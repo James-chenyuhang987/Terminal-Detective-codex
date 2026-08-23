@@ -1,47 +1,104 @@
-# 🕵️‍♂️ Terminal_Detective：逻辑架构师 (Terminal Detective: Logic Architect)
+# Terminal Detective · Logic Architect
 
-> [cite_start]颠覆传统的“幕后架构师”体验：你不再是拿着放大镜找线索的侦探，而是教 AI 如何探案的“逻辑架构师” 。
+一款由 LLM 驱动的赛博朋克多智能体侦探游戏。玩家配置探员队伍与调查策略，通过 ReAct 循环推进案件、连接证据并提交最终报告。
 
-## 📖 项目简介
+## 当前架构
 
-[cite_start]《Terminal_Detective》是一款基于大语言模型（LLM）驱动的高级网页端侦探游戏。游戏打破了传统侦探游戏“系统引导 vs 玩家脑补”的痛点 [cite: 1][cite_start]。玩家的核心任务是构建侦探型 Agent，专注于设计一套能让 LLM 顺利完成任务的智能体循环逻辑（Agentic Loop） 。
+```text
+GitHub Pages 前端
+  └─ Base44 JavaScript SDK
+       └─ Base44 detectiveLLM 云函数
+            └─ Base44 内置 InvokeLLM
+```
 
-[cite_start]你将为 AI 设定“做事套路”，将其投放至错综复杂的案件剧本中，旁观它与 NPC 的交锋，并通过复盘和纠错不断完善 AI 的探案战术，直到完美锁定真凶 。
+- 前端：React 18、Vite 6、Tailwind CSS
+- 后端：Base44 托管的 `detectiveLLM` 云函数
+- 模型调用：Base44 内置 `InvokeLLM`
+- 身份认证：Base44 邮箱登录、注册和邮箱验证码
+- 当前代码不使用 DeepSeek API Key，也不包含第三方模型密钥
 
-## ✨ 核心特性
+## 本地开发
 
-### 🧠 智能体与逻辑架构
-* [cite_start]**ReAct 行为框架驱动器**：提供基于 ReAct 框架的基准智能体，动态展现 Agent “观察 -> 思考 -> 行动”的完整推理路径 。
-* [cite_start]**多智能体协同**：支持构建多个独立决策的 Agent 或群体 Agent，通过前端数据流转动画展现集体智慧的破案过程 。
-* [cite_start]**涌现式叙事引擎**：具备蝴蝶效应模拟与容错机制。若 Agent 逻辑存在漏洞导致指控错误，案件剧情仍将以戏剧性的分支继续发展 。
+需要 Node.js 22 或更高版本。
 
-### 🕵️ 深度案件挑战
-* [cite_start]**底层案件库**：首发内置 3 个独立且深度的案件关卡，通过 JSON 静态化管理 。
-* [cite_start]**不完全信息博弈**：系统动态释放加分线索与隐藏信息，考验 Agent 在迷雾重重的环境下的判断力 [cite: 1, 2]。
-* [cite_start]**鲁棒性试炼**：案件充满信息不对称与逻辑陷阱，界面实时反馈 Agent 受到干扰时的“逻辑混乱度” [cite: 2]。
+```bash
+npm ci
+cp .env.example .env.local
+npm run dev
+```
 
-### 🎨 次世代视效体验
-[cite_start]摒弃纯文本，打造极致精美的沉浸式动效 ：
-* [cite_start]**探员集结大厅**：全息投影风格配置面板与流光溢彩的属性滑动条 [cite: 2]。
-* [cite_start]**沉浸式搜证剧场**：动态打字机交互特效、物理抛物线抓取动效及随剧情变色的氛围渲染 [cite: 2]。
-* [cite_start]**粒子化线索图谱**：3D 悬浮软木板，成功建立逻辑关联时触发激光连线与碰撞动效 [cite: 2]。
-* [cite_start]**AI 思考具象化**：API 调用期间展示数据流转、代码雨等高质量 CSS 动画 [cite: 2]。
+`.env.example` 中只有公开连接配置，不应在任何 `VITE_` 变量中保存 API Key。Vite 会把 `VITE_` 变量编译进浏览器代码。
 
-## 🛠️ 技术栈与架构 (The Front-End Trinity)
+常用检查：
 
-[cite_start]本项目采用物理隔离的前端工业级架构 ：
-* [cite_start]**HTML (纯骨架)**：仅定义界面的 DOM 结构与绝对层级 。
-* [cite_start]**CSS (纯皮肤与动画)**：全权负责霓虹光晕、材质渲染、3D 空间变换及关键帧动画 。
-* [cite_start]**JavaScript (纯肌肉与大脑)**：统管 ReAct 逻辑、多智能体数据流、LLM API 异步通讯及动态 DOM 更新 。
-* [cite_start]**LLM 接口**：接入 Gemini API (通过 4sapi 代理调用) 。
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
 
-## 🚀 快速开始
+## 部署
 
-### 前置要求
-* 现代浏览器 (推荐 Chrome 或 Edge)
-* 获取有效的 Gemini API Key 
+项目使用两部分部署。GitHub Pages 只托管静态前端；LLM 云函数仍部署在 Base44，以免服务端能力和模型调用暴露到浏览器。
 
-### 运行步骤
-1. 克隆本项目到本地：
+### 1. 部署 Base44 后端函数
+
+首次使用 CLI 时：
+
+```bash
+npm install -g base44@latest
+base44 login
+base44 link
+```
+
+在交互步骤中选择此项目对应的 Base44 应用。随后启用仓库中配置的邮箱密码认证，并部署游戏使用的函数：
+
+```bash
+base44 auth push
+base44 functions deploy detectiveLLM
+```
+
+不要随意添加 `--force`；该参数会删除 Base44 上不存在于本地的其他远程函数。
+
+### 2. 部署 GitHub Pages 前端
+
+仓库已经包含 [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)。它会在每次推送到 `main` 后自动执行测试、类型检查、Lint、构建和 Pages 部署。
+
+1. 将代码推送到 GitHub：
+
    ```bash
-   git clone [https://github.com/YourUsername/Terminal_Detective.git](https://github.com/YourUsername/Terminal_Detective.git)
+   git add -A
+   git commit -m "准备 GitHub Pages 部署"
+   git push
+   ```
+
+2. 打开 GitHub 仓库的 **Settings → Pages**。
+3. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。
+4. 在 **Actions** 页面等待 `Deploy frontend to GitHub Pages` 完成。
+
+默认访问地址：
+
+```text
+https://James-chenyuhang987.github.io/Terminal-Detective-codex/
+```
+
+工作流会自动根据仓库名称生成 Vite 子路径。如果以后改用自定义域名，在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 中创建：
+
+```text
+VITE_BASE_PATH=/
+```
+
+## 安全说明
+
+- `base44/functions/detectiveLLM/` 保存服务端提示词、案件真相和裁定逻辑。
+- 浏览器只提交受限制的游戏状态与 ID，不接收服务端案件秘密。
+- LLM 函数要求已认证用户，避免公开匿名调用产生费用。
+- `.env`、`.env.local`、构建目录和依赖目录均已被 Git 忽略。
+
+## 相关官方文档
+
+- [Vite：部署静态站点](https://vite.dev/guide/static-deploy)
+- [GitHub：自动部署网站](https://docs.github.com/en/get-started/start-your-journey/deploying-your-website-automatically)
+- [Base44：外部应用使用 SDK](https://docs.base44.com/developers/references/sdk/getting-started/client)
+- [Base44：部署后端函数](https://docs.base44.com/developers/references/cli/commands/functions-deploy)

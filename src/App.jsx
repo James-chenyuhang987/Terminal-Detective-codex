@@ -1,13 +1,10 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { LangProvider } from '@/lib/lang.jsx';
 import { SettingsProvider } from '@/lib/settings.jsx';
-// Add page imports here
-import TerminalDetective from './pages/TerminalDetective';
+import AuthGate from '@/components/AuthGate';
 
-const PageNotFound = lazy(() => import('./lib/PageNotFound'));
-const UserNotRegisteredError = lazy(() => import('@/components/UserNotRegisteredError'));
+const TerminalDetective = lazy(() => import('./pages/TerminalDetective'));
 
 function AppLoading() {
   return (
@@ -18,31 +15,17 @@ function AppLoading() {
 }
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isAuthenticated } = useAuth();
 
-  // Show loading spinner while checking app public settings or auth
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  if (isLoadingAuth) {
     return <AppLoading />;
   }
 
-  // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
-    }
+  if (!isAuthenticated) {
+    return <AuthGate />;
   }
 
-  // Render the main app
-  return (
-    <Routes>
-      <Route path="/" element={<TerminalDetective />} />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
-  );
+  return <TerminalDetective />;
 };
 
 
@@ -52,11 +35,9 @@ function App() {
     <LangProvider>
       <SettingsProvider>
         <AuthProvider>
-          <Router>
-            <Suspense fallback={<AppLoading />}>
-              <AuthenticatedApp />
-            </Suspense>
-          </Router>
+          <Suspense fallback={<AppLoading />}>
+            <AuthenticatedApp />
+          </Suspense>
         </AuthProvider>
       </SettingsProvider>
     </LangProvider>
