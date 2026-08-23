@@ -1,0 +1,68 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "detective_name": {
+      "type": "string",
+      "description": "\u73a9\u5bb6\u4fa6\u63a2\u4ee3\u53f7"
+    },
+    "avatar": {
+      "type": "string",
+      "description": "\u4fa6\u63a2\u5934\u50cf\uff08emoji\uff09"
+    },
+    "signature": {
+      "type": "string",
+      "description": "\u4fa6\u63a2\u4e2a\u6027\u7b7e\u540d"
+    },
+    "level": {
+      "type": "number",
+      "default": 1
+    },
+    "xp": {
+      "type": "number",
+      "default": 0
+    },
+    "rank_title": {
+      "type": "string",
+      "default": "\u65b0\u624b\u4fa6\u63a2"
+    },
+    "energy": {
+      "type": "number",
+      "default": 120
+    },
+    "energy_updated_at": {
+      "type": "string"
+    },
+    "diamonds": {
+      "type": "number",
+      "default": 0
+    },
+    "gold": {
+      "type": "number",
+      "default": 0
+    },
+    "last_checkin": {
+      "type": "string"
+    },
+    "checkin_streak": {
+      "type": "number",
+      "default": 0
+    },
+    "achievements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "solved_cases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unsolved_count": {
+      "type": "number",
+      "default": 3
+    }
+  }
+}
