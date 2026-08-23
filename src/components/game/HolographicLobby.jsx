@@ -2,15 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { useSettings } from '@/lib/settings.jsx';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
-import { LocalStorage } from '@/game/gameState';
-import { DEFAULT_AGENT_CONFIG } from '@/game/caseData';
-import { loadProgression, getLevelFromXP, getXPToNextLevel } from '@/game/agentProgression';
+import { getLevelFromXP, getXPToNextLevel } from '@/game/agentProgression';
 import SkillTreePanel from '@/components/game/SkillTreePanel';
 import AgentRadarChart from '@/components/game/AgentRadarChart';
 import SpecialtyAttrPanel from '@/components/game/SpecialtyAttrPanel';
 import SynergyPanel from '@/components/game/SynergyPanel';
 import SynergyUnlockFX from '@/components/game/SynergyUnlockFX';
-import { calcTeamSynergy, effectiveAttrs, getEquippedSkillEffects } from '@/game/specialtySystem';
+import { calcTeamSynergy } from '@/game/specialtySystem';
 import AgentLoreTooltip from '@/components/game/AgentLoreTooltip';
 import AgentDossierPanel from '@/components/game/AgentDossierPanel';
 import CaseMatchGauge from '@/components/game/CaseMatchGauge';
@@ -18,65 +16,8 @@ import PresetChips from '@/components/game/PresetChips';
 import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
 import { calcCaseMatchScore } from '@/game/casePresets';
-
-// ── Agent definitions ─────────────────────────────────────────────────────────
-const AGENT_DEFS = [
-  {
-    id: 'NEXUS-01', name: 'NEXUS-01', role: 'Lead Investigator',
-    roleZh: '首席调查员', icon: '👁️', color: '#00e5ff',
-    stance: 'analytical',
-    desc: '逻辑主宰：在复杂推理链中获得额外15%逻辑加成。复杂推理优先。',
-    traitEn: 'Logic',
-    attrs: { logic_power: 20, observation_focus: 10, confusion_resistance: 10, ap_cost_discount: 10, hack_level: 10 },
-  },
-  {
-    id: 'AURORA-09', name: 'AURORA-09', role: 'Forensic Analyst',
-    roleZh: '法证分析师', icon: '🔬', color: '#a78bfa',
-    stance: 'analytical',
-    desc: '精准之眼：证据分析时线索发现率提升20%。观察型行动优先。',
-    traitEn: 'Observation',
-    attrs: { logic_power: 10, observation_focus: 20, confusion_resistance: 10, ap_cost_discount: 10, hack_level: 10 },
-  },
-  {
-    id: 'CIPHER-47', name: 'CIPHER-47', role: 'Tech Specialist',
-    roleZh: '技术专家', icon: '💻', color: '#ff6b35',
-    stance: 'cautious',
-    desc: '幽灵协议：数字渗透时被发现风险降低30%。黑客类行动优先。',
-    traitEn: 'Hacker',
-    attrs: { logic_power: 10, observation_focus: 10, confusion_resistance: 10, ap_cost_discount: 10, hack_level: 20 },
-  },
-];
-
-const PRIORITY_ACTIONS = [
-  { id: 'search_area', label: '区域搜索', icon: '🔭', color: '#00e5ff' },
-  { id: 'examine_clue', label: '线索检验', icon: '🔍', color: '#a78bfa' },
-  { id: 'interrogate_suspect', label: 'NPC审讯', icon: '🎤', color: '#ffaa00' },
-  { id: 'hack_terminal', label: '系统入侵', icon: '💾', color: '#ff6b35' },
-  { id: 'analyze_forensics', label: '法证分析', icon: '🧪', color: '#00ff88' },
-  { id: 'check_alibi', label: '不在场核查', icon: '⏱️', color: '#ff3aff' },
-];
-
-// 探员职业基础属性固定（AGENT_DEFS.attrs 即 base_attrs），玩家仅分配 20 点专长
-function defaultSpecs() { return [{}, {}, {}]; }
-function defaultPriorities() { return AGENT_DEFS.map(() => PRIORITY_ACTIONS.map(p => p.id)); }
-
-const LEGACY_ACTION_IDS = {
-  interrogate_npc: 'interrogate_suspect',
-  hack_system: 'hack_terminal',
-};
-
-function normalizePriorityList(list) {
-  const defaults = PRIORITY_ACTIONS.map(action => action.id);
-  const allowed = new Set(defaults);
-  const migrated = (Array.isArray(list) ? list : [])
-    .map(id => LEGACY_ACTION_IDS[id] || id)
-    .filter(id => allowed.has(id));
-  return [...new Set([...migrated, ...defaults])];
-}
-
-function normalizePriorities(value) {
-  return AGENT_DEFS.map((_, index) => normalizePriorityList(value?.[index]));
-}
+import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
+import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
 
 // ── Particle Canvas — neural network lines ────────────────────────────────────
 function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColor }) {
@@ -379,10 +320,10 @@ function PriorityList({ priorityList, onChange }) {
 }
 
 // ── Left: Team Roster + Priority ──────────────────────────────────────────────
-function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorityChange, onHover }) {
+function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorityChange, onHover, mobileActive }) {
   const lvls = AGENT_DEFS.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
   return (
-    <div style={{
+    <div className={`td-lobby-roster ${mobileActive ? 'td-mobile-active' : ''}`} style={{
       width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10,
       padding: '12px 0 12px 12px',
     }}>
@@ -455,14 +396,14 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
 }
 
 // ── Center: Holographic Stage ─────────────────────────────────────────────────
-function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, synergy, onHover }) {
+function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive }) {
   const lvls = AGENT_DEFS.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
   const teamPower = Math.round(agents.reduce((s, a) =>
     s + (a.logic_power || 0) + (a.observation_focus || 0) + (a.confusion_resistance || 0) +
     (a.ap_cost_discount || 0) + (a.hack_level || 0), 0) / 240 * 100);
 
   return (
-    <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div className={`td-lobby-stage ${mobileActive ? 'td-mobile-active' : ''}`} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {/* Grid bg */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 0,
@@ -581,7 +522,7 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
 }
 
 // ── Right: Attribute Config + Skill Tree ─────────────────────────────────────
-function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents }) {
+function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive }) {
   const [tab, setTab] = useState('attrs'); // 'attrs' | 'skills' | 'dossier'
 
   const tabs = [
@@ -591,7 +532,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
   ];
 
   return (
-    <div style={{
+    <div className={`td-lobby-attributes ${mobileActive ? 'td-mobile-active' : ''}`} style={{
       width: 300, flexShrink: 0, padding: '12px 12px 12px 0',
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
@@ -657,7 +598,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
             </>
           )}
           {tab === 'skills' && (
-            <SkillTreePanel agentIdx={agentIdx} />
+            <SkillTreePanel agentIdx={agentIdx} progression={progression} loadout={skillLoadout} onChange={onSkillLoadout} />
           )}
           {tab === 'dossier' && (
             <AgentDossierPanel
@@ -679,7 +620,7 @@ function StatusBar({ onBack, onOpenSettings }) {
   const { lang } = useLang();
   useEffect(() => { const id = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(id); }, []);
   return (
-    <div style={{
+    <div className="td-lobby-status" style={{
       height: 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 16px', borderBottom: '1px solid rgba(0,229,255,0.15)',
       background: 'rgba(0,0,0,0.65)', fontFamily: 'monospace', fontSize: '0.5rem', flexShrink: 0,
@@ -715,8 +656,9 @@ function StatusBar({ onBack, onOpenSettings }) {
 }
 
 // ── Deploy Controls ───────────────────────────────────────────────────────────
-function DeployControls({ onDeploy, onSave, onLoad, synergyOver, synergy, onApplyPreset }) {
+function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, synergy, onApplyPreset, disabled = false }) {
   const [deploying, setDeploying] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState(false);
   const prevSynergy = useRef(synergy);
 
@@ -730,35 +672,42 @@ function DeployControls({ onDeploy, onSave, onLoad, synergyOver, synergy, onAppl
     }
   }, [synergy]);
 
-  const handleDeploy = () => {
+  const handleDeploy = async () => {
+    if (disabled || deploying) return;
     setDeploying(true);
-    onDeploy();
+    try { await onDeploy(); } catch { /* parent displays the sync failure */ } finally { setDeploying(false); }
+  };
+
+  const handleSave = async () => {
+    if (saving || disabled) return;
+    setSaving(true);
+    try { await onSave(); } catch { /* parent displays the sync failure */ } finally { setSaving(false); }
   };
 
   const c = synergyOver ? '#ff3860' : '#00e5ff';
   const barPct = Math.min(synergy, 100);
 
   const btns = [
-    { label: 'SAVE\n保存', icon: '💾', onClick: onSave, color: '#00e5ff' },
+    { label: saving ? 'SYNCING\n同步中' : 'SAVE\n保存', icon: '💾', onClick: handleSave, color: '#00e5ff', disabled: saving || disabled },
     { label: 'LOAD\n加载', icon: '📂', onClick: onLoad, color: '#a78bfa' },
     { label: 'RELOAD\n重载', icon: '🔄', onClick: () => window.location.reload(), color: '#ffaa00' },
-    { label: 'TUTORIAL\n教程', icon: '❓', onClick: () => {}, color: 'rgba(255,255,255,0.35)' },
+    { label: 'TUTORIAL\n教程', icon: '❓', onClick: onTutorial, color: 'rgba(255,255,255,0.55)' },
   ];
 
   return (
-    <div style={{
+    <div className="td-lobby-controls" style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
       borderTop: `1px solid ${synergyOver ? '#ff386040' : 'rgba(0,229,255,0.15)'}`,
       background: synergyOver ? 'rgba(30,0,8,0.85)' : 'rgba(0,0,0,0.75)',
       flexShrink: 0, transition: 'background 0.4s, border-color 0.4s',
     }}>
       {btns.map((b, i) => (
-        <button key={i} onClick={b.onClick} style={{
+        <button key={i} onClick={b.onClick} disabled={b.disabled} style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
           padding: '6px 14px', borderRadius: 8, border: `1px solid ${b.color}40`,
           background: `${b.color}08`, color: b.color, cursor: 'pointer',
           fontFamily: 'monospace', fontSize: '0.44rem', whiteSpace: 'pre-line', textAlign: 'center',
-          transition: 'all 0.2s',
+          transition: 'all 0.2s', opacity: b.disabled ? .45 : 1,
         }}
           onMouseEnter={e => e.currentTarget.style.background = `${b.color}18`}
           onMouseLeave={e => e.currentTarget.style.background = `${b.color}08`}
@@ -831,8 +780,8 @@ function DeployControls({ onDeploy, onSave, onLoad, synergyOver, synergy, onAppl
       {/* Main deploy */}
       <button
         onClick={handleDeploy}
-        disabled={deploying}
-        title={synergyOver ? '专长过载：三人专长雷同，部署后将承受协同惩罚（混乱增长 +15%）' : ''}
+        disabled={deploying || disabled}
+        title={disabled ? '当前设备为只读，请先接管此设备' : synergyOver ? '专长过载：三人专长雷同，部署后将承受协同惩罚（混乱增长 +15%）' : ''}
         style={{
           flex: 1, maxWidth: 300, marginLeft: 'auto',
           padding: '11px 24px', borderRadius: 10,
@@ -843,14 +792,14 @@ function DeployControls({ onDeploy, onSave, onLoad, synergyOver, synergy, onAppl
             ? 'rgba(0,229,255,0.15)'
             : 'linear-gradient(135deg, rgba(0,80,160,0.7) 0%, rgba(0,200,255,0.45) 100%)',
           color: synergyOver ? '#ff3860' : '#fff',
-          cursor: deploying ? 'wait' : 'pointer',
+          cursor: disabled ? 'not-allowed' : deploying ? 'wait' : 'pointer',
           fontFamily: 'monospace', fontWeight: 900, fontSize: '0.78rem', letterSpacing: '0.2em',
           textShadow: synergyOver ? '0 0 12px rgba(255,56,96,0.9)' : '0 0 12px rgba(0,229,255,0.9)',
           boxShadow: synergyOver
             ? '0 0 24px rgba(255,56,96,0.3)'
             : '0 0 24px rgba(0,200,255,0.35), 0 0 50px rgba(0,200,255,0.1)',
           transition: 'all 0.3s', position: 'relative', overflow: 'hidden',
-          opacity: synergyOver ? 0.85 : 1,
+          opacity: disabled ? .42 : synergyOver ? 0.85 : 1,
         }}>
         {!synergyOver && (
           <div style={{
@@ -872,40 +821,28 @@ function DeployControls({ onDeploy, onSave, onLoad, synergyOver, synergy, onAppl
 }
 
 // ── Main HolographicLobby ─────────────────────────────────────────────────────
-export default function HolographicLobby({ onDeploy, onBack }) {
+export default function HolographicLobby({ profile, readOnly = false, onDeploy, onBack, onTeamSave, onSkillLoadout }) {
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
-  const [specs, setSpecs] = useState(() => {
-    const saved = LocalStorage.loadTeamConfig();
-    if (saved?.specs && Array.isArray(saved.specs) && saved.specs.length === 3) return saved.specs;
-    return defaultSpecs();
-  });
-  const [priorities, setPriorities] = useState(() => {
-    const saved = LocalStorage.loadTeamConfig();
-    if (saved?.priorities && Array.isArray(saved.priorities)) return normalizePriorities(saved.priorities);
-    return defaultPriorities();
-  });
-  const [progression] = useState(() => loadProgression());
-  const [selectedIdx, setSelectedIdx] = useState(1);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
+  const noticeTimerRef = useRef(null);
+  const {
+    agents, specs, selectedIdx, setSelectedIdx, skillLoadout, setSkillLoadout,
+    updateSpec, updatePriority, applyPreset, currentConfig, loadSaved,
+  } = useTeamBuilder(profile);
+  const progression = profile?.agent_progression || [];
+  const [mobileTab, setMobileTab] = useState('stage');
 
   const accentColor = '#00e5ff';
 
-  // 有效属性 = 职业固定基础 + 专长加成
-  const agents = specs.map((spec, i) => ({
-    agent_id: AGENT_DEFS[i].id,
-    role: AGENT_DEFS[i].roleZh,
-    base_stance: AGENT_DEFS[i].stance,
-    ...effectiveAttrs(i, spec),
-    priority_list: priorities[i],
-  }));
-
-  const updateSpec = useCallback((spec) => {
-    setSpecs(prev => prev.map((s, i) => i === selectedIdx ? spec : s));
-  }, [selectedIdx]);
-
-  const updatePriority = useCallback((idx, list) => {
-    setPriorities(prev => prev.map((p, i) => i === idx ? normalizePriorityList(list) : p));
+  const showNotice = useCallback((message, duration = 1800) => {
+    window.clearTimeout(noticeTimerRef.current);
+    setSaveNotice(message);
+    noticeTimerRef.current = window.setTimeout(() => setSaveNotice(''), duration);
   }, []);
+
+  useEffect(() => () => window.clearTimeout(noticeTimerRef.current), []);
 
   const synergy = calcTeamSynergy(specs);
 
@@ -927,42 +864,20 @@ export default function HolographicLobby({ onDeploy, onBack }) {
   const [showSequence, setShowSequence] = useState(false);
   const matchForecast = calcCaseMatchScore(agents).score;
 
-  const applyPreset = useCallback((preset) => {
-    setSpecs(preset.specs.map(s => ({ ...s })));
-    setPriorities(normalizePriorities(preset.priorities));
-  }, []);
-
-  const handleDeploy = () => {
-    LocalStorage.saveTeamConfig({ specs, priorities });
-    const skillEffects = getEquippedSkillEffects();
-    const teamConfig = {
-      ...DEFAULT_AGENT_CONFIG,
-      agent_id: agents.map(a => a.agent_id).join('+'),
-      role: 'Multi_Agent_Team',
-      base_stance: agents[selectedIdx]?.base_stance || 'analytical',
-      team: agents,
-      combat_attributes: {
-        logic_power: Math.max(...agents.map(a => a.logic_power || 0)),
-        observation_focus: Math.max(...agents.map(a => a.observation_focus || 0)),
-        hack_level: Math.max(...agents.map(a => a.hack_level || 0)),
-      },
-      engine_modifiers: {
-        confusion_resistance: agents.reduce((s, a) => s + (a.confusion_resistance || 0), 0) / 120,
-        ap_cost_discount: agents.reduce((s, a) => s + (a.ap_cost_discount || 0), 0) / 90,
-      },
-      // ── 协同 + 技能效果随部署打包，主玩法真实生效 ──
-      synergy_skills: synergy.active.map(s => s.id),
-      specialty_match: synergy.matchScore,
-      specialty_overload: synergy.overload,
-      skill_effects: skillEffects,
-      priority_list: agents[selectedIdx]?.priority_list || PRIORITY_ACTIONS.map(p => p.id),
-    };
-    onDeploy(teamConfig);
+  const prepareDeploy = async () => {
+    const config = currentConfig();
+    try {
+      await onTeamSave?.(config);
+      setShowSequence(true);
+    } catch (cause) {
+      showNotice('⚠ 编队同步失败，请重试', 2400);
+      throw cause;
+    }
   };
 
   return (
-    <div style={{
-      height: '100vh', display: 'flex', flexDirection: 'column',
+    <div className="td-lobby" style={{
+      height: '100dvh', display: 'flex', flexDirection: 'column',
       background: 'radial-gradient(ellipse at 30% 15%, #050e22 0%, #020810 55%, #010408 100%)',
       fontFamily: "'Courier New', monospace", color: 'white',
       overflow: 'hidden', position: 'relative',
@@ -989,6 +904,38 @@ export default function HolographicLobby({ onDeploy, onBack }) {
 
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
+      {showTutorial && (
+        <div onClick={() => setShowTutorial(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 80, display: 'grid', placeItems: 'center',
+          padding: 20, background: 'rgba(0,4,12,.82)', backdropFilter: 'blur(8px)',
+        }}>
+          <div onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" style={{
+            width: 'min(560px, 94vw)', padding: 24, borderRadius: 16,
+            border: '1px solid rgba(0,229,255,.45)', background: '#06101d',
+            boxShadow: '0 0 45px rgba(0,229,255,.18)', fontFamily: 'monospace',
+          }}>
+            <div style={{ color: '#7df1ff', fontWeight: 900, fontSize: '1rem' }}>探员大厅快速指南</div>
+            <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
+              <li>选择一名探员，为其分配专长点数。</li>
+              <li>拖动行动优先级，决定 AI 调查顺序。</li>
+              <li>保持三名探员专长互补，可激活协同能力。</li>
+              <li>点击“保存”记录预设，再部署进入案件簿。</li>
+            </ol>
+            <button onClick={() => setShowTutorial(false)} style={{
+              width: '100%', padding: 10, borderRadius: 8, cursor: 'pointer',
+              border: '1px solid #00e5ff80', background: 'rgba(0,229,255,.12)', color: '#7df1ff',
+              fontFamily: 'monospace', fontWeight: 900,
+            }}>明白了 · CONTINUE</button>
+          </div>
+        </div>
+      )}
+
+      {saveNotice && <div role="status" style={{
+        position: 'fixed', right: 18, bottom: 78, zIndex: 70, padding: '9px 14px',
+        borderRadius: 9, border: '1px solid rgba(0,255,136,.45)',
+        background: 'rgba(0,24,18,.94)', color: '#00ff88', fontSize: '.58rem', fontFamily: 'monospace',
+      }}>{saveNotice}</div>}
+
       {/* 协同技能解锁特效 */}
       <SynergyUnlockFX
         skill={unlockQueue[0] || null}
@@ -996,7 +943,7 @@ export default function HolographicLobby({ onDeploy, onBack }) {
       />
 
       {/* Title */}
-      <div style={{
+      <div className="td-lobby-title" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '7px 20px', borderBottom: '1px solid rgba(0,229,255,0.1)',
         background: 'rgba(0,0,0,0.35)', flexShrink: 0, zIndex: 1,
@@ -1020,13 +967,20 @@ export default function HolographicLobby({ onDeploy, onBack }) {
         </div>
       </div>
 
+      <div className="td-lobby-mobile-tabs" role="tablist">
+        {[['agents', '探员'], ['stage', '舞台'], ['attrs', '属性']].map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={mobileTab === key} onClick={() => setMobileTab(key)}>{label}</button>
+        ))}
+      </div>
+
       {/* Main */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
+      <div className="td-lobby-main" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
         <TeamRosterPanel
           agents={agents} selectedIdx={selectedIdx}
           onSelect={setSelectedIdx} progression={progression}
           onPriorityChange={updatePriority}
           onHover={handleHover}
+          mobileActive={mobileTab === 'agents'}
         />
         <HoloStage
           agents={agents} selectedIdx={selectedIdx}
@@ -1034,6 +988,7 @@ export default function HolographicLobby({ onDeploy, onBack }) {
           progression={progression}
           synergy={synergy}
           onHover={handleHover}
+          mobileActive={mobileTab === 'stage'}
         />
         <AttributePanel
           agent={agents[selectedIdx]}
@@ -1042,6 +997,14 @@ export default function HolographicLobby({ onDeploy, onBack }) {
           spec={specs[selectedIdx]}
           onSpecChange={updateSpec}
           allAgents={agents}
+          progression={progression}
+          skillLoadout={skillLoadout}
+          onSkillLoadout={async next => {
+            if (readOnly) return;
+            setSkillLoadout(next);
+            try { await onSkillLoadout?.(next); } catch { setSkillLoadout(profile?.skill_loadout || []); }
+          }}
+          mobileActive={mobileTab === 'attrs'}
         />
       </div>
 
@@ -1060,20 +1023,31 @@ export default function HolographicLobby({ onDeploy, onBack }) {
       {showSequence && (
         <DeploySequence
           matchScore={matchForecast}
-          onComplete={() => { setShowSequence(false); handleDeploy(); }}
+          onComplete={() => {
+            setShowSequence(false);
+            onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout));
+          }}
         />
       )}
 
       <DeployControls
         onApplyPreset={applyPreset}
-        onDeploy={() => setShowSequence(true)}
-        onSave={() => LocalStorage.saveTeamConfig({ specs, priorities })}
-        onLoad={() => {
-          const s = LocalStorage.loadTeamConfig();
-          if (s?.specs) { setSpecs(s.specs); if (s.priorities) setPriorities(normalizePriorities(s.priorities)); }
+        onDeploy={prepareDeploy}
+        onSave={async () => {
+          const config = currentConfig();
+          try {
+            await onTeamSave?.(config);
+            showNotice('✓ 编队预设已保存');
+          } catch (cause) {
+            showNotice('⚠ 编队同步失败，请重试', 2400);
+            throw cause;
+          }
         }}
+        onLoad={loadSaved}
         synergy={Math.round(synergy.matchScore * 100)}
         synergyOver={synergy.overload}
+        onTutorial={() => setShowTutorial(true)}
+        disabled={readOnly}
       />
     </div>
   );

@@ -8,14 +8,14 @@ import { getInitialZone, getZoneClueIds, isValidZoneTransition } from './caseRun
 import { normalizeSettlementResult } from './settlementResult.js';
 
 // ── Initial State Factory ─────────────────────────────────────────────────
-export function createInitialGameState(caseData) {
+export function createInitialGameState(caseData, runtimeEffects = {}) {
   const initialZone = getInitialZone(caseData);
   return {
     run_id: `${caseData.case_id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     case_id: caseData.case_id,
     case_title: caseData.title,
     current_hp: 100,
-    action_points_left: 20,
+    action_points_left: 20 + Math.max(0, Number(runtimeEffects.initial_ap_bonus) || 0),
     ap_discount_credit: 0,
     unlocked_clues: [],
     unlocked_clues_set: new Set(), // fast lookup
@@ -31,6 +31,8 @@ export function createInitialGameState(caseData) {
     last_observation: '',
     last_action: null,
     is_crashed: false,
+    trap_shield_charges: runtimeEffects.ignore_first_trap ? 1 : 0,
+    traps_triggered: 0,
     evidence_crisis: null,
     reputation: 100,
     checkpoint_stack: [],
@@ -102,10 +104,14 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
     ? settlement.next_zone
     : state.current_zone;
 
-  // 量子幽灵：完全免疫陷阱事件
-  if (settlement.is_trap && fx.trap_immunity) {
+  // 仓库防火墙优先抵消一次陷阱；量子幽灵则完全免疫。
+  if (settlement.is_trap && newState.trap_shield_charges > 0) {
+    settlement = { ...settlement, is_trap: false, trap_narration: null };
+    newState.trap_shield_charges -= 1;
+  } else if (settlement.is_trap && fx.trap_immunity) {
     settlement = { ...settlement, is_trap: false, trap_narration: null };
   }
+  if (settlement.is_trap) newState.traps_triggered = (newState.traps_triggered || 0) + 1;
 
   // HP change
   newState.current_hp = Math.max(0, Math.min(100,

@@ -10,14 +10,28 @@ const DIFFICULTY_CONFIG = {
 
 const CASE_COVER_ICONS = ['🏙️', '🔬', '🦋'];
 
-export default function CaseSelect({ onSelect, onBack }) {
+export default function CaseSelect({ onSelect, onBack, preferredCaseId = null }) {
   const { lang, t } = useLang();
   const [hovered, setHovered] = useState(null);
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState(preferredCaseId);
+  const [error, setError] = useState('');
 
-  const handleStart = (caseData) => {
+  const handleStart = async (caseData) => {
+    if (selected && selected !== preferredCaseId) return;
     setSelected(caseData.case_id);
-    setTimeout(() => onSelect(caseData), 400);
+    setError('');
+    try {
+      const result = await onSelect(caseData);
+      if (result?.error) {
+        setSelected(null);
+        setError(result.error === 'insufficient_energy'
+          ? (lang === 'zh' ? `体力不足，需要 ${result.cost} 点体力。请返回侦探之家补给。` : `Not enough energy. This case requires ${result.cost}.`)
+          : (lang === 'zh' ? '无法开始案件，请稍后重试。' : 'Unable to start the case. Please retry.'));
+      }
+    } catch {
+      setSelected(null);
+      setError(lang === 'zh' ? '云端同步失败，体力未扣除。' : 'Cloud sync failed. Energy was not spent.');
+    }
   };
 
   // Get localised fields for a case
@@ -25,7 +39,7 @@ export default function CaseSelect({ onSelect, onBack }) {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
+      className="td-case-select min-h-screen flex flex-col items-center px-4 py-10"
       style={{
         background: 'radial-gradient(ellipse at 50% 0%, #0a1628 0%, #050a14 60%, #020408 100%)',
         fontFamily: "'Courier New', monospace",
@@ -35,7 +49,7 @@ export default function CaseSelect({ onSelect, onBack }) {
       {/* Back button */}
       <button
         onClick={onBack}
-        className="absolute top-6 left-6 text-xs opacity-40 hover:opacity-80 transition-opacity"
+        className="td-case-back self-start text-xs opacity-40 hover:opacity-80 transition-opacity"
         style={{ color: '#00e5ff', fontFamily: 'monospace' }}
       >
         {t.backToLobby}
@@ -62,6 +76,7 @@ export default function CaseSelect({ onSelect, onBack }) {
       </div>
 
       {/* Case cards */}
+      {error && <div style={{ width: '100%', maxWidth: 860, margin: '-22px auto 18px', padding: '10px 14px', border: '1px solid rgba(255,56,96,.5)', borderRadius: 9, color: '#ff6b84', background: 'rgba(255,56,96,.08)', fontSize: '.66rem', textAlign: 'center' }}>{error}</div>}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-4xl">
         {ALL_CASES.map((c, i) => {
           const diff = DIFFICULTY_CONFIG[c.difficulty] || DIFFICULTY_CONFIG.NORMAL;
@@ -76,7 +91,7 @@ export default function CaseSelect({ onSelect, onBack }) {
               key={c.case_id}
               onMouseEnter={() => setHovered(c.case_id)}
               onMouseLeave={() => setHovered(null)}
-              onClick={() => handleStart(c)}
+              onClick={() => void handleStart(c)}
               style={{
                 borderRadius: 20,
                 border: `1.5px solid ${isHover || isSel ? diff.color : 'rgba(255,255,255,0.08)'}`,

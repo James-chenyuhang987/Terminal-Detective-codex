@@ -1,6 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import { useAuth } from '@/lib/AuthContext';
 import { useSettings, panelSkin, playSfx, APP_VERSION, SAVE_KEYS } from '@/lib/settings.jsx';
+import { useProfile } from '@/lib/ProfileContext.jsx';
+import { migrateProfileV2, normalizeProfile, sanitizeProfileWrite } from '@/game/playerProfile';
 import { ToggleRow, SegmentRow, ActionRow, SectionTitle } from '@/components/game/settings/SettingRow';
 
 const TX = {
@@ -14,15 +17,18 @@ const TX = {
     glitch: '故障特效强度', glitchDesc: '混乱值升高时的画面撕裂程度',
     particles: '粒子动画', particlesDesc: '大厅神经网络粒子与浮动光点',
     data: '游戏数据 · DATA',
-    exportL: '导出配置', exportDesc: '将设置与探员配置保存为 JSON 文件', exportBtn: '导出',
-    importL: '导入配置', importDesc: '从 JSON 文件恢复设置与探员配置', importBtn: '导入',
+    exportL: '导出档案', exportDesc: '导出版本化本地设置与合法云端进度字段', exportBtn: '导出',
+    importL: '导入档案', importDesc: '校验并预览 JSON 后恢复设置与云端进度', importBtn: '导入',
     resetSet: '重置设置', resetSetDesc: '恢复语言之外的全部设置为默认值', resetSetBtn: '重置',
-    clearL: '清除本地存档', clearDesc: '删除探员配置、成长进度与新手引导记录', clearBtn: '清除',
+    clearL: '清除本地偏好', clearDesc: '仅清除设置、现场缓存与新手引导，不影响云端进度', clearBtn: '清除',
+    cloudReset: '重置云端进度', cloudResetDesc: '清空经济、任务、案件、编队与探员成长；需要输入侦探代号确认', cloudResetBtn: '重置云端',
     version: '版本信息',
-    confirmClear: '确认清除全部本地存档？此操作不可撤销。',
+    account: '账户 · ACCOUNT', email: '登录邮箱', sync: '云端同步', syncOk: '已连接 Base44', logout: '退出登录', logoutDesc: '清除本机登录令牌并返回登录页', logoutBtn: '退出',
+    confirmClear: '确认清除本机偏好和现场缓存？云端档案不会变化。',
     confirmReset: '确认将设置恢复为默认值？',
     okClear: '本地存档已清除', okReset: '设置已恢复默认', okExport: '配置已导出',
-    okImport: '配置导入成功', errImport: '导入失败：文件格式无效',
+    okImport: '档案导入成功', errImport: '导入失败：文件格式或版本无效', importPreview: '确认导入：本地设置与云端进度将被覆盖。',
+    resetCode: '请输入当前侦探代号以确认', resetMismatch: '代号不匹配', okCloudReset: '云端进度已重置', syncFailed: '云端同步失败，请重试',
     off: '关闭', low: '低', high: '高',
     yes: '确认', no: '取消',
   },
@@ -36,15 +42,18 @@ const TX = {
     glitch: 'Glitch Intensity', glitchDesc: 'Screen tearing as confusion rises',
     particles: 'Particle FX', particlesDesc: 'Lobby neural particles and floating motes',
     data: 'DATA',
-    exportL: 'Export Config', exportDesc: 'Save settings and agent config as JSON', exportBtn: 'EXPORT',
-    importL: 'Import Config', importDesc: 'Restore settings and agent config from JSON', importBtn: 'IMPORT',
+    exportL: 'Export Profile', exportDesc: 'Export versioned local preferences and valid cloud progress fields', exportBtn: 'EXPORT',
+    importL: 'Import Profile', importDesc: 'Validate and preview JSON before restoring local and cloud data', importBtn: 'IMPORT',
     resetSet: 'Reset Settings', resetSetDesc: 'Restore all settings except language to defaults', resetSetBtn: 'RESET',
-    clearL: 'Clear Local Saves', clearDesc: 'Delete agent config, progression and onboarding state', clearBtn: 'CLEAR',
+    clearL: 'Clear Local Preferences', clearDesc: 'Clear settings, run cache and onboarding only; cloud progress is preserved', clearBtn: 'CLEAR',
+    cloudReset: 'Reset Cloud Progress', cloudResetDesc: 'Clear economy, tasks, cases, squad and agent growth; codename confirmation required', cloudResetBtn: 'RESET CLOUD',
     version: 'Version',
-    confirmClear: 'Clear all local saves? This cannot be undone.',
+    account: 'ACCOUNT', email: 'Signed-in email', sync: 'Cloud sync', syncOk: 'Connected to Base44', logout: 'Sign out', logoutDesc: 'Clear the local session and return to sign in', logoutBtn: 'SIGN OUT',
+    confirmClear: 'Clear local preferences and run cache? Cloud progress is preserved.',
     confirmReset: 'Restore settings to defaults?',
     okClear: 'Local saves cleared', okReset: 'Settings restored', okExport: 'Config exported',
-    okImport: 'Config imported', errImport: 'Import failed: invalid file',
+    okImport: 'Profile imported', errImport: 'Import failed: invalid format or version', importPreview: 'Import local settings and overwrite cloud progress?',
+    resetCode: 'Enter the current detective codename to confirm', resetMismatch: 'Codename does not match', okCloudReset: 'Cloud progress reset', syncFailed: 'Cloud sync failed. Please retry.',
     off: 'OFF', low: 'LOW', high: 'HIGH',
     yes: 'CONFIRM', no: 'CANCEL',
   },
@@ -52,24 +61,72 @@ const TX = {
 
 export default function SettingsDrawer({ onClose }) {
   const { lang, setLang } = useLang();
+  const { user, logout } = useAuth();
   const { settings, setSetting, resetSettings } = useSettings();
+  const { profile, account, syncStatus, mutate } = useProfile();
   const skin = panelSkin(settings.panelLight);
   const tx = TX[lang] || TX.zh;
   const [toast, setToast] = useState('');
   const [confirm, setConfirm] = useState(null); // { text, run }
+  const [resetCode, setResetCode] = useState('');
+  const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
+  const closeRef = useRef(null);
+  const previousFocusRef = useRef(null);
+  const toastTimerRef = useRef(null);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement;
+    closeRef.current?.focus();
+    return () => {
+      window.clearTimeout(toastTimerRef.current);
+      previousFocusRef.current?.focus?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key !== 'Escape') return;
+      if (saving) return;
+      if (confirm) setConfirm(null);
+      else onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirm, onClose, saving]);
 
   const notify = (msg, kind = 'click') => {
     playSfx(settings.sfxEnabled, kind);
     setToast(msg);
-    setTimeout(() => setToast(''), 2600);
+    window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(''), 2600);
+  };
+
+  const closeSafely = () => { if (!saving) onClose(); };
+
+  const runConfirmed = async () => {
+    const task = confirm?.run;
+    if (!task || saving) return;
+    setConfirm(null);
+    setSaving(true);
+    try {
+      await task();
+    } catch {
+      notify(tx.syncFailed, 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const change = (key, value) => { setSetting(key, value); playSfx(settings.sfxEnabled, 'click'); };
 
   const handleExport = () => {
-    const payload = { version: APP_VERSION, settings, saves: {} };
-    SAVE_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) payload.saves[k] = v; });
+    const payload = {
+      format: 'terminal-detective-profile', schema_version: 2, app_version: APP_VERSION,
+      exported_at: new Date().toISOString(), local: { settings, saves: {} },
+      cloud_profile: profile ? sanitizeProfileWrite(profile) : null,
+    };
+    SAVE_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) payload.local.saves[k] = v; });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -83,12 +140,21 @@ export default function SettingsDrawer({ onClose }) {
     if (!file) return;
     try {
       const data = JSON.parse(await file.text());
-      if (!data || typeof data !== 'object' || !data.settings) throw new Error('bad');
-      Object.entries(data.settings).forEach(([k, v]) => setSetting(k, v));
-      Object.entries(data.saves || {}).forEach(([k, v]) => {
-        if (SAVE_KEYS.includes(k)) localStorage.setItem(k, v);
+      if (data?.format !== 'terminal-detective-profile' || data?.schema_version !== 2 || !data.local?.settings || !data.cloud_profile) throw new Error('bad');
+      const previewProfile = migrateProfileV2(data.cloud_profile, null);
+      setConfirm({
+        text: `${tx.importPreview} · ${previewProfile.detective_name || '—'} · Lv.${previewProfile.level} · 🪙${previewProfile.gold} · 💎${previewProfile.diamonds}`,
+        run: async () => {
+          await mutate(current => ({ profile: { ...current, ...sanitizeProfileWrite(previewProfile) } }));
+          Object.entries(data.local.settings).forEach(([k, v]) => {
+            if (Object.prototype.hasOwnProperty.call(settings, k)) setSetting(k, v);
+          });
+          Object.entries(data.local.saves || {}).forEach(([k, v]) => {
+            if (SAVE_KEYS.includes(k) && typeof v === 'string') localStorage.setItem(k, v);
+          });
+          notify(tx.okImport, 'success');
+        },
       });
-      notify(tx.okImport, 'success');
     } catch {
       notify(tx.errImport, 'error');
     }
@@ -96,13 +162,13 @@ export default function SettingsDrawer({ onClose }) {
 
   return (
     <>
-      <div onClick={onClose} style={{
+      <div onClick={closeSafely} style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(0,4,10,0.6)', backdropFilter: 'blur(3px)',
       }} />
-      <div style={{
+      <div role="dialog" aria-modal="true" aria-label={tx.title} style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 201,
-        width: 'min(400px, 92vw)', display: 'flex', flexDirection: 'column',
+        width: 'min(400px, 100vw)', display: 'flex', flexDirection: 'column',
         background: skin.bg,
         borderLeft: `1px solid ${skin.accent}55`,
         boxShadow: `-18px 0 50px rgba(0,0,0,0.6), inset 1px 0 0 ${skin.accent}30`,
@@ -122,7 +188,7 @@ export default function SettingsDrawer({ onClose }) {
               color: skin.accent, textShadow: settings.panelLight ? 'none' : `0 0 12px ${skin.accent}70`,
             }}>{tx.title}</span>
           </div>
-          <button onClick={onClose} style={{
+          <button ref={closeRef} onClick={closeSafely} disabled={saving} style={{
             background: 'transparent', border: `1px solid ${skin.border}`, borderRadius: 7,
             color: skin.subText, cursor: 'pointer', padding: '4px 9px', fontSize: '0.58rem',
             fontFamily: 'monospace',
@@ -130,7 +196,7 @@ export default function SettingsDrawer({ onClose }) {
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px 20px' }}>
+        <div aria-busy={saving} style={{ flex: 1, overflowY: 'auto', padding: '4px 16px 20px', pointerEvents: saving ? 'none' : 'auto', opacity: saving ? .68 : 1 }}>
           <SectionTitle skin={skin}>{tx.general}</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <SegmentRow skin={skin} label={tx.language} desc={tx.languageDesc}
@@ -173,9 +239,27 @@ export default function SettingsDrawer({ onClose }) {
                 text: tx.confirmClear,
                 run: () => {
                   SAVE_KEYS.forEach(k => localStorage.removeItem(k));
+                  resetSettings();
                   notify(tx.okClear, 'error');
                 },
               })} />
+            <div style={{ padding: '10px 12px', borderRadius: 9, border: '1px solid rgba(255,56,96,.28)', background: 'rgba(255,56,96,.05)' }}>
+              <div style={{ color: skin.text, fontWeight: 700, fontSize: '.7rem' }}>{tx.cloudReset}</div>
+              <div style={{ color: skin.subText, fontSize: '.55rem', lineHeight: 1.5, marginTop: 4 }}>{tx.cloudResetDesc}</div>
+              <input value={resetCode} onChange={event => setResetCode(event.target.value)} placeholder={tx.resetCode} style={{ width: '100%', marginTop: 9, padding: 8, borderRadius: 7, border: '1px solid rgba(255,56,96,.3)', background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace' }} />
+              <button disabled={!profile?.detective_name || resetCode !== profile.detective_name} onClick={() => setConfirm({
+                text: tx.cloudResetDesc,
+                run: async () => {
+                  const identity = {
+                    detective_name: profile.detective_name, avatar: profile.avatar, signature: profile.signature,
+                    identity_badge: profile.identity_badge, detective_tags: profile.detective_tags,
+                  };
+                  await mutate(() => ({ profile: normalizeProfile(identity) }));
+                  setResetCode('');
+                  notify(tx.okCloudReset, 'error');
+                },
+              })} style={{ width: '100%', marginTop: 8, padding: 8, borderRadius: 7, border: '1px solid #ff386080', background: 'rgba(255,56,96,.12)', color: '#ff7890', fontFamily: 'monospace', cursor: resetCode === profile?.detective_name ? 'pointer' : 'not-allowed', opacity: resetCode === profile?.detective_name ? 1 : .42 }}>{tx.cloudResetBtn}</button>
+            </div>
             <div style={{
               padding: '10px 12px', borderRadius: 9,
               border: `1px solid ${skin.border}`, background: skin.panel,
@@ -183,6 +267,19 @@ export default function SettingsDrawer({ onClose }) {
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.version}</div>
               <div style={{ fontSize: '0.55rem', color: skin.subText, marginTop: 4 }}>{APP_VERSION}</div>
             </div>
+          </div>
+
+          <SectionTitle skin={skin}>{tx.account}</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
+              <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.email}</div>
+              <div style={{ fontSize: '0.55rem', color: skin.subText, marginTop: 4 }}>{account?.email || user?.email || '—'}</div>
+            </div>
+            <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
+              <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.sync}</div>
+              <div style={{ fontSize: '0.55rem', color: syncStatus === 'online' ? '#00b878' : syncStatus === 'syncing' ? '#ffaa00' : '#ff6b84', marginTop: 4 }}>● {syncStatus === 'online' ? tx.syncOk : syncStatus.toUpperCase()}</div>
+            </div>
+            <ActionRow skin={skin} danger label={tx.logout} desc={tx.logoutDesc} btnLabel={tx.logoutBtn} onClick={logout} />
           </div>
         </div>
       </div>
@@ -200,12 +297,12 @@ export default function SettingsDrawer({ onClose }) {
           }}>
             <div style={{ fontSize: '0.7rem', color: skin.text, lineHeight: 1.7 }}>{confirm.text}</div>
             <div style={{ display: 'flex', gap: 9, marginTop: 16 }}>
-              <button onClick={() => { const run = confirm.run; setConfirm(null); run(); }} style={{
+              <button onClick={() => void runConfirmed()} disabled={saving} style={{
                 flex: 1, padding: 9, borderRadius: 8, cursor: 'pointer',
                 border: '1px solid #ff3860', background: 'rgba(255,56,96,0.16)', color: '#ff3860',
                 fontFamily: 'monospace', fontSize: '0.62rem', letterSpacing: '0.12em',
               }}>{tx.yes}</button>
-              <button onClick={() => setConfirm(null)} style={{
+              <button onClick={() => setConfirm(null)} disabled={saving} style={{
                 flex: 1, padding: 9, borderRadius: 8, cursor: 'pointer',
                 border: `1px solid ${skin.border}`, background: 'transparent', color: skin.subText,
                 fontFamily: 'monospace', fontSize: '0.62rem', letterSpacing: '0.12em',

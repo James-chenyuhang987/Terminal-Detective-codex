@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { SKILL_TREES, getLevelFromXP, loadProgression } from '@/game/agentProgression';
+import { SKILL_TREES, getLevelFromXP } from '@/game/agentProgression';
 
 // ── 每个探员的技能链定义（线性解锁关系）─────────────────────────────────────
 // skills[0] → skills[1] → skills[2] → ...
@@ -198,18 +198,14 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
 }
 
 // ── Main SkillTreePanel ────────────────────────────────────────────────────────
-export default function SkillTreePanel({ agentIdx }) {
+export default function SkillTreePanel({ agentIdx, progression = [], loadout = [], onChange }) {
   const color = AGENT_COLORS[agentIdx];
   const skills = SKILL_TREES[agentIdx] || [];
   const positions = getNodePositions(skills.length);
 
-  // Load state from localStorage
-  const [progression] = useState(() => loadProgression());
-  const [equipped, setEquipped] = useState(() => {
-    try {
-      const raw = localStorage.getItem(`skill_equipped_v1`);
-      return raw ? JSON.parse(raw) : [[], [], []];
-    } catch { return [[], [], []]; }
+  const equipped = [0, 1, 2].map(index => {
+    const agentId = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'][index];
+    return loadout.find(row => row?.agent_id === agentId)?.skill_ids || loadout[index] || [];
   });
   const [hoveredId, setHoveredId] = useState(null);
 
@@ -218,13 +214,8 @@ export default function SkillTreePanel({ agentIdx }) {
   const unlockedByLevel = skills.filter(s => level >= s.unlock_level).map(s => s.id);
   const equippedIds = equipped[agentIdx] || [];
 
-  const saveEquipped = useCallback((next) => {
-    localStorage.setItem('skill_equipped_v1', JSON.stringify(next));
-  }, []);
-
   const handleSkillClick = useCallback((skill) => {
-    setEquipped(prev => {
-      const current = [...(prev[agentIdx] || [])];
+    const current = [...(equipped[agentIdx] || [])];
       const idx = current.indexOf(skill.id);
       let next;
       if (idx >= 0) {
@@ -236,14 +227,13 @@ export default function SkillTreePanel({ agentIdx }) {
         // Equip — require all previous skills equipped
         const skillIdx = skills.findIndex(s => s.id === skill.id);
         const prereqsMet = skillIdx === 0 || current.includes(skills[skillIdx - 1].id);
-        if (!prereqsMet) return prev; // can't equip out of order
+        if (!prereqsMet) return;
         next = [...current, skill.id];
       }
-      const updated = prev.map((arr, i) => i === agentIdx ? next : arr);
-      saveEquipped(updated);
-      return updated;
-    });
-  }, [agentIdx, skills, saveEquipped]);
+      const ids = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
+      const updated = ids.map((agentId, i) => ({ agent_id: agentId, skill_ids: i === agentIdx ? next : equipped[i] }));
+      onChange?.(updated);
+  }, [agentIdx, equipped, onChange, skills]);
 
   // Determine node state
   const getNodeState = (skill, idx) => {

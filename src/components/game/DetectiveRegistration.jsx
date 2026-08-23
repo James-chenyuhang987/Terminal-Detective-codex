@@ -14,7 +14,7 @@ const TAGS = ['冷静', '直觉', '技术流', '心理侧写', '铁血', '书虫
 const RANDOM_NAMES = ['夜鸦', '灰隼', '零号', '雨村', '白桦', '暗弦', '玄影', '晨钟'];
 const MAX_SIG = 30;
 
-export default function DetectiveRegistration({ onConfirm, onBack, busy }) {
+export default function DetectiveRegistration({ onConfirm, onBack, busy, error = '' }) {
   const [name, setName] = useState('');
   const [avatarIdx, setAvatarIdx] = useState(0);
   const [badge, setBadge] = useState('private');
@@ -29,7 +29,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy }) {
     setTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : prev.length >= 3 ? prev : [...prev, t]);
 
   return (
-    <div style={{ minHeight: '100vh', position: 'relative', background: '#07090e', fontFamily: 'monospace', overflowX: 'hidden' }}>
+    <div className="td-registration" style={{ minHeight: '100dvh', position: 'relative', background: '#07090e', fontFamily: 'monospace', overflowX: 'hidden' }}>
       <HomeBackdrop />
 
       <div style={{ position: 'relative', zIndex: 2, padding: '24px 22px 40px', maxWidth: 1180, margin: '0 auto' }}>
@@ -52,7 +52,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy }) {
           <span style={{ width: 40 }} />
         </div>
 
-        <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(180px,210px) 1fr minmax(210px,250px)', alignItems: 'start' }}>
+        <div className="td-registration-grid" style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(180px,210px) 1fr minmax(210px,250px)', alignItems: 'start' }}>
           <RegStepTracker current={step} />
 
           {/* Form */}
@@ -138,7 +138,10 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy }) {
             </Field>
 
             <button
-              onClick={() => onConfirm({ detective_name: name.trim(), avatar, signature: signature.trim() })}
+              onClick={() => onConfirm({
+                detective_name: name.trim(), avatar, signature: signature.trim(),
+                identity_badge: badge, detective_tags: tags,
+              })}
               disabled={busy || name.trim().length < 2}
               style={{
                 width: '100%', marginTop: 6, padding: '14px', borderRadius: 12,
@@ -152,6 +155,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy }) {
               }}>
               🔒 {busy ? '登记中…' : '确认注册'}
             </button>
+            {error && <div role="alert" style={{ marginTop: 10, padding: 9, borderRadius: 8, border: '1px solid rgba(255,56,96,.45)', background: 'rgba(255,56,96,.08)', color: '#ff7890', textAlign: 'center', fontSize: '.58rem' }}>{error}</div>}
             <div style={{ textAlign: 'center', fontSize: '0.54rem', color: 'rgba(255,255,255,0.28)', marginTop: 10 }}>
               ⚠ 侦探代号仅可修改 1 次，请谨慎确认
             </div>

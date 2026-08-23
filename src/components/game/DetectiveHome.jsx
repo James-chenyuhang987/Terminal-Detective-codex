@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { loadProfile, saveProfile, applyCheckin, canCheckin, ACHIEVEMENT_TOTAL } from '@/game/playerProfile';
+import React, { lazy, Suspense, useState } from 'react';
+import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, knownAchievementCount, markActivity } from '@/game/playerProfile';
+import { useProfile } from '@/lib/ProfileContext.jsx';
+import { useLang } from '@/lib/lang.jsx';
 import NameInputDialog from '@/components/game/home/NameInputDialog';
 import ResourceBar from '@/components/game/home/ResourceBar';
 import ProfileBadge from '@/components/game/home/ProfileBadge';
@@ -7,28 +9,61 @@ import HomePortal from '@/components/game/home/HomePortal';
 import InfoCard from '@/components/game/home/InfoCard';
 import SideNavIcons from '@/components/game/home/SideNavIcons';
 import FooterShortcuts from '@/components/game/home/FooterShortcuts';
-import ModulePanel from '@/components/game/home/ModulePanel';
 import HomeBackdrop from '@/components/game/home/HomeBackdrop';
 
-const SIDE_ITEMS = [
-  { key: 'warehouse', icon: '🎒', label: '物品仓库', desc: '道具与材料' },
-  { key: 'graph', icon: '🕸', label: '线索图谱', desc: '线索关联分析' },
-  { key: 'tech', icon: '⚙️', label: '科技研发', desc: '解锁科技能力' },
-  { key: 'comms', icon: '✉️', label: '探员通讯', desc: '好友与聊天' },
-  { key: 'settings', icon: '🔧', label: '设置', desc: '游戏设置' },
-];
+const HomeModules = lazy(() => import('@/components/game/home/HomeModules'));
 
 export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
-  const [profile, setProfile] = useState(null);
+  const { lang } = useLang();
+  const { profile, mutate, refresh, syncStatus, isReadOnly } = useProfile();
   const [busy, setBusy] = useState(false);
   const [module, setModule] = useState(null);
   const [toast, setToast] = useState('');
+  const hasSavedTeam = !!profile?.saved_team_config;
+  const loadError = syncStatus === 'error';
 
-  useEffect(() => { loadProfile().then(setProfile); }, []);
+  const retryLoad = () => {
+    void refresh().catch(() => {});
+  };
 
-  const patch = async (next) => {
-    setProfile(next);
-    await saveProfile(next);
+  const notify = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(''), 3200);
+  };
+
+  const patch = async (next, message = '') => {
+    setBusy(true);
+    try {
+      await mutate(() => ({ profile: next }));
+      if (message) notify(message);
+      return true;
+    } catch {
+      notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applyResult = async (result, message = '') => {
+    if (busy || isReadOnly) return false;
+    if (!result?.profile || result.error) {
+      const errors = {
+        insufficient_funds: lang === 'zh' ? '资源不足' : 'Insufficient funds',
+        not_owned: lang === 'zh' ? '尚未持有该物品' : 'Item not owned',
+        equip_limit: lang === 'zh' ? '最多装备两件任务道具' : 'Only two mission items can be equipped',
+        prerequisite: lang === 'zh' ? '请先解锁前置科技' : 'Unlock the prerequisite first',
+        already_claimed: lang === 'zh' ? '奖励已经领取' : 'Reward already claimed',
+        incomplete: lang === 'zh' ? '目标尚未完成' : 'Objective incomplete',
+        day_locked: lang === 'zh' ? '该目标尚未解锁' : 'This day is still locked',
+        locked: lang === 'zh' ? '成就尚未解锁' : 'Achievement locked',
+        rename_used: lang === 'zh' ? '代号修改次数已用完' : 'Codename rename already used',
+        energy_full: lang === 'zh' ? '体力已达到临时上限' : 'Energy is at the overflow cap',
+      };
+      notify(errors[result?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'));
+      return false;
+    }
+    return patch(result.profile, message);
   };
 
   const handleName = async (name) => {
@@ -40,31 +75,58 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const handleCheckin = async () => {
     const { profile: next, reward } = applyCheckin(profile);
     if (!reward) return;
-    await patch(next);
-    setToast(`签到成功 · 体力+${reward.energy} 金币+${reward.gold} 钻石+${reward.diamonds}`);
-    setTimeout(() => setToast(''), 3200);
+    const parts = [reward.energy ? `⚡+${reward.energy}` : '', reward.gold ? `🪙+${reward.gold}` : '', reward.diamonds ? `💎+${reward.diamonds}` : ''].filter(Boolean).join(' · ');
+    await patch(next, `${lang === 'zh' ? '签到成功' : 'Check-in complete'} · ${parts || '🎁'}`);
+  };
+
+  const enterLobby = async (targetCaseId = null) => {
+    const next = markActivity(profile, 'lobby_visits');
+    if (await patch(next)) onEnterLobby(targetCaseId);
+  };
+
+  const openCase = (caseId) => {
+    setModule(null);
+    onOpenCases(caseId);
+  };
+
+  const quickStart = () => {
+    if (profile.saved_team_config) setModule('cases');
+    else void enterLobby();
   };
 
   if (!profile) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0a0a0f', display: 'grid', placeItems: 'center', color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.75rem' }}>
-        读取侦探档案…
+      <div style={{ minHeight: '100dvh', background: '#0a0a0f', display: 'grid', placeItems: 'center', color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+        {loadError ? <div style={{ textAlign: 'center' }}><div style={{ color: '#ff7890', marginBottom: 12 }}>{lang === 'zh' ? '读取云端档案失败' : 'Failed to load cloud profile'}</div><button onClick={retryLoad} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #00e5ff80', background: 'rgba(0,229,255,.1)', color: '#7df1ff', cursor: 'pointer', fontFamily: 'monospace' }}>{lang === 'zh' ? '重试' : 'RETRY'}</button></div> : (lang === 'zh' ? '读取侦探档案…' : 'LOADING DETECTIVE PROFILE…')}
       </div>
     );
   }
 
   const named = !!profile.detective_name;
+  const sideItems = lang === 'zh' ? [
+    { key: 'warehouse', icon: '🎒', label: '物品仓库', desc: '道具与材料' },
+    { key: 'graph', icon: '🕸', label: '线索图谱', desc: '线索关联分析' },
+    { key: 'tech', icon: '⚙️', label: '科技研发', desc: '解锁科技能力' },
+    { key: 'comms', icon: '✉️', label: '探员通讯', desc: '系统与剧情联络' },
+    { key: 'settings', icon: '🔧', label: '设置', desc: '游戏与账户设置' },
+  ] : [
+    { key: 'warehouse', icon: '🎒', label: 'WAREHOUSE', desc: 'Items and materials' },
+    { key: 'graph', icon: '🕸', label: 'CLUE GRAPH', desc: 'Cross-case evidence' },
+    { key: 'tech', icon: '⚙️', label: 'RESEARCH', desc: 'Permanent upgrades' },
+    { key: 'comms', icon: '✉️', label: 'COMMS', desc: 'System and story mail' },
+    { key: 'settings', icon: '🔧', label: 'SETTINGS', desc: 'Game and account' },
+  ];
 
   return (
-    <div style={{
-      minHeight: '100vh', position: 'relative', overflowX: 'hidden',
+    <div className="td-home" style={{
+      minHeight: '100dvh', position: 'relative', overflowX: 'hidden',
       background: '#07090e',
       fontFamily: 'monospace', display: 'flex', flexDirection: 'column',
     }}>
       <HomeBackdrop />
 
       {/* Top bar */}
-      <div style={{
+      <div className="td-home-topbar" style={{
         position: 'relative', zIndex: 2,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
         padding: '12px 22px', borderBottom: '1px solid rgba(0,229,255,0.14)',
@@ -73,37 +135,37 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         boxShadow: '0 6px 26px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
         flexWrap: 'wrap',
       }}>
-        <ProfileBadge profile={profile} />
+        <ProfileBadge profile={profile} onClick={() => setModule('profile')} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <ResourceBar profile={profile} onCheckin={handleCheckin} canCheckin={canCheckin(profile)} />
+          <ResourceBar profile={profile} onPick={setModule} />
           <div style={{ display: 'flex', gap: 10, fontSize: 15 }}>
             {[['✉️', 'comms'], ['📅', 'checkin'], ['🔧', 'settings']].map(([ic, k]) => (
               <button key={k} onClick={() => setModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
             ))}
-            <span style={{ color: '#00ff88', fontSize: '0.7rem' }}>📶</span>
+            <span title={syncStatus === 'online' ? 'Base44 connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed'} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶</span>
           </div>
         </div>
       </div>
 
       {/* Body */}
-      <div style={{
+      <div className="td-home-grid" style={{
         position: 'relative', zIndex: 2,
         flex: 1, display: 'grid', gap: 20, padding: '26px 22px',
         gridTemplateColumns: 'minmax(190px, 220px) 1fr minmax(180px, 210px)',
         alignItems: 'start',
       }}>
         {/* Left column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <InfoCard icon="📰" title="今日情报" alert desc="城市迷案追踪 —— 新的案件线索已更新"
-            btnLabel="查看详情" onClick={() => setModule('intel')} />
-          <InfoCard icon="🗂" title="未解案件" big={String(profile.unsolved_count).padStart(2, '0')}
-            unit="个案件待调查" btnLabel="进入案件簿" onClick={onOpenCases} />
-          <InfoCard icon="🏅" title="成就徽章" big={(profile.achievements || []).length}
-            unit={`/ ${ACHIEVEMENT_TOTAL}`} btnLabel="查看成就" onClick={() => setModule('achievements')} />
+        <div className="td-home-left" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <InfoCard icon="📰" title={lang === 'zh' ? '今日情报' : 'DAILY INTEL'} alert desc={lang === 'zh' ? '优先案件与今日额外奖励已更新' : 'Priority case and daily bonus updated'}
+            btnLabel={lang === 'zh' ? '查看详情' : 'VIEW INTEL'} onClick={() => setModule('intel')} />
+          <InfoCard icon="🗂" title={lang === 'zh' ? '未解案件' : 'OPEN CASES'} big={String(profile.unsolved_count).padStart(2, '0')}
+            unit={lang === 'zh' ? '个案件待调查' : 'cases pending'} btnLabel={lang === 'zh' ? '进入案件簿' : 'OPEN ARCHIVE'} onClick={() => setModule('cases')} />
+          <InfoCard icon="🏅" title={lang === 'zh' ? '成就徽章' : 'ACHIEVEMENTS'} big={knownAchievementCount(profile)}
+            unit={`/ ${ACHIEVEMENT_TOTAL}`} btnLabel={lang === 'zh' ? '查看成就' : 'VIEW'} onClick={() => setModule('achievements')} />
         </div>
 
         {/* Center */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+        <div className="td-home-center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
           <div style={{ textAlign: 'center' }}>
             <h1 style={{
               margin: 0, fontSize: 'clamp(2.1rem, 5.4vw, 3.7rem)', fontWeight: 900, letterSpacing: '0.05em',
@@ -157,39 +219,47 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
                 <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
                   代号 {profile.detective_name} · 侦探之旅已启程
                 </div>
-                <button onClick={onEnterLobby} style={{
+                <button onClick={quickStart} style={{
                   width: '100%', padding: '11px', cursor: 'pointer', borderRadius: 10,
                   border: '1px solid #c5a059', background: 'rgba(197,160,89,0.22)',
                   color: '#f0d9a5', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
-                }}>开始调查</button>
-                <button onClick={() => patch({ ...profile, detective_name: '' })} style={{
+                }}>{lang === 'zh' ? '开始调查' : 'START INVESTIGATION'}</button>
+                <button onClick={() => setModule('profile')} style={{
                   marginTop: 8, background: 'transparent', border: 'none', cursor: 'pointer',
                   color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: '0.55rem',
-                }}>✎ 修改代号</button>
+                }}>✎ {lang === 'zh' ? '修改档案' : 'EDIT PROFILE'}</button>
               </div>
             )}
-            <HomePortal onEnter={onEnterLobby} />
+            <HomePortal onEnter={() => void enterLobby()} />
           </div>
         </div>
 
         {/* Right column */}
-        <SideNavIcons items={SIDE_ITEMS} onPick={setModule} />
+        <SideNavIcons items={sideItems} onPick={setModule} />
       </div>
 
       {/* Footer */}
       <div style={{ position: 'relative', zIndex: 2, padding: '14px 22px 22px' }}>
         <FooterShortcuts
           items={[
-            { key: 'checkin', icon: '📅', label: '每日签到', alert: canCheckin(profile) },
-            { key: 'events', icon: '🎁', label: '活动中心' },
-            { key: 'tutorial', icon: '📖', label: '新手任务' },
-            { key: 'goals', icon: '🎯', label: '七日目标' },
+            { key: 'checkin', icon: '📅', label: lang === 'zh' ? '每日签到' : 'CHECK-IN', alert: canCheckin(profile) },
+            { key: 'events', icon: '🎁', label: lang === 'zh' ? '活动中心' : 'EVENTS' },
+            { key: 'tutorial', icon: '📖', label: lang === 'zh' ? '新手任务' : 'ROOKIE TASKS' },
+            { key: 'goals', icon: '🎯', label: lang === 'zh' ? '七日目标' : '7-DAY GOALS' },
           ]}
           onPick={setModule}
         />
       </div>
 
-      {module && <ModulePanel moduleKey={module} profile={profile} onClose={() => setModule(null)} />}
+      {module && (
+        <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 180, background: 'rgba(0,3,8,.82)', color: '#7df1ff', display: 'grid', placeItems: 'center' }}>LOADING MODULE…</div>}>
+          <HomeModules
+            moduleKey={module} profile={profile} busy={busy} onClose={() => setModule(null)}
+            onApply={applyResult} onCheckin={handleCheckin} onOpenModule={setModule} onNavigate={openCase}
+            hasSavedTeam={hasSavedTeam}
+          />
+        </Suspense>
+      )}
 
       {toast && (
         <div style={{

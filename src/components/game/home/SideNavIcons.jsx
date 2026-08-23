@@ -3,7 +3,7 @@ import GlassPanel from '@/components/game/home/GlassPanel';
 
 export default function SideNavIcons({ items, onPick }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontFamily: 'monospace' }}>
+    <div className="td-home-sidenav" style={{ display: 'flex', flexDirection: 'column', gap: 10, fontFamily: 'monospace' }}>
       {items.map((it, i) => (
         <GlassPanel key={it.key} accent="#00e5ff" glow={0.12}
           style={{ animation: `nav-in 0.5s ${0.1 + i * 0.07}s cubic-bezier(.22,1,.36,1) both` }}>

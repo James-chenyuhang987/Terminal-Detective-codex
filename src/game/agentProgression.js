@@ -141,7 +141,7 @@ export function grantXPAllOnce(runId, amount, storage) {
 
     const updated = addXPAll(current, amount);
     target.setItem(STORAGE_KEY, JSON.stringify(updated));
-    const nextRewarded = [...(Array.isArray(rewarded) ? rewarded : []), runId].slice(-100);
+    const nextRewarded = [...(Array.isArray(rewarded) ? rewarded : []), runId];
     target.setItem(REWARDED_RUNS_KEY, JSON.stringify(nextRewarded));
     return { progression: updated, awarded: true };
   } catch {

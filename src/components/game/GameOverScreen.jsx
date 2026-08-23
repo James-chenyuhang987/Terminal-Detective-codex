@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   getLevelFromXP, getXPToNextLevel, SKILL_TREES, LEVEL_XP_TABLE, MAX_LEVEL,
-  loadProgression, grantXPAllOnce,
 } from '@/game/agentProgression';
+import { normalizeAgentProgression } from '@/game/playerProfile';
+import { useProfile } from '@/lib/ProfileContext.jsx';
 import LevelUpModal from '@/components/game/LevelUpModal';
 
 // ── XP formula ────────────────────────────────────────────────────────────────
@@ -242,11 +243,14 @@ const AGENT_NAMES  = ['隼目', '破心', '幽灵'];
 const AGENT_ICONS  = ['👁️', '🔥', '💻'];
 const AGENT_COLORS = ['#00e5ff', '#ff6b6b', '#a78bfa'];
 
-export default function GameOverScreen({ judgeResult, gameState, caseData, rewardEligible = false, onReturnToLobby, onReturnToLanding }) {
+export default function GameOverScreen({ judgeResult, gameState, caseData, rewardEligible = false, onReturnToLobby, onReturnToLanding, onSettlement }) {
+  const { profile } = useProfile();
   const xpGain = calcXPGain(rewardEligible ? judgeResult : null, gameState, caseData);
-  const [oldProg] = useState(() => loadProgression());
+  const [oldProg] = useState(() => normalizeAgentProgression(profile?.agent_progression));
   const [newProg, setNewProg] = useState(null);
   const [phase, setPhase] = useState('summary');
+  const settlementSentRef = useRef(false);
+  const [settlementStatus, setSettlementStatus] = useState('saving');
 
   // Level-up modal queue
   const [modalQueue, setModalQueue] = useState([]); // [{agentIdx, fromLevel, toLevel}]
@@ -254,12 +258,29 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
 
   useEffect(() => {
     const t = setTimeout(() => {
-      const { progression } = grantXPAllOnce(gameState.run_id, xpGain.total);
-      setNewProg(progression);
       setPhase('xp');
     }, 1400);
     return () => clearTimeout(t);
   }, []);
+
+  const syncSettlement = useCallback(async () => {
+    if (settlementSentRef.current) return;
+    settlementSentRef.current = true;
+    setSettlementStatus('saving');
+    try {
+      const result = await onSettlement?.({
+        xpGain: xpGain.total,
+      });
+      if (result?.error) throw new Error(result.error);
+      setNewProg(normalizeAgentProgression(result?.profile?.agent_progression || oldProg));
+      setSettlementStatus('saved');
+    } catch {
+      settlementSentRef.current = false;
+      setSettlementStatus('error');
+    }
+  }, [oldProg, onSettlement, xpGain.total]);
+
+  useEffect(() => { void syncSettlement(); }, [syncSettlement]);
 
   // Process modal queue sequentially
   useEffect(() => {
@@ -292,8 +313,8 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
   ];
 
   return (
-    <div style={{
-      minHeight: '100vh',
+    <div className="td-game-over" style={{
+      minHeight: '100dvh',
       background: 'radial-gradient(ellipse at 30% 10%, #0a0020 0%, #03060f 60%)',
       fontFamily: "'Courier New', monospace",
       display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -376,14 +397,22 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           </div>
         )}
 
+        <div role="status" style={{
+          marginBottom: 12, textAlign: 'center', fontFamily: 'monospace', fontSize: '.58rem',
+          color: settlementStatus === 'saved' ? '#00ff88' : settlementStatus === 'error' ? '#ff6b84' : '#ffaa00',
+        }}>
+          {settlementStatus === 'saved' ? '✓ 调查档案已同步至 Base44' : settlementStatus === 'error' ? '⚠ 云端结算失败，奖励尚未写入' : '⟳ 正在同步调查结算…'}
+          {settlementStatus === 'error' && <button onClick={() => void syncSettlement()} style={{ marginLeft: 9, border: '1px solid #ff6b8480', borderRadius: 6, padding: '3px 8px', background: 'rgba(255,56,96,.1)', color: '#ff8da0', cursor: 'pointer', fontFamily: 'monospace' }}>重试</button>}
+        </div>
+
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', animation: 'go-in 0.6s 0.6s cubic-bezier(.22,1,.36,1) both' }}>
-          <button onClick={onReturnToLobby} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
+          <button onClick={onReturnToLobby} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
             ↺ 重新配置编队
           </button>
-          <button onClick={onReturnToLanding} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.6)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, cursor: 'pointer', transition: 'all 0.2s' }}
+          <button onClick={onReturnToLanding} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.6)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, transition: 'all 0.2s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}>
             ← 返回主页

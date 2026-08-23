@@ -1,4 +1,5 @@
 const isNode = typeof window === 'undefined';
+const runtimeEnv = /** @type {ImportMetaEnv} */ (import.meta.env || {});
 const memoryValues = new Map();
 const memoryStorage = {
 	getItem: (key) => memoryValues.get(key) ?? null,
@@ -51,13 +52,13 @@ const getAppParams = () => {
 		storage.removeItem('base44_access_token');
 		storage.removeItem('token');
 	}
-	const serverUrl = normalizeUrl(import.meta.env.VITE_BASE44_SERVER_URL, DEFAULT_SERVER_URL);
-	const appBaseUrl = normalizeUrl(import.meta.env.VITE_BASE44_APP_BASE_URL, serverUrl);
+	const serverUrl = normalizeUrl(runtimeEnv.VITE_BASE44_SERVER_URL, DEFAULT_SERVER_URL);
+	const appBaseUrl = normalizeUrl(runtimeEnv.VITE_BASE44_APP_BASE_URL, serverUrl);
 	return {
-		appId: getAppParamValue("app_id", { defaultValue: import.meta.env.VITE_BASE44_APP_ID || DEFAULT_APP_ID }),
+		appId: getAppParamValue("app_id", { defaultValue: runtimeEnv.VITE_BASE44_APP_ID || DEFAULT_APP_ID }),
 		token: getAppParamValue("access_token", { removeFromUrl: true }),
 		fromUrl: getAppParamValue("from_url", { defaultValue: isNode ? '' : window.location.href }),
-		functionsVersion: getAppParamValue("functions_version", { defaultValue: import.meta.env.VITE_BASE44_FUNCTIONS_VERSION }),
+		functionsVersion: getAppParamValue("functions_version", { defaultValue: runtimeEnv.VITE_BASE44_FUNCTIONS_VERSION }),
 		serverUrl,
 		appBaseUrl,
 	}

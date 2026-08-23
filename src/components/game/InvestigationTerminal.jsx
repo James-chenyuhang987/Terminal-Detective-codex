@@ -7,7 +7,7 @@ import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
 import { streamThinkSSE, getAction, settleAction, getNPCDialogue, judgeReport, branchCheck, parseActionTag, linkCheck, setLLMLang, generateDecisionCards, linkCinematic } from '@/game/llmClient';
 import DecisionCards from '@/components/game/DecisionCards';
 import LinkCinematic from '@/components/game/LinkCinematic';
-import InterrogationHints, { EmotionBadge } from '@/components/game/InterrogationHints';
+import { EmotionBadge } from '@/components/game/InterrogationHints';
 import { buildHints, getEmotion, shiftEmotion } from '@/game/npcEmotion';
 import { nextCrisisIn, rollCrisis, applyCrisisChoice } from '@/game/crisisEvents';
 import CrisisAlert from '@/components/game/CrisisAlert';
@@ -26,17 +26,24 @@ import OnboardingGuide from '@/components/game/OnboardingGuide';
 import ToolPanelTabs from '@/components/game/ToolPanelTabs';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import { useSettings, panelSkin } from '@/lib/settings.jsx';
+import { JudgeResult, NPCDialogBox, TerminalLine } from '@/components/game/investigation/TerminalPanels';
+import { useManagedTimers } from '@/components/game/investigation/useManagedTimers';
 
 const ONBOARD_KEY = 'td_onboarding_seen_v1';
 
 const PHASE_COLORS = Phase_Color_Map;
 
-export default function InvestigationTerminal({ agentStrategy, selectedCase, onGameEnd, onBackToLobby }) {
+export default function InvestigationTerminal({ agentStrategy, selectedCase, onGameEnd, onBackToLobby, onSettlement }) {
   const { lang, t } = useLang();
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   const skin = panelSkin(settings.panelLight);
+  const { schedule, wait } = useManagedTimers();
   const caseDataResolved = selectedCase || Case_Data_Lvl_01;
+  const [runtimePriority, setRuntimePriority] = useState(() => agentStrategy?.priority_list || []);
+  const activeAgentStrategy = useMemo(() => ({
+    ...(agentStrategy || {}), priority_list: runtimePriority,
+  }), [agentStrategy, runtimePriority]);
 
   const caseData = useMemo(
     () => localizeCase(caseDataResolved, lang),
@@ -45,7 +52,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   // AI 叙事输出语言跟随界面语言
   useEffect(() => { setLLMLang(lang); }, [lang]);
 
-  const [gameState, setGameState] = useState(() => createInitialGameState(caseDataResolved));
+  const [gameState, setGameState] = useState(() => createInitialGameState(caseDataResolved, agentStrategy?.home_effects));
   const [reactState, setReactState] = useState(ReAct_Enum.IDLE);
   const [terminalLines, setTerminalLines] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -58,6 +65,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [selectedNPC, setSelectedNPC] = useState(null);
   const [npcDialogue, setNpcDialogue] = useState([]);
   const [toolTab, setToolTab] = useState('evidence');
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [showMiniMap, setShowMiniMap] = useState(true);
   const [decisionLog, setDecisionLog] = useState([]);
   const [agentPath, setAgentPath] = useState(() => [getInitialZone(caseDataResolved)].filter(Boolean));
   const [zoneFeedback, setZoneFeedback] = useState({});
@@ -83,6 +92,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const abortCtrlRef = useRef(null);
   const activeRunRef = useRef(0);
   const nextCrisisTurnRef = useRef(nextCrisisIn());
+  const bsodCountRef = useRef(0);
 
   const triggerSynergy = useCallback((type, clue) => {
     setSynergyEvent({
@@ -134,8 +144,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
   const addLine = useCallback((text, type = 'default', prefix = '') => {
     setTerminalLines(prev => [...prev, { text, type, prefix, id: Date.now() + Math.random() }]);
-    setTimeout(scrollToBottom, 50);
-  }, [scrollToBottom]);
+    schedule(scrollToBottom, 50);
+  }, [schedule, scrollToBottom]);
 
   // Check for auto-released hidden clues on turn change
   useEffect(() => {
@@ -150,7 +160,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           unlocked_clues_set: new Set([...prev.unlocked_clues, hc.clue_id]),
         }));
         setNewClueIds(prev => [...prev, hc.clue_id]);
-        setTimeout(() => setNewClueIds(prev => prev.filter(id => id !== hc.clue_id)), 3000);
+        schedule(() => setNewClueIds(prev => prev.filter(id => id !== hc.clue_id)), 3000);
       }
     });
   }, [gameState.turn_count]);
@@ -158,6 +168,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   // Confusion / crash monitoring
   useEffect(() => {
     if (gameState.confusion_score >= 100 && !showBSoD) {
+      bsodCountRef.current += 1;
       setShowBSoD(true);
     }
   }, [gameState.confusion_score]);
@@ -173,7 +184,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const stopStressTimer = () => {
     clearInterval(stressTimerRef.current);
     stressTimerRef.current = null;
-    setTimeout(() => setStressLevel(0), 500);
+    schedule(() => setStressLevel(0), 500);
   };
 
   const beginAbortableOperation = () => {
@@ -207,7 +218,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       addLine('\n' + '═'.repeat(50), 'divider');
       addLine(`◈ ${t.turnLabel} ${gs.turn_count + 1} — ${t.observationPhase}`, 'phase');
       addLine(observation, 'observe');
-      await sleep(800);
+      await wait(800);
       if (isCancelled()) return;
 
       // ── Phase 2: THINK ────────────────────────────────────────────────
@@ -220,7 +231,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
       await streamThinkSSE({
         gameState: gs,
-        agentStrategy,
+        agentStrategy: activeAgentStrategy,
         chatHistory: gs.chat_history.slice(-6),
         banList: gs.action_ban_list,
         observation,
@@ -247,7 +258,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       const actionText = await getAction({
         thoughtProcess: fullThought,
         gameState: gs,
-        agentStrategy,
+        agentStrategy: activeAgentStrategy,
         signal: ctrl.signal,
       });
 
@@ -302,7 +313,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           const overrideText = await getAction({
             thoughtProcess: `${fullThought}\n\n[ARCHITECT OVERRIDE ORDER — player_override=true] ${choice.freeform}`,
             gameState: gs,
-            agentStrategy,
+            agentStrategy: activeAgentStrategy,
             signal: ctrl.signal,
           });
           if (isCancelled()) return;
@@ -335,7 +346,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           : actionTag || 'search_area',
         gameState: gs,
         caseData,
-        agentStrategy,
+        agentStrategy: activeAgentStrategy,
         actionTag: actionTag || 'search_area',
         isIllegal: !isLegal,
         signal: ctrl.signal,
@@ -344,7 +355,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
       // Apply results — pass agentStrategy for resistance/discount/skill modifiers
       settlement.action_name = actionTag || 'search_area';
-      const { newState, newClues } = applySettlementResult(gs, settlement, agentStrategy, caseData);
+      const { newState, newClues } = applySettlementResult(gs, settlement, activeAgentStrategy, caseData);
       newState.lastAction = actionTag;
       newState.last_action = actionTag;
 
@@ -401,7 +412,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       if (newState.turn_count >= nextCrisisTurnRef.current) {
         nextCrisisTurnRef.current = newState.turn_count + nextCrisisIn();
         const evt = rollCrisis(newState, caseData);
-        setTimeout(() => setCrisis(evt), 900);
+        schedule(() => setCrisis(evt), 900);
       }
 
       setGameState(newState);
@@ -464,14 +475,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           }
         });
         setNewClueIds(prev => [...prev, ...newClues]);
-        setTimeout(() => setNewClueIds(prev => prev.filter(id => !newClues.includes(id))), 3000);
+        schedule(() => setNewClueIds(prev => prev.filter(id => !newClues.includes(id))), 3000);
       }
 
       // Cross-validate synergy: trigger when action involves presenting evidence or examining
       const crossValidateActions = ['present_evidence', 'examine_clue', 'analyze_forensics', 'check_alibi'];
       if (actionTag && crossValidateActions.includes(actionTag) && newState.unlocked_clues.length >= 2) {
         const lastClue = caseData.clue_dictionary.find(c => newState.unlocked_clues.includes(c.clue_id));
-        setTimeout(() => triggerSynergy('cross_validate', lastClue), 600);
+        schedule(() => triggerSynergy('cross_validate', lastClue), 600);
       }
 
       if (settlement.confusion_increase > 0) {
@@ -532,7 +543,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         agentStatement: msg,
         gameState: state,
         caseData,
-        agentStrategy,
+        agentStrategy: activeAgentStrategy,
         emotionLevel: emo.level,
         refusesTopic: emo.refuses_topic,
         signal: ctrl.signal,
@@ -601,7 +612,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             return { ...prev, unlocked_clues: clues, unlocked_clues_set: new Set(clues) };
           });
           setNewClueIds(prev => [...prev, result.bonus_clue]);
-          setTimeout(() => setNewClueIds(prev => prev.filter(id => id !== result.bonus_clue)), 3000);
+          schedule(() => setNewClueIds(prev => prev.filter(id => id !== result.bonus_clue)), 3000);
           addLine(`\n🔍 破防审讯揭示新线索：${clue?.visual_icon || '🔍'} ${clue?.keyword || result.bonus_clue}`, 'success');
           if (clue) triggerSynergy('clue_converge', clue);
         }
@@ -623,7 +634,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     const evt = crisis;
     setCrisis(null);
     if (!evt) return;
-    const { changes, resultText } = applyCrisisChoice(evt, choiceId, gameStateRef.current, agentStrategy);
+    const { changes, resultText } = applyCrisisChoice(evt, choiceId, gameStateRef.current, activeAgentStrategy);
     addLine(`\n🚨 ${resultText}`, changes.confusion_delta > 0 ? 'warning' : 'success');
     setGameState(prev => {
       const next = { ...prev };
@@ -706,7 +717,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       if (bonus) {
         const bc = caseData.clue_dictionary.find(x => x.clue_id === bonus);
         setNewClueIds(ids => [...ids, bonus]);
-        setTimeout(() => setNewClueIds(ids => ids.filter(id => id !== bonus)), 3000);
+        schedule(() => setNewClueIds(ids => ids.filter(id => id !== bonus)), 3000);
         addLine(`\n${zh ? '🧩 不可逆线索已写入证物库：' : '🧩 IRREVERSIBLE CLUE FILED: '}${bc?.visual_icon || '🔍'} ${bc?.keyword || c.new_clue_hint || bonus}`, 'success');
       }
     }
@@ -797,7 +808,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         addLine(`\n${t.caseSolved}`, 'success');
         addLine(`\n${t.judgeVerdict} [${result.score}]: ${result.critique}`, 'success');
         setFinalJudgeResult(result);
-        setTimeout(() => setShowGameOver(true), 1800);
+        schedule(() => setShowGameOver(true), 1800);
       } else {
         const apLoss = result.score === 'D' ? Math.floor(gameStateRef.current.action_points_left * 0.5) : 3;
         setGameState(prev => ({
@@ -833,6 +844,25 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         gameState={gameState}
         caseData={caseData}
         rewardEligible={finalJudgeResult?.is_passed === true}
+        onSettlement={({ xpGain }) => onSettlement?.({
+          run_id: gameState.run_id,
+          case_id: caseDataResolved.case_id,
+          difficulty: caseDataResolved.difficulty,
+          score: finalJudgeResult?.score || 'D',
+          is_passed: finalJudgeResult?.is_passed === true,
+          clues: gameState.unlocked_clues,
+          valid_links: linkedPairs.filter(pair => pair.valid).map(pair => [pair.a, pair.b]),
+          valid_link_count: linkedPairs.filter(pair => pair.valid).length,
+          invalid_link_count: linkedPairs.filter(pair => !pair.valid).length,
+          turns: gameState.turn_count,
+          ap_left: gameState.action_points_left,
+          confusion: gameState.confusion_score,
+          bsod_count: bsodCountRef.current,
+          traps_triggered: gameState.traps_triggered || 0,
+          clue_ratio: gameState.unlocked_clues.length / Math.max(1, caseDataResolved.clue_dictionary.length),
+          all_hidden_clues: (caseDataResolved.hidden_clues || []).every(clue => gameState.unlocked_clues.includes(clue.clue_id)),
+          xp_gain: xpGain,
+        })}
         onReturnToLobby={onBackToLobby}
         onReturnToLanding={onGameEnd}
       />
@@ -840,7 +870,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }
 
   return (
-    <div className="min-h-screen flex flex-col"
+    <div className="td-investigation min-h-screen flex flex-col"
       style={{
         background: `radial-gradient(ellipse at top, ${bgColor} 0%, #040810 70%)`,
         fontFamily: "'Courier New', monospace",
@@ -904,7 +934,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       <InsightFlashFX event={insightEvent} onDone={() => setInsightEvent(null)} />
 
       {/* Top HUD */}
-      <div className="flex items-center justify-between px-4 py-2 border-b sticky top-0 z-50"
+      <div className="td-investigation-hud flex items-center justify-between px-4 py-2 border-b sticky top-0 z-50"
         style={{
           borderColor: `${accentColor}30`,
           background: `linear-gradient(180deg, rgba(10,18,32,0.55) 0%, rgba(2,6,14,0.35) 100%)`,
@@ -950,6 +980,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             style={{ borderColor: `${accentColor}50`, color: accentColor, backgroundColor: 'transparent' }}>
             ?
           </button>
+          <button onClick={() => setShowMiniMap(value => !value)} className="td-mobile-only text-xs px-3 py-1 rounded border" style={{ borderColor: `${accentColor}50`, color: accentColor }}>🗺</button>
           <button onClick={() => setReportMode(r => !r)}
             className="text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
@@ -964,23 +995,23 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       </div>
 
       {/* MiniMap — floating bottom-right */}
-      <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 30, pointerEvents: 'auto' }}>
+      {showMiniMap && <div className="td-investigation-minimap" style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 30, pointerEvents: 'auto' }}>
         <MiniMap
           gameState={gameState}
           caseData={caseData}
           agentPath={agentPath}
           accentColor={accentColor}
         />
-      </div>
+      </div>}
 
       {/* Main area */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="td-investigation-main flex flex-1 overflow-hidden relative">
 
         {/* Agent Synergy FX overlay */}
         <AgentSynergyFX event={synergyEvent} />
 
         {/* Left: Terminal */}
-        <div className="flex flex-col flex-1 min-w-0">
+        <div className="td-investigation-terminal flex flex-col flex-1 min-w-0">
           {/* Terminal output */}
           <div ref={terminalRef} className="flex-1 overflow-y-auto p-4 space-y-1"
             style={{ scrollBehavior: 'smooth' }}>
@@ -1057,7 +1088,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           )}
 
           {/* Action Bar */}
-          <div className="p-4 border-t flex items-center gap-3 flex-wrap"
+          <div className="td-investigation-actions p-4 border-t flex items-center gap-3 flex-wrap"
             style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <button onClick={runReActCycle} disabled={isProcessing || gameState.action_points_left <= 0}
               className="px-6 py-2 text-xs font-bold tracking-widest rounded border transition-all hover:scale-105 active:scale-95 disabled:opacity-30"
@@ -1076,6 +1107,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
                 {t.abortBtn}
               </button>
             )}
+            <button type="button" className="td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}>🧰 {lang === 'zh' ? '工具' : 'TOOLS'}</button>
             <div className="flex gap-2 flex-wrap">
               {caseData.npcs.map(npc => (
                 <button key={npc.npc_id} onClick={() => handleNPCTalk(npc)}
@@ -1091,7 +1123,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-72 border-l flex flex-col overflow-hidden"
+        <div className={`td-investigation-tools ${mobileToolsOpen ? 'td-tools-open' : ''} w-72 border-l flex flex-col overflow-hidden`}
           style={{
             borderColor: settings.panelLight ? skin.border : `${accentColor}20`,
             backgroundColor: settings.panelLight ? skin.bg : 'rgba(0,0,0,0.4)',
@@ -1107,6 +1139,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               log: decisionLog.filter(e => e.isKeyDecision || e.isTrap).length,
             }}
           />
+          <button type="button" className="td-mobile-only td-tools-close" onClick={() => setMobileToolsOpen(false)}>↓ {lang === 'zh' ? '收起工具' : 'CLOSE TOOLS'}</button>
           {toolTab === 'link' ? (
             <LinkBoard
               clues={caseData.clue_dictionary}
@@ -1123,8 +1156,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               agentPath={agentPath}
               zoneFeedback={zoneFeedback}
               accentColor={accentColor}
-              agentStrategy={agentStrategy}
-              onPriorityChange={() => {}}
+              agentStrategy={activeAgentStrategy}
+              onPriorityChange={setRuntimePriority}
             />
           ) : toolTab === 'log' ? (
             <DecisionLog entries={decisionLog} accentColor={accentColor} />
@@ -1184,95 +1217,3 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     </div>
   );
 }
-
-function TerminalLine({ line, accentColor }) {
-  const colors = {
-    default: '#c0c0d0',
-    phase: accentColor,
-    observe: '#00e5ff',
-    thought: '#bf5fff',
-    action: '#00ff88',
-    narration: '#e0e0f0',
-    clue_desc: '#8888aa',
-    success: '#00ff88',
-    error: '#ff3860',
-    warning: '#ffaa00',
-    trap: '#ff6600',
-    system: '#8888aa',
-    divider: '#ffffff15',
-  };
-  const color = colors[line.type] || colors.default;
-  return (
-    <div className="text-xs leading-relaxed whitespace-pre-wrap"
-      style={{ color, fontFamily: 'monospace' }}>
-      {line.text}
-    </div>
-  );
-}
-
-function NPCDialogBox({ npc, dialogue, onSend, onClose, isProcessing, accentColor, emotion, hints }) {
-  const { t } = useLang();
-  const [msg, setMsg] = useState('');
-  const ref = useRef(null);
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [dialogue]);
-
-  return (
-    <div className="border-t p-3" style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.6)' }}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-bold flex items-center gap-2" style={{ color: accentColor }}>
-          <span>{npc.avatar} {t.interrogating}: {npc.name} · {npc.role}</span>
-          <EmotionBadge level={emotion?.level} />
-        </div>
-        <button onClick={onClose} className="text-xs opacity-40 hover:opacity-80" style={{ color: accentColor }}>✕</button>
-      </div>
-      <div ref={ref} className="max-h-32 overflow-y-auto space-y-1 mb-2">
-        {dialogue.map((d, i) => (
-          <div key={i} className="text-xs" style={{
-            color: d.role === 'agent' ? '#00ff88' : d.role === 'npc' ? '#ffaa00' : '#8888aa',
-            fontStyle: d.role === 'system' ? 'italic' : 'normal'
-          }}>
-            {d.role === 'agent' ? '> AGENT: ' : d.role === 'npc' ? `${npc.avatar} ${d.name}: ` : ''}{d.text}
-          </div>
-        ))}
-      </div>
-      <InterrogationHints hints={hints} onPick={(text) => setMsg(text)} />
-      <div className="flex gap-2">
-        <input
-          className="flex-1 bg-transparent border rounded px-2 py-1 text-xs outline-none"
-          style={{ borderColor: `${accentColor}40`, color: accentColor }}
-          placeholder={`${t.interrogating}: ${npc.name}...`}
-          value={msg}
-          onChange={e => setMsg(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !isProcessing) { onSend(msg); setMsg(''); } }}
-          disabled={isProcessing}
-        />
-        <button onClick={() => { onSend(msg); setMsg(''); }} disabled={isProcessing || !msg.trim()}
-          className="px-3 text-xs rounded border disabled:opacity-30"
-          style={{ borderColor: `${accentColor}50`, color: accentColor }}>
-          {t.sendBtn}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function JudgeResult({ result }) {
-  const { t } = useLang();
-  const scoreColors = { S: '#00ff88', A: '#00ffff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' };
-  const color = scoreColors[result.score] || '#ffffff';
-  return (
-    <div className="mt-3 p-3 rounded border" style={{ borderColor: `${color}50`, backgroundColor: `${color}10` }}>
-      <div className="flex items-center gap-3 mb-2">
-        <div className="text-3xl font-bold" style={{ color, textShadow: `0 0 20px ${color}` }}>{result.score}</div>
-        <div className="text-xs" style={{ color }}>
-          {result.is_passed ? t.caseClosedTag : t.reportRejectedTag}
-        </div>
-      </div>
-      <div className="text-xs" style={{ color: `${color}cc` }}>{result.critique}</div>
-    </div>
-  );
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

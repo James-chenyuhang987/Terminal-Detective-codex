@@ -4,7 +4,7 @@
 // 三人组合触发协同技能，随部署打包进 teamConfig
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { SKILL_TREES } from './agentProgression';
+import { SKILL_TREES } from './agentProgression.js';
 
 export const SPECIALTY_BUDGET = 20;
 
@@ -138,12 +138,10 @@ export function calcTeamSynergy(specs) {
 }
 
 // ── 已装备技能效果汇总（读取技能树装备状态）──────────────────────────────────
-export function getEquippedSkillEffects() {
-  let equipped = [[], [], []];
-  try {
-    const raw = localStorage.getItem('skill_equipped_v1');
-    if (raw) equipped = JSON.parse(raw);
-  } catch {}
+export function getEquippedSkillEffects(loadout) {
+  const equipped = Array.isArray(loadout)
+    ? loadout.map(row => Array.isArray(row) ? row : row?.skill_ids || [])
+    : [[], [], []];
 
   const effects = {};
   equipped.forEach((ids, agentIdx) => {

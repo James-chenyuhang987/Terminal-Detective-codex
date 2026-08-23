@@ -1,0 +1,242 @@
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { useLang } from '@/lib/lang.jsx';
+import { CASE_SUMMARIES } from '@/game/caseSummaries';
+import { getLevelFromXP } from '@/game/agentProgression';
+import {
+  ACHIEVEMENTS, CASE_ENERGY_COST, ENERGY_MAX, ENERGY_OVERFLOW_MAX, ITEM_CATALOG,
+  SEVEN_DAY_TASKS, TECH_CATALOG, TUTORIAL_TASKS,
+  achievementProgress, canCheckin, claimAchievement, claimTask, claimWeeklyReward,
+  dailyIntelCaseId, daysBetween, editIdentity, energyCountdown, purchaseItem,
+  consumeEnergyCell, sevenDayTaskDone, toggleEquipItem, tutorialTaskDone, unlockTech,
+  weeklyChallenge, knownAchievementCount,
+} from '@/game/playerProfile';
+import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
+import HomeDrawer from './HomeDrawer';
+
+const GraphModule = lazy(() => import('./modules/GraphModule.jsx'));
+
+const CASE_ICON = { Lvl_01: '🏙️', Lvl_02: '🔬', Lvl_03: '🦋' };
+const DIFF_COLOR = { NORMAL: '#00ff88', HARD: '#ffaa00', OMEGA: '#ff3860' };
+const GROUP_LABEL = {
+  investigation: ['调查', 'INVESTIGATION'], evidence: ['证据', 'EVIDENCE'], reasoning: ['推理', 'REASONING'],
+  efficiency: ['效率', 'EFFICIENCY'], growth: ['成长', 'GROWTH'], activity: ['活跃', 'ACTIVITY'],
+};
+
+const TEXT = {
+  zh: {
+    profile: ['🪪 侦探档案', '身份、等级与调查统计'], supply: ['⚡ 补给中心', '体力每 5 分钟恢复 1 点'],
+    diamonds: ['💎 钻石来源', '仅通过游戏进度获得，不含真实付费'], warehouse: ['🎒 物品仓库', '道具、商店与下一局装备'],
+    graph: ['🕸 线索图谱', '只显示你真实发现的证据'], tech: ['⚙️ 科技研发', '永久能力将叠加到探员技能'],
+    comms: ['✉️ 探员通讯', '系统通知与单机剧情联络'], intel: ['📰 今日情报', '每日轮换的优先调查档案'],
+    cases: ['🗂 未解案件', '档案状态、最佳评分与调查成本'], achievements: ['🏅 成就徽章', '24 项长期调查目标'],
+    checkin: ['📅 每日签到', '七日奖励循环，连续签到进度保留'], events: ['🎁 活动中心', '每周轮换的单人挑战'],
+    tutorial: ['📖 新手任务', '完成基础调查流程并领取奖励'], goals: ['🎯 七日目标', '按旅程天数逐步解锁'],
+    buy: '购买', use: '使用', equip: '装备', unequip: '卸下', claim: '领取', claimed: '已领取', locked: '未完成',
+    go: '前往调查', save: '保存档案', todayBonus: '今日首次侦破额外 +250 金币',
+  },
+  en: {
+    profile: ['🪪 DETECTIVE PROFILE', 'Identity, level and investigation statistics'], supply: ['⚡ SUPPLY CENTER', 'Recover 1 energy every 5 minutes'],
+    diamonds: ['💎 DIAMOND SOURCES', 'Earned through play only; no real-money purchases'], warehouse: ['🎒 WAREHOUSE', 'Inventory, store and next-case loadout'],
+    graph: ['🕸 CLUE GRAPH', 'Only evidence you actually discovered is shown'], tech: ['⚙️ RESEARCH', 'Permanent upgrades stack with agent skills'],
+    comms: ['✉️ COMMS', 'System notices and single-player story contacts'], intel: ['📰 DAILY INTEL', 'A rotating priority case file'],
+    cases: ['🗂 OPEN CASES', 'Status, best score and investigation cost'], achievements: ['🏅 ACHIEVEMENTS', '24 long-term detective goals'],
+    checkin: ['📅 DAILY CHECK-IN', 'Seven-day reward cycle with persistent streak'], events: ['🎁 EVENT CENTER', 'A rotating weekly solo challenge'],
+    tutorial: ['📖 ROOKIE TASKS', 'Learn the core loop and claim rewards'], goals: ['🎯 SEVEN-DAY GOALS', 'Unlock objectives as the journey advances'],
+    buy: 'BUY', use: 'USE', equip: 'EQUIP', unequip: 'REMOVE', claim: 'CLAIM', claimed: 'CLAIMED', locked: 'INCOMPLETE',
+    go: 'INVESTIGATE', save: 'SAVE PROFILE', todayBonus: 'First solve today: +250 gold',
+  },
+};
+
+function Panel({ children, accent = '#00e5ff', style = {} }) {
+  return <div style={{ border: `1px solid ${accent}35`, borderRadius: 13, padding: 14, background: `${accent}08`, ...style }}>{children}</div>;
+}
+
+function ActionButton({ children, onClick, disabled = false, accent = '#00e5ff', style = {} }) {
+  return <button onClick={onClick} disabled={disabled} style={{
+    border: `1px solid ${accent}80`, borderRadius: 9, padding: '8px 12px', background: `${accent}18`,
+    color: accent, fontFamily: 'monospace', fontWeight: 800, fontSize: '0.62rem', cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? .42 : 1, ...style,
+  }}>{children}</button>;
+}
+
+/** @param {{ reward?: { gold?: number, diamonds?: number, energy?: number, items?: Record<string, number> } }} props */
+function RewardText({ reward = {} }) {
+  return <span>{[
+    reward.gold ? `🪙 ${reward.gold}` : '', reward.diamonds ? `💎 ${reward.diamonds}` : '',
+    reward.energy ? `⚡ ${reward.energy}` : '',
+    ...Object.entries(reward.items || {}).map(([id, n]) => `${ITEM_CATALOG.find(item => item.id === id)?.icon || '📦'} ${n}`),
+  ].filter(Boolean).join(' · ')}</span>;
+}
+
+function Stat({ label, value, color = '#7df1ff' }) {
+  return <Panel style={{ textAlign: 'center', minWidth: 92, flex: 1 }}><div style={{ color, fontSize: '1.15rem', fontWeight: 900 }}>{value}</div><div style={{ color: 'rgba(255,255,255,.38)', fontSize: '.54rem', marginTop: 4 }}>{label}</div></Panel>;
+}
+
+function ProfileModule({ profile, onApply, tx, lang }) {
+  const [name, setName] = useState(profile.detective_name);
+  const [avatar, setAvatar] = useState(profile.avatar);
+  const [signature, setSignature] = useState(profile.signature || '');
+  const [badge, setBadge] = useState(profile.identity_badge || 'private');
+  const [tags, setTags] = useState(profile.detective_tags || []);
+  const progression = profile.agent_progression || [];
+  const avatars = ['🕵️', '🕵️‍♀️', '👁️', '🦉', '🐺', '🎩', '🦅', '🐍'];
+  const badges = [['city', '🏙 城市警局'], ['private', '🗝 私家侦探'], ['bureau', '🛰 特别调查局']];
+  const tagOptions = ['冷静', '直觉', '技术流', '心理侧写', '铁血', '书虫', '夜行者', '话术大师'];
+  return <>
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+      <Stat label={lang === 'zh' ? '等级' : 'LEVEL'} value={profile.level} />
+      <Stat label={lang === 'zh' ? '经验' : 'XP'} value={profile.xp} />
+      <Stat label={lang === 'zh' ? '已破案件' : 'SOLVED'} value={profile.solved_cases.length} />
+      <Stat label={lang === 'zh' ? '成就' : 'ACHIEVEMENTS'} value={`${knownAchievementCount(profile)}/24`} />
+    </div>
+    <Panel accent="#e8c98a" style={{ marginBottom: 14 }}><div style={{ color: '#e8c98a', fontWeight: 900 }}>{profile.rank_title}</div><div style={{ marginTop: 6, color: 'rgba(255,255,255,.42)', fontSize: '.56rem' }}>{lang === 'zh' ? `累计尝试 ${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} 次 · 有效连线 ${profile.activity_stats.valid_links}` : `${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} attempts · ${profile.activity_stats.valid_links} valid links`}</div></Panel>
+    <Panel>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>{avatars.map(icon => <button key={icon} onClick={() => setAvatar(icon)} style={{ width: 42, height: 42, borderRadius: 9, fontSize: 21, cursor: 'pointer', border: `1px solid ${avatar === icon ? '#e8c98a' : 'rgba(255,255,255,.12)'}`, background: avatar === icon ? 'rgba(232,201,138,.15)' : 'rgba(0,0,0,.3)' }}>{icon}</button>)}</div>
+      <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? `侦探代号 · 剩余修改次数 ${profile.rename_count ? 0 : 1}` : `CODENAME · ${profile.rename_count ? 0 : 1} rename left`}</label>
+      <input value={name} maxLength={10} disabled={profile.rename_count >= 1} onChange={event => setName(event.target.value)} style={{ width: '100%', margin: '7px 0 12px', padding: 10, borderRadius: 8, border: '1px solid rgba(0,229,255,.3)', background: 'rgba(0,0,0,.45)', color: '#7df1ff', fontFamily: 'monospace' }} />
+      <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? '个性签名' : 'SIGNATURE'}</label>
+      <textarea value={signature} maxLength={30} onChange={event => setSignature(event.target.value)} style={{ width: '100%', height: 68, margin: '7px 0 12px', padding: 10, resize: 'none', borderRadius: 8, border: '1px solid rgba(0,229,255,.3)', background: 'rgba(0,0,0,.45)', color: '#dff8ff', fontFamily: 'monospace' }} />
+      <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? '身份徽章' : 'IDENTITY BADGE'}</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', margin: '7px 0 12px' }}>{badges.map(([id, label]) => <ActionButton key={id} accent={badge === id ? '#e8c98a' : '#668899'} onClick={() => setBadge(id)}>{label}</ActionButton>)}</div>
+      <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? `侦探标签 · ${tags.length}/3` : `TAGS · ${tags.length}/3`}</label>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', margin: '7px 0 14px' }}>{tagOptions.map(tag => <ActionButton key={tag} accent={tags.includes(tag) ? '#a78bfa' : '#668899'} onClick={() => setTags(current => current.includes(tag) ? current.filter(value => value !== tag) : current.length < 3 ? [...current, tag] : current)}>{tag}</ActionButton>)}</div>
+      <ActionButton onClick={() => onApply(editIdentity(profile, { detective_name: name, avatar, signature, identity_badge: badge, detective_tags: tags }), lang === 'zh' ? '档案已同步' : 'Profile synced')}>{tx.save}</ActionButton>
+    </Panel>
+    <div style={{ marginTop: 14, color: 'rgba(255,255,255,.45)', fontSize: '.62rem' }}>{lang === 'zh' ? '探员等级' : 'AGENT LEVELS'} · {progression.map((p, i) => `${['隼目','破心','幽灵'][i]} Lv.${getLevelFromXP(p.xp)}`).join(' / ')}</div>
+  </>;
+}
+
+function SupplyModule({ profile, onApply, lang, tx }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (profile.energy >= ENERGY_MAX) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [profile.energy]);
+  const remaining = energyCountdown(profile, new Date(now));
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  return <>
+    <Panel accent="#ffd34d" style={{ textAlign: 'center', marginBottom: 14 }}>
+      <div style={{ fontSize: '2rem', color: '#ffd34d', fontWeight: 900 }}>⚡ {profile.energy}/{ENERGY_MAX}</div>
+      <div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.6rem', marginTop: 6 }}>{profile.energy >= ENERGY_MAX ? (lang === 'zh' ? '自然恢复已满' : 'Natural recovery full') : `${lang === 'zh' ? '下一点体力' : 'Next point'} ${mins}:${String(secs).padStart(2, '0')}`}</div>
+      <div style={{ color: 'rgba(255,255,255,.3)', fontSize: '.54rem', marginTop: 4 }}>{lang === 'zh' ? `道具溢出上限 ${ENERGY_OVERFLOW_MAX}` : `Item overflow cap ${ENERGY_OVERFLOW_MAX}`}</div>
+    </Panel>
+    <Panel>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 30 }}>🔋</span><div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 800 }}>{lang === 'zh' ? '能量电池' : 'Energy Cell'}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.58rem' }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory.energy_cell}</div></div></div>
+      <div style={{ display: 'flex', gap: 9, marginTop: 12 }}>
+        <ActionButton onClick={() => onApply(purchaseItem(profile, 'energy_cell'), lang === 'zh' ? '已购买能量电池' : 'Energy Cell purchased')}>🪙 400 · {tx.buy}</ActionButton>
+        <ActionButton disabled={!profile.inventory.energy_cell || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(consumeEnergyCell(profile), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use} +30</ActionButton>
+      </div>
+    </Panel>
+  </>;
+}
+
+function DiamondSources({ profile, onOpen, lang }) {
+  const sources = [
+    ['achievements', '🏅', lang === 'zh' ? '成就奖励' : 'Achievement rewards', `${knownAchievementCount(profile)}/24`],
+    ['cases', '🗂', lang === 'zh' ? '案件首通' : 'First clears', `${profile.solved_cases.length}/3`],
+    ['checkin', '📅', lang === 'zh' ? '签到奖励' : 'Check-in rewards', `${profile.checkin_streak}d`],
+    ['goals', '🎯', lang === 'zh' ? '七日目标' : 'Seven-day goals', '100 💎'],
+    ['events', '🎁', lang === 'zh' ? '每周挑战' : 'Weekly challenge', '40 💎'],
+  ];
+  return <div style={{ display: 'grid', gap: 10 }}>{sources.map(([key, icon, label, value]) => <Panel key={key}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 24 }}>{icon}</span><div style={{ flex: 1 }}><div>{label}</div><div style={{ color: '#5fd8ff', marginTop: 4, fontSize: '.62rem' }}>{value}</div></div><ActionButton onClick={() => onOpen(key)}>›</ActionButton></div></Panel>)}</div>;
+}
+
+function WarehouseModule({ profile, onApply, lang, tx }) {
+  const [tab, setTab] = useState('inventory');
+  return <>
+    <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>{[['inventory', lang === 'zh' ? '持有' : 'OWNED'], ['shop', lang === 'zh' ? '商店' : 'STORE'], ['equipped', lang === 'zh' ? '已装备' : 'LOADOUT']].map(([id, label]) => <ActionButton key={id} accent={tab === id ? '#00e5ff' : '#668899'} onClick={() => setTab(id)}>{label}</ActionButton>)}</div>
+    {tab === 'shop' && <Panel accent="#e8c98a" style={{ marginBottom: 12 }}><div style={{ color: '#e8c98a', fontWeight: 900, marginBottom: 7 }}>{lang === 'zh' ? '金币来源' : 'GOLD SOURCES'}</div><div style={{ color: 'rgba(255,255,255,.48)', fontSize: '.56rem', lineHeight: 1.75 }}>{lang === 'zh' ? '案件评级：S 1000 / A 750 / B 500 / C 300 / D 150 · 今日情报 +250 · 签到、新手任务与周活动' : 'Case rank: S 1000 / A 750 / B 500 / C 300 / D 150 · Daily Intel +250 · check-ins, tasks and weekly events'}</div></Panel>}
+    <div style={{ display: 'grid', gap: 10 }}>{ITEM_CATALOG.filter(item => tab === 'shop' || (tab === 'equipped' ? profile.equipped_items.includes(item.id) : profile.inventory[item.id] > 0)).map(item => {
+      const text = item[lang] || item.zh;
+      const equipped = profile.equipped_items.includes(item.id);
+      return <Panel key={item.id} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'}><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><span style={{ fontSize: 30 }}>{item.icon}</span><div style={{ flex: 1 }}><div style={{ fontWeight: 900 }}>{text.name}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.56rem', marginTop: 4 }}>{text.desc}</div><div style={{ color: '#7df1ff', fontSize: '.56rem', marginTop: 5 }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory[item.id]}</div></div>{tab === 'shop' ? <ActionButton onClick={() => onApply(purchaseItem(profile, item.id), lang === 'zh' ? '购买成功' : 'Purchase complete')}>{item.currency === 'gold' ? '🪙' : '💎'} {item.cost}</ActionButton> : item.id === 'energy_cell' ? <ActionButton disabled={!profile.inventory.energy_cell || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(consumeEnergyCell(profile), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use}</ActionButton> : <ActionButton onClick={() => onApply(toggleEquipItem(profile, item.id), equipped ? (lang === 'zh' ? '已卸下' : 'Removed') : (lang === 'zh' ? '已装备' : 'Equipped'))}>{equipped ? tx.unequip : tx.equip}</ActionButton>}</div></Panel>;
+    })}</div>
+    {tab !== 'shop' && ITEM_CATALOG.every(item => tab === 'equipped' ? !profile.equipped_items.includes(item.id) : !profile.inventory[item.id]) && <Panel><div style={{ color: 'rgba(255,255,255,.4)', fontSize: '.65rem' }}>{lang === 'zh' ? '这里暂时是空的。' : 'Nothing here yet.'}</div></Panel>}
+    <div style={{ marginTop: 12, color: 'rgba(255,255,255,.32)', fontSize: '.55rem' }}>{lang === 'zh' ? `任务道具最多装备 2 件 · 当前 ${profile.equipped_items.length}/2` : `Equip up to 2 mission items · ${profile.equipped_items.length}/2`}</div>
+  </>;
+}
+
+function TechModule({ profile, onApply, lang }) {
+  const branchLabels = { forensics: ['🧪 法证', '🧪 FORENSICS'], network: ['💻 网络', '💻 NETWORK'], psychology: ['🧠 心理', '🧠 PSYCHOLOGY'] };
+  return <div style={{ display: 'grid', gap: 14 }}>{Object.keys(branchLabels).map(branch => <Panel key={branch}><div style={{ color: '#e8c98a', fontWeight: 900, marginBottom: 10 }}>{branchLabels[branch][lang === 'zh' ? 0 : 1]}</div><div style={{ display: 'grid', gap: 8 }}>{TECH_CATALOG.filter(tech => tech.branch === branch).map(tech => { const unlocked = profile.tech_unlocks.includes(tech.id); const prereq = tech.level === 1 || profile.tech_unlocks.includes(`${branch}_${tech.level - 1}`); const text = tech[lang] || tech.zh; return <div key={tech.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 10, borderRadius: 9, background: unlocked ? 'rgba(0,255,136,.07)' : 'rgba(255,255,255,.025)', border: `1px solid ${unlocked ? 'rgba(0,255,136,.35)' : 'rgba(255,255,255,.08)'}` }}><div style={{ width: 29, height: 29, borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1px solid rgba(0,229,255,.3)', color: unlocked ? '#00ff88' : '#7df1ff' }}>{tech.level}</div><div style={{ flex: 1 }}><div style={{ fontSize: '.68rem', fontWeight: 800 }}>{text.name}</div><div style={{ fontSize: '.53rem', color: 'rgba(255,255,255,.4)', marginTop: 3 }}>{text.desc}</div></div><ActionButton disabled={unlocked || !prereq} onClick={() => onApply(unlockTech(profile, tech.id), lang === 'zh' ? '科技已解锁' : 'Technology unlocked')}>{unlocked ? '✓' : `💎 ${tech.cost}`}</ActionButton></div>; })}</div></Panel>)}</div>;
+}
+
+function CaseArchive({ profile, lang, onNavigate, hasSavedTeam }) {
+  return <div style={{ display: 'grid', gap: 11 }}>{CASE_SUMMARIES.map(caseData => { const record = profile.case_records.find(item => item.case_id === caseData.case_id); const solved = profile.solved_cases.includes(caseData.case_id); const clueCount = record?.discovered_clues.length || 0; const cluePct = Math.round((clueCount / Math.max(1, caseData.clue_total)) * 100); const title = lang === 'en' ? caseData.en?.title : caseData.title; return <Panel key={caseData.case_id} accent={DIFF_COLOR[caseData.difficulty]}><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><span style={{ fontSize: 34 }}>{CASE_ICON[caseData.case_id]}</span><div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 900 }}>{title}</div><div style={{ color: DIFF_COLOR[caseData.difficulty], fontSize: '.54rem', marginTop: 3 }}>{caseData.difficulty} · ⚡ {CASE_ENERGY_COST[caseData.difficulty]}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.55rem', marginTop: 5 }}>{solved ? (lang === 'zh' ? '已侦破' : 'SOLVED') : record ? (lang === 'zh' ? '调查中' : 'IN PROGRESS') : (lang === 'zh' ? '未开始' : 'NOT STARTED')} · {lang === 'zh' ? '最佳' : 'BEST'} {record?.best_score || '—'} · {lang === 'zh' ? '尝试' : 'TRIES'} {record?.attempts || 0} · {lang === 'zh' ? '线索' : 'CLUES'} {cluePct}%</div></div><ActionButton onClick={() => onNavigate(caseData.case_id)}>{hasSavedTeam ? (lang === 'zh' ? '继续调查' : 'CONTINUE') : (lang === 'zh' ? '配置队伍' : 'SQUAD')}</ActionButton></div></Panel>; })}</div>;
+}
+
+function IntelModule({ profile, lang, onNavigate, tx }) {
+  const id = dailyIntelCaseId();
+  const caseData = CASE_SUMMARIES.find(item => item.case_id === id) || CASE_SUMMARIES[0];
+  const record = profile.case_records.find(item => item.case_id === id);
+  const title = lang === 'en' ? caseData.en?.title : caseData.title;
+  const setting = lang === 'en' ? caseData.en?.setting : caseData.setting;
+  return <><Panel accent={DIFF_COLOR[caseData.difficulty]} style={{ textAlign: 'center' }}><div style={{ fontSize: 52 }}>{CASE_ICON[id]}</div><h2 style={{ color: '#fff', margin: '8px 0' }}>{title}</h2><div style={{ color: DIFF_COLOR[caseData.difficulty], fontSize: '.58rem' }}>{caseData.difficulty}</div><p style={{ color: 'rgba(230,245,255,.55)', fontSize: '.66rem', lineHeight: 1.75 }}>{setting}</p><div style={{ color: '#e8c98a', fontSize: '.6rem', marginBottom: 12 }}>{tx.todayBonus}</div><div style={{ color: 'rgba(255,255,255,.35)', fontSize: '.55rem', marginBottom: 12 }}>{lang === 'zh' ? '当前线索完成度' : 'CLUE PROGRESS'} {record?.discovered_clues.length || 0}/{caseData.clue_total}</div><ActionButton onClick={() => onNavigate(id)}>{tx.go}</ActionButton></Panel></>;
+}
+
+const MAILS = [
+  { id: 'welcome', when: () => true, icon: '🛰️', zh: ['档案管理局', '欢迎加入终端侦探网络。你的调查记录将被安全归档。'], en: ['Archive Bureau', 'Welcome to the Terminal Detective network. Your records will be archived securely.'] },
+  { id: 'case1', when: p => p.solved_cases.includes('Lvl_01'), icon: '🏙️', zh: ['匿名线人', '霓虹城记住了你的名字。那条暗线，也许还没有真正结束。'], en: ['Anonymous Source', 'Neon City remembers your name. That hidden thread may not be over.'] },
+  { id: 'case2', when: p => p.solved_cases.includes('Lvl_02'), icon: '🔬', zh: ['量子研究所', '幽灵协议档案已解封。感谢你保住了真相。'], en: ['Quantum Institute', 'The Ghost Protocol file is unsealed. Thank you for preserving the truth.'] },
+  { id: 'case3', when: p => p.solved_cases.includes('Lvl_03'), icon: '🦋', zh: ['Lena', '我终于敢开口了。谢谢你让我相信证词有意义。'], en: ['Lena', 'I can finally speak. Thank you for proving testimony matters.'] },
+  { id: 'tech', when: p => p.tech_unlocks.length > 0, icon: '⚙️', zh: ['研发终端', '首项科技已接入调查矩阵。'], en: ['Research Terminal', 'Your first technology is now wired into the investigation matrix.'] },
+  { id: 'week', when: p => SEVEN_DAY_TASKS.every(task => p.reward_claims.includes(`seven:${task.id}`)), icon: '🏅', zh: ['档案管理局', '首周评估完成。你已不再是见习侦探。'], en: ['Archive Bureau', 'First-week assessment complete. You are no longer a trainee.'] },
+];
+
+function CommsModule({ profile, onApply, lang }) {
+  const mails = MAILS.filter(mail => mail.when(profile));
+  return <div style={{ display: 'grid', gap: 9 }}>{mails.map(mail => { const read = profile.mail_read_ids.includes(mail.id); const copy = mail[lang] || mail.zh; return <Panel key={mail.id} accent={read ? '#668899' : '#00e5ff'}><button onClick={() => !read && onApply({ profile: { ...profile, mail_read_ids: [...profile.mail_read_ids, mail.id] } }, lang === 'zh' ? '已标记为已读' : 'Marked as read')} style={{ width: '100%', border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', fontFamily: 'monospace' }}><div style={{ display: 'flex', gap: 10 }}><span style={{ fontSize: 24 }}>{mail.icon}</span><div><div style={{ color: read ? 'rgba(255,255,255,.5)' : '#7df1ff', fontWeight: 900 }}>{copy[0]} {!read && '●'}</div><div style={{ color: 'rgba(255,255,255,.48)', fontSize: '.6rem', lineHeight: 1.7, marginTop: 5 }}>{copy[1]}</div></div></div></button>{mail.id.startsWith('case') && <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>{[lang === 'zh' ? '保持联络' : 'Stay in touch', lang === 'zh' ? '档案已收到' : 'File received'].map((choice, i) => { const choiceId = `${mail.id}:${i}`; const picked = profile.mail_reply_choices.some(value => value.startsWith(`${mail.id}:`)); return <ActionButton key={choice} disabled={picked} onClick={() => onApply({ profile: { ...profile, mail_reply_choices: [...profile.mail_reply_choices, choiceId] } }, lang === 'zh' ? '回复已发送' : 'Reply sent')}>{picked ? '✓' : choice}</ActionButton>; })}</div>}</Panel>; })}</div>;
+}
+
+function AchievementsModule({ profile, onApply, lang, tx }) {
+  const [filter, setFilter] = useState('all');
+  const groups = ['all', ...Object.keys(GROUP_LABEL)];
+  return <><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>{groups.map(group => <ActionButton key={group} accent={filter === group ? '#00e5ff' : '#668899'} onClick={() => setFilter(group)}>{group === 'all' ? (lang === 'zh' ? '全部' : 'ALL') : GROUP_LABEL[group][lang === 'zh' ? 0 : 1]}</ActionButton>)}</div><div style={{ display: 'grid', gap: 9 }}>{ACHIEVEMENTS.filter(item => filter === 'all' || item.category === filter).map(item => { const unlocked = profile.achievements.includes(item.id); const claimed = profile.reward_claims.includes(`achievement:${item.id}`); const progress = achievementProgress(profile, item.id); const text = item[lang] || item.zh; return <Panel key={item.id} accent={unlocked ? '#c5a059' : '#668899'}><div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ fontSize: 25, opacity: unlocked ? 1 : .35 }}>{unlocked ? '🏅' : '🔒'}</span><div style={{ flex: 1 }}><div style={{ color: unlocked ? '#e8c98a' : 'rgba(255,255,255,.45)', fontWeight: 900 }}>{text.name}</div><div style={{ color: 'rgba(255,255,255,.38)', fontSize: '.55rem', marginTop: 4 }}>{text.desc} · {progress.current}/{progress.target} · 💎 {item.reward}</div><div style={{ height: 3, marginTop: 7, borderRadius: 3, background: 'rgba(255,255,255,.07)' }}><div style={{ height: '100%', width: `${(progress.current / progress.target) * 100}%`, borderRadius: 3, background: unlocked ? '#e8c98a' : '#00e5ff', transition: 'width .3s' }} /></div></div><ActionButton disabled={!unlocked || claimed} accent="#e8c98a" onClick={() => onApply(claimAchievement(profile, item.id), lang === 'zh' ? `领取 ${item.reward} 钻石` : `Claimed ${item.reward} diamonds`)}>{claimed ? tx.claimed : unlocked ? tx.claim : tx.locked}</ActionButton></div></Panel>; })}</div></>;
+}
+
+function CheckinModule({ profile, onCheckin, lang, tx }) {
+  const rewards = [{ gold: 500 }, { diamonds: 10 }, { energy: 30 }, { gold: 800 }, { diamonds: 20 }, { items: { ap_booster: 1 } }, { diamonds: 50, gold: 1000 }];
+  const nextDay = (profile.checkin_streak % 7) + 1;
+  return <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(105px,1fr))', gap: 9 }}>{rewards.map((reward, i) => <Panel key={i} accent={i + 1 === nextDay ? '#e8c98a' : '#00e5ff'} style={{ textAlign: 'center', opacity: i + 1 === nextDay ? 1 : .65 }}><div style={{ color: '#e8c98a', fontSize: '.6rem' }}>DAY {i + 1}</div><div style={{ marginTop: 8, fontSize: '.62rem' }}><RewardText reward={reward} /></div></Panel>)}</div><Panel style={{ marginTop: 14, textAlign: 'center' }}><div style={{ marginBottom: 10, color: 'rgba(255,255,255,.5)', fontSize: '.62rem' }}>{lang === 'zh' ? `连续签到 ${profile.checkin_streak} 天` : `${profile.checkin_streak}-day streak`}</div><ActionButton disabled={!canCheckin(profile)} onClick={onCheckin}>{canCheckin(profile) ? `${tx.claim} · DAY ${nextDay}` : tx.claimed}</ActionButton></Panel></>;
+}
+
+function TaskModule({ kind, profile, onApply, lang, tx }) {
+  const list = kind === 'tutorial' ? TUTORIAL_TASKS : SEVEN_DAY_TASKS;
+  const dayNow = daysBetween(profile.journey_started_on) + 1;
+  return <div style={{ display: 'grid', gap: 9 }}>{list.map((task, index) => { const done = kind === 'tutorial' ? tutorialTaskDone(profile, task.id) : sevenDayTaskDone(profile, task.id); const claimed = profile.reward_claims.includes(`${kind}:${task.id}`); const dayLocked = kind === 'seven' && dayNow < task.day; return <Panel key={task.id} accent={claimed ? '#00ff88' : done && !dayLocked ? '#e8c98a' : '#668899'}><div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><div style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1px solid rgba(0,229,255,.3)', color: claimed ? '#00ff88' : '#7df1ff' }}>{kind === 'seven' ? task.day : index + 1}</div><div style={{ flex: 1 }}><div style={{ fontSize: '.66rem' }}>{task[lang]}</div><div style={{ marginTop: 5, color: 'rgba(255,255,255,.42)', fontSize: '.54rem' }}><RewardText reward={task.reward} /></div></div><ActionButton disabled={!done || claimed || dayLocked} onClick={() => onApply(claimTask(profile, kind, task.id), lang === 'zh' ? '奖励已领取' : 'Reward claimed')}>{claimed ? tx.claimed : dayLocked ? `D${task.day}` : done ? tx.claim : tx.locked}</ActionButton></div></Panel>; })}</div>;
+}
+
+function EventModule({ profile, onApply, lang, tx, onNavigate }) {
+  const challenge = weeklyChallenge();
+  const caseData = CASE_SUMMARIES.find(item => item.case_id === challenge.caseId);
+  const record = profile.weekly_records.find(item => item.cycle_id === challenge.cycleId) || {};
+  const claimed = profile.reward_claims.includes(`weekly:${challenge.cycleId}`);
+  const tasks = [[record.passed, lang === 'zh' ? '成功侦破指定案件' : 'Solve the featured case'], [record.clue_target, lang === 'zh' ? '收集至少 70% 线索' : 'Collect at least 70% of clues'], [record.speed_target, lang === 'zh' ? '12 回合内且混乱低于 40' : 'Finish within 12 turns and under 40 confusion']];
+  return <><Panel accent={DIFF_COLOR[caseData.difficulty]}><div style={{ textAlign: 'center', fontSize: 42 }}>{CASE_ICON[caseData.case_id]}</div><div style={{ textAlign: 'center', color: '#fff', fontWeight: 900 }}>{lang === 'en' ? caseData.en?.title : caseData.title}</div><div style={{ textAlign: 'center', color: 'rgba(255,255,255,.35)', fontSize: '.54rem', marginTop: 5 }}>{challenge.cycleId}</div><div style={{ textAlign: 'center', marginTop: 10 }}><ActionButton onClick={() => onNavigate(caseData.case_id)}>{tx.go}</ActionButton></div></Panel><div style={{ display: 'grid', gap: 8, marginTop: 12 }}>{tasks.map(([done, label]) => <Panel key={label} accent={done ? '#00ff88' : '#668899'}><span style={{ color: done ? '#00ff88' : 'rgba(255,255,255,.4)' }}>{done ? '✓' : '○'} {label}</span></Panel>)}</div><Panel style={{ marginTop: 12, textAlign: 'center' }}><div style={{ marginBottom: 10 }}>🪙 1000 · 💎 40</div><ActionButton disabled={claimed || tasks.some(([done]) => !done)} onClick={() => onApply(claimWeeklyReward(profile), lang === 'zh' ? '每周奖励已领取' : 'Weekly reward claimed')}>{claimed ? tx.claimed : tx.claim}</ActionButton></Panel></>;
+}
+
+export default function HomeModules({ moduleKey, profile, busy, onClose, onApply, onCheckin, onOpenModule, onNavigate, hasSavedTeam }) {
+  const { lang } = useLang();
+  const tx = TEXT[lang] || TEXT.zh;
+  if (moduleKey === 'settings') return <SettingsDrawer onClose={onClose} />;
+  const meta = tx[moduleKey] || tx.warehouse;
+  const props = { profile, onApply, lang, tx };
+  let content = null;
+  if (moduleKey === 'profile') content = <ProfileModule {...props} />;
+  else if (moduleKey === 'supply') content = <SupplyModule {...props} />;
+  else if (moduleKey === 'diamonds') content = <DiamondSources profile={profile} onOpen={onOpenModule} lang={lang} />;
+  else if (moduleKey === 'warehouse') content = <WarehouseModule {...props} />;
+  else if (moduleKey === 'tech') content = <TechModule {...props} />;
+  else if (moduleKey === 'cases') content = <CaseArchive profile={profile} lang={lang} onNavigate={onNavigate} hasSavedTeam={hasSavedTeam} />;
+  else if (moduleKey === 'intel') content = <IntelModule profile={profile} lang={lang} onNavigate={onNavigate} tx={tx} />;
+  else if (moduleKey === 'graph') content = <Suspense fallback={<Panel>{lang === 'zh' ? '加载案件线索…' : 'LOADING CASE CLUES…'}</Panel>}><GraphModule profile={profile} lang={lang} /></Suspense>;
+  else if (moduleKey === 'comms') content = <CommsModule {...props} />;
+  else if (moduleKey === 'achievements') content = <AchievementsModule {...props} />;
+  else if (moduleKey === 'checkin') content = <CheckinModule profile={profile} onCheckin={onCheckin} lang={lang} tx={tx} />;
+  else if (moduleKey === 'events') content = <EventModule {...props} onNavigate={onNavigate} />;
+  else if (moduleKey === 'tutorial') content = <TaskModule kind="tutorial" {...props} />;
+  else if (moduleKey === 'goals') content = <TaskModule kind="seven" {...props} />;
+  return <HomeDrawer title={meta[0]} subtitle={meta[1]} onClose={onClose} busy={busy}>{content}</HomeDrawer>;
+}

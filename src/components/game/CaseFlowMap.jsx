@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { PRIORITY_ACTIONS, normalizePriorityList } from '@/game/teamConfig';
 
 // ── Static zone layout positions (% of container) ────────────────────────────
 const ZONE_LAYOUT = {
@@ -237,13 +238,13 @@ export default function CaseFlowMap({
   const [positions, setPositions] = useState(makePositions);
 
   const [dragging, setDragging]   = useState(null); // { key, ox, oy }
-  const [priority, setPriority]   = useState(() => Object.keys(zoneLayout)); // drag-to-reorder list
+  const [priority, setPriority] = useState(() => normalizePriorityList(agentStrategy?.priority_list));
 
   useEffect(() => {
     setPositions(makePositions());
-    setPriority(Object.keys(zoneLayout));
+    setPriority(normalizePriorityList(agentStrategy?.priority_list));
     setDragging(null);
-  }, [caseData?.case_id, makePositions, zoneLayout]);
+  }, [agentStrategy?.priority_list, caseData?.case_id, makePositions, zoneLayout]);
 
   // ── Build derived data ────────────────────────────────────────────────────
   const visitCounts = {};
@@ -315,6 +316,15 @@ export default function CaseFlowMap({
     setDragOverPri(null);
   };
 
+  const movePriority = (index, delta) => {
+    const target = index + delta;
+    if (target < 0 || target >= priority.length) return;
+    const next = [...priority];
+    [next[index], next[target]] = [next[target], next[index]];
+    setPriority(next);
+    onPriorityChange?.(next);
+  };
+
   const currentPos = currentZone ? positions[currentZone] : null;
 
   return (
@@ -378,33 +388,37 @@ export default function CaseFlowMap({
           ◎ 调查优先级 (拖拽排序)
         </div>
         <div className="flex gap-1.5 flex-wrap">
-          {priority.map((zk, idx) => {
-            const zd = zoneLayout[zk];
-            if (!zd) return null;
-            const isOver = dragOverPri === zk;
+          {priority.map((actionId, idx) => {
+            const action = PRIORITY_ACTIONS.find(item => item.id === actionId);
+            if (!action) return null;
+            const isOver = dragOverPri === actionId;
             return (
               <div
-                key={zk}
+                key={actionId}
                 draggable
-                onDragStart={() => setDragPri(zk)}
-                onDragOver={e => { e.preventDefault(); setDragOverPri(zk); }}
+                onDragStart={() => setDragPri(actionId)}
+                onDragOver={e => { e.preventDefault(); setDragOverPri(actionId); }}
                 onDragLeave={() => setDragOverPri(null)}
-                onDrop={() => handlePriDrop(zk)}
+                onDrop={() => handlePriDrop(actionId)}
                 onDragEnd={() => { setDragPri(null); setDragOverPri(null); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '3px 8px', borderRadius: 6,
-                  border: `1px solid ${isOver ? zd.color : 'rgba(255,255,255,0.1)'}`,
-                  background: isOver ? `${zd.color}20` : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${isOver ? action.color : 'rgba(255,255,255,0.1)'}`,
+                  background: isOver ? `${action.color}20` : 'rgba(255,255,255,0.04)',
                   cursor: 'grab',
                   fontSize: '0.55rem', color: 'rgba(255,255,255,0.55)',
                   transition: 'all 0.15s',
-                  boxShadow: isOver ? `0 0 8px ${zd.color}50` : 'none',
+                  boxShadow: isOver ? `0 0 8px ${action.color}50` : 'none',
                 }}
               >
                 <span style={{ opacity: 0.4 }}>#{idx + 1}</span>
-                <span>{zd.icon}</span>
-                <span style={{ color: visitCounts[zk] ? zd.color : 'inherit' }}>{zd.label}</span>
+                <span>{action.icon}</span>
+                <span style={{ color: action.color }}>{action.label}</span>
+                <span className="td-priority-mobile-buttons" style={{ display: 'none', gap: 2 }}>
+                  <button type="button" aria-label="上移" disabled={idx === 0} onClick={() => movePriority(idx, -1)}>↑</button>
+                  <button type="button" aria-label="下移" disabled={idx === priority.length - 1} onClick={() => movePriority(idx, 1)}>↓</button>
+                </span>
               </div>
             );
           })}

@@ -2,7 +2,9 @@ import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { LangProvider } from '@/lib/lang.jsx';
 import { SettingsProvider } from '@/lib/settings.jsx';
+import { ProfileProvider, SessionReadOnlyBanner } from '@/lib/ProfileContext.jsx';
 import AuthGate from '@/components/AuthGate';
+import AppErrorBoundary from '@/components/AppErrorBoundary.jsx';
 
 const TerminalDetective = lazy(() => import('./pages/TerminalDetective'));
 
@@ -35,9 +37,14 @@ function App() {
     <LangProvider>
       <SettingsProvider>
         <AuthProvider>
-          <Suspense fallback={<AppLoading />}>
-            <AuthenticatedApp />
-          </Suspense>
+          <ProfileProvider>
+            <AppErrorBoundary>
+              <SessionReadOnlyBanner />
+              <Suspense fallback={<AppLoading />}>
+                <AuthenticatedApp />
+              </Suspense>
+            </AppErrorBoundary>
+          </ProfileProvider>
         </AuthProvider>
       </SettingsProvider>
     </LangProvider>

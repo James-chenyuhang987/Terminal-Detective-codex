@@ -16,13 +16,13 @@ export const APP_VERSION = 'TERMINAL DETECTIVE · v2.1.57';
 // 本地存档键位（数据管理用）
 export const SAVE_KEYS = [
   'save_strategy_current',
-  'save_team_config',
   'save_checkpoints',
-  'agent_progression_v1',
-  'agent_rewarded_runs_v1',
-  'skill_equipped_v1',
   'td_team_presets',
   'td_onboarding_seen_v1',
+];
+
+export const LEGACY_CLOUD_KEYS = [
+  'save_team_config', 'agent_progression_v1', 'agent_rewarded_runs_v1', 'skill_equipped_v1',
 ];
 
 function readStored() {
