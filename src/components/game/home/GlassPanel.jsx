@@ -1,9 +1,9 @@
 import React from 'react';
 
 // 全息玻璃面板：四角切角描边 + 内发光 + 顶部高光
-export default function GlassPanel({ children, accent = '#00e5ff', style = {}, onClick = undefined, glow = 0.22 }) {
+export default function GlassPanel({ children, accent = '#00e5ff', style = {}, onClick = undefined, glow = 0.22, className = '' }) {
   return (
-    <div onClick={onClick} style={{
+    <div className={`td-glass-panel ${onClick ? 'td-interactive-card' : ''} ${className}`.trim()} onClick={onClick} style={{
       position: 'relative', borderRadius: 14,
       border: `1px solid ${accent}3d`,
       background: 'linear-gradient(158deg, rgba(12,26,40,0.72) 0%, rgba(4,8,14,0.82) 100%)',

@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function FooterShortcuts({ items, onPick }) {
   return (
-    <div style={{
+    <div className="td-home-shortcuts" style={{
       display: 'flex', gap: 8, justifyContent: 'center', fontFamily: 'monospace',
       padding: '8px 14px', borderRadius: 16, width: 'fit-content', margin: '0 auto',
       border: '1px solid rgba(0,229,255,0.18)',
@@ -11,7 +11,7 @@ export default function FooterShortcuts({ items, onPick }) {
       boxShadow: '0 8px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
     }}>
       {items.map(it => (
-        <button key={it.key} onClick={() => onPick(it.key)}
+        <button className="td-ui-button td-home-shortcut-button" key={it.key} onClick={() => onPick(it.key)}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,229,255,0.12)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           style={{

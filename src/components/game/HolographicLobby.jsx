@@ -6,18 +6,26 @@ import { getLevelFromXP, getXPToNextLevel } from '@/game/agentProgression';
 import SkillTreePanel from '@/components/game/SkillTreePanel';
 import AgentRadarChart from '@/components/game/AgentRadarChart';
 import SpecialtyAttrPanel from '@/components/game/SpecialtyAttrPanel';
-import SynergyPanel from '@/components/game/SynergyPanel';
 import SynergyUnlockFX from '@/components/game/SynergyUnlockFX';
 import { calcTeamSynergy } from '@/game/specialtySystem';
 import AgentLoreTooltip from '@/components/game/AgentLoreTooltip';
 import AgentDossierPanel from '@/components/game/AgentDossierPanel';
-import CaseMatchGauge from '@/components/game/CaseMatchGauge';
 import PresetChips from '@/components/game/PresetChips';
 import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
 import { calcCaseMatchScore } from '@/game/casePresets';
 import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
 import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
+
+function LobbyAtmosphere() {
+  return <div className="td-lobby-atmosphere" aria-hidden="true">
+    <i className="td-lobby-aurora td-lobby-aurora-a" />
+    <i className="td-lobby-aurora td-lobby-aurora-b" />
+    <i className="td-lobby-orbit td-lobby-orbit-a" />
+    <i className="td-lobby-orbit td-lobby-orbit-b" />
+    <i className="td-lobby-vignette" />
+  </div>;
+}
 
 // ── Particle Canvas — neural network lines ────────────────────────────────────
 function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColor }) {
@@ -39,7 +47,7 @@ function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColo
     window.addEventListener('resize', resize);
 
     // Spawn floating particles
-    particles.current = Array.from({ length: 60 }, () => ({
+    particles.current = Array.from({ length: 36 }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       vx: (Math.random() - 0.5) * 0.4,
@@ -165,7 +173,7 @@ function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColo
 // ── Holographic Agent Figure ──────────────────────────────────────────────────
 function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
   return (
-    <div onClick={onClick}
+    <div className={`td-holo-figure ${isSelected ? 'td-holo-selected' : ''}`} onClick={onClick}
       onMouseEnter={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseMove={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseLeave={() => onHover?.(null)}
@@ -256,6 +264,7 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
 function PriorityList({ priorityList, onChange }) {
   const [dragging, setDragging] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [expanded, setExpanded] = useState(false);
 
   const getAction = (id) => PRIORITY_ACTIONS.find(a => a.id === id);
 
@@ -271,20 +280,32 @@ function PriorityList({ priorityList, onChange }) {
     setDragOver(null);
   };
 
+  const move = (id, offset) => {
+    const from = priorityList.indexOf(id);
+    const to = Math.max(0, Math.min(priorityList.length - 1, from + offset));
+    if (from === to) return;
+    const next = [...priorityList];
+    next.splice(from, 1);
+    next.splice(to, 0, id);
+    onChange(next);
+  };
+
+  const visiblePriorities = expanded ? priorityList : priorityList.slice(0, 3);
+
   return (
     <div>
       <div style={{
         fontSize: '0.5rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace',
         letterSpacing: '0.12em', marginBottom: 8,
       }}>
-        ◈ 行动优先级 <span style={{ opacity: 0.5 }}>拖拽排序</span>
+        ◈ 行动优先级 <span style={{ opacity: 0.5 }}>优先执行前 3 项</span>
       </div>
-      {priorityList.map((id, idx) => {
+      {visiblePriorities.map((id, idx) => {
         const action = getAction(id);
         if (!action) return null;
         const isOver = dragOver === id;
         return (
-          <div
+          <div className="td-priority-row"
             key={id}
             draggable
             onDragStart={() => setDragging(id)}
@@ -312,9 +333,16 @@ function PriorityList({ priorityList, onChange }) {
               {action.label}
             </span>
             <span style={{ fontSize: '0.4rem', color: 'rgba(255,255,255,0.2)' }}>⠿⠿</span>
+            <span className="td-mobile-only td-priority-mobile-buttons">
+              <button type="button" aria-label="上移" disabled={idx === 0} onClick={event => { event.stopPropagation(); move(id, -1); }}>↑</button>
+              <button type="button" aria-label="下移" disabled={priorityList.indexOf(id) === priorityList.length - 1} onClick={event => { event.stopPropagation(); move(id, 1); }}>↓</button>
+            </span>
           </div>
         );
       })}
+      <button className="td-priority-expand" type="button" onClick={() => setExpanded(value => !value)}>
+        {expanded ? '收起次要行动 ↑' : `查看其余 ${Math.max(0, priorityList.length - 3)} 项 ↓`}
+      </button>
     </div>
   );
 }
@@ -328,7 +356,7 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
       padding: '12px 0 12px 12px',
     }}>
       {/* Roster card */}
-      <div style={{
+      <div className="td-lobby-panel td-lobby-roster-card" style={{
         border: '1px solid rgba(0,229,255,0.2)', borderRadius: 12, overflow: 'hidden',
         background: 'rgba(0,8,24,0.85)', backdropFilter: 'blur(10px)',
       }}>
@@ -344,7 +372,7 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
           const isSelected = selectedIdx === i;
           const xpInfo = getXPToNextLevel(progression[i]?.xp || 0);
           return (
-            <div key={i} onClick={() => onSelect(i)}
+            <div className={`td-roster-agent ${isSelected ? 'td-roster-agent-selected' : ''}`} key={i} onClick={() => onSelect(i)}
               onMouseEnter={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseMove={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseLeave={() => onHover?.(null)}
@@ -381,7 +409,7 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
       </div>
 
       {/* Priority list card */}
-      <div style={{
+      <div className="td-lobby-panel td-lobby-priority-card" style={{
         border: '1px solid rgba(167,139,250,0.2)', borderRadius: 12,
         background: 'rgba(0,4,20,0.85)', backdropFilter: 'blur(10px)',
         padding: '10px 12px', flex: 1,
@@ -398,12 +426,9 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
 // ── Center: Holographic Stage ─────────────────────────────────────────────────
 function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive }) {
   const lvls = AGENT_DEFS.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
-  const teamPower = Math.round(agents.reduce((s, a) =>
-    s + (a.logic_power || 0) + (a.observation_focus || 0) + (a.confusion_resistance || 0) +
-    (a.ap_cost_discount || 0) + (a.hack_level || 0), 0) / 240 * 100);
 
   return (
-    <div className={`td-lobby-stage ${mobileActive ? 'td-mobile-active' : ''}`} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div className={`td-lobby-stage td-lobby-panel ${mobileActive ? 'td-mobile-active' : ''}`} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {/* Grid bg */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 0,
@@ -415,59 +440,15 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
       {/* Particle network canvas */}
       <ParticleCanvas agents={agents} selectedIdx={selectedIdx} accentColor={accentColor} />
 
-      {/* Case preview floating */}
-      <div style={{
-        position: 'relative', margin: '2px auto 0', flexShrink: 0,
-        width: 268, zIndex: 10,
-        border: '1px solid rgba(255,58,96,0.35)', borderRadius: 10,
-        background: 'rgba(2,4,14,0.92)', backdropFilter: 'blur(10px)',
-      }}>
-        <div style={{
-          padding: '5px 10px', borderBottom: '1px solid rgba(255,58,96,0.2)',
-          background: 'rgba(255,58,96,0.07)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <span style={{ fontSize: '0.5rem', color: '#ff3860', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.1em' }}>
-            CASE PREVIEW · 案件预览
-          </span>
-          <span style={{ fontSize: '0.42rem', color: '#ff3860', border: '1px solid #ff386040', borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace' }}>
-            THREAT: HIGH
-          </span>
-        </div>
-        <div style={{ padding: '7px 10px', fontFamily: 'monospace' }}>
-          <div style={{ color: '#ff6b35', fontWeight: 700, fontSize: '0.52rem', marginBottom: 3 }}>霓虹血迹 · NEON BLOOD</div>
-          <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.42rem', lineHeight: 1.5, marginBottom: 5 }}>
-            高科技大亨在赛博城顶层豪华套房中死亡，电磁脉冲痕迹与神经接口灼伤指向内部人员。
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[
-              { label: 'DIFFICULTY', val: '★★★★☆' },
-              { label: 'TEAM POWER', val: `${teamPower}` },
-            ].map(s => (
-              <div key={s.label} style={{
-                flex: 1, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5,
-                padding: '4px 6px', textAlign: 'center',
-              }}>
-                <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.38rem' }}>{s.label}</div>
-                <div style={{ color: '#ffaa00', fontSize: '0.6rem', fontWeight: 700 }}>{s.val}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Scan beam */}
-      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 2 }}>
-        <div style={{
-          position: 'absolute', left: 0, right: 0, height: 2,
-          background: `linear-gradient(to right, transparent, ${accentColor}60, transparent)`,
-          animation: 'scan-beam 4s linear infinite',
-        }}/>
+      <div className="td-stage-focus">
+        <span>AGENT CONFIGURATION</span>
+        <strong style={{ color: AGENT_DEFS[selectedIdx].color }}>{AGENT_DEFS[selectedIdx].icon} {AGENT_DEFS[selectedIdx].id}</strong>
+        <small>{synergy.active.length ? `${synergy.active.length} 项协同已激活` : '选择探员并调整专长'}</small>
       </div>
 
       {/* Agents on stage */}
       <div style={{
-        position: 'absolute', bottom: 190, left: 0, right: 0,
+        position: 'absolute', bottom: 118, left: 0, right: 0,
         display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end',
         padding: '0 30px', zIndex: 3,
       }}>
@@ -480,7 +461,7 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
       </div>
 
       {/* Platform ellipse */}
-      <div style={{ position: 'absolute', bottom: 130, left: '10%', right: '10%', zIndex: 2 }}>
+      <div style={{ position: 'absolute', bottom: 58, left: '10%', right: '10%', zIndex: 2 }}>
         <svg viewBox="0 0 400 50" width="100%" style={{ overflow: 'visible' }}>
           <defs>
             <linearGradient id="plat-g" x1="0" y1="0" x2="0" y2="1">
@@ -504,16 +485,7 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
         </svg>
       </div>
 
-      {/* Synergy skill cards — 中央舞台下方 */}
-      <div style={{
-        position: 'absolute', bottom: 10, left: 0, right: 0, zIndex: 6,
-        display: 'flex', justifyContent: 'center',
-      }}>
-        <SynergyPanel synergy={synergy} />
-      </div>
-
       <style>{`
-        @keyframes scan-beam { 0%{top:-2px;opacity:0.8} 90%{opacity:0.3} 100%{top:100%;opacity:0} }
         @keyframes spin-ring { from{stroke-dashoffset:0} to{stroke-dashoffset:100} }
         @keyframes plat-dot { 0%,100%{opacity:0.3} 50%{opacity:1} }
       `}</style>
@@ -536,7 +508,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
       width: 300, flexShrink: 0, padding: '12px 12px 12px 0',
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
-      <div style={{
+      <div className="td-lobby-panel td-lobby-attribute-card" style={{
         border: `1px solid ${agentDef.color}35`, borderRadius: 12, overflow: 'hidden',
         background: 'rgba(0,8,24,0.85)', backdropFilter: 'blur(10px)',
         flex: 1, display: 'flex', flexDirection: 'column',
@@ -571,7 +543,6 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
           {tab === 'attrs' && (
             <>
-              <CaseMatchGauge agents={allAgents} />
               {/* Radar chart */}
               <div style={{
                 display: 'flex', justifyContent: 'center',
@@ -615,7 +586,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
 }
 
 // ── Status Bar ────────────────────────────────────────────────────────────────
-function StatusBar({ onBack, onOpenSettings }) {
+function StatusBar({ onBack, onOpenSettings, profile, readOnly }) {
   const [time, setTime] = useState(new Date());
   const { lang } = useLang();
   useEffect(() => { const id = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(id); }, []);
@@ -634,17 +605,19 @@ function StatusBar({ onBack, onOpenSettings }) {
             whiteSpace: 'nowrap',
           }}>◄ {lang === 'zh' ? '侦探之家' : 'HOME'}</button>
         )}
-        <span style={{ color: '#00e5ff', fontWeight: 900, letterSpacing: '0.15em', fontSize: '0.62rem' }}>TD</span>
-        <span style={{ color: 'rgba(255,255,255,0.3)', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: 10 }}>
-          USER: <span style={{ color: '#00e5ff' }}>ARCHITECT</span>
+        <span className="td-lobby-brand">TD<span>//</span>07</span>
+        <span className="td-lobby-user">
+          {profile?.avatar || '🕵️'} <strong>{profile?.detective_name || (lang === 'zh' ? '未命名侦探' : 'UNNAMED')}</strong>
+          <em>LV.{profile?.level || 1}</em>
         </span>
-        <span style={{ color: 'rgba(255,255,255,0.25)' }}>架构师控制台</span>
       </div>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-        <span style={{ color: 'rgba(255,255,255,0.3)' }}>SYSTEM: <span style={{ color: '#00ff88' }}>● ONLINE</span></span>
-        <span style={{ color: 'rgba(255,255,255,0.3)' }}>DATA: <span style={{ color: '#00e5ff' }}>2.45 TB/S</span></span>
+      <div className="td-lobby-status-right" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <span className="td-lobby-wallet-pill">⚡ <b>{profile?.energy || 0}</b></span>
+        <span className="td-lobby-wallet-pill">💎 <b>{(profile?.diamonds || 0).toLocaleString('en-US')}</b></span>
+        <span className="td-lobby-wallet-pill">🪙 <b>{(profile?.gold || 0).toLocaleString('en-US')}</b></span>
+        <span className={`td-lobby-link-state ${readOnly ? 'is-readonly' : ''}`}>● {readOnly ? (lang === 'zh' ? '只读' : 'READ ONLY') : (lang === 'zh' ? '云端在线' : 'CLOUD ONLINE')}</span>
         <span style={{ color: '#00e5ff', fontWeight: 700 }}>
-          {time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          {time.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
         <button onClick={onOpenSettings} title={lang === 'zh' ? '设置' : 'Settings'} style={{
           padding: '2px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
@@ -660,6 +633,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
   const [deploying, setDeploying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const prevSynergy = useRef(synergy);
 
   // Flash animation whenever synergy changes
@@ -688,10 +662,9 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
   const barPct = Math.min(synergy, 100);
 
   const btns = [
-    { label: saving ? 'SYNCING\n同步中' : 'SAVE\n保存', icon: '💾', onClick: handleSave, color: '#00e5ff', disabled: saving || disabled },
-    { label: 'LOAD\n加载', icon: '📂', onClick: onLoad, color: '#a78bfa' },
-    { label: 'RELOAD\n重载', icon: '🔄', onClick: () => window.location.reload(), color: '#ffaa00' },
-    { label: 'TUTORIAL\n教程', icon: '❓', onClick: onTutorial, color: 'rgba(255,255,255,0.55)' },
+    { label: saving ? '同步中' : '保存编队', icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#00e5ff', disabled: saving || disabled },
+    { label: '加载预设', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#a78bfa' },
+    { label: '大厅教程', icon: '❓', onClick: () => { onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)' },
   ];
 
   return (
@@ -701,80 +674,20 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
       background: synergyOver ? 'rgba(30,0,8,0.85)' : 'rgba(0,0,0,0.75)',
       flexShrink: 0, transition: 'background 0.4s, border-color 0.4s',
     }}>
-      {btns.map((b, i) => (
-        <button key={i} onClick={b.onClick} disabled={b.disabled} style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-          padding: '6px 14px', borderRadius: 8, border: `1px solid ${b.color}40`,
-          background: `${b.color}08`, color: b.color, cursor: 'pointer',
-          fontFamily: 'monospace', fontSize: '0.44rem', whiteSpace: 'pre-line', textAlign: 'center',
-          transition: 'all 0.2s', opacity: b.disabled ? .45 : 1,
-        }}
-          onMouseEnter={e => e.currentTarget.style.background = `${b.color}18`}
-          onMouseLeave={e => e.currentTarget.style.background = `${b.color}08`}
-        >
-          <span style={{ fontSize: 15 }}>{b.icon}</span>
-          {b.label}
+      <div className="td-lobby-tools-wrap">
+        <button className="td-lobby-tools-toggle" type="button" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
+          <span>☰</span><span>编队工具</span><small>{toolsOpen ? '收起' : '预设 / 保存'}</small>
         </button>
-      ))}
+        {toolsOpen && <div className="td-lobby-tools-popover">
+          <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: button.color, borderColor: `${button.color}45`, background: `${button.color}0d` }}><span>{button.icon}</span>{button.label}</button>)}</div>
+          <PresetChips onApply={preset => { onApplyPreset(preset); setToolsOpen(false); }} />
+        </div>}
+      </div>
 
-      <PresetChips onApply={onApplyPreset} />
-
-      {/* ── Inline TEAM SYNERGY meter ── */}
-      <div style={{
-        marginLeft: 8, padding: '6px 14px',
-        border: `1px solid ${c}40`, borderRadius: 10,
-        background: `${c}08`, minWidth: 160,
-        transition: 'border-color 0.3s, background 0.3s',
-      }}>
-        {/* Label row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace', letterSpacing: '0.1em' }}>
-            专长匹配度 · MATCH
-          </span>
-          {synergyOver && (
-            <span style={{
-              fontSize: '0.38rem', color: '#ff3860', border: '1px solid #ff386050',
-              borderRadius: 3, padding: '0 4px', background: '#ff386018',
-              animation: 'synergy-warn 0.8s ease-in-out infinite',
-              fontFamily: 'monospace',
-            }}>⚠ 专长过载</span>
-          )}
-        </div>
-        {/* Big number */}
-        <div style={{
-          fontSize: '1.1rem', fontWeight: 900, fontFamily: 'monospace',
-          color: c, lineHeight: 1,
-          textShadow: `0 0 10px ${c}`,
-          transform: flash ? 'scale(1.12)' : 'scale(1)',
-          transition: 'transform 0.18s cubic-bezier(.22,1,.36,1), color 0.3s, text-shadow 0.3s',
-          marginBottom: 5,
-        }}>
-          {synergy}<span style={{ fontSize: '0.55rem', fontWeight: 700 }}>%</span>
-        </div>
-        {/* Progress bar with threshold marker */}
-        <div style={{ position: 'relative', height: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 3 }}>
-          {/* 50% line */}
-          <div style={{
-            position: 'absolute', left: '50%', top: -3, bottom: -3, width: 1.5,
-            background: synergyOver ? '#ff386070' : 'rgba(255,255,255,0.4)', zIndex: 2,
-          }}/>
-          <div style={{
-            height: '100%', borderRadius: 3,
-            width: `${barPct}%`,
-            background: synergyOver
-              ? 'linear-gradient(to right, #ff6600, #ff3860)'
-              : 'linear-gradient(to right, #00e5ff80, #00e5ff)',
-            boxShadow: `0 0 8px ${c}80`,
-            transition: 'width 0.25s ease, background 0.3s',
-          }}/>
-        </div>
-        <div style={{
-          marginTop: 3, fontSize: '0.38rem', fontFamily: 'monospace',
-          color: synergyOver ? '#ff386090' : 'rgba(255,255,255,0.2)',
-          transition: 'color 0.3s',
-        }}>
-          {synergyOver ? '三人专长雷同 — 部署后混乱增长 +15%' : '专长互补 ≥66% 时危机惩罚 -20%'}
-        </div>
+      <div className="td-lobby-synergy-compact" style={/** @type {React.CSSProperties & {'--synergy-color': string}} */ ({ '--synergy-color': c })}>
+        <span>{synergyOver ? '⚠ 专长过载' : '队伍协同'}</span>
+        <strong style={{ transform: flash ? 'scale(1.08)' : 'scale(1)' }}>{synergy}<small>%</small></strong>
+        <i><b style={{ width: `${barPct}%` }} /></i>
       </div>
 
       {/* Main deploy */}
@@ -783,7 +696,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
         disabled={deploying || disabled}
         title={disabled ? '当前设备为只读，请先接管此设备' : synergyOver ? '专长过载：三人专长雷同，部署后将承受协同惩罚（混乱增长 +15%）' : ''}
         style={{
-          flex: 1, maxWidth: 300, marginLeft: 'auto',
+          flex: 1, maxWidth: 330, marginLeft: 'auto',
           padding: '11px 24px', borderRadius: 10,
           border: `2px solid ${synergyOver ? '#ff386070' : deploying ? 'rgba(0,229,255,0.3)' : '#00e5ffaa'}`,
           background: synergyOver
@@ -809,7 +722,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
           }}/>
         )}
         <span style={{ position: 'relative', zIndex: 1 }}>
-          {synergyOver ? '⚠ 专长过载 · 仍可强行部署' : deploying ? '⟳  DEPLOYING...' : '▶  DEPLOY AGENTS · 部署探员'}
+          {synergyOver ? '⚠ 专长过载 · 仍可部署' : deploying ? '⟳  DEPLOYING...' : '▶  部署探员'}
         </span>
       </button>
       <style>{`
@@ -882,6 +795,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
       fontFamily: "'Courier New', monospace", color: 'white',
       overflow: 'hidden', position: 'relative',
     }}>
+      <LobbyAtmosphere />
       {/* Scanlines */}
       {settings.scanlines && (
         <div style={{
@@ -900,7 +814,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
         <div key={i} style={{ position: 'absolute', width: 36, height: 36, pointerEvents: 'none', zIndex: 10, ...s }}/>
       ))}
 
-      <StatusBar onBack={onBack} onOpenSettings={() => setShowSettings(true)} />
+      <StatusBar profile={profile} readOnly={readOnly} onBack={onBack} onOpenSettings={() => setShowSettings(true)} />
 
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
@@ -948,22 +862,14 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
         padding: '7px 20px', borderBottom: '1px solid rgba(0,229,255,0.1)',
         background: 'rgba(0,0,0,0.35)', flexShrink: 0, zIndex: 1,
       }}>
-        <div>
-          <div style={{ fontSize: '0.58rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace', letterSpacing: '0.2em' }}>
-            TERMINAL DETECTIVE · AGENT DISPATCH CENTER
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-            <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>
-              全息探员大厅
-            </span>
-            <span style={{ fontSize: '0.56rem', color: 'rgba(0,229,255,0.45)', fontFamily: 'monospace', letterSpacing: '0.15em' }}>
-              HOLOGRAPHIC AGENT LOBBY
-            </span>
-          </div>
+        <div className="td-lobby-title-copy">
+          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>探员编组</span>
+          <small>选择探员、调整专长，然后部署</small>
         </div>
-        <div style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', textAlign: 'right', lineHeight: 1.6 }}>
-          配置AI探员团队，拖拽排序行动优先级<br/>
-          优化属性组合，为案件调查做充分准备
+        <div className="td-lobby-readiness">
+          <div><small>CASE MATCH</small><strong>{matchForecast}<em>%</em></strong></div>
+          <i />
+          <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: AGENT_DEFS[selectedIdx].color }}>{AGENT_DEFS[selectedIdx].icon} {AGENT_DEFS[selectedIdx].id}</strong></div>
         </div>
       </div>
 

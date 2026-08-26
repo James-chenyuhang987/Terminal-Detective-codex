@@ -40,10 +40,10 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
 
   return (
     <>
-      <div onClick={() => !busy && onClose()} style={{
+      <div className="td-drawer-backdrop" onClick={() => !busy && onClose()} style={{
         position: 'fixed', inset: 0, zIndex: 180, background: 'rgba(0,3,8,0.72)', backdropFilter: 'blur(5px)',
       }} />
-      <aside ref={drawerRef} role="dialog" aria-modal="true" aria-label={title} aria-busy={busy} style={{
+      <aside className="td-home-drawer" ref={drawerRef} role="dialog" aria-modal="true" aria-label={title} aria-busy={busy} style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 181,
         width: `min(${width}px, 100vw)`, display: 'flex', flexDirection: 'column',
         color: '#dff8ff', fontFamily: 'monospace',
@@ -52,7 +52,7 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
         boxShadow: '-22px 0 70px rgba(0,0,0,0.75), inset 1px 0 rgba(125,241,255,0.08)',
         animation: 'home-drawer-in .28s cubic-bezier(.22,1,.36,1)',
       }}>
-        <header style={{
+        <header className="td-home-drawer-header" style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
           padding: '17px 20px', borderBottom: '1px solid rgba(0,229,255,0.18)',
           background: 'rgba(0,229,255,0.035)',
@@ -61,12 +61,12 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
             <div style={{ fontSize: '0.94rem', color: '#7df1ff', fontWeight: 900, letterSpacing: '0.13em' }}>{title}</div>
             {subtitle && <div style={{ fontSize: '0.56rem', color: 'rgba(220,245,255,.4)', marginTop: 5 }}>{subtitle}</div>}
           </div>
-          <button ref={closeRef} onClick={onClose} disabled={busy} aria-label="Close" style={{
+          <button className="td-ui-button td-icon-button" ref={closeRef} onClick={onClose} disabled={busy} aria-label="Close" style={{
             border: '1px solid rgba(0,229,255,.25)', borderRadius: 8, padding: '6px 10px',
             background: 'rgba(0,229,255,.06)', color: '#7df1ff', cursor: busy ? 'wait' : 'pointer', fontFamily: 'monospace',
           }}>{busy ? 'SYNC…' : '✕'}</button>
         </header>
-        <div style={{
+        <div className="td-home-drawer-content" style={{
           flex: 1, overflowY: 'auto', padding: '18px 20px 30px',
           pointerEvents: busy ? 'none' : 'auto', opacity: busy ? .72 : 1, transition: 'opacity .2s',
         }}>{children}</div>

@@ -25,7 +25,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
   }, [left]);
 
   return (
-    <div style={{
+    <div className="td-decision-overlay" style={{
       position: 'fixed', inset: 0, zIndex: 120,
       background: 'radial-gradient(ellipse at center, rgba(4,10,26,0.86) 0%, rgba(0,0,0,0.94) 100%)',
       backdropFilter: 'blur(6px)',
@@ -48,7 +48,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
           const m = STYLE_META[c.style] || STYLE_META.steady;
           const rc = RISK_COLOR[c.risk_level] || '#ffaa00';
           return (
-            <button key={i} onClick={() => onChoose({ card: c })}
+            <button className="td-ui-button td-ui-card td-decision-card" key={i} onClick={() => onChoose({ card: c })}
               style={{
                 width: 214, minHeight: 258, textAlign: 'left', cursor: 'pointer',
                 display: 'flex', flexDirection: 'column',
@@ -84,6 +84,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
 
       <div style={{ marginTop: 26, width: '100%', maxWidth: 830, display: 'flex', gap: 10 }}>
         <input
+          className="td-ui-input"
           value={custom}
           onChange={e => setCustom(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && custom.trim()) onChoose({ freeform: custom.trim() }); }}
@@ -94,7 +95,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
             fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none',
           }}
         />
-        <button onClick={() => custom.trim() && onChoose({ freeform: custom.trim() })}
+        <button className="td-ui-button td-button-primary" onClick={() => custom.trim() && onChoose({ freeform: custom.trim() })}
           disabled={!custom.trim()}
           style={{
             padding: '14px 26px', borderRadius: 10, border: '1px solid #00e5ff70',

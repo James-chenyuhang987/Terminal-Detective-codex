@@ -111,13 +111,13 @@ export default function AuthGate() {
   const canSubmit = Boolean(email.trim() && (mode === 'verify' ? otp.trim() : password));
 
   return (
-    <main className="auth-gate">
+    <main className="auth-gate td-page-shell">
       <div className="auth-grid" aria-hidden="true" />
-      <button className="auth-lang" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} type="button">
+      <button className="auth-lang td-ui-button td-button-ghost td-button-compact" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} type="button">
         {lang === 'zh' ? 'EN' : '中'}
       </button>
 
-      <section className="auth-panel">
+      <section className="auth-panel td-ui-card">
         <div className="auth-orb" aria-hidden="true">◈</div>
         <p className="auth-eyebrow">{text.eyebrow}</p>
         <h1>{text.title}</h1>
@@ -127,6 +127,7 @@ export default function AuthGate() {
           <label>
             <span>{text.email}</span>
             <input
+              className="td-ui-input"
               autoComplete="email"
               inputMode="email"
               onChange={(event) => setEmail(event.target.value)}
@@ -141,6 +142,7 @@ export default function AuthGate() {
             <label>
               <span>{text.otp}</span>
               <input
+                className="td-ui-input"
                 autoComplete="one-time-code"
                 inputMode="numeric"
                 maxLength={8}
@@ -155,6 +157,7 @@ export default function AuthGate() {
             <label>
               <span>{text.password}</span>
               <input
+                className="td-ui-input"
                 autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                 minLength={mode === 'register' ? 8 : undefined}
                 onChange={(event) => setPassword(event.target.value)}
@@ -172,18 +175,18 @@ export default function AuthGate() {
             {notice && <p className="auth-notice">✓ {notice}</p>}
           </div>
 
-          <button className="auth-submit" disabled={!canSubmit || busy} type="submit">
+          <button className="auth-submit td-ui-button td-button-primary" disabled={!canSubmit || busy} type="submit">
             {busy ? text.busy : `▶ ${actionLabel}`}
           </button>
         </form>
 
         {mode === 'verify' && (
-          <button className="auth-link" disabled={busy} onClick={resend} type="button">
+          <button className="auth-link td-ui-button td-button-ghost" disabled={busy} onClick={resend} type="button">
             {text.resend}
           </button>
         )}
         <button
-          className="auth-link"
+          className="auth-link td-ui-button td-button-ghost"
           disabled={busy}
           onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
           type="button"

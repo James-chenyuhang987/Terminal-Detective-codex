@@ -21,7 +21,7 @@ export default function ClueCard({ clue, isNew = false, compact = false }) {
   if (compact) {
     return (
       <div
-        className="flex items-center gap-2 p-2 rounded text-xs transition-all duration-300"
+        className="td-clue-card is-compact flex items-center gap-2 p-2 rounded text-xs transition-all duration-300"
         style={{
           backgroundColor: flash ? `${wc.glow}` : 'rgba(255,255,255,0.03)',
           border: `1px solid ${wc.color}30`,
@@ -38,7 +38,7 @@ export default function ClueCard({ clue, isNew = false, compact = false }) {
 
   return (
     <div
-      className="p-3 rounded-lg border transition-all duration-500 cursor-default"
+      className="td-clue-card p-3 rounded-lg border transition-all duration-500 cursor-default"
       style={{
         backgroundColor: flash ? `${wc.glow}` : 'rgba(10,15,30,0.8)',
         borderColor: flash ? wc.color : `${wc.color}50`,

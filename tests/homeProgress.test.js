@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   ACHIEVEMENTS, ENERGY_MAX, achievementProgress, applyCheckin, claimAchievement, claimTask,
-  claimWeeklyReward, consumeEnergyCell, dailyIntelCaseId, evaluateAchievements,
-  localDateKey, normalizeProfile, purchaseItem, regenEnergy, settleCase, startCase,
+  buyAndUseEnergyCell, claimWeeklyReward, consumeEnergyCell, dailyIntelCaseId, evaluateAchievements,
+  getEconomySnapshot, localDateKey, normalizeProfile, purchaseItem, quotePurchase,
+  regenEnergy, settleCase, startCase,
   toggleEquipItem, unlockTech, weeklyChallenge,
 } from '../src/game/homeProgress.js';
 
@@ -80,6 +81,46 @@ test('warehouse purchase, use and loadout rules are deterministic', () => {
   current = toggleEquipItem(current, 'ap_booster').profile;
   current = toggleEquipItem(current, 'firewall_shield').profile;
   assert.equal(toggleEquipItem(current, 'clue_scanner').error, 'equip_limit');
+});
+
+test('currency quotes support safe batch purchases and inventory limits', () => {
+  const current = profile({ gold: 5000, inventory: { energy_cell: 18 } });
+  const quote = quotePurchase(current, 'energy_cell', 2);
+  assert.equal(quote.canPurchase, true);
+  assert.equal(quote.totalCost, 800);
+  assert.equal(quote.afterBalance, 4200);
+  assert.equal(quote.afterOwned, 20);
+
+  const purchased = purchaseItem(current, 'energy_cell', 2);
+  assert.equal(purchased.profile.gold, 4200);
+  assert.equal(purchased.profile.inventory.energy_cell, 20);
+  assert.equal(purchased.transaction.delta, -800);
+  assert.equal(quotePurchase(purchased.profile, 'energy_cell').error, 'inventory_full');
+  assert.equal(quotePurchase(current, 'energy_cell', 11).error, 'invalid_quantity');
+});
+
+test('direct energy supply bypasses storage while charging the exact price', () => {
+  const current = profile({ gold: 900, energy: 170, inventory: { energy_cell: 20 } });
+  const supplied = buyAndUseEnergyCell(current);
+  assert.equal(supplied.profile.gold, 500);
+  assert.equal(supplied.profile.energy, 180);
+  assert.equal(supplied.profile.inventory.energy_cell, 20);
+  assert.equal(supplied.restored, 10);
+});
+
+test('economy snapshot exposes spendability without mutating the profile', () => {
+  const current = profile({
+    gold: 1600, diamonds: 30, energy: 15,
+    achievements: ['first_deploy'], reward_claims: [],
+  });
+  const before = structuredClone(current);
+  const snapshot = getEconomySnapshot(current);
+  assert.equal(snapshot.buyingPower.energy_cell, 4);
+  assert.equal(snapshot.pendingDiamonds, 10);
+  assert.equal(snapshot.nextTech.cost, 25);
+  assert.equal(snapshot.nextTech.affordable, true);
+  assert.deepEqual(snapshot.energy.availableDifficulties, ['NORMAL', 'HARD']);
+  assert.deepEqual(current, before);
 });
 
 test('technology enforces prerequisites and composes with mission items', () => {

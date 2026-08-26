@@ -56,7 +56,7 @@ function Scanlines() {
 
 function FeatureCard({ icon, title, desc, color, delay }) {
   return (
-    <div style={{
+    <div className="td-ui-card td-feature-card" style={{
       border: `1px solid ${color}30`,
       background: `linear-gradient(135deg, ${color}08 0%, rgba(0,0,0,0.4) 100%)`,
       borderRadius: 16, padding: '20px 18px',
@@ -195,7 +195,7 @@ function TerminalPreview({ lang }) {
   }, [visibleLines === 0]);
 
   return (
-    <div style={{ border: '1px solid rgba(0,229,255,0.15)', borderRadius: 12, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', padding: '14px 18px', fontFamily: 'monospace', fontSize: '0.68rem', lineHeight: 1.8, maxWidth: 560, margin: '0 auto', animation: 'fade-in 1s 1.2s both', position: 'relative', zIndex: 2 }}>
+    <div className="td-ui-card td-terminal-preview" style={{ border: '1px solid rgba(0,229,255,0.15)', borderRadius: 12, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', padding: '14px 18px', fontFamily: 'monospace', fontSize: '0.68rem', lineHeight: 1.8, maxWidth: 560, margin: '0 auto', animation: 'fade-in 1s 1.2s both', position: 'relative', zIndex: 2 }}>
       <div style={{ color: 'rgba(0,229,255,0.4)', fontSize: '0.55rem', letterSpacing: '0.2em', marginBottom: 8 }}>● TERMINAL PREVIEW · LIVE</div>
       {lines.slice(0, visibleLines).map((l, i) => <div key={i} style={{ color: l.c }}>{l.t}</div>)}
       <span style={{ color: '#00ff88', animation: 'cursor-blink 1s step-end infinite' }}>▊</span>
@@ -208,6 +208,7 @@ function StartButton({ onClick, t }) {
   return (
     <div style={{ textAlign: 'center', position: 'relative', zIndex: 2, animation: 'fade-in 1s 1.5s both' }}>
       <button
+        className="td-ui-button td-button-primary td-landing-start"
         onClick={onClick}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -235,6 +236,7 @@ function LangToggle() {
   const { lang, t, setLang } = useLang();
   return (
     <button
+      className="td-ui-button td-button-ghost td-button-compact"
       onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
       style={{
         padding: '4px 12px',
@@ -255,7 +257,7 @@ export default function GameLanding({ onStart }) {
   const { lang, t } = useLang();
 
   return (
-    <div style={{ minHeight: '100vh', background: 'radial-gradient(ellipse at 30% 20%, #0a0a2e 0%, #03060f 60%)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div className="td-page-shell td-landing" style={{ minHeight: '100dvh', background: 'radial-gradient(ellipse at 30% 20%, #0a0a2e 0%, #03060f 60%)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <MatrixRain color="#00e5ff" />
       <Scanlines />
 

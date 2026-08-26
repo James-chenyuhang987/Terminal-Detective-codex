@@ -870,7 +870,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }
 
   return (
-    <div className="td-investigation min-h-screen flex flex-col"
+    <div className="td-investigation td-page-shell min-h-screen flex flex-col"
       style={{
         background: `radial-gradient(ellipse at top, ${bgColor} 0%, #040810 70%)`,
         fontFamily: "'Courier New', monospace",
@@ -944,7 +944,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           borderRadius: '0 0 16px 16px',
         }}>
         <div className="flex items-center gap-4">
-          <button onClick={onBackToLobby} className="text-xs opacity-40 hover:opacity-80 transition-opacity"
+          <button onClick={onBackToLobby} className="td-ui-button td-button-ghost td-button-compact text-xs opacity-60 hover:opacity-100 transition-opacity"
             style={{ color: accentColor }}>{t.lobbyBtn}</button>
           <div className="text-xs font-bold tracking-widest" style={{ color: accentColor, textShadow: `0 0 10px ${accentColor}` }}>
             {caseData.title} · {caseData.subtitle}
@@ -970,24 +970,24 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         <div className="flex gap-2">
           <button onClick={() => setShowSettings(true)}
             title={lang === 'zh' ? '设置' : 'Settings'}
-            className="text-xs px-3 py-1 rounded border transition-all"
+            className="td-ui-button td-icon-button text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: `${accentColor}50`, color: accentColor, backgroundColor: 'transparent' }}>
             ⚙️
           </button>
           <button onClick={() => setShowOnboarding(true)}
             title={lang === 'zh' ? '新手指引' : 'Field Briefing'}
-            className="text-xs px-3 py-1 rounded border transition-all"
+            className="td-ui-button td-icon-button text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: `${accentColor}50`, color: accentColor, backgroundColor: 'transparent' }}>
             ?
           </button>
-          <button onClick={() => setShowMiniMap(value => !value)} className="td-mobile-only text-xs px-3 py-1 rounded border" style={{ borderColor: `${accentColor}50`, color: accentColor }}>🗺</button>
+          <button onClick={() => setShowMiniMap(value => !value)} className="td-ui-button td-icon-button td-mobile-only text-xs px-3 py-1 rounded border" style={{ borderColor: `${accentColor}50`, color: accentColor }}>🗺</button>
           <button onClick={() => setReportMode(r => !r)}
-            className="text-xs px-3 py-1 rounded border transition-all"
+            className="td-ui-button td-button-secondary text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
             {t.btnReport}
           </button>
           <button onClick={() => { setFinalJudgeResult(judgeResult); setShowGameOver(true); }}
-            className="text-xs px-3 py-1 rounded border transition-all"
+            className="td-ui-button td-button-danger text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: '#ff386050', color: '#ff3860', backgroundColor: 'transparent' }}>
             {t.btnEnd}
           </button>
@@ -1013,7 +1013,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         {/* Left: Terminal */}
         <div className="td-investigation-terminal flex flex-col flex-1 min-w-0">
           {/* Terminal output */}
-          <div ref={terminalRef} className="flex-1 overflow-y-auto p-4 space-y-1"
+          <div ref={terminalRef} className="td-terminal-surface flex-1 overflow-y-auto p-4 space-y-1"
             style={{ scrollBehavior: 'smooth' }}>
             <div className="text-xs opacity-30 mb-4" style={{ color: accentColor }}>
               ═══ TERMINAL DETECTIVE SYSTEM · CASE: {caseData.case_id} · AGENT: {agentStrategy?.agent_id} ═══
@@ -1060,7 +1060,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             }}>
               <div className="text-xs mb-2" style={{ color: settings.panelLight ? skin.text : '#00ff88' }}>{t.reportTitle}</div>
               <textarea
-                className="w-full bg-transparent border rounded p-3 text-xs outline-none resize-none"
+                className="td-ui-input w-full bg-transparent border rounded p-3 text-xs outline-none resize-none"
                 style={{
                   borderColor: settings.panelLight ? skin.border : '#00ff8850',
                   color: settings.panelLight ? skin.text : '#00ff88',
@@ -1073,12 +1073,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               />
               <div className="flex gap-2 mt-2">
                 <button onClick={handleSubmitReport} disabled={isProcessing}
-                  className="flex-1 py-2 text-xs rounded border transition-all"
+                  className="td-ui-button td-button-success flex-1 py-2 text-xs rounded border transition-all"
                   style={{ borderColor: '#00ff88', color: '#00ff88', backgroundColor: '#00ff8815' }}>
                   {t.reportSubmit}
                 </button>
                 <button onClick={() => setReportMode(false)}
-                  className="px-4 py-2 text-xs rounded border opacity-50 hover:opacity-80"
+                  className="td-ui-button td-button-ghost px-4 py-2 text-xs rounded border opacity-60 hover:opacity-100"
                   style={{ borderColor: '#ffffff30', color: '#fff' }}>
                   {t.reportCancel}
                 </button>
@@ -1088,10 +1088,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           )}
 
           {/* Action Bar */}
-          <div className="td-investigation-actions p-4 border-t flex items-center gap-3 flex-wrap"
+          <div className="td-investigation-actions td-action-dock p-4 border-t flex items-center gap-3 flex-wrap"
             style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <button onClick={runReActCycle} disabled={isProcessing || gameState.action_points_left <= 0}
-              className="px-6 py-2 text-xs font-bold tracking-widest rounded border transition-all hover:scale-105 active:scale-95 disabled:opacity-30"
+              className="td-ui-button td-button-primary px-6 py-2 text-xs font-bold tracking-widest rounded border transition-all disabled:opacity-30"
               style={{
                 borderColor: accentColor, color: accentColor,
                 backgroundColor: `${accentColor}15`,
@@ -1102,17 +1102,17 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             </button>
             {isProcessing && (
               <button onClick={handleAbort}
-                className="px-4 py-2 text-xs rounded border transition-all"
+                className="td-ui-button td-button-danger px-4 py-2 text-xs rounded border transition-all"
                 style={{ borderColor: '#ff386060', color: '#ff3860', backgroundColor: '#ff386015' }}>
                 {t.abortBtn}
               </button>
             )}
-            <button type="button" className="td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}>🧰 {lang === 'zh' ? '工具' : 'TOOLS'}</button>
+            <button type="button" className="td-ui-button td-button-secondary td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}>🧰 {lang === 'zh' ? '工具' : 'TOOLS'}</button>
             <div className="flex gap-2 flex-wrap">
               {caseData.npcs.map(npc => (
                 <button key={npc.npc_id} onClick={() => handleNPCTalk(npc)}
                   disabled={isProcessing}
-                  className="px-3 py-1 text-xs rounded border transition-all hover:opacity-80 disabled:opacity-30 inline-flex items-center gap-2"
+                  className="td-ui-button td-npc-chip px-3 py-1 text-xs rounded border transition-all disabled:opacity-30 inline-flex items-center gap-2"
                   style={{ borderColor: `${accentColor}40`, color: `${accentColor}cc`, backgroundColor: `${accentColor}08` }}>
                   <span>{npc.avatar} {npc.name}</span>
                   <EmotionBadge level={getEmotion(npcEmotionState, npc.npc_id).level} />
@@ -1139,7 +1139,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               log: decisionLog.filter(e => e.isKeyDecision || e.isTrap).length,
             }}
           />
-          <button type="button" className="td-mobile-only td-tools-close" onClick={() => setMobileToolsOpen(false)}>↓ {lang === 'zh' ? '收起工具' : 'CLOSE TOOLS'}</button>
+          <button type="button" className="td-ui-button td-mobile-only td-tools-close" onClick={() => setMobileToolsOpen(false)}>↓ {lang === 'zh' ? '收起工具' : 'CLOSE TOOLS'}</button>
           {toolTab === 'link' ? (
             <LinkBoard
               clues={caseData.clue_dictionary}

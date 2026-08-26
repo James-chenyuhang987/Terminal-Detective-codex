@@ -4,6 +4,7 @@ export const ENERGY_MINUTES_PER_POINT = 5;
 export const XP_PER_LEVEL = 4800;
 export const ACHIEVEMENT_TOTAL = 24;
 export const KNOWN_CASE_IDS = ['Lvl_01', 'Lvl_02', 'Lvl_03'];
+export const CURRENCY_CAPS = Object.freeze({ gold: 9_999_999, diamonds: 999_999 });
 
 export const CASE_ENERGY_COST = { NORMAL: 10, HARD: 15, OMEGA: 20 };
 export const CASE_GOLD_REWARD = { S: 1000, A: 750, B: 500, C: 300, D: 150 };
@@ -13,16 +14,16 @@ const DEFAULT_CASE_TOTALS = { Lvl_01: 9, Lvl_02: 9, Lvl_03: 9 };
 const HIDDEN_CLUE_IDS = ['c_secret_99', 'd_secret_99', 'e_secret_99'];
 
 export const ITEM_CATALOG = [
-  { id: 'energy_cell', icon: '🔋', currency: 'gold', cost: 400, mission: false,
+  { id: 'energy_cell', icon: '🔋', currency: 'gold', cost: 400, stackLimit: 20, mission: false,
     zh: { name: '能量电池', desc: '立即恢复 30 点体力，临时上限 180。' },
     en: { name: 'Energy Cell', desc: 'Restore 30 energy immediately, up to 180.' } },
-  { id: 'ap_booster', icon: '⚡', currency: 'gold', cost: 800, mission: true,
+  { id: 'ap_booster', icon: '⚡', currency: 'gold', cost: 800, stackLimit: 12, mission: true,
     zh: { name: 'AP 增幅器', desc: '下一局初始 AP +3。' },
     en: { name: 'AP Booster', desc: 'Start the next case with +3 AP.' } },
-  { id: 'firewall_shield', icon: '🛡️', currency: 'diamonds', cost: 35, mission: true,
+  { id: 'firewall_shield', icon: '🛡️', currency: 'diamonds', cost: 35, stackLimit: 12, mission: true,
     zh: { name: '防火墙护盾', desc: '下一局抵消第一次陷阱。' },
     en: { name: 'Firewall Shield', desc: 'Negate the first trap in the next case.' } },
-  { id: 'clue_scanner', icon: '📡', currency: 'diamonds', cost: 50, mission: true,
+  { id: 'clue_scanner', icon: '📡', currency: 'diamonds', cost: 50, stackLimit: 12, mission: true,
     zh: { name: '线索扫描器', desc: '下一局自动发现起始区域一条线索。' },
     en: { name: 'Clue Scanner', desc: 'Reveal one valid clue in the starting zone.' } },
 ];
@@ -122,6 +123,8 @@ export const PROFILE_FIELD_KEYS = Object.freeze(Object.keys(PROFILE_DEFAULTS));
 const unique = (values) => [...new Set((Array.isArray(values) ? values : []).filter(Boolean))];
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const currencyAmount = (value, currency) => clamp(Math.floor(finite(value)), 0, CURRENCY_CAPS[currency]);
+const INVENTORY_HARD_CAP = 999;
 
 export function localDateKey(date = new Date()) {
   const d = new Date(date);
@@ -161,14 +164,17 @@ export function normalizeProfile(raw = {}, now = new Date()) {
   p.level = Math.max(1, finite(p.level, 1));
   p.xp = Math.max(0, finite(p.xp));
   p.energy = clamp(finite(p.energy, ENERGY_MAX), 0, ENERGY_OVERFLOW_MAX);
-  p.diamonds = Math.max(0, finite(p.diamonds));
-  p.gold = Math.max(0, finite(p.gold));
+  p.diamonds = currencyAmount(p.diamonds, 'diamonds');
+  p.gold = currencyAmount(p.gold, 'gold');
   p.rename_count = clamp(finite(p.rename_count), 0, 1);
   p.checkin_streak = Math.max(0, finite(p.checkin_streak));
   p.checkin_history = unique(p.checkin_history).slice(-60);
   p.achievements = unique(p.achievements);
   p.solved_cases = unique(p.solved_cases);
-  p.inventory = Object.fromEntries(ITEM_CATALOG.map(item => [item.id, Math.max(0, finite(p.inventory?.[item.id]))]));
+  p.inventory = Object.fromEntries(ITEM_CATALOG.map(item => [
+    item.id,
+    clamp(Math.floor(finite(p.inventory?.[item.id])), 0, INVENTORY_HARD_CAP),
+  ]));
   p.equipped_items = unique(p.equipped_items).filter(id => ITEM_CATALOG.some(item => item.id === id && item.mission)).slice(0, 2);
   p.tech_unlocks = unique(p.tech_unlocks).filter(id => TECH_CATALOG.some(tech => tech.id === id));
   p.case_records = Array.isArray(p.case_records) ? p.case_records.map(record => ({
@@ -224,12 +230,13 @@ export function energyCountdown(profile, now = new Date()) {
 
 function rewardProfile(profile, reward = {}) {
   const next = { ...profile };
-  next.gold = Math.max(0, next.gold + finite(reward.gold));
-  next.diamonds = Math.max(0, next.diamonds + finite(reward.diamonds));
+  next.gold = currencyAmount(next.gold + finite(reward.gold), 'gold');
+  next.diamonds = currencyAmount(next.diamonds + finite(reward.diamonds), 'diamonds');
   next.energy = clamp(next.energy + finite(reward.energy), 0, ENERGY_OVERFLOW_MAX);
   next.inventory = { ...next.inventory };
   Object.entries(reward.items || {}).forEach(([id, amount]) => {
-    if (ITEM_CATALOG.some(item => item.id === id)) next.inventory[id] = Math.max(0, finite(next.inventory[id]) + finite(amount));
+    const item = ITEM_CATALOG.find(entry => entry.id === id);
+    if (item) next.inventory[id] = clamp(Math.floor(finite(next.inventory[id]) + finite(amount)), 0, INVENTORY_HARD_CAP);
   });
   return next;
 }
@@ -262,21 +269,102 @@ export function applyCheckin(profile, now = new Date()) {
   return { profile: evaluateAchievements(next), reward, day: ((streak - 1) % 7) + 1 };
 }
 
-export function purchaseItem(profile, itemId) {
+export function quotePurchase(profile, itemId, quantity = 1) {
   const item = ITEM_CATALOG.find(entry => entry.id === itemId);
-  if (!item) return { profile, error: 'unknown_item' };
-  if (finite(profile[item.currency]) < item.cost) return { profile, error: 'insufficient_funds' };
-  const next = { ...profile, inventory: { ...profile.inventory }, [item.currency]: profile[item.currency] - item.cost };
-  next.inventory[itemId] = finite(next.inventory[itemId]) + 1;
-  return { profile: next, item };
+  if (!item) return {
+    item: null, quantity: 0, owned: 0, stackLimit: 0, balance: 0, totalCost: 0,
+    afterBalance: 0, afterOwned: 0, error: 'unknown_item', canPurchase: false,
+  };
+  const count = Math.floor(finite(quantity));
+  const owned = Math.max(0, Math.floor(finite(profile?.inventory?.[itemId])));
+  const balance = currencyAmount(profile?.[item.currency], item.currency);
+  const totalCost = item.cost * Math.max(0, count);
+  const quote = {
+    item, quantity: count, owned, stackLimit: item.stackLimit, balance, totalCost,
+    afterBalance: Math.max(0, balance - totalCost), afterOwned: owned + count,
+  };
+  if (count < 1 || count > 10) return { ...quote, error: 'invalid_quantity', canPurchase: false };
+  if (owned + count > item.stackLimit) return { ...quote, error: 'inventory_full', canPurchase: false };
+  if (balance < totalCost) return { ...quote, error: 'insufficient_funds', canPurchase: false };
+  return { ...quote, error: null, canPurchase: true };
+}
+
+export function purchaseItem(profile, itemId, quantity = 1) {
+  const quote = quotePurchase(profile, itemId, quantity);
+  if (!quote.canPurchase || !quote.item) return { profile, ...quote };
+  const { item } = quote;
+  const next = {
+    ...profile,
+    inventory: { ...profile.inventory, [itemId]: quote.afterOwned },
+    [item.currency]: quote.afterBalance,
+  };
+  return {
+    profile: next, item, quantity: quote.quantity, error: null,
+    transaction: { currency: item.currency, delta: -quote.totalCost, balance: quote.afterBalance },
+  };
 }
 
 export function consumeEnergyCell(profile) {
   if (finite(profile.inventory?.energy_cell) < 1) return { profile, error: 'not_owned' };
   if (profile.energy >= ENERGY_OVERFLOW_MAX) return { profile, error: 'energy_full' };
   const next = { ...profile, inventory: { ...profile.inventory, energy_cell: profile.inventory.energy_cell - 1 } };
+  const before = next.energy;
   next.energy = Math.min(ENERGY_OVERFLOW_MAX, next.energy + 30);
-  return { profile: next, restored: 30 };
+  return { profile: next, restored: next.energy - before };
+}
+
+export function buyAndUseEnergyCell(profile) {
+  if (finite(profile.energy) >= ENERGY_OVERFLOW_MAX) return { profile, error: 'energy_full' };
+  const item = ITEM_CATALOG.find(entry => entry.id === 'energy_cell');
+  const balance = currencyAmount(profile.gold, 'gold');
+  if (balance < item.cost) return { profile, item, error: 'insufficient_funds' };
+  const before = clamp(finite(profile.energy), 0, ENERGY_OVERFLOW_MAX);
+  const next = {
+    ...profile,
+    gold: balance - item.cost,
+    energy: Math.min(ENERGY_OVERFLOW_MAX, before + 30),
+  };
+  return {
+    profile: next, item, error: null, restored: next.energy - before,
+    transaction: { currency: 'gold', delta: -item.cost, balance: next.gold },
+  };
+}
+
+export function getEconomySnapshot(profile) {
+  const p = profile || PROFILE_DEFAULTS;
+  const pendingAchievements = ACHIEVEMENTS.filter(item => (
+    p.achievements?.includes(item.id) && !p.reward_claims?.includes(`achievement:${item.id}`)
+  ));
+  const availableTech = TECH_CATALOG.filter(tech => (
+    !p.tech_unlocks?.includes(tech.id)
+    && (tech.level === 1 || p.tech_unlocks?.includes(`${tech.branch}_${tech.level - 1}`))
+  )).sort((a, b) => a.cost - b.cost);
+  const nextTech = availableTech[0] || null;
+  const energy = clamp(finite(p.energy), 0, ENERGY_OVERFLOW_MAX);
+  return {
+    wallet: {
+      gold: currencyAmount(p.gold, 'gold'),
+      diamonds: currencyAmount(p.diamonds, 'diamonds'),
+    },
+    energy: {
+      current: energy,
+      baseCap: ENERGY_MAX,
+      overflowCap: ENERGY_OVERFLOW_MAX,
+      percent: Math.round((energy / ENERGY_MAX) * 100),
+      availableDifficulties: Object.entries(CASE_ENERGY_COST)
+        .filter(([, cost]) => energy >= cost).map(([difficulty]) => difficulty),
+    },
+    pendingDiamonds: pendingAchievements.reduce((sum, item) => sum + item.reward, 0),
+    pendingAchievementCount: pendingAchievements.length,
+    nextTech: nextTech ? { id: nextTech.id, cost: nextTech.cost, affordable: finite(p.diamonds) >= nextTech.cost } : null,
+    buyingPower: Object.fromEntries(ITEM_CATALOG.map(item => [
+      item.id,
+      Math.min(
+        Math.floor(currencyAmount(p[item.currency], item.currency) / item.cost),
+        Math.max(0, item.stackLimit - Math.floor(finite(p.inventory?.[item.id]))),
+      ),
+    ])),
+  };
 }
 
 export function toggleEquipItem(profile, itemId) {
@@ -397,7 +485,7 @@ export function settleCase(profile, summary, now = new Date()) {
     next = addProfileXP(next, summary.xp_gain);
     const dailyKey = `intel:${localDateKey(now)}`;
     if (dailyIntelCaseId(now) === summary.case_id && !next.reward_claims.includes(dailyKey)) {
-      next.gold += 250;
+      next.gold = currencyAmount(next.gold + 250, 'gold');
       next.reward_claims = [...next.reward_claims, dailyKey];
     }
   }

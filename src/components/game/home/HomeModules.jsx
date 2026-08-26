@@ -7,8 +7,9 @@ import {
   SEVEN_DAY_TASKS, TECH_CATALOG, TUTORIAL_TASKS,
   achievementProgress, canCheckin, claimAchievement, claimTask, claimWeeklyReward,
   dailyIntelCaseId, daysBetween, editIdentity, energyCountdown, purchaseItem,
-  consumeEnergyCell, sevenDayTaskDone, toggleEquipItem, tutorialTaskDone, unlockTech,
-  weeklyChallenge, knownAchievementCount,
+  consumeEnergyCell, buyAndUseEnergyCell, getEconomySnapshot, quotePurchase,
+  sevenDayTaskDone, toggleEquipItem, tutorialTaskDone, unlockTech,
+  weeklyChallenge, knownAchievementCount, KNOWN_CASE_IDS,
 } from '@/game/playerProfile';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import HomeDrawer from './HomeDrawer';
@@ -48,15 +49,35 @@ const TEXT = {
 };
 
 function Panel({ children, accent = '#00e5ff', style = {} }) {
-  return <div style={{ border: `1px solid ${accent}35`, borderRadius: 13, padding: 14, background: `${accent}08`, ...style }}>{children}</div>;
+  return <div className="td-ui-card td-module-panel" style={{ border: `1px solid ${accent}35`, borderRadius: 13, padding: 14, background: `${accent}08`, ...style }}>{children}</div>;
 }
 
 function ActionButton({ children, onClick, disabled = false, accent = '#00e5ff', style = {} }) {
-  return <button onClick={onClick} disabled={disabled} style={{
+  return <button className="td-ui-button td-button-secondary td-economy-action" onClick={onClick} disabled={disabled} style={{
     border: `1px solid ${accent}80`, borderRadius: 9, padding: '8px 12px', background: `${accent}18`,
     color: accent, fontFamily: 'monospace', fontWeight: 800, fontSize: '0.62rem', cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? .42 : 1, ...style,
   }}>{children}</button>;
+}
+
+function WalletOverview({ profile, lang }) {
+  const snapshot = getEconomySnapshot(profile);
+  const entries = [
+    { icon: '🪙', value: snapshot.wallet.gold, color: '#e8c98a', label: lang === 'zh' ? '可用金币' : 'GOLD' },
+    { icon: '💎', value: snapshot.wallet.diamonds, color: '#5fd8ff', label: lang === 'zh' ? '可用钻石' : 'DIAMONDS' },
+    { icon: '⚡', value: `${snapshot.energy.current}/${snapshot.energy.overflowCap}`, color: '#ffd34d', label: lang === 'zh' ? '行动体力' : 'ENERGY' },
+  ];
+  return <div className="td-economy-wallet">{entries.map(entry => <div key={entry.label} style={/** @type {import('react').CSSProperties & {'--wallet-color': string}} */ ({ '--wallet-color': entry.color })}>
+    <span>{entry.icon}</span><section><small>{entry.label}</small><strong>{typeof entry.value === 'number' ? entry.value.toLocaleString('en-US') : entry.value}</strong></section>
+  </div>)}</div>;
+}
+
+function QuantityPicker({ value, onChange, max = 10 }) {
+  return <div className="td-quantity-picker" aria-label="purchase quantity">
+    <button type="button" disabled={value <= 1} onClick={() => onChange(Math.max(1, value - 1))}>−</button>
+    <span>×{value}</span>
+    <button type="button" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>＋</button>
+  </div>;
 }
 
 /** @param {{ reward?: { gold?: number, diamonds?: number, energy?: number, items?: Record<string, number> } }} props */
@@ -91,11 +112,11 @@ function ProfileModule({ profile, onApply, tx, lang }) {
     </div>
     <Panel accent="#e8c98a" style={{ marginBottom: 14 }}><div style={{ color: '#e8c98a', fontWeight: 900 }}>{profile.rank_title}</div><div style={{ marginTop: 6, color: 'rgba(255,255,255,.42)', fontSize: '.56rem' }}>{lang === 'zh' ? `累计尝试 ${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} 次 · 有效连线 ${profile.activity_stats.valid_links}` : `${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} attempts · ${profile.activity_stats.valid_links} valid links`}</div></Panel>
     <Panel>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>{avatars.map(icon => <button key={icon} onClick={() => setAvatar(icon)} style={{ width: 42, height: 42, borderRadius: 9, fontSize: 21, cursor: 'pointer', border: `1px solid ${avatar === icon ? '#e8c98a' : 'rgba(255,255,255,.12)'}`, background: avatar === icon ? 'rgba(232,201,138,.15)' : 'rgba(0,0,0,.3)' }}>{icon}</button>)}</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>{avatars.map(icon => <button className={`td-ui-button td-select-tile ${avatar === icon ? 'is-active' : ''}`} key={icon} onClick={() => setAvatar(icon)} style={{ width: 42, height: 42, borderRadius: 9, fontSize: 21, cursor: 'pointer', border: `1px solid ${avatar === icon ? '#e8c98a' : 'rgba(255,255,255,.12)'}`, background: avatar === icon ? 'rgba(232,201,138,.15)' : 'rgba(0,0,0,.3)' }}>{icon}</button>)}</div>
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? `侦探代号 · 剩余修改次数 ${profile.rename_count ? 0 : 1}` : `CODENAME · ${profile.rename_count ? 0 : 1} rename left`}</label>
-      <input value={name} maxLength={10} disabled={profile.rename_count >= 1} onChange={event => setName(event.target.value)} style={{ width: '100%', margin: '7px 0 12px', padding: 10, borderRadius: 8, border: '1px solid rgba(0,229,255,.3)', background: 'rgba(0,0,0,.45)', color: '#7df1ff', fontFamily: 'monospace' }} />
+      <input className="td-ui-input" value={name} maxLength={10} disabled={profile.rename_count >= 1} onChange={event => setName(event.target.value)} style={{ width: '100%', margin: '7px 0 12px', padding: 10, borderRadius: 8, border: '1px solid rgba(0,229,255,.3)', background: 'rgba(0,0,0,.45)', color: '#7df1ff', fontFamily: 'monospace' }} />
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? '个性签名' : 'SIGNATURE'}</label>
-      <textarea value={signature} maxLength={30} onChange={event => setSignature(event.target.value)} style={{ width: '100%', height: 68, margin: '7px 0 12px', padding: 10, resize: 'none', borderRadius: 8, border: '1px solid rgba(0,229,255,.3)', background: 'rgba(0,0,0,.45)', color: '#dff8ff', fontFamily: 'monospace' }} />
+      <textarea className="td-ui-input" value={signature} maxLength={30} onChange={event => setSignature(event.target.value)} style={{ width: '100%', height: 68, margin: '7px 0 12px', padding: 10, resize: 'none', borderRadius: 8, border: '1px solid rgba(0,229,255,.3)', background: 'rgba(0,0,0,.45)', color: '#dff8ff', fontFamily: 'monospace' }} />
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? '身份徽章' : 'IDENTITY BADGE'}</label>
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', margin: '7px 0 12px' }}>{badges.map(([id, label]) => <ActionButton key={id} accent={badge === id ? '#e8c98a' : '#668899'} onClick={() => setBadge(id)}>{label}</ActionButton>)}</div>
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? `侦探标签 · ${tags.length}/3` : `TAGS · ${tags.length}/3`}</label>
@@ -116,42 +137,55 @@ function SupplyModule({ profile, onApply, lang, tx }) {
   const remaining = energyCountdown(profile, new Date(now));
   const mins = Math.floor(remaining / 60000);
   const secs = Math.floor((remaining % 60000) / 1000);
+  const snapshot = getEconomySnapshot(profile);
+  const canBuyDirect = profile.gold >= 400;
+  const directRestore = Math.min(30, ENERGY_OVERFLOW_MAX - profile.energy);
   return <>
+    <WalletOverview profile={profile} lang={lang} />
     <Panel accent="#ffd34d" style={{ textAlign: 'center', marginBottom: 14 }}>
       <div style={{ fontSize: '2rem', color: '#ffd34d', fontWeight: 900 }}>⚡ {profile.energy}/{ENERGY_MAX}</div>
+      <div className="td-energy-meter"><span style={{ width: `${Math.min(100, snapshot.energy.percent)}%` }} /></div>
       <div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.6rem', marginTop: 6 }}>{profile.energy >= ENERGY_MAX ? (lang === 'zh' ? '自然恢复已满' : 'Natural recovery full') : `${lang === 'zh' ? '下一点体力' : 'Next point'} ${mins}:${String(secs).padStart(2, '0')}`}</div>
       <div style={{ color: 'rgba(255,255,255,.3)', fontSize: '.54rem', marginTop: 4 }}>{lang === 'zh' ? `道具溢出上限 ${ENERGY_OVERFLOW_MAX}` : `Item overflow cap ${ENERGY_OVERFLOW_MAX}`}</div>
     </Panel>
     <Panel>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 30 }}>🔋</span><div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 800 }}>{lang === 'zh' ? '能量电池' : 'Energy Cell'}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.58rem' }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory.energy_cell}</div></div></div>
-      <div style={{ display: 'flex', gap: 9, marginTop: 12 }}>
-        <ActionButton onClick={() => onApply(purchaseItem(profile, 'energy_cell'), lang === 'zh' ? '已购买能量电池' : 'Energy Cell purchased')}>🪙 400 · {tx.buy}</ActionButton>
+      <div style={{ color: 'rgba(255,255,255,.35)', fontSize: '.54rem', lineHeight: 1.6, marginTop: 8 }}>{lang === 'zh' ? `400 金币恢复 ${directRestore} 点体力；购买后立即使用，不占库存。` : `Spend 400 gold to restore ${directRestore} energy instantly without using inventory space.`}</div>
+      <div style={{ display: 'flex', gap: 9, marginTop: 12, flexWrap: 'wrap' }}>
+        <ActionButton disabled={!canBuyDirect || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(buyAndUseEnergyCell(profile), lang === 'zh' ? `补给完成 · 体力 +${directRestore}` : `Supply complete · Energy +${directRestore}`)}>🪙 400 · {lang === 'zh' ? '购买并使用' : 'BUY & USE'}</ActionButton>
         <ActionButton disabled={!profile.inventory.energy_cell || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(consumeEnergyCell(profile), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use} +30</ActionButton>
       </div>
+      {!canBuyDirect && <div className="td-economy-hint">{lang === 'zh' ? `还差 ${400 - profile.gold} 金币` : `${400 - profile.gold} more gold required`}</div>}
     </Panel>
   </>;
 }
 
 function DiamondSources({ profile, onOpen, lang }) {
+  const economy = getEconomySnapshot(profile);
   const sources = [
-    ['achievements', '🏅', lang === 'zh' ? '成就奖励' : 'Achievement rewards', `${knownAchievementCount(profile)}/24`],
-    ['cases', '🗂', lang === 'zh' ? '案件首通' : 'First clears', `${profile.solved_cases.length}/3`],
+    ['achievements', '🏅', lang === 'zh' ? '成就奖励' : 'Achievement rewards', economy.pendingDiamonds ? `${economy.pendingDiamonds} 💎 ${lang === 'zh' ? '待领取' : 'READY'}` : `${knownAchievementCount(profile)}/24`],
+    ['cases', '🗂', lang === 'zh' ? '案件首通' : 'First clears', `${profile.solved_cases.filter(id => KNOWN_CASE_IDS.includes(id)).length}/3`],
     ['checkin', '📅', lang === 'zh' ? '签到奖励' : 'Check-in rewards', `${profile.checkin_streak}d`],
     ['goals', '🎯', lang === 'zh' ? '七日目标' : 'Seven-day goals', '100 💎'],
     ['events', '🎁', lang === 'zh' ? '每周挑战' : 'Weekly challenge', '40 💎'],
   ];
-  return <div style={{ display: 'grid', gap: 10 }}>{sources.map(([key, icon, label, value]) => <Panel key={key}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 24 }}>{icon}</span><div style={{ flex: 1 }}><div>{label}</div><div style={{ color: '#5fd8ff', marginTop: 4, fontSize: '.62rem' }}>{value}</div></div><ActionButton onClick={() => onOpen(key)}>›</ActionButton></div></Panel>)}</div>;
+  return <><WalletOverview profile={profile} lang={lang} /><Panel accent="#5fd8ff" style={{ marginBottom: 12 }}><div style={{ color: '#8fe8ff', fontWeight: 900 }}>{lang === 'zh' ? '钻石只来自调查进度' : 'DIAMONDS ARE PROGRESSION-ONLY'}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.56rem', lineHeight: 1.7, marginTop: 5 }}>{economy.nextTech ? (lang === 'zh' ? `下一项可研发科技需要 ${economy.nextTech.cost} 钻石${economy.nextTech.affordable ? '，当前可解锁。' : `，还差 ${economy.nextTech.cost - economy.wallet.diamonds}。`}` : `The next available research costs ${economy.nextTech.cost} diamonds${economy.nextTech.affordable ? ' and is affordable now.' : '.'}`) : (lang === 'zh' ? '九项科技已经全部解锁。' : 'All nine technologies are unlocked.')}</div></Panel><div style={{ display: 'grid', gap: 10 }}>{sources.map(([key, icon, label, value]) => <Panel key={key}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 24 }}>{icon}</span><div style={{ flex: 1 }}><div>{label}</div><div style={{ color: '#5fd8ff', marginTop: 4, fontSize: '.62rem' }}>{value}</div></div><ActionButton onClick={() => onOpen(key)}>›</ActionButton></div></Panel>)}</div></>;
 }
 
 function WarehouseModule({ profile, onApply, lang, tx }) {
   const [tab, setTab] = useState('inventory');
+  const [quantities, setQuantities] = useState({});
   return <>
+    <WalletOverview profile={profile} lang={lang} />
     <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>{[['inventory', lang === 'zh' ? '持有' : 'OWNED'], ['shop', lang === 'zh' ? '商店' : 'STORE'], ['equipped', lang === 'zh' ? '已装备' : 'LOADOUT']].map(([id, label]) => <ActionButton key={id} accent={tab === id ? '#00e5ff' : '#668899'} onClick={() => setTab(id)}>{label}</ActionButton>)}</div>
     {tab === 'shop' && <Panel accent="#e8c98a" style={{ marginBottom: 12 }}><div style={{ color: '#e8c98a', fontWeight: 900, marginBottom: 7 }}>{lang === 'zh' ? '金币来源' : 'GOLD SOURCES'}</div><div style={{ color: 'rgba(255,255,255,.48)', fontSize: '.56rem', lineHeight: 1.75 }}>{lang === 'zh' ? '案件评级：S 1000 / A 750 / B 500 / C 300 / D 150 · 今日情报 +250 · 签到、新手任务与周活动' : 'Case rank: S 1000 / A 750 / B 500 / C 300 / D 150 · Daily Intel +250 · check-ins, tasks and weekly events'}</div></Panel>}
     <div style={{ display: 'grid', gap: 10 }}>{ITEM_CATALOG.filter(item => tab === 'shop' || (tab === 'equipped' ? profile.equipped_items.includes(item.id) : profile.inventory[item.id] > 0)).map(item => {
       const text = item[lang] || item.zh;
       const equipped = profile.equipped_items.includes(item.id);
-      return <Panel key={item.id} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'}><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><span style={{ fontSize: 30 }}>{item.icon}</span><div style={{ flex: 1 }}><div style={{ fontWeight: 900 }}>{text.name}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.56rem', marginTop: 4 }}>{text.desc}</div><div style={{ color: '#7df1ff', fontSize: '.56rem', marginTop: 5 }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory[item.id]}</div></div>{tab === 'shop' ? <ActionButton onClick={() => onApply(purchaseItem(profile, item.id), lang === 'zh' ? '购买成功' : 'Purchase complete')}>{item.currency === 'gold' ? '🪙' : '💎'} {item.cost}</ActionButton> : item.id === 'energy_cell' ? <ActionButton disabled={!profile.inventory.energy_cell || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(consumeEnergyCell(profile), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use}</ActionButton> : <ActionButton onClick={() => onApply(toggleEquipItem(profile, item.id), equipped ? (lang === 'zh' ? '已卸下' : 'Removed') : (lang === 'zh' ? '已装备' : 'Equipped'))}>{equipped ? tx.unequip : tx.equip}</ActionButton>}</div></Panel>;
+      const quantity = quantities[item.id] || 1;
+      const quote = quotePurchase(profile, item.id, quantity);
+      const room = Math.max(1, Math.min(10, item.stackLimit - profile.inventory[item.id]));
+      return <Panel key={item.id} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'}><div className="td-store-item"><span className="td-store-item-icon">{item.icon}</span><div className="td-store-item-copy"><div style={{ fontWeight: 900 }}>{text.name}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.56rem', marginTop: 4 }}>{text.desc}</div><div style={{ color: '#7df1ff', fontSize: '.56rem', marginTop: 5 }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory[item.id]} / {item.stackLimit}</div></div>{tab === 'shop' ? <div className="td-store-buy"><QuantityPicker value={quantity} max={room} onChange={value => setQuantities(current => ({ ...current, [item.id]: value }))} /><ActionButton disabled={!quote.canPurchase} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'} onClick={() => onApply(purchaseItem(profile, item.id, quantity), lang === 'zh' ? `购买成功 · ${text.name} ×${quantity}` : `Purchased ${text.name} ×${quantity}`)}>{item.currency === 'gold' ? '🪙' : '💎'} {quote.totalCost || item.cost}</ActionButton>{!quote.canPurchase && <small>{quote.error === 'inventory_full' ? (lang === 'zh' ? '库存已满' : 'FULL') : (lang === 'zh' ? '余额不足' : 'LOW BALANCE')}</small>}</div> : item.id === 'energy_cell' ? <ActionButton disabled={!profile.inventory.energy_cell || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(consumeEnergyCell(profile), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use}</ActionButton> : <ActionButton onClick={() => onApply(toggleEquipItem(profile, item.id), equipped ? (lang === 'zh' ? '已卸下' : 'Removed') : (lang === 'zh' ? '已装备' : 'Equipped'))}>{equipped ? tx.unequip : tx.equip}</ActionButton>}</div></Panel>;
     })}</div>
     {tab !== 'shop' && ITEM_CATALOG.every(item => tab === 'equipped' ? !profile.equipped_items.includes(item.id) : !profile.inventory[item.id]) && <Panel><div style={{ color: 'rgba(255,255,255,.4)', fontSize: '.65rem' }}>{lang === 'zh' ? '这里暂时是空的。' : 'Nothing here yet.'}</div></Panel>}
     <div style={{ marginTop: 12, color: 'rgba(255,255,255,.32)', fontSize: '.55rem' }}>{lang === 'zh' ? `任务道具最多装备 2 件 · 当前 ${profile.equipped_items.length}/2` : `Equip up to 2 mission items · ${profile.equipped_items.length}/2`}</div>

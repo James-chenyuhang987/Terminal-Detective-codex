@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function HomePortal({ onEnter }) {
   return (
-    <div style={{
+    <div className="td-ui-card td-home-portal" style={{
       position: 'relative', width: '100%', maxWidth: 350, padding: '22px 20px 18px',
       border: '1px solid rgba(0,229,255,0.45)', borderRadius: 20, textAlign: 'center',
       background: 'linear-gradient(180deg, rgba(0,72,110,0.42) 0%, rgba(0,14,28,0.9) 100%)',
@@ -68,7 +68,7 @@ export default function HomePortal({ onEnter }) {
         </div>
       </div>
 
-      <button onClick={onEnter}
+      <button className="td-ui-button td-button-primary td-home-portal-button" onClick={onEnter}
         onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 0 40px rgba(0,229,255,0.7)'; }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 0 22px rgba(0,229,255,0.35)'; }}
         style={{

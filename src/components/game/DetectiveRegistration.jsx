@@ -29,12 +29,12 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
     setTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : prev.length >= 3 ? prev : [...prev, t]);
 
   return (
-    <div className="td-registration" style={{ minHeight: '100dvh', position: 'relative', background: '#07090e', fontFamily: 'monospace', overflowX: 'hidden' }}>
+    <div className="td-registration td-page-shell" style={{ minHeight: '100dvh', position: 'relative', background: '#07090e', fontFamily: 'monospace', overflowX: 'hidden' }}>
       <HomeBackdrop />
 
       <div style={{ position: 'relative', zIndex: 2, padding: '24px 22px 40px', maxWidth: 1180, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <button onClick={onBack} style={{
+          <button className="td-ui-button td-button-ghost td-button-compact" onClick={onBack} style={{
             background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'monospace',
             color: 'rgba(0,229,255,0.6)', fontSize: '0.62rem', letterSpacing: '0.16em',
           }}>◄ 返回</button>
@@ -56,18 +56,18 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
           <RegStepTracker current={step} />
 
           {/* Form */}
-          <GlassPanel accent="#00e5ff" style={{ padding: '22px 24px' }}>
+          <GlassPanel accent="#00e5ff" className="td-registration-form" style={{ padding: '22px 24px' }}>
             {/* 代号 */}
             <Field label="侦探代号" hint="2–10 个字符">
               <div style={{ display: 'flex', gap: 8 }}>
-                <input value={name} maxLength={10} onChange={e => setName(e.target.value)}
+                <input className="td-ui-input" value={name} maxLength={10} onChange={e => setName(e.target.value)}
                   placeholder="输入你的侦探代号…"
                   style={{
                     flex: 1, background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(0,229,255,0.35)',
                     borderRadius: 9, padding: '11px 13px', color: '#00e5ff',
                     fontFamily: 'monospace', fontSize: '0.82rem', outline: 'none',
                   }} />
-                <button onClick={rollName} title="随机代号" style={{
+                <button className="td-ui-button td-icon-button" onClick={rollName} title="随机代号" style={{
                   padding: '0 14px', borderRadius: 9, cursor: 'pointer',
                   border: '1px solid rgba(0,229,255,0.35)', background: 'rgba(0,229,255,0.1)',
                   color: '#00e5ff', fontSize: '1rem',
@@ -81,7 +81,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
                 <Arrow dir="◄" onClick={() => setAvatarIdx(i => (i - 1 + AVATARS.length) % AVATARS.length)} />
                 <div style={{ flex: 1, display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 2px' }}>
                   {AVATARS.map((a, i) => (
-                    <button key={a + i} onClick={() => setAvatarIdx(i)} style={{
+                    <button className={`td-ui-button td-select-tile ${i === avatarIdx ? 'is-active' : ''}`} key={a + i} onClick={() => setAvatarIdx(i)} style={{
                       width: 52, height: 52, flexShrink: 0, borderRadius: 12, cursor: 'pointer', fontSize: 25,
                       border: `1px solid ${i === avatarIdx ? '#e8c98a' : 'rgba(255,255,255,0.14)'}`,
                       background: i === avatarIdx ? 'rgba(232,201,138,0.16)' : 'rgba(0,0,0,0.5)',
@@ -98,7 +98,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
             <Field label="身份徽章">
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {BADGES.map(b => (
-                  <button key={b.key} onClick={() => setBadge(b.key)} style={{
+                  <button className={`td-ui-button td-choice-chip ${badge === b.key ? 'is-active' : ''}`} key={b.key} onClick={() => setBadge(b.key)} style={{
                     padding: '10px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'monospace',
                     border: `1px solid ${badge === b.key ? '#00e5ff' : 'rgba(255,255,255,0.14)'}`,
                     background: badge === b.key ? 'rgba(0,229,255,0.14)' : 'rgba(0,0,0,0.5)',
@@ -114,7 +114,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
                 {TAGS.map(t => {
                   const on = tags.includes(t);
                   return (
-                    <button key={t} onClick={() => toggleTag(t)} style={{
+                    <button className={`td-ui-button td-choice-pill ${on ? 'is-active' : ''}`} key={t} onClick={() => toggleTag(t)} style={{
                       padding: '6px 12px', borderRadius: 99, cursor: 'pointer', fontFamily: 'monospace',
                       border: `1px solid ${on ? '#a78bfa' : 'rgba(255,255,255,0.14)'}`,
                       background: on ? 'rgba(167,139,250,0.18)' : 'transparent',
@@ -127,7 +127,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
 
             {/* 签名 */}
             <Field label="个性签名" hint={`${signature.length}/${MAX_SIG}`}>
-              <textarea value={signature} maxLength={MAX_SIG} onChange={e => setSignature(e.target.value)}
+              <textarea className="td-ui-input" value={signature} maxLength={MAX_SIG} onChange={e => setSignature(e.target.value)}
                 placeholder="写下属于你的侦探信条…"
                 style={{
                   width: '100%', height: 62, resize: 'none',
@@ -138,6 +138,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
             </Field>
 
             <button
+              className="td-ui-button td-button-gold td-button-wide"
               onClick={() => onConfirm({
                 detective_name: name.trim(), avatar, signature: signature.trim(),
                 identity_badge: badge, detective_tags: tags,
@@ -182,7 +183,7 @@ function Field({ label, hint = '', children }) {
 
 function Arrow({ dir, onClick }) {
   return (
-    <button onClick={onClick} style={{
+    <button className="td-ui-button td-icon-button td-registration-arrow" onClick={onClick} style={{
       background: 'transparent', border: 'none', cursor: 'pointer',
       color: 'rgba(0,229,255,0.55)', fontSize: '0.8rem', padding: 4,
     }}>{dir}</button>

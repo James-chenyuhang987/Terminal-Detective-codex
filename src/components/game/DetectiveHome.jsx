@@ -50,6 +50,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     if (!result?.profile || result.error) {
       const errors = {
         insufficient_funds: lang === 'zh' ? '资源不足' : 'Insufficient funds',
+        inventory_full: lang === 'zh' ? '该道具已达到库存上限' : 'This item has reached its inventory limit',
+        invalid_quantity: lang === 'zh' ? '购买数量无效' : 'Invalid purchase quantity',
         not_owned: lang === 'zh' ? '尚未持有该物品' : 'Item not owned',
         equip_limit: lang === 'zh' ? '最多装备两件任务道具' : 'Only two mission items can be equipped',
         prerequisite: lang === 'zh' ? '请先解锁前置科技' : 'Unlock the prerequisite first',
@@ -118,7 +120,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   ];
 
   return (
-    <div className="td-home" style={{
+    <div className="td-home td-page-shell" style={{
       minHeight: '100dvh', position: 'relative', overflowX: 'hidden',
       background: '#07090e',
       fontFamily: 'monospace', display: 'flex', flexDirection: 'column',
@@ -140,7 +142,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
           <ResourceBar profile={profile} onPick={setModule} />
           <div style={{ display: 'flex', gap: 10, fontSize: 15 }}>
             {[['✉️', 'comms'], ['📅', 'checkin'], ['🔧', 'settings']].map(([ic, k]) => (
-              <button key={k} onClick={() => setModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
+              <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => setModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
             ))}
             <span title={syncStatus === 'online' ? 'Base44 connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed'} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶</span>
           </div>
@@ -188,7 +190,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
           <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
             {!named ? (
               onRegister
-                ? <div style={{
+                ? <div className="td-ui-card td-home-investigate-card" style={{
                     width: 300, border: '1px solid rgba(0,229,255,0.4)', borderRadius: 14, padding: 20,
                     background: 'linear-gradient(160deg, rgba(0,229,255,0.12), rgba(0,0,0,0.8))', textAlign: 'center',
                   }}>
@@ -199,7 +201,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
                     <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
                       设定代号、头像与个性签名
                     </div>
-                    <button onClick={onRegister} style={{
+                    <button className="td-ui-button td-button-primary td-button-wide" onClick={onRegister} style={{
                       width: '100%', padding: 11, cursor: 'pointer', borderRadius: 10,
                       border: '1px solid #00e5ff', background: 'rgba(0,229,255,0.18)',
                       color: '#cfefff', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
@@ -207,7 +209,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
                   </div>
                 : <NameInputDialog onConfirm={handleName} busy={busy} />
             ) : (
-              <div style={{
+              <div className="td-ui-card td-home-investigate-card" style={{
                 width: 300, border: '1px solid rgba(197,160,89,0.5)', borderRadius: 14, padding: '20px',
                 background: 'linear-gradient(160deg, rgba(197,160,89,0.16), rgba(0,0,0,0.8))', textAlign: 'center',
                 boxShadow: '0 0 34px rgba(197,160,89,0.22)',
@@ -219,12 +221,12 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
                 <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
                   代号 {profile.detective_name} · 侦探之旅已启程
                 </div>
-                <button onClick={quickStart} style={{
+                <button className="td-ui-button td-button-gold td-button-wide" onClick={quickStart} style={{
                   width: '100%', padding: '11px', cursor: 'pointer', borderRadius: 10,
                   border: '1px solid #c5a059', background: 'rgba(197,160,89,0.22)',
                   color: '#f0d9a5', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
                 }}>{lang === 'zh' ? '开始调查' : 'START INVESTIGATION'}</button>
-                <button onClick={() => setModule('profile')} style={{
+                <button className="td-ui-button td-button-ghost td-button-compact" onClick={() => setModule('profile')} style={{
                   marginTop: 8, background: 'transparent', border: 'none', cursor: 'pointer',
                   color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: '0.55rem',
                 }}>✎ {lang === 'zh' ? '修改档案' : 'EDIT PROFILE'}</button>
@@ -262,7 +264,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       )}
 
       {toast && (
-        <div style={{
+        <div className="td-toast" role="status" style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 120,
           border: '1px solid rgba(0,255,136,0.5)', borderRadius: 10, padding: '10px 18px',
           background: 'rgba(0,20,10,0.92)', color: '#00ff88', fontSize: '0.7rem', letterSpacing: '0.08em',

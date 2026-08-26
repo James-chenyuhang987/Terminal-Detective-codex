@@ -12,8 +12,8 @@ const DetectiveRegistration = lazy(() => import('@/components/game/DetectiveRegi
 
 function ScreenFallback() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-[#02060e] text-cyan-300 font-mono text-xs tracking-[0.25em]">
-      ◈ LOADING DETECTIVE MODULE…
+    <div className="td-screen-fallback fixed inset-0 flex items-center justify-center bg-[#02060e] text-cyan-300 font-mono text-xs tracking-[0.25em]">
+      <span>◈</span> LOADING DETECTIVE MODULE…
     </div>
   );
 }
@@ -127,7 +127,7 @@ export default function TerminalDetective() {
   } else if (screen === 'LOBBY') {
     content = <AgentLobby profile={profile} readOnly={isReadOnly} onDeploy={handleDeploy} onBack={() => setScreen('HOME')} onTeamSave={handleTeamSave} onSkillLoadout={handleSkillLoadout} />;
   } else if (screen === 'CASE_SELECT') {
-    content = <CaseSelect onSelect={handleCaseSelect} onBack={() => setScreen('LOBBY')} preferredCaseId={preferredCaseId} />;
+    content = <CaseSelect profile={profile} onSelect={handleCaseSelect} onBack={() => setScreen('LOBBY')} preferredCaseId={preferredCaseId} />;
   } else {
     content = (
       <InvestigationTerminal
@@ -140,5 +140,9 @@ export default function TerminalDetective() {
     );
   }
 
-  return <Suspense fallback={<ScreenFallback />}>{content}</Suspense>;
+  return (
+    <Suspense fallback={<ScreenFallback />}>
+      <div key={screen} className="td-screen-stage">{content}</div>
+    </Suspense>
+  );
 }

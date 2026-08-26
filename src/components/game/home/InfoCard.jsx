@@ -3,7 +3,7 @@ import GlassPanel from '@/components/game/home/GlassPanel';
 
 export default function InfoCard({ title, alert = false, big = undefined, unit = '', desc = '', btnLabel, icon, onClick }) {
   return (
-    <GlassPanel accent="#00e5ff" style={{ padding: '13px 15px', fontFamily: 'monospace' }}>
+    <GlassPanel accent="#00e5ff" className="td-home-info-card" style={{ padding: '13px 15px', fontFamily: 'monospace' }}>
       {/* 标题条 */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -34,7 +34,7 @@ export default function InfoCard({ title, alert = false, big = undefined, unit =
       )}
       {desc && <div style={{ fontSize: '0.6rem', color: 'rgba(220,235,255,0.5)', lineHeight: 1.7, marginTop: 6 }}>{desc}</div>}
 
-      <button onClick={onClick}
+      <button className="td-ui-button td-button-secondary td-home-info-action" onClick={onClick}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,229,255,0.18)'; e.currentTarget.style.color = '#dffaff'; }}
         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,229,255,0.06)'; e.currentTarget.style.color = 'rgba(0,229,255,0.85)'; }}
         style={{

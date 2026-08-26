@@ -313,7 +313,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
   ];
 
   return (
-    <div className="td-game-over" style={{
+    <div className="td-game-over td-page-shell" style={{
       minHeight: '100dvh',
       background: 'radial-gradient(ellipse at 30% 10%, #0a0020 0%, #03060f 60%)',
       fontFamily: "'Courier New', monospace",
@@ -358,7 +358,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         </div>
 
         {/* XP breakdown */}
-        <div style={{ border: '1px solid rgba(0,229,255,0.15)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.6s 0.3s cubic-bezier(.22,1,.36,1) both' }}>
+        <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(0,229,255,0.15)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.6s 0.3s cubic-bezier(.22,1,.36,1) both' }}>
           <div style={{ color: 'rgba(0,229,255,0.7)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 10, fontFamily: 'monospace' }}>◈ 经验值结算明细</div>
           {BONUS_ROWS.map((r, i) => (
             <XPSourceRow key={i} label={r.label} val={r.val} color={r.color} icon={r.icon} delay={400 + i * 180} sublabel={r.sublabel} />
@@ -373,7 +373,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
 
         {/* Agent XP bars */}
         {phase === 'xp' && newProg && (
-          <div style={{ border: '1px solid rgba(167,139,250,0.2)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.5s cubic-bezier(.22,1,.36,1) both', position: 'relative', overflow: 'hidden' }}>
+          <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(167,139,250,0.2)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.5s cubic-bezier(.22,1,.36,1) both', position: 'relative', overflow: 'hidden' }}>
             <div style={{ color: 'rgba(167,139,250,0.8)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 14, fontFamily: 'monospace' }}>◈ 探员晋升档案</div>
             {AGENT_NAMES.map((name, i) => (
               <XPBar
@@ -402,17 +402,17 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           color: settlementStatus === 'saved' ? '#00ff88' : settlementStatus === 'error' ? '#ff6b84' : '#ffaa00',
         }}>
           {settlementStatus === 'saved' ? '✓ 调查档案已同步至 Base44' : settlementStatus === 'error' ? '⚠ 云端结算失败，奖励尚未写入' : '⟳ 正在同步调查结算…'}
-          {settlementStatus === 'error' && <button onClick={() => void syncSettlement()} style={{ marginLeft: 9, border: '1px solid #ff6b8480', borderRadius: 6, padding: '3px 8px', background: 'rgba(255,56,96,.1)', color: '#ff8da0', cursor: 'pointer', fontFamily: 'monospace' }}>重试</button>}
+          {settlementStatus === 'error' && <button className="td-ui-button td-button-danger td-button-compact" onClick={() => void syncSettlement()} style={{ marginLeft: 9 }}>重试</button>}
         </div>
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', animation: 'go-in 0.6s 0.6s cubic-bezier(.22,1,.36,1) both' }}>
-          <button onClick={onReturnToLobby} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
+          <button className="td-ui-button td-button-primary" onClick={onReturnToLobby} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
             ↺ 重新配置编队
           </button>
-          <button onClick={onReturnToLanding} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.6)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, transition: 'all 0.2s' }}
+          <button className="td-ui-button td-button-ghost" onClick={onReturnToLanding} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.6)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, transition: 'all 0.2s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}>
             ← 返回主页
