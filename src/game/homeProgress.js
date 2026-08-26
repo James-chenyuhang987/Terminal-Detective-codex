@@ -210,7 +210,13 @@ export function regenEnergy(profile, now = new Date()) {
   const current = clamp(finite(p.energy, ENERGY_MAX), 0, ENERGY_OVERFLOW_MAX);
   const nowMs = new Date(now).getTime();
   const lastMs = p.energy_updated_at ? new Date(p.energy_updated_at).getTime() : nowMs;
-  if (current >= ENERGY_MAX || !Number.isFinite(lastMs) || lastMs > nowMs) {
+  if (current >= ENERGY_MAX) {
+    const updatedAt = p.energy_updated_at && Number.isFinite(lastMs) && lastMs <= nowMs
+      ? new Date(lastMs).toISOString()
+      : null;
+    return { ...p, energy: current, energy_updated_at: updatedAt };
+  }
+  if (!Number.isFinite(lastMs) || lastMs > nowMs) {
     return { ...p, energy: current, energy_updated_at: new Date(nowMs).toISOString() };
   }
   const interval = ENERGY_MINUTES_PER_POINT * 60000;
@@ -422,7 +428,7 @@ export function startCase(profile, caseData, now = new Date()) {
     initial_ap_bonus: finite(tech.initial_ap_bonus) + (equipped.includes('ap_booster') ? 3 : 0),
     ignore_first_trap: equipped.includes('firewall_shield'),
   };
-  next = { ...next, energy: next.energy - cost, equipped_items: [], inventory: { ...next.inventory },
+  next = { ...next, energy: next.energy - cost, energy_updated_at: new Date(now).toISOString(), equipped_items: [], inventory: { ...next.inventory },
     activity_stats: { ...next.activity_stats, cases_started: next.activity_stats.cases_started + 1 } };
   equipped.forEach(id => { next.inventory[id] = Math.max(0, finite(next.inventory[id]) - 1); });
   const record = { ...recordFor(next, caseData), attempts: recordFor(next, caseData).attempts + 1, last_played_at: new Date(now).toISOString() };

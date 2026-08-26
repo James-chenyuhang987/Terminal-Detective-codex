@@ -56,6 +56,22 @@ export function sanitizeProfileWrite(profile) {
   return Object.fromEntries(PROFILE_PATCH_FIELDS.map(key => [key, normalized[key]]));
 }
 
+export function sanitizeProfilePatch(patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return null;
+  const keys = Object.keys(patch);
+  if (keys.some(key => !PROFILE_PATCH_FIELDS.includes(key))) return null;
+  const normalized = sanitizeProfileWrite(patch);
+  return Object.fromEntries(keys.map(key => [key, normalized[key]]));
+}
+
+export function diffProfileWrite(before, after) {
+  const previous = sanitizeProfileWrite(before || {});
+  const next = sanitizeProfileWrite(after || {});
+  return Object.fromEntries(PROFILE_PATCH_FIELDS
+    .filter(key => JSON.stringify(previous[key]) !== JSON.stringify(next[key]))
+    .map(key => [key, next[key]]));
+}
+
 export function knownAchievementCount(profile) {
   const known = new Set(ACHIEVEMENTS.map(item => item.id));
   return unique(profile?.achievements).filter(id => known.has(id)).length;
@@ -180,6 +196,38 @@ function unwrapFunctionResponse(response) {
   return payload;
 }
 
+function profileRequestError(code, message, status, payload = {}) {
+  const error = /** @type {Error & { code?: string, status?: number, payload?: any }} */ (new Error(message));
+  error.code = code;
+  error.status = status;
+  error.payload = payload;
+  return error;
+}
+
+async function invokeDirectProfile(action, payload, headers, signal) {
+  const url = `${appParams.serverUrl}/api/apps/${appParams.appId}/entities/User/me`;
+  const isPatch = action === 'patch';
+  const patch = isPatch ? sanitizeProfilePatch(payload.patch) : null;
+  if (isPatch && !patch) throw profileRequestError('INVALID_PATCH', 'Profile patch contains unsupported fields.', 400);
+  const response = await fetch(url, {
+    method: isPatch ? 'PUT' : 'GET',
+    headers,
+    signal,
+    ...(isPatch ? { body: JSON.stringify(patch) } : {}),
+  });
+  const body = await response.json().catch(() => ({}));
+  const current = body?.data ?? body;
+  if (!response.ok || !current || typeof current !== 'object' || Array.isArray(current) || !current.id) {
+    const code = body?.error || (response.status === 401 || response.status === 403 ? 'UNAUTHENTICATED' : 'PROFILE_UNAVAILABLE');
+    throw profileRequestError(code, body?.message || body?.detail || `Profile request failed (${response.status}).`, response.status, body);
+  }
+  return {
+    profile: current,
+    account: { id: current.id, email: current.email, full_name: current.full_name },
+    compatibility_mode: true,
+  };
+}
+
 export async function invokePlayerProfile(action, payload = {}) {
   const headers = /** @type {Record<string, string>} */ ({
     'Content-Type': 'application/json',
@@ -195,8 +243,23 @@ export async function invokePlayerProfile(action, payload = {}) {
       method: 'POST', headers, body: JSON.stringify({ action, ...payload }), signal: controller.signal,
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok || body?.error) return unwrapFunctionResponse(body);
-    return unwrapFunctionResponse(body);
+    if (response.ok) {
+      const result = unwrapFunctionResponse(body);
+      if (result?.profile && typeof result.profile === 'object') return result;
+      // An undeployed or incompatible function can return an empty successful
+      // envelope. It must never be treated as a successful profile write.
+      return invokeDirectProfile(action, payload, headers, controller.signal);
+    }
+    if (response.status === 404 || response.status === 405) {
+      return invokeDirectProfile(action, payload, headers, controller.signal);
+    }
+    const result = unwrapFunctionResponse(body);
+    throw profileRequestError(
+      body?.error || 'PROFILE_UNAVAILABLE',
+      body?.message || body?.detail || `Profile request failed (${response.status}).`,
+      response.status,
+      result,
+    );
   } catch (cause) {
     if (cause?.name === 'AbortError') {
       const error = /** @type {Error & { code?: string }} */ (new Error('Profile request timed out.'));

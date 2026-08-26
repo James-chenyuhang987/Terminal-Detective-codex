@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense, useRef, useState } from 'react';
 import GameLanding from '@/components/game/GameLanding';
 import DetectiveRegistration from '@/components/game/DetectiveRegistration';
 import { markActivity, startCase } from '@/game/playerProfile';
@@ -24,6 +24,7 @@ export default function TerminalDetective() {
   const [agentStrategy, setAgentStrategy] = useState(null);
   const [selectedCase, setSelectedCase] = useState(null);
   const [regBusy, setRegBusy] = useState(false);
+  const registrationRef = useRef(false);
   const [regError, setRegError] = useState('');
   const [preferredCaseId, setPreferredCaseId] = useState(null);
 
@@ -33,14 +34,18 @@ export default function TerminalDetective() {
   };
 
   const handleRegister = async (identity) => {
+    if (registrationRef.current) return;
+    registrationRef.current = true;
     setRegBusy(true);
     setRegError('');
     try {
-      await mutate(current => ({ profile: { ...current, ...identity } }));
+      const result = await mutate(current => ({ profile: { ...current, ...identity } }));
+      if (!result?.profile?.detective_name) throw new Error('Identity was not persisted.');
       setScreen('HOME');
     } catch {
       setRegError('云端注册失败，请检查网络后重试。');
     } finally {
+      registrationRef.current = false;
       setRegBusy(false);
     }
   };

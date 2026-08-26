@@ -2,12 +2,12 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { useAuth } from '@/lib/AuthContext';
 import {
   applySettlementToProfile,
+  diffProfileWrite,
   enqueuePendingSettlement,
   invokePlayerProfile,
   migrateProfileV2,
   readPendingSettlements,
   removePendingSettlement,
-  sanitizeProfileWrite,
 } from '@/game/playerProfile';
 
 const SESSION_KEY = 'td_profile_session_v2';
@@ -31,7 +31,7 @@ function sessionIdForTab() {
 }
 
 function isSameProfile(a, b) {
-  return JSON.stringify(sanitizeProfileWrite(a)) === JSON.stringify(sanitizeProfileWrite(b));
+  return Object.keys(diffProfileWrite(a, b)).length === 0;
 }
 
 function normalizeRemote(remote) {
@@ -44,6 +44,7 @@ export function ProfileProvider({ children }) {
   const pendingOwnerRef = useRef(user?.id || 'signed-in');
   const profileRef = useRef(null);
   const queueRef = useRef(Promise.resolve());
+  const mutationGenerationRef = useRef(0);
   const replayingRef = useRef(false);
   const mountedRef = useRef(true);
   const syncStatusRef = useRef('loading');
@@ -81,11 +82,11 @@ export function ProfileProvider({ children }) {
       const payload = await invokePlayerProfile('claim_session', { session_id: sessionIdRef.current });
       const remote = normalizeRemote(payload.profile);
       let accepted = remote;
-      if (!isSameProfile(remote, payload.profile)) {
+      if (!payload.compatibility_mode && !isSameProfile(remote, payload.profile)) {
         const migrated = await invokePlayerProfile('patch', {
           session_id: sessionIdRef.current,
           expected_revision: Number(payload.profile?.profile_revision) || 0,
-          patch: sanitizeProfileWrite(remote),
+          patch: diffProfileWrite(payload.profile, remote),
         });
         accepted = acceptPayload(migrated);
       } else {
@@ -103,8 +104,12 @@ export function ProfileProvider({ children }) {
   }, [acceptPayload, changeSyncStatus, commitError, commitProfile, user]);
 
   const refresh = useCallback(async () => {
+    const generation = mutationGenerationRef.current;
     try {
       const payload = await invokePlayerProfile('status', { session_id: sessionIdRef.current });
+      if (generation !== mutationGenerationRef.current) {
+        return profileRef.current || normalizeRemote(payload?.profile);
+      }
       const next = acceptPayload(payload);
       changeSyncStatus('online');
       commitError(null);
@@ -124,17 +129,19 @@ export function ProfileProvider({ children }) {
     }
     const before = profileRef.current;
     if (!before) throw new Error('Profile is not loaded.');
+    mutationGenerationRef.current += 1;
     const reduced = await reducer(before);
     if (reduced?.error) return reduced;
     const candidate = normalizeRemote(reduced?.profile || reduced || before);
-    if (isSameProfile(before, candidate)) return { ...reduced, profile: before, unchanged: true };
+    const patch = diffProfileWrite(before, candidate);
+    if (!Object.keys(patch).length) return { ...reduced, profile: before, unchanged: true };
     commitProfile(candidate);
     changeSyncStatus('syncing');
     try {
       const payload = await invokePlayerProfile('patch', {
         session_id: sessionIdRef.current,
         expected_revision: Number(before.profile_revision) || 0,
-        patch: sanitizeProfileWrite(candidate),
+        patch,
       });
       const saved = acceptPayload(payload);
       changeSyncStatus('online');

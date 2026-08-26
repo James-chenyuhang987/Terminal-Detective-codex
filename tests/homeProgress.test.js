@@ -52,6 +52,16 @@ test('energy regeneration preserves partial intervals and stops at base cap', ()
   assert.equal(capped.energy, ENERGY_MAX);
 });
 
+test('full energy normalization stays stable and case start begins a fresh recovery clock', () => {
+  const full = normalizeProfile({ energy: 120, energy_updated_at: null }, new Date('2026-08-20T10:00:00Z'));
+  const repeated = normalizeProfile(full, new Date('2026-08-20T12:00:00Z'));
+  assert.equal(full.energy_updated_at, null);
+  assert.equal(repeated.energy_updated_at, null);
+  const started = startCase(repeated, { case_id: 'Lvl_01', difficulty: 'NORMAL' }, new Date('2026-08-20T12:34:56Z'));
+  assert.equal(started.profile.energy, 110);
+  assert.equal(started.profile.energy_updated_at, '2026-08-20T12:34:56.000Z');
+});
+
 test('check-in follows the seven-day table and cannot be claimed twice', () => {
   const first = applyCheckin(profile({ last_checkin: null, checkin_streak: 0 }), NOW);
   assert.equal(first.day, 1);

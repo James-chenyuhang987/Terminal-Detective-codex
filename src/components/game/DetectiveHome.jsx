@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, knownAchievementCount, markActivity } from '@/game/playerProfile';
+import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, diffProfileWrite, knownAchievementCount, markActivity } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { useLang } from '@/lib/lang.jsx';
 import NameInputDialog from '@/components/game/home/NameInputDialog';
@@ -20,6 +20,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const [module, setModule] = useState(null);
   const [toast, setToast] = useState('');
   const toastTimerRef = useRef(null);
+  const busyRef = useRef(false);
   const hasSavedTeam = !!profile?.saved_team_config;
   const loadError = syncStatus === 'error';
 
@@ -36,21 +37,29 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   };
 
   const patch = async (next, message = '') => {
+    if (busyRef.current || isReadOnly) return false;
+    const changes = diffProfileWrite(profile, next);
+    if (!Object.keys(changes).length) {
+      if (message) notify(message);
+      return true;
+    }
+    busyRef.current = true;
     setBusy(true);
     try {
-      await mutate(() => ({ profile: next }));
+      await mutate(current => ({ profile: { ...current, ...changes } }));
       if (message) notify(message);
       return true;
     } catch {
       notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.');
       return false;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
   const applyResult = async (result, message = '') => {
-    if (busy || isReadOnly) return false;
+    if (busyRef.current || isReadOnly) return false;
     if (!result?.profile || result.error) {
       const errors = {
         insufficient_funds: lang === 'zh' ? '资源不足' : 'Insufficient funds',
@@ -73,9 +82,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   };
 
   const handleName = async (name) => {
-    setBusy(true);
     await patch({ ...profile, detective_name: name });
-    setBusy(false);
   };
 
   const handleCheckin = async () => {

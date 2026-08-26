@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   applySettlementToProfile,
+  diffProfileWrite,
   enqueuePendingSettlement,
   knownAchievementCount,
   invokePlayerProfile,
@@ -12,6 +13,7 @@ import {
   readPendingSettlements,
   removePendingSettlement,
   sanitizeProfileWrite,
+  sanitizeProfilePatch,
 } from '../src/game/playerProfile.js';
 import { normalizeProfile } from '../src/game/homeProgress.js';
 import { normalizeSavedTeamConfig } from '../src/game/teamConfig.js';
@@ -35,6 +37,24 @@ test('profile writes use an explicit allowlist and never echo Base44 metadata', 
   assert.equal(clean.gold, 100);
   ['id', 'email', 'role', 'created_date', 'updated_date', 'created_by', 'surprise', 'profile_revision', 'active_session_id']
     .forEach(key => assert.equal(Object.hasOwn(clean, key), false, key));
+});
+
+test('profile patches contain only real identity changes', () => {
+  const before = normalizeProfile({
+    detective_name: '', avatar: '🕵️', energy: 120, energy_updated_at: null,
+    gold: 100, diamonds: 10,
+  });
+  const after = normalizeProfile({
+    ...before,
+    detective_name: '玄影', avatar: '🦉', signature: '真相只有一个',
+    identity_badge: 'bureau', detective_tags: ['冷静', '技术流'],
+  });
+  assert.deepEqual(diffProfileWrite(before, after), {
+    detective_name: '玄影', avatar: '🦉', signature: '真相只有一个',
+    identity_badge: 'bureau', detective_tags: ['冷静', '技术流'],
+  });
+  assert.deepEqual(sanitizeProfilePatch({ detective_name: '  玄影  ' }), { detective_name: '玄影' });
+  assert.equal(sanitizeProfilePatch({ detective_name: '玄影', role: 'admin' }), null);
 });
 
 test('v1 local migration merges only once and validates chained skills', () => {
@@ -131,6 +151,61 @@ test('profile function preserves stable session and revision error codes', async
       invokePlayerProfile('patch', { session_id: 'web-1234567890123456', expected_revision: 9, patch: {} }),
       error => error.code === 'STALE_PROFILE' && error.payload.profile.profile_revision === 10,
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('missing profile function falls back to the authenticated user profile without false success', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (String(url).includes('/functions/playerProfile')) {
+        return new Response(JSON.stringify({ detail: 'Function not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({
+        id: 'user-1', email: 'detective@example.com', detective_name: '玄影', avatar: '🦉',
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    const result = await invokePlayerProfile('patch', {
+      session_id: 'web-1234567890123456',
+      expected_revision: 0,
+      patch: { detective_name: '  玄影  ', avatar: '🦉' },
+    });
+    assert.equal(result.profile.detective_name, '玄影');
+    assert.equal(result.compatibility_mode, true);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].options.method, 'POST');
+    assert.equal(calls[1].options.method, 'PUT');
+    assert.deepEqual(JSON.parse(calls[1].options.body), { detective_name: '玄影', avatar: '🦉' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('empty successful function envelope is treated as incompatible and reloads the real profile', async () => {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  try {
+    globalThis.fetch = async () => {
+      call += 1;
+      if (call === 1) {
+        return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ id: 'user-2', detective_name: '夜鸦' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+    const result = await invokePlayerProfile('status', { session_id: 'web-1234567890123456' });
+    assert.equal(call, 2);
+    assert.equal(result.profile.detective_name, '夜鸦');
+    assert.equal(result.compatibility_mode, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
