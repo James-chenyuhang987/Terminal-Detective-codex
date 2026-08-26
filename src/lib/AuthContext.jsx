@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { appParams } from '@/lib/app-params';
 
 const AuthContext = createContext(null);
+const AUTH_TIMEOUT_MS = 25_000;
 
 function clearStoredAuth() {
   appParams.token = null;
@@ -45,14 +46,29 @@ async function authRequest(path, { method = 'GET', body, token = appParams.token
   /** @type {Record<string, string>} */
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${appParams.serverUrl}/api/apps/${appParams.appId}${path}`, {
-    method,
-    headers,
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${appParams.serverUrl}/api/apps/${appParams.appId}${path}`, {
+      method,
+      headers,
+      signal: controller.signal,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('Authentication request timed out. Please retry.');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   const payload = await readJson(response);
   if (!response.ok) {
-    throw new Error(responseMessage(payload, `Authentication request failed (${response.status}).`));
+    const error = /** @type {Error & { status?: number }} */ (
+      new Error(responseMessage(payload, `Authentication request failed (${response.status}).`))
+    );
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }
@@ -70,8 +86,8 @@ export function AuthProvider({ children }) {
       setUser(currentUser);
       setIsAuthenticated(true);
       return currentUser;
-    } catch {
-      clearStoredAuth();
+    } catch (cause) {
+      if (cause?.status === 401 || cause?.status === 403) clearStoredAuth();
       setUser(null);
       setIsAuthenticated(false);
       return null;

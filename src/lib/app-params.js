@@ -6,7 +6,21 @@ const memoryStorage = {
 	setItem: (key, value) => memoryValues.set(key, String(value)),
 	removeItem: (key) => memoryValues.delete(key),
 };
-const storage = isNode ? memoryStorage : window.localStorage;
+const browserStorage = (() => {
+	if (isNode) return memoryStorage;
+	try { return window.localStorage; } catch { return memoryStorage; }
+})();
+const storage = {
+	getItem(key) { try { return browserStorage.getItem(key); } catch { return memoryStorage.getItem(key); } },
+	setItem(key, value) {
+		try { browserStorage.setItem(key, value); }
+		catch { memoryStorage.setItem(key, value); }
+	},
+	removeItem(key) {
+		try { browserStorage.removeItem(key); }
+		catch { memoryStorage.removeItem(key); }
+	},
+};
 const DEFAULT_APP_ID = '6a841dff26d5042e4adf890e';
 const DEFAULT_SERVER_URL = 'https://base44.app';
 

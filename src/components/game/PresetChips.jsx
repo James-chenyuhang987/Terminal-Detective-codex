@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PRESET_CONFIGS } from '@/game/casePresets';
 
 // 预设方案芯片 — 一键加载三人配置
 export default function PresetChips({ onApply }) {
   const [applied, setApplied] = useState(null);
+  const clearTimerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(clearTimerRef.current), []);
 
   const handle = (p) => {
     onApply(p);
     setApplied(p.id);
-    setTimeout(() => setApplied(null), 500);
+    clearTimeout(clearTimerRef.current);
+    clearTimerRef.current = setTimeout(() => setApplied(null), 500);
   };
 
   return (

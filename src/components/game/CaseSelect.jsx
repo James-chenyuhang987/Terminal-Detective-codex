@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ALL_CASES } from '@/game/caseData';
 import { CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS } from '@/game/playerProfile';
 import { useLang } from '@/lib/lang.jsx';
@@ -15,27 +15,35 @@ export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, p
   const { lang, t } = useLang();
   const [hovered, setHovered] = useState(null);
   const [selected, setSelected] = useState(preferredCaseId);
+  const [startingId, setStartingId] = useState(null);
   const [error, setError] = useState('');
+  const startingRef = useRef(false);
 
   const handleStart = async (caseData) => {
-    if (selected && selected !== preferredCaseId) return;
+    if (startingRef.current) return;
     const energyCost = CASE_ENERGY_COST[caseData.difficulty] || 10;
     if ((profile?.energy || 0) < energyCost) {
       setError(lang === 'zh' ? `体力不足，需要 ${energyCost} 点体力。请返回侦探之家补给。` : `Not enough energy. This case requires ${energyCost}.`);
       return;
     }
+    startingRef.current = true;
+    setStartingId(caseData.case_id);
     setSelected(caseData.case_id);
     setError('');
     try {
       const result = await onSelect(caseData);
       if (result?.error) {
-        setSelected(null);
+        startingRef.current = false;
+        setStartingId(null);
+        setSelected(preferredCaseId);
         setError(result.error === 'insufficient_energy'
           ? (lang === 'zh' ? `体力不足，需要 ${result.cost} 点体力。请返回侦探之家补给。` : `Not enough energy. This case requires ${result.cost}.`)
           : (lang === 'zh' ? '无法开始案件，请稍后重试。' : 'Unable to start the case. Please retry.'));
       }
     } catch {
-      setSelected(null);
+      startingRef.current = false;
+      setStartingId(null);
+      setSelected(preferredCaseId);
       setError(lang === 'zh' ? '云端同步失败，体力未扣除。' : 'Cloud sync failed. Energy was not spent.');
     }
   };
@@ -95,6 +103,7 @@ export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, p
           const energyCost = CASE_ENERGY_COST[c.difficulty] || 10;
           const firstClear = !profile?.solved_cases?.includes(c.case_id);
           const canStart = (profile?.energy || 0) >= energyCost;
+          const isStarting = startingId !== null;
 
           return (
             <div
@@ -113,7 +122,7 @@ export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, p
                   ? `0 0 40px ${diff.color}30, 0 8px 32px rgba(0,0,0,0.5)`
                   : '0 4px 20px rgba(0,0,0,0.4)',
                 padding: '28px 24px',
-                cursor: 'pointer',
+                cursor: isStarting ? 'wait' : canStart ? 'pointer' : 'not-allowed',
                 transition: 'all 0.3s cubic-bezier(0.22,1,0.36,1)',
                 transform: isHover ? 'translateY(-4px)' : isSel ? 'scale(0.97)' : 'none',
                 position: 'relative',
@@ -198,7 +207,7 @@ export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, p
 
               <button
                 className="td-ui-button td-case-start-button"
-                disabled={!canStart}
+                disabled={!canStart || isStarting}
                 style={{
                   width: '100%', padding: '10px 0',
                   borderRadius: 10,
@@ -209,13 +218,17 @@ export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, p
                   color: isHover ? diff.color : 'rgba(255,255,255,0.35)',
                   fontSize: '0.65rem', fontWeight: 900,
                   letterSpacing: '0.2em', fontFamily: 'monospace',
-                  cursor: canStart ? 'pointer' : 'not-allowed',
-                  opacity: canStart ? 1 : .46,
+                  cursor: isStarting ? 'wait' : canStart ? 'pointer' : 'not-allowed',
+                  opacity: canStart && !isStarting ? 1 : .46,
                   transition: 'all 0.3s',
                   boxShadow: isHover ? `0 0 20px ${diff.color}30` : 'none',
                 }}
               >
-                {canStart ? (isSel ? t.loadingCase : t.startCase) : (lang === 'zh' ? '体力不足' : 'LOW ENERGY')}
+                {startingId === c.case_id
+                  ? t.loadingCase
+                  : canStart
+                    ? t.startCase
+                    : (lang === 'zh' ? '体力不足' : 'LOW ENERGY')}
               </button>
             </div>
           );

@@ -75,11 +75,15 @@ function FeatureCard({ icon, title, desc, color, delay }) {
 function TitleLogo({ t }) {
   const [glitch, setGlitch] = useState(false);
   useEffect(() => {
+    let glitchTimer;
     const id = setInterval(() => {
       setGlitch(true);
-      setTimeout(() => setGlitch(false), 150);
+      glitchTimer = setTimeout(() => setGlitch(false), 150);
     }, 3500 + Math.random() * 2000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      clearTimeout(glitchTimer);
+    };
   }, []);
 
   return (
@@ -171,28 +175,29 @@ function TerminalPreview({ lang }) {
   useEffect(() => {
     setVisibleLines(0);
     let i = 0;
+    let timer;
+    let cancelled = false;
     const tick = () => {
+      if (cancelled) return;
       i++;
       setVisibleLines(i);
-      if (i < lines.length) setTimeout(tick, 700);
-      else setTimeout(() => setVisibleLines(0), 1500);
+      if (i < lines.length) {
+        timer = setTimeout(tick, 700);
+      } else {
+        timer = setTimeout(() => {
+          if (cancelled) return;
+          i = 0;
+          setVisibleLines(0);
+          timer = setTimeout(tick, 700);
+        }, 1500);
+      }
     };
-    const id = setTimeout(tick, 700);
-    return () => clearTimeout(id);
+    timer = setTimeout(tick, 700);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [lang]);
-
-  useEffect(() => {
-    if (visibleLines !== 0) return;
-    let i = 0;
-    const tick = () => {
-      i++;
-      setVisibleLines(i);
-      if (i < lines.length) setTimeout(tick, 700);
-      else setTimeout(() => setVisibleLines(0), 1500);
-    };
-    const id = setTimeout(tick, 700);
-    return () => clearTimeout(id);
-  }, [visibleLines === 0]);
 
   return (
     <div className="td-ui-card td-terminal-preview" style={{ border: '1px solid rgba(0,229,255,0.15)', borderRadius: 12, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', padding: '14px 18px', fontFamily: 'monospace', fontSize: '0.68rem', lineHeight: 1.8, maxWidth: 560, margin: '0 auto', animation: 'fade-in 1s 1.2s both', position: 'relative', zIndex: 2 }}>

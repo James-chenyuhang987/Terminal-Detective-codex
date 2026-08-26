@@ -74,13 +74,15 @@ function Counter({ target, duration = 1200, color = '#00e5ff', suffix = '' }) {
   const [val, setVal] = useState(0);
   useEffect(() => {
     let start = null;
+    let frameId = 0;
     const step = (ts) => {
       if (!start) start = ts;
       const pct = Math.min((ts - start) / duration, 1);
       setVal(Math.round((1 - Math.pow(1 - pct, 3)) * target));
-      if (pct < 1) requestAnimationFrame(step);
+      if (pct < 1) frameId = requestAnimationFrame(step);
     };
-    requestAnimationFrame(step);
+    frameId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frameId);
   }, [target, duration]);
   return <span style={{ color, fontFamily: 'monospace', fontWeight: 900 }}>{val >= 0 ? '+' : ''}{val}{suffix}</span>;
 }
@@ -100,6 +102,8 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
 
   useEffect(() => {
     if (!visible) return;
+    let frameId = 0;
+    const levelTimers = [];
     const crossings = [];
     for (let lvl = 1; lvl <= MAX_LEVEL; lvl++) {
       if (LEVEL_XP_TABLE[lvl] > oldXP && LEVEL_XP_TABLE[lvl] <= newXP) crossings.push(lvl);
@@ -113,23 +117,28 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
         if (!start) start = ts;
         const pct = Math.min((ts - start) / dur, 1);
         setDisplayed(Math.round(oldXP + (1 - Math.pow(1 - pct, 4)) * (newXP - oldXP)));
-        if (pct < 1) requestAnimationFrame(step);
+        if (pct < 1) frameId = requestAnimationFrame(step);
         else {
           setFlash(true);
           if (crossings.length > 0) {
             setParticleTrigger(t => t + 1);
             // Stagger modal per crossing level
             crossings.forEach((lvl, idx) => {
-              setTimeout(() => {
+              const timer = setTimeout(() => {
                 onLevelUp?.({ fromLevel: idx === 0 ? getLevelFromXP(oldXP) : crossings[idx - 1], toLevel: lvl, agentIdx });
               }, idx * 200);
+              levelTimers.push(timer);
             });
           }
         }
       };
-      requestAnimationFrame(step);
+      frameId = requestAnimationFrame(step);
     }, 300);
-    return () => clearTimeout(startTimer);
+    return () => {
+      clearTimeout(startTimer);
+      cancelAnimationFrame(frameId);
+      levelTimers.forEach(clearTimeout);
+    };
   }, [visible, oldXP, newXP]);
 
   const level = getLevelFromXP(displayed);
@@ -189,7 +198,10 @@ function ScoreRing({ score, isPassed }) {
   const colors = { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' };
   const color = colors[score] || '#888';
   const [visible, setVisible] = useState(false);
-  useEffect(() => { setTimeout(() => setVisible(true), 200); }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
   return (
     <div style={{
       width: 110, height: 110, borderRadius: '50%', flexShrink: 0,

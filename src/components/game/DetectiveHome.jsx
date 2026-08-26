@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, knownAchievementCount, markActivity } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { useLang } from '@/lib/lang.jsx';
@@ -19,8 +19,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const [busy, setBusy] = useState(false);
   const [module, setModule] = useState(null);
   const [toast, setToast] = useState('');
+  const toastTimerRef = useRef(null);
   const hasSavedTeam = !!profile?.saved_team_config;
   const loadError = syncStatus === 'error';
+
+  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
   const retryLoad = () => {
     void refresh().catch(() => {});
@@ -28,7 +31,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
 
   const notify = (message) => {
     setToast(message);
-    setTimeout(() => setToast(''), 3200);
+    clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(''), 3200);
   };
 
   const patch = async (next, message = '') => {

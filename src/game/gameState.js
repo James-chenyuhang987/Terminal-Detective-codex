@@ -42,7 +42,7 @@ export function createInitialGameState(caseData, runtimeEffects = {}) {
 // ── LocalStorage Manager ──────────────────────────────────────────────────
 export const LocalStorage = {
   saveStrategy(payload) {
-    localStorage.setItem('save_strategy_current', JSON.stringify(payload));
+    try { localStorage.setItem('save_strategy_current', JSON.stringify(payload)); } catch { /* storage unavailable */ }
   },
   loadStrategy() {
     try {
@@ -50,7 +50,7 @@ export const LocalStorage = {
     } catch { return { ...DEFAULT_AGENT_CONFIG }; }
   },
   saveTeamConfig(config) {
-    localStorage.setItem('save_team_config', JSON.stringify(config));
+    try { localStorage.setItem('save_team_config', JSON.stringify(config)); } catch { /* storage unavailable */ }
   },
   loadTeamConfig() {
     try {
@@ -69,9 +69,11 @@ export const LocalStorage = {
     } catch { return []; }
   },
   clearAll() {
-    localStorage.removeItem('save_strategy_current');
-    localStorage.removeItem('save_team_config');
-    localStorage.removeItem('save_checkpoints');
+    try {
+      localStorage.removeItem('save_strategy_current');
+      localStorage.removeItem('save_team_config');
+      localStorage.removeItem('save_checkpoints');
+    } catch { /* storage unavailable */ }
   }
 };
 

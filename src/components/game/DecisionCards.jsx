@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import StoryBriefing from '@/components/game/StoryBriefing';
 
@@ -14,15 +14,23 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
   const zh = lang === 'zh';
   const [left, setLeft] = useState(timeLimit);
   const [custom, setCustom] = useState('');
+  const resolvedRef = useRef(false);
+
+  const chooseOnce = useCallback((choice) => {
+    if (resolvedRef.current) return;
+    resolvedRef.current = true;
+    onChoose(choice);
+  }, [onChoose]);
 
   useEffect(() => {
-    const id = setInterval(() => setLeft(v => v - 1), 1000);
+    const id = setInterval(() => setLeft(value => Math.max(0, value - 1)), 1000);
     return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
-    if (left <= 0) onChoose({ card: cards[1] || cards[0] });
-  }, [left]);
+    const fallbackCard = cards[1] || cards[0];
+    if (left === 0 && fallbackCard) chooseOnce({ card: fallbackCard });
+  }, [cards, chooseOnce, left]);
 
   return (
     <div className="td-decision-overlay" style={{
@@ -48,7 +56,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
           const m = STYLE_META[c.style] || STYLE_META.steady;
           const rc = RISK_COLOR[c.risk_level] || '#ffaa00';
           return (
-            <button className="td-ui-button td-ui-card td-decision-card" key={i} onClick={() => onChoose({ card: c })}
+            <button className="td-ui-button td-ui-card td-decision-card" key={i} onClick={() => chooseOnce({ card: c })}
               style={{
                 width: 214, minHeight: 258, textAlign: 'left', cursor: 'pointer',
                 display: 'flex', flexDirection: 'column',
@@ -87,7 +95,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
           className="td-ui-input"
           value={custom}
           onChange={e => setCustom(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && custom.trim()) onChoose({ freeform: custom.trim() }); }}
+          onKeyDown={e => { if (e.key === 'Enter' && custom.trim()) chooseOnce({ freeform: custom.trim() }); }}
           placeholder={zh ? '输入自定义指令覆盖所有卡片…' : 'Type a custom order to override all cards…'}
           style={{
             flex: 1, background: 'rgba(0,0,0,0.6)', border: '1px solid #00e5ff45',
@@ -95,7 +103,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
             fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none',
           }}
         />
-        <button className="td-ui-button td-button-primary" onClick={() => custom.trim() && onChoose({ freeform: custom.trim() })}
+        <button className="td-ui-button td-button-primary" onClick={() => custom.trim() && chooseOnce({ freeform: custom.trim() })}
           disabled={!custom.trim()}
           style={{
             padding: '14px 26px', borderRadius: 10, border: '1px solid #00e5ff70',

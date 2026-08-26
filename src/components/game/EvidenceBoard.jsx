@@ -12,6 +12,7 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
   const nodesRef = useRef({});
   const animFrameRef = useRef(null);
   const particlesRef = useRef([]);
+  const freshnessTimersRef = useRef(new Map());
 
   const unlockedClues = clues.filter(c => unlockedIds.includes(c.clue_id));
 
@@ -46,10 +47,12 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
             color: NODE_COLORS[clue.weight] || '#00ffff',
           });
         }
-        setTimeout(() => {
+        const freshnessTimer = setTimeout(() => {
           if (nodesRef.current[clue.clue_id])
             nodesRef.current[clue.clue_id].isNew = false;
+          freshnessTimersRef.current.delete(clue.clue_id);
         }, 2000);
+        freshnessTimersRef.current.set(clue.clue_id, freshnessTimer);
       }
     });
 
@@ -194,6 +197,11 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
     animFrameRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [unlockedIds, validEdges]);
+
+  useEffect(() => () => {
+    freshnessTimersRef.current.forEach(clearTimeout);
+    freshnessTimersRef.current.clear();
+  }, []);
 
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden"
