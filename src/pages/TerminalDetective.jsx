@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useState } from 'react';
 import GameLanding from '@/components/game/GameLanding';
+import DetectiveRegistration from '@/components/game/DetectiveRegistration';
 import { markActivity, startCase } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { buildTeamConfig } from '@/game/teamConfig';
@@ -8,7 +9,6 @@ const AgentLobby = lazy(() => import('@/components/game/AgentLobby'));
 const InvestigationTerminal = lazy(() => import('@/components/game/InvestigationTerminal'));
 const CaseSelect = lazy(() => import('@/components/game/CaseSelect'));
 const DetectiveHome = lazy(() => import('@/components/game/DetectiveHome'));
-const DetectiveRegistration = lazy(() => import('@/components/game/DetectiveRegistration'));
 
 function ScreenFallback() {
   return (
