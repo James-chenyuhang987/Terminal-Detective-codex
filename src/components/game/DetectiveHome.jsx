@@ -11,6 +11,7 @@ import SideNavIcons from '@/components/game/home/SideNavIcons';
 import FooterShortcuts from '@/components/game/home/FooterShortcuts';
 import HomeBackdrop from '@/components/game/home/HomeBackdrop';
 import CheckinCelebration from '@/components/game/home/CheckinCelebration';
+import { transactionErrorMessage } from '@/game/transactionFeedback';
 
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
@@ -21,7 +22,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const { profile, mutate, refresh, syncStatus, isReadOnly } = useProfile();
   const [busy, setBusy] = useState(false);
   const [module, setModule] = useState(null);
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState(null);
   const [checkinCelebration, setCheckinCelebration] = useState(null);
   const toastTimerRef = useRef(null);
   const busyRef = useRef(false);
@@ -46,10 +47,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     void refresh().catch(() => {});
   };
 
-  const notify = (message) => {
-    setToast(message);
+  const notify = (message, type = 'success') => {
+    setToast({ id: Date.now(), message, type });
     clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(''), 3200);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3200);
   };
 
   const patch = async (next, message = '') => {
@@ -66,7 +67,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       if (message) notify(message);
       return true;
     } catch {
-      notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.');
+      notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
       return false;
     } finally {
       busyRef.current = false;
@@ -78,22 +79,15 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     if (busyRef.current || isReadOnly) return false;
     if (!result?.profile || result.error) {
       const errors = {
-        insufficient_funds: lang === 'zh' ? '资源不足' : 'Insufficient funds',
-        inventory_full: lang === 'zh' ? '该道具已达到库存上限' : 'This item has reached its inventory limit',
-        invalid_quantity: lang === 'zh' ? '购买数量无效' : 'Invalid purchase quantity',
         not_owned: lang === 'zh' ? '尚未持有该物品' : 'Item not owned',
         equip_limit: lang === 'zh' ? '最多装备两件任务道具' : 'Only two mission items can be equipped',
-        prerequisite: lang === 'zh' ? '请先解锁前置科技' : 'Unlock the prerequisite first',
         already_claimed: lang === 'zh' ? '奖励已经领取' : 'Reward already claimed',
         incomplete: lang === 'zh' ? '目标尚未完成' : 'Objective incomplete',
         day_locked: lang === 'zh' ? '该目标尚未解锁' : 'This day is still locked',
         locked: lang === 'zh' ? '成就尚未解锁' : 'Achievement locked',
         rename_used: lang === 'zh' ? '代号修改次数已用完' : 'Codename rename already used',
-        energy_full: lang === 'zh' ? '体力已达到临时上限' : 'Energy is at the overflow cap',
-        already_owned: lang === 'zh' ? '该探员已在你的名册中' : 'This agent is already in your roster',
-        unknown_agent: lang === 'zh' ? '未找到该探员档案' : 'Agent record not found',
       };
-      notify(errors[result?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'));
+      notify(transactionErrorMessage(result?.error, lang) || errors[result?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'), 'error');
       return false;
     }
     return patch(result.profile, message);
@@ -304,11 +298,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       )}
 
       {toast && (
-        <div className="td-toast" role="status" style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 120,
-          border: '1px solid rgba(0,255,136,0.5)', borderRadius: 10, padding: '10px 18px',
-          background: 'rgba(0,20,10,0.92)', color: '#00ff88', fontSize: '0.7rem', letterSpacing: '0.08em',
-        }}>{toast}</div>
+        <div key={toast.id} className={`td-toast is-${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'} aria-live={toast.type === 'error' ? 'assertive' : 'polite'} style={{
+          position: 'fixed', right: 24, bottom: 24, zIndex: 240,
+          borderRadius: 10, padding: '11px 18px', fontSize: '0.7rem', letterSpacing: '0.08em',
+        }}><span aria-hidden="true">{toast.type === 'error' ? '✕' : '✓'}</span>{toast.message}</div>
       )}
       {checkinCelebration && (
         <CheckinCelebration
