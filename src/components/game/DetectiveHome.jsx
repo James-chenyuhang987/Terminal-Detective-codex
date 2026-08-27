@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, diffProfileWrite, knownAchievementCount, markActivity } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { useLang } from '@/lib/lang.jsx';
@@ -16,6 +17,25 @@ import { transactionErrorMessage } from '@/game/transactionFeedback';
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
 const BUILD_ID = String(import.meta.env.VITE_BUILD_SHA || 'local').slice(0, 7);
+
+function FeedbackToast({ toast, lang }) {
+  if (!toast || typeof document === 'undefined') return null;
+  const isError = toast.type === 'error';
+  const eyebrow = isError
+    ? (lang === 'zh' ? '交易未完成' : 'TRANSACTION DECLINED')
+    : (lang === 'zh' ? '交易已确认' : 'TRANSACTION CONFIRMED');
+
+  return createPortal(
+    <div className="td-toast-layer" aria-live={isError ? 'assertive' : 'polite'}>
+      <div key={toast.id} className={`td-toast is-${toast.type}`} role={isError ? 'alert' : 'status'}>
+        <span className="td-toast-icon" aria-hidden="true">{isError ? '!' : '✓'}</span>
+        <span className="td-toast-copy"><small>{eyebrow}</small><strong>{toast.message}</strong></span>
+        <span className="td-toast-timer" aria-hidden="true" />
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
   const { lang } = useLang();
@@ -297,12 +317,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         </Suspense>
       )}
 
-      {toast && (
-        <div key={toast.id} className={`td-toast is-${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'} aria-live={toast.type === 'error' ? 'assertive' : 'polite'} style={{
-          position: 'fixed', right: 24, bottom: 24, zIndex: 240,
-          borderRadius: 10, padding: '11px 18px', fontSize: '0.7rem', letterSpacing: '0.08em',
-        }}><span aria-hidden="true">{toast.type === 'error' ? '✕' : '✓'}</span>{toast.message}</div>
-      )}
+      <FeedbackToast toast={toast} lang={lang} />
       {checkinCelebration && (
         <CheckinCelebration
           reward={checkinCelebration.reward}

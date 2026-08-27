@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { purchaseSuccessMessage, transactionErrorMessage } from '../src/game/transactionFeedback.js';
 
 test('transaction feedback uses the requested purchase copy in both languages', () => {
-  assert.equal(transactionErrorMessage('insufficient_funds', 'zh'), '资金不足');
+  assert.equal(transactionErrorMessage('insufficient_funds', 'zh'), '资源不足');
   assert.equal(transactionErrorMessage('insufficient_funds', 'en'), 'Insufficient funds');
   assert.equal(purchaseSuccessMessage('', 'zh'), '购买成功');
   assert.equal(purchaseSuccessMessage('', 'en'), 'Purchase successful');
