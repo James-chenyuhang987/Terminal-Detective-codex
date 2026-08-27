@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 const AXES = [
   { key: 'logic_power',         label: 'LOGIC',   labelZh: '逻辑', max: 100, color: '#00e5ff' },
@@ -20,6 +21,8 @@ const polarToXY = (r, angle) => ({
 });
 
 export default function AgentRadarChart({ agent, agentColor, allAgents, size = 160 }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   // Build polygon points for one agent's data
   const buildPoints = (a) =>
     AXES.map((axis, i) => {
@@ -116,16 +119,16 @@ export default function AgentRadarChart({ agent, agentColor, allAgents, size = 1
                 fontSize="7.5" fontFamily="monospace" fontWeight="700"
                 fill={axis.color}
               >
-                {axis.label}
+                {zh ? axis.labelZh : axis.label}
               </text>
-              <text
+              {zh && <text
                 x={pos.x} y={pos.y + 11}
                 textAnchor="middle" dominantBaseline="middle"
                 fontSize="6" fontFamily="monospace"
                 fill={`${axis.color}80`}
               >
-                {axis.labelZh}
-              </text>
+                {axis.label}
+              </text>}
             </g>
           );
         })}
@@ -138,12 +141,12 @@ export default function AgentRadarChart({ agent, agentColor, allAgents, size = 1
       <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <div style={{ width: 10, height: 2, background: `${agentColor}`, borderRadius: 1 }} />
-          <span style={{ fontSize: '0.38rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>当前探员</span>
+          <span style={{ fontSize: '0.38rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{zh ? '当前探员' : 'CURRENT AGENT'}</span>
         </div>
         {avgPoints && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <div style={{ width: 10, height: 2, background: 'rgba(255,255,255,0.3)', borderRadius: 1, borderTop: '1px dashed rgba(255,255,255,0.4)' }} />
-            <span style={{ fontSize: '0.38rem', color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace' }}>队伍均值</span>
+            <span style={{ fontSize: '0.38rem', color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace' }}>{zh ? '队伍均值' : 'TEAM AVERAGE'}</span>
           </div>
         )}
       </div>

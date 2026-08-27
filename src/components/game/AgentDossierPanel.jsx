@@ -1,9 +1,12 @@
 import React from 'react';
 import { getLore } from '@/game/agentLore';
+import { useLang } from '@/lib/lang.jsx';
 
 // 完整档案 Tab — 时间线布局 + 战绩 + 心理评估
 export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _roleZh }) {
-  const lore = getLore(agentIdx);
+  const { lang } = useLang();
+  const zh = lang === 'zh';
+  const lore = getLore(agentIdx, lang);
   if (!lore) return null;
 
   return (
@@ -26,7 +29,7 @@ export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _role
 
       {/* 战绩 */}
       <div style={{ fontSize: '0.44rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.14em', marginBottom: 6 }}>
-        ◈ 历史战绩 · SERVICE RECORD
+        ◈ {zh ? '历史战绩' : 'SERVICE RECORD'}
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
         {lore.record.map(r => (
@@ -43,7 +46,7 @@ export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _role
 
       {/* 时间线 */}
       <div style={{ fontSize: '0.44rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.14em', marginBottom: 8 }}>
-        ◈ 出身经历 · ORIGIN TIMELINE
+        ◈ {zh ? '出身经历' : 'ORIGIN TIMELINE'}
       </div>
       <div style={{ position: 'relative', paddingLeft: 16, marginBottom: 14 }}>
         <div style={{
@@ -69,7 +72,7 @@ export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _role
 
       {/* 性格侧写 */}
       <div style={{ fontSize: '0.44rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.14em', marginBottom: 6 }}>
-        ◈ 性格侧写 · PROFILE
+        ◈ {zh ? '性格侧写' : 'PROFILE'}
       </div>
       <div style={{
         fontSize: '0.46rem', color: 'rgba(255,255,255,0.48)', lineHeight: 1.75,

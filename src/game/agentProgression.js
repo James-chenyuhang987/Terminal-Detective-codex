@@ -23,27 +23,27 @@ export const XP_REWARDS = {
 export const SKILL_TREES = [
   // Agent 0 — 隼目 (Observer)
   [
-    { id: 's0_1', name: '锐利感知',    icon: '👁️‍🗨️', desc: 'AP消耗降低10%', unlock_level: 2, effect_key: 'ap_cost_discount',      effect_value: 0.10 },
-    { id: 's0_2', name: '证据联想',    icon: '🔗',    desc: '每回合有15%概率额外发现一条线索', unlock_level: 4, effect_key: 'bonus_clue_chance', effect_value: 0.15 },
-    { id: 's0_3', name: '全息扫描',    icon: '📡',   desc: '混乱值每轮自动降低5点',           unlock_level: 6, effect_key: 'confusion_regen',   effect_value: 5 },
-    { id: 's0_4', name: '鹰眼协议',    icon: '🦅',   desc: 'AP消耗再降低15%（叠加）',         unlock_level: 8, effect_key: 'ap_cost_discount',  effect_value: 0.15 },
-    { id: 's0_5', name: '全知视界',    icon: '🌐',   desc: '游戏开始自动解锁第一条线索',       unlock_level: 10, effect_key: 'auto_unlock_first', effect_value: true },
+    { id: 's0_1', name: '锐利感知', nameEn: 'SHARP PERCEPTION', icon: '👁️‍🗨️', desc: 'AP消耗降低10%', descEn: 'Reduces AP costs by 10%', unlock_level: 2, effect_key: 'ap_cost_discount', effect_value: 0.10 },
+    { id: 's0_2', name: '证据联想', nameEn: 'EVIDENCE ASSOCIATION', icon: '🔗', desc: '每回合有15%概率额外发现一条线索', descEn: '15% chance to discover an extra clue each turn', unlock_level: 4, effect_key: 'bonus_clue_chance', effect_value: 0.15 },
+    { id: 's0_3', name: '全息扫描', nameEn: 'HOLOGRAPHIC SCAN', icon: '📡', desc: '混乱值每轮自动降低5点', descEn: 'Reduces confusion by 5 each turn', unlock_level: 6, effect_key: 'confusion_regen', effect_value: 5 },
+    { id: 's0_4', name: '鹰眼协议', nameEn: 'EAGLE EYE PROTOCOL', icon: '🦅', desc: 'AP消耗再降低15%（叠加）', descEn: 'Further reduces AP costs by 15% (stacks)', unlock_level: 8, effect_key: 'ap_cost_discount', effect_value: 0.15 },
+    { id: 's0_5', name: '全知视界', nameEn: 'OMNISCIENT VISION', icon: '🌐', desc: '游戏开始自动解锁第一条线索', descEn: 'Automatically unlocks the first clue at case start', unlock_level: 10, effect_key: 'auto_unlock_first', effect_value: true },
   ],
   // Agent 1 — 破心 (Enforcer)
   [
-    { id: 's1_1', name: '心理压制',    icon: '🔥',   desc: 'NPC对话时混乱值增加减少20%',      unlock_level: 2, effect_key: 'npc_confusion_reduce', effect_value: 0.20 },
-    { id: 's1_2', name: '思维加速',    icon: '⚡',   desc: 'Think阶段速度提升30%',             unlock_level: 4, effect_key: 'think_speed_boost',    effect_value: 0.30 },
-    { id: 's1_3', name: '破防审讯',    icon: '💥',   desc: 'NPC拒绝回答时自动追问，有30%概率获得线索', unlock_level: 6, effect_key: 'interrogation_bonus', effect_value: 0.30 },
-    { id: 's1_4', name: '铁血逻辑',    icon: '⚔️',  desc: '混乱抵抗提升25%',                 unlock_level: 8, effect_key: 'confusion_resistance', effect_value: 0.25 },
-    { id: 's1_5', name: '意志核心',    icon: '🧬',   desc: 'BSOD触发时自动回满混乱值并免除AP罚',unlock_level: 10, effect_key: 'bsod_immunity',       effect_value: true },
+    { id: 's1_1', name: '心理压制', nameEn: 'PSYCHOLOGICAL PRESSURE', icon: '🔥', desc: 'NPC对话时混乱值增加减少20%', descEn: 'Reduces confusion gained in NPC dialogue by 20%', unlock_level: 2, effect_key: 'npc_confusion_reduce', effect_value: 0.20 },
+    { id: 's1_2', name: '思维加速', nameEn: 'COGNITIVE ACCELERATION', icon: '⚡', desc: 'Think阶段速度提升30%', descEn: 'Increases THINK phase speed by 30%', unlock_level: 4, effect_key: 'think_speed_boost', effect_value: 0.30 },
+    { id: 's1_3', name: '破防审讯', nameEn: 'BREAKTHROUGH INTERROGATION', icon: '💥', desc: 'NPC拒绝回答时自动追问，有30%概率获得线索', descEn: 'Automatically follows up on refusals with a 30% clue chance', unlock_level: 6, effect_key: 'interrogation_bonus', effect_value: 0.30 },
+    { id: 's1_4', name: '铁血逻辑', nameEn: 'IRON LOGIC', icon: '⚔️', desc: '混乱抵抗提升25%', descEn: 'Increases confusion resistance by 25%', unlock_level: 8, effect_key: 'confusion_resistance', effect_value: 0.25 },
+    { id: 's1_5', name: '意志核心', nameEn: 'WILL CORE', icon: '🧬', desc: 'BSOD触发时自动回满混乱值并免除AP罚', descEn: 'Negates the AP penalty and resets confusion when BSoD triggers', unlock_level: 10, effect_key: 'bsod_immunity', effect_value: true },
   ],
   // Agent 2 — 幽灵 (Phantom Hacker)
   [
-    { id: 's2_1', name: '数字渗透',    icon: '💾',   desc: '黑客类动作成功率提升20%',          unlock_level: 2, effect_key: 'hack_success_rate',  effect_value: 0.20 },
-    { id: 's2_2', name: '加密破解',    icon: '🔓',   desc: '自动解密加密线索，无需AP',         unlock_level: 4, effect_key: 'free_decrypt',        effect_value: true },
-    { id: 's2_3', name: '权限提升',    icon: '🛡️',  desc: '系统黑入动作解锁隐藏区域',         unlock_level: 6, effect_key: 'zone_unlock_bonus',   effect_value: true },
-    { id: 's2_4', name: '神经接口',    icon: '🔌',   desc: '每回合被动扫描，5%概率发现隐藏线索', unlock_level: 8, effect_key: 'passive_scan_chance', effect_value: 0.05 },
-    { id: 's2_5', name: '量子幽灵',    icon: '👻',   desc: '完全免疫陷阱事件(is_trap)',        unlock_level: 10, effect_key: 'trap_immunity',       effect_value: true },
+    { id: 's2_1', name: '数字渗透', nameEn: 'DIGITAL INFILTRATION', icon: '💾', desc: '黑客类动作成功率提升20%', descEn: 'Increases hacking action success by 20%', unlock_level: 2, effect_key: 'hack_success_rate', effect_value: 0.20 },
+    { id: 's2_2', name: '加密破解', nameEn: 'CRYPT BREAKER', icon: '🔓', desc: '自动解密加密线索，无需AP', descEn: 'Decrypts encrypted clues automatically without AP', unlock_level: 4, effect_key: 'free_decrypt', effect_value: true },
+    { id: 's2_3', name: '权限提升', nameEn: 'PRIVILEGE ESCALATION', icon: '🛡️', desc: '系统黑入动作解锁隐藏区域', descEn: 'System hacks can unlock hidden areas', unlock_level: 6, effect_key: 'zone_unlock_bonus', effect_value: true },
+    { id: 's2_4', name: '神经接口', nameEn: 'NEURAL INTERFACE', icon: '🔌', desc: '每回合被动扫描，5%概率发现隐藏线索', descEn: 'Passive scan each turn with a 5% hidden-clue chance', unlock_level: 8, effect_key: 'passive_scan_chance', effect_value: 0.05 },
+    { id: 's2_5', name: '量子幽灵', nameEn: 'QUANTUM GHOST', icon: '👻', desc: '完全免疫陷阱事件(is_trap)', descEn: 'Grants complete immunity to trap events', unlock_level: 10, effect_key: 'trap_immunity', effect_value: true },
   ],
 ];
 

@@ -378,6 +378,14 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-quantity-picker span { text-align: center; color: rgba(255,255,255,.62); font: 9px ui-monospace, monospace; }
 
 /* ── Holographic lobby polish ─────────────────────────────────────── */
+.td-lobby { isolation: isolate; }
+.td-lobby-time-light { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(155deg,rgba(255,232,169,var(--td-lobby-day-glow)) 0%,transparent 38%),rgba(0,4,14,var(--td-lobby-night-veil)); transition: background 1.8s ease, opacity 1.8s ease; }
+.td-lobby-title,.td-lobby-main,.td-lobby-controls { filter: brightness(var(--td-lobby-brightness)) saturate(var(--td-lobby-saturation)); transition: filter 1.8s ease; }
+.td-lobby-light-state { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid rgba(255,218,130,.14); border-radius: 7px; color: #f0d28b; background: rgba(240,210,139,.04); }
+.td-lobby-light-state b { color: rgba(232,245,250,.45); font-size: 7px; letter-spacing: .07em; }
+.td-lobby-light-night .td-lobby-time-light { background: radial-gradient(circle at 70% 8%,rgba(75,105,171,.08),transparent 32%),rgba(0,4,14,var(--td-lobby-night-veil)); }
+.td-lobby-light-dawn .td-lobby-time-light { background: linear-gradient(145deg,rgba(255,174,105,.1),transparent 40%),rgba(0,4,14,var(--td-lobby-night-veil)); }
+.td-lobby-light-evening .td-lobby-time-light { background: linear-gradient(155deg,rgba(255,129,82,.07),transparent 40%),rgba(0,4,14,var(--td-lobby-night-veil)); }
 .td-lobby-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
 .td-lobby-atmosphere i { position: absolute; display: block; }
 .td-lobby-aurora { width: 48vw; height: 48vw; border-radius: 50%; filter: blur(90px); opacity: .1; animation: lobby-aurora 16s ease-in-out infinite alternate; }
@@ -580,7 +588,8 @@ button, input, textarea, select { box-sizing: border-box; }
 
   .td-lobby { overflow-y: auto !important; }
   .td-lobby-status { min-height: 48px; height: auto !important; padding: 6px 10px !important; }
-  .td-lobby-user, .td-lobby-link-state, .td-lobby-wallet-pill:nth-child(2), .td-lobby-wallet-pill:nth-child(3) { display: none; }
+  .td-lobby-user, .td-lobby-link-state, .td-lobby-wallet-diamonds, .td-lobby-wallet-gold { display: none; }
+  .td-lobby-light-state b { display: none; }
   .td-lobby-status-right { gap: 6px !important; }
   .td-lobby-title { padding: 8px 12px !important; }
   .td-lobby-title > div:last-child { display: none; }

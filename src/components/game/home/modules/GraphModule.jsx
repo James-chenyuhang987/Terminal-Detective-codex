@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ALL_CASES } from '@/game/caseData';
+import { ALL_CASES, localizeCase } from '@/game/caseData';
 
 const CASE_ICON = { Lvl_01: '🏙️', Lvl_02: '🔬', Lvl_03: '🦋' };
 
@@ -9,7 +9,7 @@ function Button({ children, onClick, active }) {
 
 export default function GraphModule({ profile, lang }) {
   const [caseId, setCaseId] = useState(ALL_CASES[0].case_id);
-  const caseData = ALL_CASES.find(item => item.case_id === caseId);
+  const caseData = localizeCase(ALL_CASES.find(item => item.case_id === caseId), lang);
   const record = profile.case_records.find(item => item.case_id === caseId);
   const discovered = new Set(record?.discovered_clues || []);
   return <>

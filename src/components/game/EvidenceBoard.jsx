@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 const NODE_COLORS = {
   CRITICAL: '#ff3860',
@@ -8,6 +9,8 @@ const NODE_COLORS = {
 };
 
 export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData: _caseData }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const canvasRef = useRef(null);
   const nodesRef = useRef({});
   const animFrameRef = useRef(null);
@@ -216,17 +219,17 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
           <div className="text-center">
             <div className="text-4xl mb-3 opacity-20">🕸️</div>
             <div className="text-xs tracking-widest opacity-30" style={{ color: '#00ffff', fontFamily: 'monospace' }}>
-              NO EVIDENCE SECURED
+              {zh ? '尚未保全证据' : 'NO EVIDENCE SECURED'}
             </div>
             <div className="text-xs opacity-20 mt-1" style={{ color: '#00ffff', fontFamily: 'monospace' }}>
-              Begin investigation to populate the board
+              {zh ? '开始调查以填充证物板' : 'Begin investigation to populate the board'}
             </div>
           </div>
         </div>
       )}
       <div className="absolute top-2 left-2 text-xs opacity-30"
         style={{ color: '#00ffff', fontFamily: 'monospace' }}>
-        EVIDENCE BOARD · {unlockedClues.length} NODES
+        {zh ? '证物板' : 'EVIDENCE BOARD'} · {unlockedClues.length} {zh ? '节点' : 'NODES'}
       </div>
     </div>
   );

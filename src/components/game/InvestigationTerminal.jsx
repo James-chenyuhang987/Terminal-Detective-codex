@@ -98,7 +98,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     setSynergyEvent({
       type,
       clueIcon: clue?.visual_icon || '🔍',
-      clueKeyword: clue?.keyword || '未知线索',
+      clueKeyword: clue?.keyword || (lang === 'zh' ? '未知线索' : 'UNKNOWN CLUE'),
       id: Date.now(),
     });
   }, []);
@@ -214,7 +214,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     try {
       // ── Phase 1: OBSERVE ──────────────────────────────────────────────
       setReactState(ReAct_Enum.OBSERVE);
-      const observation = generateObservation(gs, caseData);
+      const observation = generateObservation(gs, caseData, lang);
       addLine('\n' + '═'.repeat(50), 'divider');
       addLine(`◈ ${t.turnLabel} ${gs.turn_count + 1} — ${t.observationPhase}`, 'phase');
       addLine(observation, 'observe');
@@ -395,23 +395,25 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         if (newState.unlocked_clues.includes(ec.clue_id) === false) {
           newState.evidence_crisis = null;
         } else if (Math.random() < 0.5) {
-          addLine(`\n🛡️ 本轮行动的余波顺带加密封存了证据「${ec.keyword}」！威胁解除。`, 'success');
+          addLine(lang === 'zh'
+            ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${ec.keyword}」！威胁解除。`
+            : `\n🛡️ This action also encrypted and secured “${ec.keyword}”. Threat cleared.`, 'success');
           newState.evidence_crisis = null;
         } else if (newState.turn_count > ec.deadline) {
           newState.unlocked_clues = newState.unlocked_clues.filter(id => id !== ec.clue_id);
           newState.unlocked_clues_set = new Set(newState.unlocked_clues);
           setLinkedPairs(prev => prev.filter(p => p.a !== ec.clue_id && p.b !== ec.clue_id));
-          addLine(`\n💀 证据「${ec.keyword}」已被销毁，永久丢失！`, 'error');
+          addLine(lang === 'zh' ? `\n💀 证据「${ec.keyword}」已被销毁，永久丢失！` : `\n💀 Evidence “${ec.keyword}” was destroyed and is permanently lost.`, 'error');
           newState.evidence_crisis = null;
         } else {
-          addLine(`\n⏳ 证据「${ec.keyword}」仍处于销毁倒计时（第 ${ec.deadline} 轮前需保全）`, 'warning');
+          addLine(lang === 'zh' ? `\n⏳ 证据「${ec.keyword}」仍处于销毁倒计时（第 ${ec.deadline} 轮前需保全）` : `\n⏳ Evidence “${ec.keyword}” remains on a purge timer (secure it before turn ${ec.deadline}).`, 'warning');
         }
       }
 
       // ── 危机事件引擎：每 4-6 轮随机触发 ──────────────────────────────
       if (newState.turn_count >= nextCrisisTurnRef.current) {
         nextCrisisTurnRef.current = newState.turn_count + nextCrisisIn();
-        const evt = rollCrisis(newState, caseData);
+        const evt = rollCrisis(newState, caseData, lang);
         schedule(() => setCrisis(evt), 900);
       }
 
@@ -445,13 +447,13 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         isTrap: !!settlement.is_trap,
         isKeyDecision,
         keyReason: settlement.is_trap
-          ? '⚠ 陷阱事件触发'
+          ? (lang === 'zh' ? '⚠ 陷阱事件触发' : '⚠ TRAP EVENT TRIGGERED')
           : newClues.length > 0
-          ? `发现 ${newClues.length} 条新线索`
+          ? (lang === 'zh' ? `发现 ${newClues.length} 条新线索` : `${newClues.length} NEW CLUES FOUND`)
           : settlement.confusion_increase > 10
-          ? '混乱值大幅上升'
+          ? (lang === 'zh' ? '混乱值大幅上升' : 'CONFUSION SPIKED')
           : isKeyDecision
-          ? '关键逻辑节点'
+          ? (lang === 'zh' ? '关键逻辑节点' : 'KEY LOGIC NODE')
           : '',
         timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       }]);
@@ -602,7 +604,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       // 破防审讯技能：自动追问 + 概率揭示新线索
       if (result.followup) {
         setNpcDialogue(prev => [...prev,
-          { role: 'system', text: '💥 技能「破防审讯」发动 — 探员抓住破绽步步紧逼…' },
+          { role: 'system', text: lang === 'zh' ? '💥 技能「破防审讯」发动 — 探员抓住破绽步步紧逼…' : '💥 BREAKTHROUGH INTERROGATION activated — the agent presses the opening…' },
           { role: 'npc', text: result.followup, name: result.npc_name },
         ]);
         if (result.bonus_clue && !gameStateRef.current.unlocked_clues.includes(result.bonus_clue)) {
@@ -613,7 +615,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           });
           setNewClueIds(prev => [...prev, result.bonus_clue]);
           schedule(() => setNewClueIds(prev => prev.filter(id => id !== result.bonus_clue)), 3000);
-          addLine(`\n🔍 破防审讯揭示新线索：${clue?.visual_icon || '🔍'} ${clue?.keyword || result.bonus_clue}`, 'success');
+          addLine(lang === 'zh'
+            ? `\n🔍 破防审讯揭示新线索：${clue?.visual_icon || '🔍'} ${clue?.keyword || result.bonus_clue}`
+            : `\n🔍 BREAKTHROUGH INTERROGATION revealed a new clue: ${clue?.visual_icon || '🔍'} ${clue?.keyword || result.bonus_clue}`, 'success');
           if (clue) triggerSynergy('clue_converge', clue);
         }
       }
@@ -634,7 +638,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     const evt = crisis;
     setCrisis(null);
     if (!evt) return;
-    const { changes, resultText } = applyCrisisChoice(evt, choiceId, gameStateRef.current, activeAgentStrategy);
+    const { changes, resultText } = applyCrisisChoice(evt, choiceId, gameStateRef.current, activeAgentStrategy, lang);
     addLine(`\n🚨 ${resultText}`, changes.confusion_delta > 0 ? 'warning' : 'success');
     setGameState(prev => {
       const next = { ...prev };

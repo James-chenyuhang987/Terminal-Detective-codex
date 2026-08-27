@@ -5,6 +5,7 @@ import { markActivity, startCase } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { buildTeamConfig } from '@/game/teamConfig';
 import { getActiveSupportAgentId } from '@/game/agentMarket';
+import { useLang } from '@/lib/lang.jsx';
 
 const loadAgentLobby = () => import('@/components/game/AgentLobby');
 const loadInvestigationTerminal = () => import('@/components/game/InvestigationTerminal');
@@ -16,14 +17,16 @@ const CaseSelect = lazy(loadCaseSelect);
 const DetectiveHome = lazy(loadDetectiveHome);
 
 function ScreenFallback() {
+  const { lang } = useLang();
   return (
     <div className="td-screen-fallback fixed inset-0 flex items-center justify-center bg-[#02060e] text-cyan-300 font-mono text-xs tracking-[0.25em]">
-      <span>◈</span> LOADING DETECTIVE MODULE…
+      <span>◈</span> {lang === 'en' ? 'LOADING DETECTIVE MODULE…' : '正在加载侦探模块…'}
     </div>
   );
 }
 
 export default function TerminalDetective() {
+  const { lang } = useLang();
   const { profile, mutate, refresh, settle, isReadOnly } = useProfile();
   const [screen, setScreen] = useState('LANDING');
   const [agentStrategy, setAgentStrategy] = useState(null);
@@ -72,8 +75,8 @@ export default function TerminalDetective() {
       setScreen('HOME');
     } catch (cause) {
       setRegError(cause?.code === 'UNAUTHENTICATED'
-        ? '登录状态已失效，请重新登录后再注册。'
-        : '身份尚未写入云端，已保留当前输入，请检查网络后重试。');
+        ? (lang === 'en' ? 'Your session has expired. Sign in again before registering.' : '登录状态已失效，请重新登录后再注册。')
+        : (lang === 'en' ? 'Your identity was not saved to the cloud. Your input is preserved; check the network and retry.' : '身份尚未写入云端，已保留当前输入，请检查网络后重试。'));
     } finally {
       registrationRef.current = false;
       setRegBusy(false);

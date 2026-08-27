@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // ── Full-screen particle burst canvas ────────────────────────────────────────
 function BurstCanvas({ color }) {
@@ -119,6 +120,8 @@ function BurstCanvas({ color }) {
 
 // ── Skill slot card ───────────────────────────────────────────────────────────
 function SkillCard({ skill, color, delay }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), delay);
@@ -152,13 +155,13 @@ function SkillCard({ skill, color, delay }) {
           letterSpacing: '0.04em', marginBottom: 3,
           textShadow: `0 0 8px ${color}`,
         }}>
-          {skill.name}
+          {zh ? skill.name : (skill.nameEn || skill.name)}
         </div>
         <div style={{
           fontSize: '0.55rem', color: 'rgba(255,255,255,0.55)',
           fontFamily: 'monospace', lineHeight: 1.5,
         }}>
-          {skill.desc}
+          {zh ? skill.desc : (skill.descEn || skill.desc)}
         </div>
         <div style={{
           marginTop: 5, fontSize: '0.45rem', color: `${color}80`,
@@ -166,7 +169,7 @@ function SkillCard({ skill, color, delay }) {
           borderRadius: 4, padding: '1px 7px', display: 'inline-block',
           background: `${color}10`,
         }}>
-          Lv.{skill.unlock_level} 解锁
+          Lv.{skill.unlock_level} {zh ? '解锁' : 'UNLOCKED'}
         </div>
       </div>
     </div>
@@ -249,6 +252,8 @@ function LevelRing({ fromLevel, toLevel, color }) {
 
 // ── Main LevelUpModal ─────────────────────────────────────────────────────────
 export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel, color, newSkills, onClose }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -305,7 +310,7 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div style={{ fontSize: '0.5rem', color: `${color}80`, letterSpacing: '0.25em', fontFamily: 'monospace' }}>
-            ◈ AGENT ADVANCEMENT · 探员晋升
+            ◈ {zh ? '探员晋升' : 'AGENT ADVANCEMENT'}
           </div>
           <button onClick={handleClose} style={{
             background: 'none', border: 'none', color: `${color}60`,
@@ -349,7 +354,7 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
                 <div style={{ flex: 1, height: 1, background: `${color}30` }}/>
-                ✦ 新技能解锁
+                ✦ {zh ? '新技能解锁' : 'NEW SKILL UNLOCKED'}
                 <div style={{ flex: 1, height: 1, background: `${color}30` }}/>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -375,7 +380,7 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
             onMouseEnter={e => { e.currentTarget.style.background = `${color}40`; e.currentTarget.style.boxShadow = `0 0 30px ${color}50`; }}
             onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)`; e.currentTarget.style.boxShadow = `0 0 20px ${color}30`; }}
           >
-            ▶ CONTINUE · 继续
+            ▶ {zh ? '继续' : 'CONTINUE'}
           </button>
         </div>
       </div>

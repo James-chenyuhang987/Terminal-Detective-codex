@@ -87,7 +87,7 @@ export default function AuthGate() {
         await loginWithPassword(email.trim(), password);
       }
     } catch (error) {
-      setLocalError(error?.message || 'Authentication failed.');
+      setLocalError(error?.message || (lang === 'zh' ? '身份验证失败。' : 'Authentication failed.'));
     } finally {
       setBusy(false);
     }
@@ -101,7 +101,7 @@ export default function AuthGate() {
       await resendVerification(email.trim());
       setNotice(text.codeResent);
     } catch (error) {
-      setLocalError(error?.message || 'Unable to resend code.');
+      setLocalError(error?.message || (lang === 'zh' ? '无法重新发送验证码。' : 'Unable to resend code.'));
     } finally {
       setBusy(false);
     }

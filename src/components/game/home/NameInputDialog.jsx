@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import GlassPanel from '@/components/game/home/GlassPanel';
+import { useLang } from '@/lib/lang.jsx';
 
 export default function NameInputDialog({ initialName = '', onConfirm, busy }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [name, setName] = useState(initialName);
   const ok = !!name.trim();
   return (
@@ -15,15 +18,15 @@ export default function NameInputDialog({ initialName = '', onConfirm, busy }) {
         fontWeight: 900, letterSpacing: '0.18em', fontSize: '1rem',
         background: 'linear-gradient(180deg,#ffffff,#6ee8ff)',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-      }}>开始调查</div>
-      <div style={{ color: 'rgba(210,238,255,0.5)', fontSize: '0.68rem', margin: '10px 0 12px' }}>请输入你的名字</div>
+      }}>{zh ? '开始调查' : 'START INVESTIGATION'}</div>
+      <div style={{ color: 'rgba(210,238,255,0.5)', fontSize: '0.68rem', margin: '10px 0 12px' }}>{zh ? '请输入你的名字' : 'ENTER YOUR NAME'}</div>
 
       <div style={{ position: 'relative' }}>
         <input
           value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && ok) onConfirm(name.trim()); }}
-          placeholder="玩家名"
+          placeholder={zh ? '玩家名' : 'PLAYER NAME'}
           maxLength={12}
           style={{
             width: '100%', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(0,229,255,0.35)',
@@ -36,7 +39,7 @@ export default function NameInputDialog({ initialName = '', onConfirm, busy }) {
       </div>
 
       <div style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', margin: '11px 0 15px' }}>
-        你的名字将出现在侦探之家中
+        {zh ? '你的名字将出现在侦探之家中' : 'Your name will appear in your Detective Home'}
       </div>
       <button
         onClick={() => ok && onConfirm(name.trim())}
@@ -49,7 +52,7 @@ export default function NameInputDialog({ initialName = '', onConfirm, busy }) {
           fontSize: '0.82rem', opacity: ok ? 1 : 0.38,
           boxShadow: ok ? '0 0 24px rgba(197,160,89,0.4)' : 'none', transition: 'all 0.22s',
         }}>
-        {busy ? '写入档案…' : '确认进入'}
+        {busy ? (zh ? '写入档案…' : 'SAVING PROFILE…') : (zh ? '确认进入' : 'CONFIRM')}
       </button>
     </GlassPanel>
   );

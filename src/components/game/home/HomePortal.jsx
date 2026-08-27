@@ -1,6 +1,9 @@
 import React from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 export default function HomePortal({ onEnter }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   return (
     <div className="td-ui-card td-home-portal" style={{
       position: 'relative', width: '100%', maxWidth: 350, padding: '22px 20px 18px',
@@ -23,10 +26,10 @@ export default function HomePortal({ onEnter }) {
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
         filter: 'drop-shadow(0 0 16px rgba(0,229,255,0.8))',
       }}>
-        全息探员大厅 🔍
+        {zh ? '全息探员大厅' : 'HOLOGRAPHIC AGENT HALL'} 🔍
       </div>
       <div style={{ fontSize: '0.62rem', color: 'rgba(200,235,255,0.5)', marginTop: 8, letterSpacing: '0.05em' }}>
-        进入全息探员市场，签约支援成员并管理编队
+        {zh ? '进入全息探员市场，签约支援成员并管理编队' : 'Recruit support agents and manage your investigation squad'}
       </div>
 
       {/* 全息拱门 + 侦探剪影 */}
@@ -79,10 +82,10 @@ export default function HomePortal({ onEnter }) {
           letterSpacing: '0.24em', fontSize: '0.88rem', textShadow: '0 0 14px #00e5ff',
           boxShadow: '0 0 22px rgba(0,229,255,0.35)', transition: 'all 0.24s',
         }}>
-        进入探员市场 ≫
+        {zh ? '进入探员市场' : 'ENTER AGENT MARKET'} ≫
       </button>
       <div style={{ fontSize: '0.5rem', color: 'rgba(200,235,255,0.3)', marginTop: 9, letterSpacing: '0.24em' }}>
-        — 探员交换站 / AGENT EXCHANGE —
+        — {zh ? '探员交换站' : 'AGENT EXCHANGE'} —
       </div>
       <style>{`
         @keyframes portal-pulse{0%,100%{opacity:.5}50%{opacity:1}}

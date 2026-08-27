@@ -1,12 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { PRIORITY_ACTIONS, normalizePriorityList } from '@/game/teamConfig';
+import { useLang } from '@/lib/lang.jsx';
 
 // ── Static zone layout positions (% of container) ────────────────────────────
 const ZONE_LAYOUT = {
-  zone_datacenter: { x: 50, y: 20, label: '数据中心', sublabel: '案发现场', icon: '💻', color: '#ff3860' },
-  zone_lobby:      { x: 20, y: 60, label: '大堂',     sublabel: '监控中心', icon: '📹', color: '#00e5ff' },
-  zone_lab:        { x: 80, y: 60, label: '私人实验室', sublabel: '黑客入口', icon: '🔬', color: '#a78bfa' },
-  zone_balcony:    { x: 50, y: 85, label: '天台阳台', sublabel: '逃离路线', icon: '🌃', color: '#ffaa00' },
+  zone_datacenter: { x: 50, y: 20, label: '数据中心', labelEn: 'DATA CENTER', sublabel: '案发现场', sublabelEn: 'CRIME SCENE', icon: '💻', color: '#ff3860' },
+  zone_lobby:      { x: 20, y: 60, label: '大堂', labelEn: 'LOBBY', sublabel: '监控中心', sublabelEn: 'SECURITY HUB', icon: '📹', color: '#00e5ff' },
+  zone_lab:        { x: 80, y: 60, label: '私人实验室', labelEn: 'PRIVATE LAB', sublabel: '黑客入口', sublabelEn: 'HACK ENTRY', icon: '🔬', color: '#a78bfa' },
+  zone_balcony:    { x: 50, y: 85, label: '天台阳台', labelEn: 'ROOFTOP', sublabel: '逃离路线', sublabelEn: 'ESCAPE ROUTE', icon: '🌃', color: '#ffaa00' },
 };
 
 const ZONE_CONNECTIONS = [
@@ -70,6 +71,8 @@ function ZoneNode({
   definition, pos, visitCount, isCurrentZone, clues, feedback, isDragging,
   onPointerDown,
 }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const zDef  = definition || {};
   const color = zDef.color || '#00e5ff';
   const hasKey = visitCount > 0 && clues.length > 0;
@@ -131,10 +134,10 @@ function ZoneNode({
               textShadow: isCurrentZone ? `0 0 8px ${color}` : 'none',
               letterSpacing: '0.04em',
             }}>
-              {zDef.label}
+              {zh ? zDef.label : (zDef.labelEn || zDef.label)}
             </div>
             <div style={{ fontSize: '0.5rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>
-              {zDef.sublabel}
+              {zh ? zDef.sublabel : (zDef.sublabelEn || zDef.sublabel)}
             </div>
           </div>
         </div>
@@ -148,7 +151,7 @@ function ZoneNode({
               background: 'rgba(255,255,255,0.06)',
               borderRadius: 4, padding: '1px 5px',
             }}>
-              ×{visitCount} 调查
+              ×{visitCount} {zh ? '调查' : 'VISITS'}
             </span>
           )}
           {clues.length > 0 && (
@@ -159,7 +162,7 @@ function ZoneNode({
               borderRadius: 4, padding: '1px 5px',
               boxShadow: '0 0 6px #ffaa0050',
             }}>
-              🔍 {clues.length}线索
+              🔍 {clues.length} {zh ? '线索' : 'CLUES'}
             </span>
           )}
         </div>
@@ -226,6 +229,8 @@ export default function CaseFlowMap({
   agentStrategy,
   onPriorityChange, // callback(reorderedPriorityList)
 }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const containerRef = useRef(null);
   const zoneLayout = caseData?.zone_layout || ZONE_LAYOUT;
   const zoneConnections = caseData?.zone_connections || ZONE_CONNECTIONS;
@@ -333,10 +338,10 @@ export default function CaseFlowMap({
       <div className="flex items-center justify-between px-3 py-2 border-b"
         style={{ borderColor: `${accentColor}20`, background: 'rgba(0,0,0,0.5)' }}>
         <div style={{ fontSize: '0.6rem', color: accentColor, fontWeight: 700, letterSpacing: '0.12em' }}>
-          ◈ 案件流程图 · 拖拽节点调整优先级
+          ◈ {zh ? '案件流程图 · 拖拽节点调整优先级' : 'CASE FLOW MAP · DRAG NODES TO REARRANGE'}
         </div>
         <div style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.3)' }}>
-          {agentPath.length} 步移动 · {Object.keys(visitCounts).filter(k => visitCounts[k]).length} 区域勘察
+          {agentPath.length} {zh ? '步移动' : 'MOVES'} · {Object.keys(visitCounts).filter(k => visitCounts[k]).length} {zh ? '区域勘察' : 'ZONES VISITED'}
         </div>
       </div>
 
@@ -385,7 +390,7 @@ export default function CaseFlowMap({
       {/* Priority list */}
       <div className="border-t px-3 py-2" style={{ borderColor: `${accentColor}20`, background: 'rgba(0,0,0,0.4)' }}>
         <div style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.35)', marginBottom: 4, letterSpacing: '0.08em' }}>
-          ◎ 调查优先级 (拖拽排序)
+          ◎ {zh ? '调查优先级（拖拽排序）' : 'INVESTIGATION PRIORITY (DRAG TO SORT)'}
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {priority.map((actionId, idx) => {
@@ -414,10 +419,10 @@ export default function CaseFlowMap({
               >
                 <span style={{ opacity: 0.4 }}>#{idx + 1}</span>
                 <span>{action.icon}</span>
-                <span style={{ color: action.color }}>{action.label}</span>
+                <span style={{ color: action.color }}>{zh ? action.label : action.labelEn}</span>
                 <span className="td-priority-mobile-buttons" style={{ display: 'none', gap: 2 }}>
-                  <button type="button" aria-label="上移" disabled={idx === 0} onClick={() => movePriority(idx, -1)}>↑</button>
-                  <button type="button" aria-label="下移" disabled={idx === priority.length - 1} onClick={() => movePriority(idx, 1)}>↓</button>
+                  <button type="button" aria-label={zh ? '上移' : 'Move up'} disabled={idx === 0} onClick={() => movePriority(idx, -1)}>↑</button>
+                  <button type="button" aria-label={zh ? '下移' : 'Move down'} disabled={idx === priority.length - 1} onClick={() => movePriority(idx, 1)}>↓</button>
                 </span>
               </div>
             );

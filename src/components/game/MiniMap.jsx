@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 
 const DEFAULT_ZONE_LAYOUT = {
-  zone_datacenter: { x: 50, y: 18, label: '数据中心', sublabel: '案发现场', icon: '💻', color: '#ff3860' },
-  zone_lobby:      { x: 20, y: 60, label: '大堂',     sublabel: '监控中心', icon: '📹', color: '#00e5ff' },
-  zone_lab:        { x: 80, y: 60, label: '私人实验室', sublabel: '黑客入口', icon: '🔬', color: '#a78bfa' },
-  zone_balcony:    { x: 50, y: 85, label: '天台阳台', sublabel: '逃离路线', icon: '🌃', color: '#ffaa00' },
+  zone_datacenter: { x: 50, y: 18, label: '数据中心', labelEn: 'Data Center', sublabel: '案发现场', sublabelEn: 'Crime Scene', icon: '💻', color: '#ff3860' },
+  zone_lobby:      { x: 20, y: 60, label: '大堂', labelEn: 'Lobby', sublabel: '监控中心', sublabelEn: 'Surveillance', icon: '📹', color: '#00e5ff' },
+  zone_lab:        { x: 80, y: 60, label: '私人实验室', labelEn: 'Private Lab', sublabel: '黑客入口', sublabelEn: 'Hack Entry', icon: '🔬', color: '#a78bfa' },
+  zone_balcony:    { x: 50, y: 85, label: '天台阳台', labelEn: 'Roof Balcony', sublabel: '逃离路线', sublabelEn: 'Escape Route', icon: '🌃', color: '#ffaa00' },
 };
 
 const DEFAULT_CONNECTIONS = [
@@ -24,7 +24,8 @@ const DEFAULT_CLUE_ZONE_MAP = {
 const WEIGHT_COLOR = { CRITICAL: '#ff3860', HIGH: '#ff6b35', MEDIUM: '#ffaa00', LOW: '#00e5ff', HIDDEN: '#a78bfa' };
 
 export default function MiniMap({ gameState, caseData, agentPath, accentColor }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const zh = lang !== 'en';
   const [tab, setTab] = useState('map'); // 'map' | 'clues' | 'plot'
   const [expanded, setExpanded] = useState(false);
 
@@ -56,8 +57,8 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
     ? (Array.isArray(caseData.plot_summary) ? caseData.plot_summary : [caseData.plot_summary])
     : [
         caseData?.description || '',
-        caseData?.victim ? `◎ 被害人: ${caseData.victim}` : '',
-        caseData?.location ? `◎ 地点: ${caseData.location}` : '',
+        caseData?.victim ? `◎ ${zh ? '被害人' : 'Victim'}: ${caseData.victim}` : '',
+        caseData?.location ? `◎ ${zh ? '地点' : 'Location'}: ${caseData.location}` : '',
       ].filter(Boolean);
 
   return (
@@ -181,7 +182,7 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
                     whiteSpace: 'nowrap', fontWeight: isCurrent ? 700 : 400,
                     maxWidth: 55, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
-                    {zd.label}
+                    {zh ? zd.label : (zd.labelEn || zd.label)}
                   </div>
                 )}
               </div>
@@ -239,7 +240,10 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
                   {/* Zone badge */}
                   {clueZoneMap[clue.clue_id] && zoneLayout[clueZoneMap[clue.clue_id]] && (
                     <div style={{ marginTop: 3, fontSize: '0.38rem', color: zoneLayout[clueZoneMap[clue.clue_id]].color, opacity: 0.7 }}>
-                      {zoneLayout[clueZoneMap[clue.clue_id]].icon} {zoneLayout[clueZoneMap[clue.clue_id]].label}
+                      {zoneLayout[clueZoneMap[clue.clue_id]].icon}{' '}
+                      {zh
+                        ? zoneLayout[clueZoneMap[clue.clue_id]].label
+                        : (zoneLayout[clueZoneMap[clue.clue_id]].labelEn || zoneLayout[clueZoneMap[clue.clue_id]].label)}
                     </div>
                   )}
                 </div>
@@ -262,7 +266,7 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
             background: `${accentColor}08`,
           }}>
             <div style={{ fontSize: '0.6rem', fontWeight: 700, color: accentColor, marginBottom: 2 }}>
-              {caseData?.title || 'Unknown Case'}
+              {caseData?.title || (zh ? '未知案件' : 'Unknown Case')}
             </div>
             <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.4)' }}>
               {caseData?.subtitle || ''}
@@ -277,7 +281,9 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
           {/* NPC list */}
           {caseData?.npcs?.length > 0 && (
             <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: '0.42rem', color: `${accentColor}60`, marginBottom: 4, letterSpacing: '0.08em' }}>◎ SUSPECTS</div>
+              <div style={{ fontSize: '0.42rem', color: `${accentColor}60`, marginBottom: 4, letterSpacing: '0.08em' }}>
+                ◎ {zh ? '相关人员' : 'PERSONS OF INTEREST'}
+              </div>
               {caseData.npcs.map(npc => (
                 <div key={npc.npc_id} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                   <span style={{ fontSize: 12 }}>{npc.avatar}</span>

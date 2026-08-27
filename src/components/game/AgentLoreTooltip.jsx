@@ -1,7 +1,9 @@
 import React from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // 轻量探员档案 Tooltip — position:fixed，避免被父容器裁切
 export default function AgentLoreTooltip({ lore, color, icon, roleZh, x, y }) {
+  const { lang } = useLang();
   if (!lore) return null;
   const left = Math.min(x + 16, window.innerWidth - 280);
   const top = Math.min(Math.max(y - 40, 12), window.innerHeight - 200);
@@ -41,7 +43,7 @@ export default function AgentLoreTooltip({ lore, color, icon, roleZh, x, y }) {
       </div>
 
       <div style={{ marginTop: 7, fontSize: '0.4rem', color: 'rgba(255,255,255,0.25)' }}>
-        点击查看完整档案 →
+        {lang === 'zh' ? '点击查看完整档案' : 'Click to view full dossier'} →
       </div>
 
       <style>{`@keyframes lore-tip-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>

@@ -1,9 +1,12 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // 推理连线板 — 拖拽两条已解锁线索进行连接，AI 判定推理有效性
 const WEIGHT_COLORS = { CRITICAL: '#ff3860', HIGH: '#ffaa00', MEDIUM: '#00e5ff', LOW: '#8888aa' };
 
 export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isChecking, accentColor: _accentColor }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const unlocked = clues.filter(c => unlockedIds.includes(c.clue_id));
   const containerRef = useRef(null);
   const nodeRefs = useRef({});
@@ -56,10 +59,10 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
     <div className="flex-1 flex flex-col overflow-hidden" style={{ fontFamily: 'monospace' }}>
       <div style={{ padding: '8px 10px 4px', textAlign: 'center' }}>
         <div style={{ fontSize: '0.6rem', color: '#00ffff', fontWeight: 700, letterSpacing: '0.15em' }}>
-          🔗 推理连线 · LINK BOARD
+          🔗 {zh ? '推理连线' : 'LINK BOARD'}
         </div>
         <div style={{ fontSize: '0.44rem', color: 'rgba(255,255,255,0.35)', marginTop: 3, lineHeight: 1.6 }}>
-          按住一条线索拖向另一条线索建立推理连接<br/>AI 将判定逻辑是否成立
+          {zh ? '按住一条线索拖向另一条线索建立推理连接' : 'Drag one clue onto another to create a deduction link'}<br/>{zh ? 'AI 将判定逻辑是否成立' : 'The AI will validate the logical relationship'}
         </div>
       </div>
 
@@ -97,7 +100,7 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
 
         {unlocked.length < 2 ? (
           <div style={{ textAlign: 'center', marginTop: 40, fontSize: '0.52rem', color: 'rgba(255,255,255,0.25)' }}>
-            至少需要 2 条已解锁线索<br/>才能开始推理连线
+            {zh ? '至少需要 2 条已解锁线索' : 'AT LEAST 2 UNLOCKED CLUES ARE REQUIRED'}<br/>{zh ? '才能开始推理连线' : 'TO CREATE A DEDUCTION LINK'}
           </div>
         ) : (
           unlocked.map(clue => {
@@ -141,7 +144,7 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
           padding: '8px', textAlign: 'center', fontSize: '0.5rem', color: '#00ffff',
           borderTop: '1px solid rgba(0,255,255,0.2)', animation: 'lb-pulse 0.8s ease-in-out infinite',
         }}>
-          ⟳ AI 正在验证推理链…
+          ⟳ {zh ? 'AI 正在验证推理链…' : 'AI IS VALIDATING THE DEDUCTION…'}
         </div>
       )}
       <style>{`@keyframes lb-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>

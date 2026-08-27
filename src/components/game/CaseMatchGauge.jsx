@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { calcCaseMatchScore, CASE_NEON_BLOOD } from '@/game/casePresets';
+import { useLang } from '@/lib/lang.jsx';
 
 // 当前案件匹配度 — 数字仪表盘
 export default function CaseMatchGauge({ agents }) {
-  const { score, color, advice } = calcCaseMatchScore(agents, CASE_NEON_BLOOD);
+  const { lang } = useLang();
+  const zh = lang === 'zh';
+  const { score, color, advice } = calcCaseMatchScore(agents, CASE_NEON_BLOOD, lang);
   const [flash, setFlash] = useState(false);
 
   useEffect(() => {
@@ -22,8 +25,8 @@ export default function CaseMatchGauge({ agents }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em' }}>
-          当前案件匹配度<br/>
-          <span style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.38rem' }}>NEON BLOOD · MATCH</span>
+          {zh ? '当前案件匹配度' : 'CURRENT CASE MATCH'}<br/>
+          <span style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.38rem' }}>NEON BLOOD</span>
         </div>
         <div style={{
           fontSize: '1.7rem', fontWeight: 900, color, lineHeight: 1,
@@ -45,7 +48,7 @@ export default function CaseMatchGauge({ agents }) {
 
       <div style={{ fontSize: '0.42rem', color: `${color}cc`, lineHeight: 1.6 }}>▸ {advice}</div>
       <div style={{ fontSize: '0.36rem', color: 'rgba(255,255,255,0.22)', marginTop: 4 }}>
-        权重：逻辑 {w.logic_power * 100}% · 黑客 {w.hack_level * 100}% · 观察 {w.observation_focus * 100}%
+        {zh ? '权重：逻辑' : 'WEIGHTS: LOGIC'} {w.logic_power * 100}% · {zh ? '黑客' : 'HACK'} {w.hack_level * 100}% · {zh ? '观察' : 'OBS'} {w.observation_focus * 100}%
       </div>
     </div>
   );

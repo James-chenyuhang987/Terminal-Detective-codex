@@ -220,7 +220,8 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
 }
 
 // ── Observation Generator ─────────────────────────────────────────────────
-export function generateObservation(gameState, caseData) {
+export function generateObservation(gameState, caseData, lang = 'en') {
+  const zh = lang === 'zh';
   const zone = caseData.scene.zones[gameState.current_zone];
   const clueCount = gameState.unlocked_clues.length;
   const clueTotal = caseData.clue_dictionary.length;
@@ -232,26 +233,28 @@ export function generateObservation(gameState, caseData) {
         const c = caseData.clue_dictionary.find(x => x.clue_id === id);
         return c ? `  ${c.visual_icon} [${c.clue_id}] ${c.keyword}: ${c.description}` : `  ${id}`;
       }).join('\n')
-    : '  None secured. Begin investigation.';
+    : (zh ? '  尚未保全证据，请开始调查。' : '  None secured. Begin investigation.');
 
   const bannedText = gameState.action_ban_list?.length > 0
-    ? `⛔ ZERO-YIELD (ban): ${gameState.action_ban_list.join(', ')}`
+    ? `${zh ? '⛔ 零收益行动（已禁用）' : '⛔ ZERO-YIELD (ban)'}: ${gameState.action_ban_list.join(', ')}`
     : '';
 
   const confusionWarning = gameState.confusion_score >= 60
-    ? `⚠️  WARNING: Logic matrix destabilizing at ${gameState.confusion_score}% — agent coherence at risk!`
+    ? (zh
+      ? `⚠️ 警告：逻辑矩阵稳定度已降至危险水平（混乱 ${gameState.confusion_score}%），探员认知一致性受到威胁！`
+      : `⚠️ WARNING: Logic matrix destabilizing at ${gameState.confusion_score}% — agent coherence at risk!`)
     : '';
 
-  return `╔══ SYSTEM SCAN · TURN ${gameState.turn_count + 1} ══╗
-📍 Location : ${zone?.label || gameState.current_zone}
-👥 Contacts : ${npcList}
-🔍 Evidence : ${clueCount}/${clueTotal} secured
-💢 Confusion: ${gameState.confusion_score}%  ❤️ HP: ${gameState.current_hp}%  ⚡ AP: ${gameState.action_points_left}/20
-🏆 Reputation: ${gameState.reputation}pts
+  return `╔══ ${zh ? '系统扫描 · 回合' : 'SYSTEM SCAN · TURN'} ${gameState.turn_count + 1} ══╗
+📍 ${zh ? '地点' : 'Location'} : ${zone?.label || gameState.current_zone}
+👥 ${zh ? '接触人' : 'Contacts'} : ${npcList}
+🔍 ${zh ? '证据' : 'Evidence'} : ${clueCount}/${clueTotal} ${zh ? '已保全' : 'secured'}
+💢 ${zh ? '混乱' : 'Confusion'}: ${gameState.confusion_score}%  ❤️ HP: ${gameState.current_hp}%  ⚡ AP: ${gameState.action_points_left}/20
+🏆 ${zh ? '声望' : 'Reputation'}: ${gameState.reputation}${zh ? '点' : 'pts'}
 ${bannedText}
 ${confusionWarning}
 
-── SECURED EVIDENCE ──
+── ${zh ? '已保全证据' : 'SECURED EVIDENCE'} ──
 ${clueDetails}
 ╚══════════════════════╝`;
 }

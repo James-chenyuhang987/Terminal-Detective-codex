@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { SKILL_TREES, getLevelFromXP } from '@/game/agentProgression';
+import { useLang } from '@/lib/lang.jsx';
 
 // ── 每个探员的技能链定义（线性解锁关系）─────────────────────────────────────
 // skills[0] → skills[1] → skills[2] → ...
@@ -145,7 +146,11 @@ function SkillNode({ skill, position, color, state, onClick, isHovered, onHover 
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
 function SkillTooltip({ skill, position, color, state, canvasW }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   if (!skill) return null;
+  const name = zh ? skill.name : (skill.nameEn || skill.name);
+  const desc = zh ? skill.desc : (skill.descEn || skill.desc);
   const isLeft = position.x > canvasW / 2;
   return (
     <div style={{
@@ -166,30 +171,30 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
         <span style={{ fontSize: 18 }}>{skill.icon}</span>
         <div>
-          <div style={{ color, fontSize: '0.65rem', fontWeight: 900, letterSpacing: '0.04em' }}>{skill.name}</div>
-          <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.45rem' }}>需要 Lv.{skill.unlock_level}</div>
+          <div style={{ color, fontSize: '0.65rem', fontWeight: 900, letterSpacing: '0.04em' }}>{name}</div>
+          <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.45rem' }}>{zh ? '需要' : 'REQUIRES'} Lv.{skill.unlock_level}</div>
         </div>
       </div>
-      <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.52rem', lineHeight: 1.6 }}>{skill.desc}</div>
+      <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.52rem', lineHeight: 1.6 }}>{desc}</div>
       {state === 'equipped' && (
         <div style={{
           marginTop: 6, padding: '4px 7px', borderRadius: 4,
           border: '1px solid #00ff8840', background: '#00ff8810',
         }}>
-          <span style={{ color: '#00ff88', fontSize: '0.44rem', fontWeight: 900 }}>◉ 本局效果</span>
+          <span style={{ color: '#00ff88', fontSize: '0.44rem', fontWeight: 900 }}>◉ {zh ? '本局效果' : 'ACTIVE EFFECT'}</span>
           <div style={{ color: '#00ff88cc', fontSize: '0.46rem', marginTop: 2, lineHeight: 1.5 }}>
-            部署后真实生效：{skill.desc}
+            {zh ? '部署后真实生效：' : 'Applies after deployment: '}{desc}
           </div>
         </div>
       )}
       {state === 'available' && (
         <div style={{ marginTop: 6, color, fontSize: '0.48rem', background: color + '15', borderRadius: 4, padding: '3px 6px', textAlign: 'center' }}>
-          点击装备
+          {zh ? '点击装备' : 'CLICK TO EQUIP'}
         </div>
       )}
       {state === 'equipped' && (
         <div style={{ marginTop: 6, color: '#ff3860', fontSize: '0.48rem', background: '#ff386015', borderRadius: 4, padding: '3px 6px', textAlign: 'center' }}>
-          点击卸下
+          {zh ? '点击卸下' : 'CLICK TO UNEQUIP'}
         </div>
       )}
       <style>{`@keyframes tt-in{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}`}</style>
@@ -199,6 +204,8 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
 
 // ── Main SkillTreePanel ────────────────────────────────────────────────────────
 export default function SkillTreePanel({ agentIdx, progression = [], loadout = [], onChange }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const color = AGENT_COLORS[agentIdx];
   const skills = SKILL_TREES[agentIdx] || [];
   const positions = getNodePositions(skills.length);
@@ -258,11 +265,11 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
             {AGENT_ICONS[agentIdx]} {AGENT_NAMES[agentIdx]} · SKILL TREE
           </div>
           <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-            Lv.{level} · 已装备 {equippedIds.length}/{skills.length} 技能
+            Lv.{level} · {zh ? `已装备 ${equippedIds.length}/${skills.length} 技能` : `${equippedIds.length}/${skills.length} EQUIPPED`}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ color: color + '80', fontSize: '0.42rem' }}>装备槽</div>
+          <div style={{ color: color + '80', fontSize: '0.42rem' }}>{zh ? '装备槽' : 'LOADOUT'}</div>
           <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
             {skills.map((s, i) => (
               <div key={i} style={{
@@ -305,7 +312,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
               whiteSpace: 'nowrap',
               pointerEvents: 'none',
             }}>
-              <div style={{ fontWeight: 700, fontSize: '0.6rem' }}>{skill.name}</div>
+              <div style={{ fontWeight: 700, fontSize: '0.6rem' }}>{zh ? skill.name : (skill.nameEn || skill.name)}</div>
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.42rem', marginTop: 1 }}>Lv.{skill.unlock_level}</div>
             </div>
           );
@@ -336,7 +343,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
       {/* Equipped skills summary */}
       {equippedIds.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 6 }}>◎ 已激活效果</div>
+          <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 6 }}>◎ {zh ? '已激活效果' : 'ACTIVE EFFECTS'}</div>
           {equippedIds.map(id => {
             const s = skills.find(sk => sk.id === id);
             if (!s) return null;
@@ -349,8 +356,8 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
               }}>
                 <span style={{ fontSize: 12 }}>{s.icon}</span>
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '0.58rem', color, fontWeight: 700 }}>{s.name}</span>
-                  <span style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>{s.desc}</span>
+                  <span style={{ fontSize: '0.58rem', color, fontWeight: 700 }}>{zh ? s.name : (s.nameEn || s.name)}</span>
+                  <span style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>{zh ? s.desc : (s.descEn || s.desc)}</span>
                 </div>
               </div>
             );

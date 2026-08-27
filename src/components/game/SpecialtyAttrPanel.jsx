@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLang } from '@/lib/lang.jsx';
 import {
   AGENT_SPECIALTIES, ATTR_META, SPECIALTY_BUDGET,
   specUsed, specRemaining, effectiveAttrs, maxBonusFor, ATTR_MAX,
@@ -6,6 +7,8 @@ import {
 
 // 专长槽属性面板 — 基础属性只读 + 专长方向内分配 20 点
 function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChange }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const color = meta.color;
   const cap = ATTR_MAX[meta.key];
   const effective = Math.min(base + bonus, cap);
@@ -31,11 +34,11 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
         <div>
           <div style={{ fontSize: '0.48rem', fontWeight: 700, color, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
-            {meta.label}
-            {!isSpecialty && <span style={{ marginLeft: 5, fontSize: '0.4rem', color: 'rgba(255,255,255,0.25)' }}>🔒 职业固定</span>}
-            {isSpecialty && <span style={{ marginLeft: 5, fontSize: '0.4rem', color: color + '90' }}>◆ 专长方向</span>}
+            {zh ? meta.labelZh : meta.label}
+            {!isSpecialty && <span style={{ marginLeft: 5, fontSize: '0.4rem', color: 'rgba(255,255,255,0.25)' }}>🔒 {zh ? '职业固定' : 'ROLE LOCKED'}</span>}
+            {isSpecialty && <span style={{ marginLeft: 5, fontSize: '0.4rem', color: color + '90' }}>◆ {zh ? '专长方向' : 'SPECIALTY'}</span>}
           </div>
-          <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }}>{meta.labelZh}</div>
+          {zh && <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }}>{meta.label}</div>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           {isSpecialty && btn(canDec, () => onChange(bonus - 1), '−')}
@@ -72,6 +75,8 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
 }
 
 export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agentColor }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const def = AGENT_SPECIALTIES[agentIdx];
   const used = specUsed(spec);
   const remaining = specRemaining(spec);
@@ -89,9 +94,11 @@ export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agent
         transition: 'all 0.3s',
       }}>
         <div style={{ fontFamily: 'monospace' }}>
-          <div style={{ fontSize: '0.46rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em' }}>专长点余额 · SPEC POINTS</div>
+          <div style={{ fontSize: '0.46rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em' }}>{zh ? '专长点余额' : 'SPEC POINTS'}</div>
           <div style={{ fontSize: '0.4rem', color: locked ? '#ff3860' : 'rgba(255,255,255,0.25)', marginTop: 2 }}>
-            {locked ? '余额耗尽 — 减点后方可再分配' : '仅可强化本职业的专长方向'}
+            {locked
+              ? (zh ? '余额耗尽 — 减点后方可再分配' : 'NO POINTS LEFT — REMOVE A POINT TO REALLOCATE')
+              : (zh ? '仅可强化本职业的专长方向' : 'POINTS APPLY TO THIS ROLE’S SPECIALTIES ONLY')}
           </div>
         </div>
         <div style={{

@@ -5,11 +5,15 @@ import {
 import { normalizeAgentProgression } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import LevelUpModal from '@/components/game/LevelUpModal';
+import { useLang } from '@/lib/lang.jsx';
 
 // ── XP formula ────────────────────────────────────────────────────────────────
 const SCORE_XP = { S: 300, A: 220, B: 150, C: 80, D: 30 };
 const SCORE_TITLES = {
   S: '至尊侦探', A: '精英探员', B: '资深调查官', C: '初级探员', D: '见习侦探',
+};
+const SCORE_TITLES_EN = {
+  S: 'MASTER DETECTIVE', A: 'ELITE AGENT', B: 'SENIOR INVESTIGATOR', C: 'JUNIOR AGENT', D: 'DETECTIVE TRAINEE',
 };
 
 function calcXPGain(judgeResult, gameState, caseData) {
@@ -89,6 +93,7 @@ function Counter({ target, duration = 1200, color = '#00e5ff', suffix = '' }) {
 
 // ── XP Bar ────────────────────────────────────────────────────────────────────
 function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0, onLevelUp }) {
+  const { lang } = useLang();
   const [displayed, setDisplayed] = useState(oldXP);
   const [flash, setFlash] = useState(false);
   const [particleTrigger, setParticleTrigger] = useState(0);
@@ -186,7 +191,7 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
       </div>
       {flash && newXP > oldXP && (
         <div style={{ marginLeft: 48, marginBottom: 4, fontSize: '0.58rem', fontFamily: 'monospace', color: `${color}90`, animation: 'fade-in-up 0.4s ease both' }}>
-          +{newXP - oldXP} XP 获得
+          +{newXP - oldXP} XP {lang === 'zh' ? '获得' : 'EARNED'}
         </div>
       )}
     </div>
@@ -195,6 +200,7 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
 
 // ── Score grade ring ──────────────────────────────────────────────────────────
 function ScoreRing({ score, isPassed }) {
+  const { lang } = useLang();
   const colors = { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' };
   const color = colors[score] || '#888';
   const [visible, setVisible] = useState(false);
@@ -213,7 +219,7 @@ function ScoreRing({ score, isPassed }) {
       transition: 'all 0.6s cubic-bezier(.22,1,.36,1)',
     }}>
       <div style={{ fontSize: '3rem', fontWeight: 900, fontFamily: 'monospace', color, textShadow: `0 0 20px ${color}`, lineHeight: 1 }}>{score}</div>
-      <div style={{ fontSize: '0.5rem', fontFamily: 'monospace', color: `${color}80`, letterSpacing: '0.15em', marginTop: 2 }}>{isPassed ? 'SOLVED' : 'FAILED'}</div>
+      <div style={{ fontSize: '0.5rem', fontFamily: 'monospace', color: `${color}80`, letterSpacing: '0.15em', marginTop: 2 }}>{isPassed ? (lang === 'zh' ? '已侦破' : 'SOLVED') : (lang === 'zh' ? '失败' : 'FAILED')}</div>
     </div>
   );
 }
@@ -256,6 +262,8 @@ const AGENT_ICONS  = ['👁️', '🔥', '💻'];
 const AGENT_COLORS = ['#00e5ff', '#ff6b6b', '#a78bfa'];
 
 export default function GameOverScreen({ judgeResult, gameState, caseData, rewardEligible = false, onReturnToLobby, onReturnToLanding, onSettlement }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const { profile } = useProfile();
   const xpGain = calcXPGain(rewardEligible ? judgeResult : null, gameState, caseData);
   const [oldProg] = useState(() => normalizeAgentProgression(profile?.agent_progression));
@@ -312,16 +320,16 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
 
   const score = judgeResult?.score || 'D';
   const isPassed = !!judgeResult?.is_passed;
-  const scoreTitle = SCORE_TITLES[score] || '见习侦探';
+  const scoreTitle = zh ? (SCORE_TITLES[score] || '见习侦探') : (SCORE_TITLES_EN[score] || 'DETECTIVE TRAINEE');
   const mainColor = isPassed ? '#00ff88' : '#ff3860';
 
   const BONUS_ROWS = [
-    { label: `案件评分 · ${score} 级`, sublabel: scoreTitle, val: xpGain.base, color: { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' }[score] || '#888', icon: { S: '🏆', A: '⭐', B: '🔰', C: '📋', D: '📝' }[score] || '📋' },
-    { label: `线索收集 · ${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, sublabel: `完成度 ${Math.round(((gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1)) * 100)}%`, val: xpGain.clueBonus, color: '#a78bfa', icon: '🔍' },
-    { label: `AP 效率 · 剩余 ${gameState.action_points_left || 0} 点`, sublabel: '每点 AP = 5 XP，上限 80', val: xpGain.apBonus, color: '#ffaa00', icon: '⚡' },
-    { label: `混乱控制 · 最终 ${gameState.confusion_score || 0}%`, sublabel: '越低奖励越高（满分 50 XP）', val: xpGain.confusionBonus, color: '#00ff88', icon: '🧠' },
-    { label: '无系统崩溃', sublabel: gameState.confusion_score < 100 ? '全程稳定运行' : '触发过 BSoD', val: xpGain.noBSoD, color: '#ff3aff', icon: '🛡️' },
-    ...(xpGain.passed < 0 ? [{ label: '破案失败惩罚', sublabel: '报告未通过审判', val: xpGain.passed, color: '#ff3860', icon: '💀' }] : []),
+    { label: zh ? `案件评分 · ${score} 级` : `CASE RANK · ${score}`, sublabel: scoreTitle, val: xpGain.base, color: { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' }[score] || '#888', icon: { S: '🏆', A: '⭐', B: '🔰', C: '📋', D: '📝' }[score] || '📋' },
+    { label: `${zh ? '线索收集' : 'CLUES COLLECTED'} · ${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, sublabel: `${zh ? '完成度' : 'COMPLETION'} ${Math.round(((gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1)) * 100)}%`, val: xpGain.clueBonus, color: '#a78bfa', icon: '🔍' },
+    { label: `${zh ? 'AP 效率 · 剩余' : 'AP EFFICIENCY · REMAINING'} ${gameState.action_points_left || 0}${zh ? ' 点' : ''}`, sublabel: zh ? '每点 AP = 5 XP，上限 80' : '5 XP per AP, maximum 80', val: xpGain.apBonus, color: '#ffaa00', icon: '⚡' },
+    { label: `${zh ? '混乱控制 · 最终' : 'CONFUSION CONTROL · FINAL'} ${gameState.confusion_score || 0}%`, sublabel: zh ? '越低奖励越高（满分 50 XP）' : 'Lower is better (maximum 50 XP)', val: xpGain.confusionBonus, color: '#00ff88', icon: '🧠' },
+    { label: zh ? '无系统崩溃' : 'NO SYSTEM CRASH', sublabel: gameState.confusion_score < 100 ? (zh ? '全程稳定运行' : 'Stable throughout the case') : (zh ? '触发过 BSoD' : 'BSoD triggered'), val: xpGain.noBSoD, color: '#ff3aff', icon: '🛡️' },
+    ...(xpGain.passed < 0 ? [{ label: zh ? '破案失败惩罚' : 'FAILED CASE PENALTY', sublabel: zh ? '报告未通过审判' : 'Report rejected by the judge', val: xpGain.passed, color: '#ff3860', icon: '💀' }] : []),
   ];
 
   return (
@@ -339,10 +347,10 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 28, animation: 'go-in 0.6s cubic-bezier(.22,1,.36,1) both' }}>
           <div style={{ display: 'inline-block', border: `1px solid ${mainColor}50`, borderRadius: 6, padding: '3px 14px', fontSize: '0.55rem', fontFamily: 'monospace', color: `${mainColor}80`, letterSpacing: '0.25em', marginBottom: 12, background: `${mainColor}08` }}>
-            ◈ CASE CLOSED · {caseData?.case_id || 'NEON_BLOOD_01'} · {new Date().toLocaleDateString('zh-CN')}
+            ◈ {zh ? '案件归档' : 'CASE CLOSED'} · {caseData?.case_id || 'NEON_BLOOD_01'} · {new Date().toLocaleDateString(zh ? 'zh-CN' : 'en-US')}
           </div>
           <h1 style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)', fontWeight: 900, margin: 0, background: isPassed ? 'linear-gradient(135deg, #00ff88 0%, #00e5ff 100%)' : 'linear-gradient(135deg, #ff3860 0%, #ff6600 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '0.08em' }}>
-            {isPassed ? '◈ 案件终结' : '◈ 调查失败'}
+            {isPassed ? (zh ? '◈ 案件终结' : '◈ CASE SOLVED') : (zh ? '◈ 调查失败' : '◈ INVESTIGATION FAILED')}
           </h1>
           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: 6, letterSpacing: '0.2em' }}>{caseData?.title} · {caseData?.subtitle}</div>
         </div>
@@ -352,13 +360,13 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           <ScoreRing score={score} isPassed={isPassed} />
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ color: mainColor, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4, letterSpacing: '0.08em' }}>{scoreTitle}</div>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.68rem', lineHeight: 1.7, marginBottom: 10 }}>{judgeResult?.critique || '调查记录已归档。'}</div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.68rem', lineHeight: 1.7, marginBottom: 10 }}>{judgeResult?.critique || (zh ? '调查记录已归档。' : 'Investigation record archived.')}</div>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               {[
-                { label: '总回合', val: gameState.turn_count || 0, icon: '🔄' },
-                { label: '发现线索', val: `${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, icon: '🔍' },
-                { label: '剩余AP', val: gameState.action_points_left || 0, icon: '⚡' },
-                { label: '混乱峰值', val: `${gameState.confusion_score || 0}%`, icon: '🌀' },
+                { label: zh ? '总回合' : 'TURNS', val: gameState.turn_count || 0, icon: '🔄' },
+                { label: zh ? '发现线索' : 'CLUES', val: `${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, icon: '🔍' },
+                { label: zh ? '剩余AP' : 'AP LEFT', val: gameState.action_points_left || 0, icon: '⚡' },
+                { label: zh ? '混乱峰值' : 'CONFUSION', val: `${gameState.confusion_score || 0}%`, icon: '🌀' },
               ].map(s => (
                 <div key={s.label} style={{ textAlign: 'center' }}>
                   <div style={{ color: mainColor, fontSize: '1rem', fontWeight: 900 }}>{s.icon} {s.val}</div>
@@ -371,12 +379,12 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
 
         {/* XP breakdown */}
         <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(0,229,255,0.15)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.6s 0.3s cubic-bezier(.22,1,.36,1) both' }}>
-          <div style={{ color: 'rgba(0,229,255,0.7)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 10, fontFamily: 'monospace' }}>◈ 经验值结算明细</div>
+          <div style={{ color: 'rgba(0,229,255,0.7)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 10, fontFamily: 'monospace' }}>◈ {zh ? '经验值结算明细' : 'XP BREAKDOWN'}</div>
           {BONUS_ROWS.map((r, i) => (
             <XPSourceRow key={i} label={r.label} val={r.val} color={r.color} icon={r.icon} delay={400 + i * 180} sublabel={r.sublabel} />
           ))}
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>本局总计获得</span>
+            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>{zh ? '本局总计获得' : 'TOTAL EARNED'}</span>
             <span style={{ color: '#00ff88', fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', textShadow: '0 0 16px #00ff88' }}>
               {phase !== 'summary' ? <Counter target={xpGain.total} suffix=" XP" color="#00ff88" duration={1200} /> : `+${xpGain.total} XP`}
             </span>
@@ -386,10 +394,10 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         {/* Agent XP bars */}
         {phase === 'xp' && newProg && (
           <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(167,139,250,0.2)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.5s cubic-bezier(.22,1,.36,1) both', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ color: 'rgba(167,139,250,0.8)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 14, fontFamily: 'monospace' }}>◈ 探员晋升档案</div>
+            <div style={{ color: 'rgba(167,139,250,0.8)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 14, fontFamily: 'monospace' }}>◈ {zh ? '探员晋升档案' : 'AGENT ADVANCEMENT'}</div>
             {AGENT_NAMES.map((name, i) => (
               <XPBar
-                key={i} agentIdx={i} agentName={name}
+                key={i} agentIdx={i} agentName={zh ? name : ['NEXUS-01', 'AURORA-09', 'CIPHER-47'][i]}
                 agentIcon={AGENT_ICONS[i]} color={AGENT_COLORS[i]}
                 oldXP={oldProg[i]?.xp || 0} newXP={newProg[i]?.xp || 0}
                 delay={i * 350}
@@ -403,7 +411,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         {phase === 'xp' && (
           <div style={{ textAlign: 'center', marginBottom: 20, animation: 'go-in 0.6s 0.5s cubic-bezier(.22,1,.36,1) both' }}>
             <div style={{ display: 'inline-block', border: `2px solid ${mainColor}60`, borderRadius: 12, padding: '10px 32px', background: `${mainColor}10`, backdropFilter: 'blur(8px)' }}>
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.52rem', letterSpacing: '0.2em', marginBottom: 4, fontFamily: 'monospace' }}>本局评定称号</div>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.52rem', letterSpacing: '0.2em', marginBottom: 4, fontFamily: 'monospace' }}>{zh ? '本局评定称号' : 'CASE TITLE EARNED'}</div>
               <div style={{ color: mainColor, fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', textShadow: `0 0 16px ${mainColor}` }}>{scoreTitle}</div>
             </div>
           </div>
@@ -413,8 +421,12 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           marginBottom: 12, textAlign: 'center', fontFamily: 'monospace', fontSize: '.58rem',
           color: settlementStatus === 'saved' ? '#00ff88' : settlementStatus === 'error' ? '#ff6b84' : '#ffaa00',
         }}>
-          {settlementStatus === 'saved' ? '✓ 调查档案已同步至 Base44' : settlementStatus === 'error' ? '⚠ 云端结算失败，奖励尚未写入' : '⟳ 正在同步调查结算…'}
-          {settlementStatus === 'error' && <button className="td-ui-button td-button-danger td-button-compact" onClick={() => void syncSettlement()} style={{ marginLeft: 9 }}>重试</button>}
+          {settlementStatus === 'saved'
+            ? (zh ? '✓ 调查档案已同步至 Base44' : '✓ INVESTIGATION SYNCED TO BASE44')
+            : settlementStatus === 'error'
+              ? (zh ? '⚠ 云端结算失败，奖励尚未写入' : '⚠ CLOUD SETTLEMENT FAILED. REWARDS NOT SAVED.')
+              : (zh ? '⟳ 正在同步调查结算…' : '⟳ SYNCING CASE SETTLEMENT…')}
+          {settlementStatus === 'error' && <button className="td-ui-button td-button-danger td-button-compact" onClick={() => void syncSettlement()} style={{ marginLeft: 9 }}>{zh ? '重试' : 'RETRY'}</button>}
         </div>
 
         {/* Buttons */}
@@ -422,12 +434,12 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           <button className="td-ui-button td-button-primary" onClick={onReturnToLobby} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
-            ↺ 重新配置编队
+            ↺ {zh ? '重新配置编队' : 'RECONFIGURE SQUAD'}
           </button>
           <button className="td-ui-button td-button-ghost" onClick={onReturnToLanding} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.6)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, transition: 'all 0.2s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}>
-            ← 返回主页
+            ← {zh ? '返回主页' : 'RETURN HOME'}
           </button>
         </div>
       </div>
@@ -435,7 +447,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
       {/* Level-up modal */}
       {currentModal && (
         <LevelUpModal
-          agentName={AGENT_NAMES[currentModal.agentIdx]}
+          agentName={zh ? AGENT_NAMES[currentModal.agentIdx] : ['NEXUS-01', 'AURORA-09', 'CIPHER-47'][currentModal.agentIdx]}
           agentIcon={AGENT_ICONS[currentModal.agentIdx]}
           color={AGENT_COLORS[currentModal.agentIdx]}
           fromLevel={currentModal.fromLevel}

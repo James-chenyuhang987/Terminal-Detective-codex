@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // 推理突破高潮特效 — 全息闪光 + WebAudio 音效
 function playBreakthroughChord() {
@@ -22,6 +23,8 @@ function playBreakthroughChord() {
 }
 
 export default function InsightFlashFX({ event, onDone }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const doneRef = useRef(false);
 
   useEffect(() => {
@@ -71,10 +74,10 @@ export default function InsightFlashFX({ event, onDone }) {
           letterSpacing: '0.25em', textShadow: '0 0 24px #00ffff',
           animation: 'if-title 1.2s ease-in-out infinite alternate',
         }}>
-          ⚡ 推理突破！
+          ⚡ {zh ? '推理突破！' : 'DEDUCTION BREAKTHROUGH!'}
         </div>
         <div style={{ fontSize: '0.5rem', color: 'rgba(0,255,255,0.5)', letterSpacing: '0.3em', marginTop: 4, marginBottom: 14 }}>
-          DEDUCTION BREAKTHROUGH
+          {zh ? '关键逻辑链已确认' : 'KEY LOGIC CHAIN CONFIRMED'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 14 }}>
           <ClueChip icon={event.iconA} label={event.keywordA} />
@@ -90,7 +93,7 @@ export default function InsightFlashFX({ event, onDone }) {
         </div>
         {event.synergy && (
           <div style={{ marginTop: 10, fontSize: '0.5rem', color: '#00ff88' }}>
-            🔗 协同技能「交叉验证」已生效 — 推理难度降低
+            {zh ? '🔗 协同技能「交叉验证」已生效 — 推理难度降低' : '🔗 CROSS VALIDATION ACTIVE — DEDUCTION DIFFICULTY REDUCED'}
           </div>
         )}
       </div>

@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // 部署过场动画 — 三段式：探员召唤 → 任务简报 → 出发倒计时
 const AGENTS = [
-  { id: 'NEXUS-01', roleZh: '首席调查员', color: '#00e5ff', icon: '👁️' },
-  { id: 'AURORA-09', roleZh: '法证分析师', color: '#a78bfa', icon: '🔬' },
-  { id: 'CIPHER-47', roleZh: '技术专家', color: '#ff6b35', icon: '💻' },
+  { id: 'NEXUS-01', roleZh: '首席调查员', roleEn: 'Lead Investigator', color: '#00e5ff', icon: '👁️' },
+  { id: 'AURORA-09', roleZh: '法证分析师', roleEn: 'Forensic Analyst', color: '#a78bfa', icon: '🔬' },
+  { id: 'CIPHER-47', roleZh: '技术专家', roleEn: 'Tech Specialist', color: '#ff6b35', icon: '💻' },
 ];
 
 function HoloBody({ color, index }) {
+  const { lang } = useLang();
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -34,7 +36,7 @@ function HoloBody({ color, index }) {
       </div>
       <div style={{ textAlign: 'center', fontFamily: 'monospace', marginTop: 4 }}>
         <div style={{ fontSize: '0.7rem', fontWeight: 900, color, textShadow: `0 0 12px ${color}` }}>{AGENTS[index].icon} {AGENTS[index].id}</div>
-        <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)' }}>{AGENTS[index].roleZh}</div>
+        <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)' }}>{lang === 'zh' ? AGENTS[index].roleZh : AGENTS[index].roleEn}</div>
       </div>
       {/* 平台光环 */}
       <div style={{
@@ -65,6 +67,8 @@ function DataParticles() {
 }
 
 export default function DeploySequence({ matchScore = 0, onComplete }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [phase, setPhase] = useState(1); // 1 召唤 · 2 简报 · 3 倒计时
   const [count, setCount] = useState(3);
 
@@ -82,10 +86,10 @@ export default function DeploySequence({ matchScore = 0, onComplete }) {
   }, [phase]);
 
   const brief = [
-    { label: '案件 CASE', value: '霓虹血迹 · NEON BLOOD', color: '#ff6b35' },
-    { label: '威胁等级 THREAT', value: 'HIGH', color: '#ff3860' },
-    { label: '预测成功率 FORECAST', value: `${matchScore}%`, color: matchScore < 50 ? '#ff3860' : matchScore <= 75 ? '#ffaa00' : '#00ff88' },
-    { label: '编组 SQUAD', value: 'NEXUS-01 + AURORA-09 + CIPHER-47', color: '#00e5ff' },
+    { label: zh ? '案件' : 'CASE', value: zh ? '霓虹血迹' : 'NEON BLOOD', color: '#ff6b35' },
+    { label: zh ? '威胁等级' : 'THREAT', value: 'HIGH', color: '#ff3860' },
+    { label: zh ? '预测成功率' : 'FORECAST', value: `${matchScore}%`, color: matchScore < 50 ? '#ff3860' : matchScore <= 75 ? '#ffaa00' : '#00ff88' },
+    { label: zh ? '编组' : 'SQUAD', value: 'NEXUS-01 + AURORA-09 + CIPHER-47', color: '#00e5ff' },
   ];
 
   return (
@@ -109,7 +113,7 @@ export default function DeploySequence({ matchScore = 0, onComplete }) {
         padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
         border: '1px solid rgba(0,229,255,0.45)', background: 'rgba(0,229,255,0.08)',
         color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.55rem', letterSpacing: '0.14em',
-      }}>跳过 SKIP ▶</button>
+      }}>{zh ? '跳过' : 'SKIP'} ▶</button>
 
       {/* Phase 1 — 探员召唤 */}
       {phase === 1 && (
@@ -117,7 +121,7 @@ export default function DeploySequence({ matchScore = 0, onComplete }) {
           <div style={{
             textAlign: 'center', fontSize: '0.6rem', letterSpacing: '0.4em',
             color: 'rgba(0,229,255,0.6)', marginBottom: 28,
-          }}>SUMMONING AGENTS · 探员召唤</div>
+          }}>{zh ? '正在召唤探员' : 'SUMMONING AGENTS'}</div>
           <div style={{ display: 'flex', gap: 46, alignItems: 'flex-end' }}>
             {AGENTS.map((a, i) => <HoloBody key={a.id} color={a.color} index={i} />)}
           </div>
@@ -134,7 +138,7 @@ export default function DeploySequence({ matchScore = 0, onComplete }) {
           animation: 'ds-brief 0.4s ease both',
         }}>
           <div style={{ fontSize: '0.55rem', letterSpacing: '0.3em', color: 'rgba(0,229,255,0.65)', marginBottom: 16 }}>
-            MISSION BRIEFING · 任务简报
+            {zh ? '任务简报' : 'MISSION BRIEFING'}
           </div>
           {brief.map((b, i) => (
             <div key={b.label} style={{
@@ -153,7 +157,7 @@ export default function DeploySequence({ matchScore = 0, onComplete }) {
       {phase === 3 && (
         <div style={{ zIndex: 6, textAlign: 'center' }}>
           <div style={{ fontSize: '0.62rem', letterSpacing: '0.4em', color: 'rgba(0,229,255,0.6)', marginBottom: 14 }}>
-            DEPLOYING IN
+            {zh ? '即将部署' : 'DEPLOYING IN'}
           </div>
           <div key={count} style={{
             fontSize: '6rem', fontWeight: 900, lineHeight: 1, color: '#00e5ff',

@@ -2,12 +2,13 @@
 // casePresets.js — 案件匹配度算法 + 配置预设方案
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { ATTR_MAX } from './specialtySystem';
+import { ATTR_MAX } from './specialtySystem.js';
 
 // 案件难度权重系数（霓虹血迹）
 export const CASE_NEON_BLOOD = {
   id: 'neon_blood',
   name: '霓虹血迹 · NEON BLOOD',
+  nameEn: 'NEON BLOOD',
   threat: 'HIGH',
   weights: { logic_power: 0.40, hack_level: 0.35, observation_focus: 0.25 },
 };
@@ -25,7 +26,7 @@ const ATTR_OWNER = {
 };
 
 // agents: 三人有效属性数组；返回 { score, color, advice }
-export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD) {
+export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD, lang = 'zh') {
   const weights = caseConfig.weights;
   let score = 0;
   const ratios = {};
@@ -45,11 +46,14 @@ export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD) {
 
   let advice;
   if (pct >= 90) {
-    advice = '配置已接近满配，可直接部署。';
+    advice = lang === 'zh' ? '配置已接近满配，可直接部署。' : 'This configuration is nearly optimal and ready to deploy.';
   } else if (ratios[weakest] >= 0.95) {
-    advice = '三项主要能力均已到顶，剩余专长点可自由分配。';
+    advice = lang === 'zh' ? '三项主要能力均已到顶，剩余专长点可自由分配。' : 'All primary capabilities are capped. Allocate remaining specialty points freely.';
   } else {
-    advice = `${ATTR_LABEL[weakest]}能力不足，${ATTR_OWNER[weakest]} 专长可继续强化。`;
+    const labelEn = { logic_power: 'Logic', hack_level: 'Hacking', observation_focus: 'Observation' };
+    advice = lang === 'zh'
+      ? `${ATTR_LABEL[weakest]}能力不足，${ATTR_OWNER[weakest]} 专长可继续强化。`
+      : `${labelEn[weakest]} is underpowered. Improve ${ATTR_OWNER[weakest]}'s specialty.`;
   }
 
   return { score: pct, color, advice, ratios };
@@ -67,9 +71,11 @@ export const PRESET_CONFIGS = [
   {
     id: 'brute_force',
     name: '暴力破解型',
+    nameEn: 'BRUTE FORCE',
     icon: '⚡',
     color: '#00e5ff',
     desc: 'NEXUS 逻辑全满 + CIPHER 黑客全满',
+    descEn: 'Max NEXUS logic and CIPHER hacking',
     specs: [
       { logic_power: 20 },
       { observation_focus: 10, logic_power: 10 },
@@ -84,9 +90,11 @@ export const PRESET_CONFIGS = [
   {
     id: 'stealth',
     name: '隐秘渗透型',
+    nameEn: 'STEALTH INFILTRATION',
     icon: '👻',
     color: '#ff6b35',
     desc: 'CIPHER 黑客+行动折扣 + NEXUS 抗干扰强化',
+    descEn: 'CIPHER hacking and AP discount with stronger NEXUS resistance',
     specs: [
       { confusion_resistance: 15, logic_power: 5 },
       { observation_focus: 12, logic_power: 8 },
@@ -101,9 +109,11 @@ export const PRESET_CONFIGS = [
   {
     id: 'recon',
     name: '全面侦察型',
+    nameEn: 'FULL RECON',
     icon: '🔬',
     color: '#a78bfa',
     desc: 'AURORA 观察全满 + 均衡分配',
+    descEn: 'Max AURORA observation with balanced allocation',
     specs: [
       { logic_power: 10, confusion_resistance: 10 },
       { observation_focus: 20 },

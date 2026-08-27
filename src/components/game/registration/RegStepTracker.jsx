@@ -1,13 +1,15 @@
 import React from 'react';
 import GlassPanel from '@/components/game/home/GlassPanel';
+import { useLang } from '@/lib/lang.jsx';
 
 const STEPS = [
-  { id: '01', label: '输入名字', desc: '设定你的侦探代号' },
-  { id: '02', label: '创建身份', desc: '头像 · 徽章 · 签名' },
-  { id: '03', label: '进入大厅', desc: '开启第一桩案件' },
+  { id: '01', zh: ['输入名字', '设定你的侦探代号'], en: ['ENTER NAME', 'Set your detective codename'] },
+  { id: '02', zh: ['创建身份', '头像 · 徽章 · 签名'], en: ['CREATE IDENTITY', 'Avatar · badge · signature'] },
+  { id: '03', zh: ['进入大厅', '开启第一桩案件'], en: ['ENTER HALL', 'Begin your first case'] },
 ];
 
 export default function RegStepTracker({ current = 0 }) {
+  const { lang } = useLang();
   return (
     <GlassPanel accent="#00e5ff" style={{ padding: '20px 18px' }}>
       <div style={{ fontSize: '0.6rem', letterSpacing: '0.24em', color: 'rgba(0,229,255,0.65)', marginBottom: 18 }}>
@@ -31,8 +33,8 @@ export default function RegStepTracker({ current = 0 }) {
               )}
             </div>
             <div style={{ paddingBottom: 22 }}>
-              <div style={{ color, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em' }}>{s.label}</div>
-              <div style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.56rem', marginTop: 4 }}>{s.desc}</div>
+              <div style={{ color, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em' }}>{s[lang][0]}</div>
+              <div style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.56rem', marginTop: 4 }}>{s[lang][1]}</div>
             </div>
           </div>
         );

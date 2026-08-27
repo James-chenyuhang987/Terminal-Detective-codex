@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // 危机事件全屏警报 — 橙红警报覆盖层（BSoD 级视觉强度）
 export default function CrisisAlert({ event, onChoose }) {
+  const { lang } = useLang();
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 120);
@@ -46,7 +48,7 @@ export default function CrisisAlert({ event, onChoose }) {
             ⚠ {event.title}
           </div>
           <div style={{ fontSize: '0.48rem', color: '#ff995580', letterSpacing: '0.35em', marginTop: 4 }}>
-            CRISIS EVENT · IMMEDIATE RESPONSE REQUIRED
+            {lang === 'zh' ? '危机事件 · 需要立即响应' : 'CRISIS EVENT · IMMEDIATE RESPONSE REQUIRED'}
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { useLang } from '@/lib/lang.jsx';
 import {
   applySettlementToProfile,
   diffProfileWrite,
@@ -225,11 +226,14 @@ export function useProfile() {
 
 export function SessionReadOnlyBanner() {
   const { isReadOnly, takeOver, syncStatus } = useProfile();
+  const { lang } = useLang();
   if (!isReadOnly) return null;
   return (
     <div role="alert" className="td-session-banner">
-      <span>此账号已在新设备接管；当前页面仅可查看。</span>
-      <button type="button" onClick={() => void takeOver()} disabled={syncStatus === 'syncing'}>接管此设备</button>
+      <span>{lang === 'zh' ? '此账号已在新设备接管；当前页面仅可查看。' : 'This account is active on another device. This page is now read-only.'}</span>
+      <button type="button" onClick={() => void takeOver()} disabled={syncStatus === 'syncing'}>
+        {lang === 'zh' ? '接管此设备' : 'TAKE OVER THIS DEVICE'}
+      </button>
     </div>
   );
 }

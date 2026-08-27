@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // Entry shape: { id, turn, thought, action, observation, isKeyDecision, keyReason, newClues, isTrap, timestamp }
 
@@ -23,6 +24,7 @@ function getActionColor(action) {
 }
 
 function EntryCard({ entry, accentColor, isLatest }) {
+  const { lang } = useLang();
   const [expanded, setExpanded] = useState(isLatest);
   const color = getActionColor(entry.action);
 
@@ -96,7 +98,7 @@ function EntryCard({ entry, accentColor, isLatest }) {
             background: '#00ff8820', border: '1px solid #00ff8840',
             color: '#00ff88', whiteSpace: 'nowrap',
           }}>
-            +{entry.newClues.length} 线索
+            +{entry.newClues.length} {lang === 'zh' ? '线索' : 'CLUES'}
           </div>
         )}
 
@@ -145,7 +147,7 @@ function EntryCard({ entry, accentColor, isLatest }) {
               background: 'rgba(0,255,136,0.06)', border: '1px solid rgba(0,255,136,0.15)',
             }}>
               <div style={{ fontSize: '0.55rem', color: '#00ff88', fontFamily: 'monospace', marginBottom: 2 }}>
-                🔍 新获线索
+                🔍 {lang === 'zh' ? '新获线索' : 'NEW CLUES'}
               </div>
               {entry.newClues.map((c, i) => (
                 <div key={i} style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(0,255,136,0.7)' }}>
@@ -181,6 +183,8 @@ function Section({ label, color, icon, children }) {
 }
 
 export default function DecisionLog({ entries, accentColor }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -203,11 +207,11 @@ export default function DecisionLog({ entries, accentColor }) {
           fontSize: '0.6rem', fontFamily: 'monospace', fontWeight: 700,
           color: accentColor, letterSpacing: '0.1em', marginBottom: 2,
         }}>
-          ◈ 决策日志 · DECISION LOG
+          ◈ {zh ? '决策日志' : 'DECISION LOG'}
         </div>
         <div className="flex gap-3" style={{ fontSize: '0.52rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>
-          <span>{entries.length} 轮次</span>
-          <span style={{ color: '#ffaa00' }}>⭐ {keyCount} 关键决策</span>
+          <span>{entries.length} {zh ? '轮次' : 'TURNS'}</span>
+          <span style={{ color: '#ffaa00' }}>⭐ {keyCount} {zh ? '关键决策' : 'KEY DECISIONS'}</span>
         </div>
       </div>
 
@@ -219,7 +223,7 @@ export default function DecisionLog({ entries, accentColor }) {
             fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.2)',
             lineHeight: 1.8,
           }}>
-            执行首次循环后<br />决策记录将显示在此
+            {zh ? '执行首次循环后' : 'RUN THE FIRST CYCLE'}<br />{zh ? '决策记录将显示在此' : 'DECISIONS WILL APPEAR HERE'}
           </div>
         ) : (
           entries.map((entry, i) => (

@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 const AGENT_COLORS = ['#00e5ff', '#ff6b6b', '#a78bfa'];
 const AGENT_ICONS = ['🦅', '💔', '⚙️'];
 const AGENT_NAMES = ['隼目', '破心', '精算'];
+const AGENT_NAMES_EN = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
 
 // ── Canvas-based particle convergence effect ─────────────────────────────
 function ConvergenceCanvas({ active, clueIcon, type }) {
@@ -183,6 +185,7 @@ function ConvergenceCanvas({ active, clueIcon, type }) {
 
 // ── Agent status row shown during synergy ────────────────────────────────
 function AgentSynergyRow() {
+  const { lang } = useLang();
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 50);
@@ -194,7 +197,7 @@ function AgentSynergyRow() {
       className="flex items-center justify-center gap-4 py-2 transition-all duration-500"
       style={{ opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(8px)' }}
     >
-      {AGENT_NAMES.map((name, i) => (
+      {(lang === 'zh' ? AGENT_NAMES : AGENT_NAMES_EN).map((name, i) => (
         <div key={i} className="flex flex-col items-center gap-1">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-base border-2"
@@ -208,7 +211,7 @@ function AgentSynergyRow() {
             {AGENT_ICONS[i]}
           </div>
           <div className="text-xs font-bold" style={{ color: AGENT_COLORS[i] }}>{name}</div>
-          <div className="text-xs opacity-60" style={{ color: AGENT_COLORS[i] }}>锁定</div>
+          <div className="text-xs opacity-60" style={{ color: AGENT_COLORS[i] }}>{lang === 'zh' ? '锁定' : 'LOCKED'}</div>
         </div>
       ))}
       <style>{`
@@ -223,6 +226,8 @@ function AgentSynergyRow() {
 
 // ── Main exported overlay ────────────────────────────────────────────────
 export default function AgentSynergyFX({ event }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   // event: null | { type: 'clue_converge' | 'cross_validate', clueIcon, clueKeyword, id }
   const [current, setCurrent] = useState(null);
   const timerRef = useRef(null);
@@ -239,7 +244,9 @@ export default function AgentSynergyFX({ event }) {
 
   const isValidate = current.type === 'cross_validate';
   const borderColor = isValidate ? '#bf5fff' : '#00ff88';
-  const title = isValidate ? '⚡ 逻辑共鸣 — 交叉验证' : '🔗 线索汇聚 — 集体锁定';
+  const title = isValidate
+    ? (zh ? '⚡ 逻辑共鸣 — 交叉验证' : '⚡ LOGIC RESONANCE — CROSS VALIDATION')
+    : (zh ? '🔗 线索汇聚 — 集体锁定' : '🔗 CLUE CONVERGENCE — TEAM LOCK');
 
   return (
     <div
@@ -282,7 +289,7 @@ export default function AgentSynergyFX({ event }) {
         className="text-center text-xs py-2 border-t"
         style={{ borderColor: borderColor + '20', color: borderColor + 'aa' }}
       >
-        {current.clueIcon} {current.clueKeyword} — 三名探员达成协同共识
+        {current.clueIcon} {current.clueKeyword} — {zh ? '三名探员达成协同共识' : 'THREE AGENTS REACHED CONSENSUS'}
       </div>
 
       <style>{`

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 // 协同技能解锁全屏特效 — 冲击波 + 光束 + 技能卡 + 音效
 function playUnlockChord() {
@@ -22,6 +23,8 @@ function playUnlockChord() {
 }
 
 export default function SynergyUnlockFX({ skill, onDone }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -77,7 +80,7 @@ export default function SynergyUnlockFX({ skill, onDone }) {
         animation: 'su-card 0.55s 0.2s cubic-bezier(.22,1,.36,1) both',
       }}>
         <div style={{ fontSize: '0.5rem', color: `${c}aa`, letterSpacing: '0.35em', marginBottom: 10 }}>
-          SYNERGY UNLOCKED · 协同技能激活
+          {zh ? '协同技能激活' : 'SYNERGY UNLOCKED'}
         </div>
         <div style={{
           fontSize: '3rem', lineHeight: 1, marginBottom: 8,
@@ -87,20 +90,20 @@ export default function SynergyUnlockFX({ skill, onDone }) {
         <div style={{
           fontSize: '1.35rem', fontWeight: 900, color: c,
           letterSpacing: '0.2em', textShadow: `0 0 26px ${c}`,
-        }}>{skill.name}</div>
+        }}>{zh ? skill.name : skill.nameEn}</div>
         <div style={{
           marginTop: 6, display: 'inline-block',
           fontSize: '0.46rem', color: `${c}cc`,
           border: `1px solid ${c}50`, borderRadius: 5,
           padding: '2px 9px', background: `${c}12`,
-        }}>{skill.condition}</div>
+        }}>{zh ? skill.condition : skill.conditionEn}</div>
         <div style={{
           marginTop: 14, padding: '11px 14px', borderRadius: 10,
           border: `1px solid ${c}35`, background: `${c}0a`,
           color: '#e6f7ff', fontSize: '0.66rem', lineHeight: 1.75,
         }}>
-          <span style={{ color: '#00ff88', fontWeight: 900 }}>◉ 增益效果 </span>
-          {skill.desc}
+          <span style={{ color: '#00ff88', fontWeight: 900 }}>◉ {zh ? '增益效果 ' : 'BONUS EFFECT '}</span>
+          {zh ? skill.desc : skill.descEn}
         </div>
       </div>
 

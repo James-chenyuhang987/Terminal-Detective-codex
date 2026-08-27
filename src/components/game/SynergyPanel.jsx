@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SYNERGY_SKILLS } from '@/game/specialtySystem';
+import { useLang } from '@/lib/lang.jsx';
 
 // 组队协同技能面板 — 发光卡片，触发时点亮 + 粒子爆发
 function ParticleBurst({ color }) {
@@ -31,6 +32,8 @@ function ParticleBurst({ color }) {
 }
 
 function SynergyCard({ skill, isActive }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [justActivated, setJustActivated] = useState(false);
   const prevActive = useRef(isActive);
 
@@ -59,33 +62,35 @@ function SynergyCard({ skill, isActive }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
         <span style={{ fontSize: 15, filter: isActive ? `drop-shadow(0 0 6px ${c})` : 'grayscale(1)' }}>{skill.icon}</span>
         <span style={{ fontSize: '0.58rem', fontWeight: 900, color: isActive ? c : 'rgba(255,255,255,0.4)' }}>
-          {skill.name}
+          {zh ? skill.name : skill.nameEn}
         </span>
         <span style={{
           marginLeft: 'auto', fontSize: '0.38rem', fontWeight: 700,
           color: isActive ? '#00ff88' : 'rgba(255,255,255,0.25)',
           border: `1px solid ${isActive ? '#00ff8850' : 'rgba(255,255,255,0.12)'}`,
           borderRadius: 3, padding: '0 4px',
-        }}>{isActive ? '已激活' : '未触发'}</span>
+        }}>{isActive ? (zh ? '已激活' : 'ACTIVE') : (zh ? '未触发' : 'INACTIVE')}</span>
       </div>
-      <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.45)', lineHeight: 1.55 }}>{skill.desc}</div>
+      <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.45)', lineHeight: 1.55 }}>{zh ? skill.desc : skill.descEn}</div>
       <div style={{ fontSize: '0.38rem', color: isActive ? c + 'aa' : 'rgba(255,255,255,0.22)', marginTop: 4 }}>
-        条件：{skill.condition}
+        {zh ? '条件：' : 'REQUIRES: '}{zh ? skill.condition : skill.conditionEn}
       </div>
     </div>
   );
 }
 
 export default function SynergyPanel({ synergy }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'monospace' }}>
         <span style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.2em' }}>
-          ◈ TEAM SYNERGY · 组队协同效果
+          ◈ {zh ? '组队协同效果' : 'TEAM SYNERGY'}
         </span>
         <span style={{ fontSize: '0.44rem', color: synergy.matchScore >= 0.66 ? '#00ff88' : '#ffaa00' }}>
-          专长匹配度 {Math.round(synergy.matchScore * 100)}%
-          {synergy.matchScore >= 0.66 && ' · 危机惩罚 -20%'}
+          {zh ? '专长匹配度' : 'SPECIALTY MATCH'} {Math.round(synergy.matchScore * 100)}%
+          {synergy.matchScore >= 0.66 && (zh ? ' · 危机惩罚 -20%' : ' · CRISIS PENALTY -20%')}
         </span>
         {synergy.overload && (
           <span style={{
@@ -93,7 +98,7 @@ export default function SynergyPanel({ synergy }) {
             border: '1px solid #ff386060', borderRadius: 4, padding: '1px 6px',
             background: '#ff386015', animation: 'syn-warn 0.9s ease-in-out infinite',
           }}>
-            ⚠ 专长过载 — 三人专长雷同，混乱增长 +15%
+            {zh ? '⚠ 专长过载 — 三人专长雷同，混乱增长 +15%' : '⚠ SPECIALTY OVERLOAD — CONFUSION GAIN +15%'}
           </span>
         )}
       </div>

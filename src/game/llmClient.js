@@ -22,7 +22,7 @@ export function setLLMLang(lang) { currentLang = lang === 'en' ? 'en' : 'zh'; }
 
 // Calls a named reasoning task on the backend. Returns plain text.
 function abortError() {
-  const error = new Error('The investigation turn was aborted.');
+  const error = new Error(currentLang === 'en' ? 'The investigation turn was aborted.' : '本轮调查已中止。');
   error.name = 'AbortError';
   return error;
 }
@@ -41,7 +41,7 @@ function withAbort(promise, signal) {
     };
     const onAbort = () => finish(reject, abortError());
     const timeoutId = setTimeout(() => {
-      const error = new Error('The reasoning service timed out. Please retry.');
+      const error = new Error(currentLang === 'en' ? 'The reasoning service timed out. Please retry.' : '推理服务响应超时，请重试。');
       error.name = 'TimeoutError';
       finish(reject, error);
     }, LLM_TIMEOUT_MS);
@@ -183,7 +183,9 @@ export async function settleAction({ actionName, actionTag = null, gameState, ca
     time_cost: isIllegal ? 2 : 1,
     health_change: 0,
     is_trap: isIllegal && Math.random() < 0.3,
-    trap_narration: isIllegal ? 'Invalid action triggered an adversarial response!' : null,
+    trap_narration: isIllegal
+      ? (currentLang === 'en' ? 'Invalid action triggered an adversarial response!' : '无效行动触发了敌对反制！')
+      : null,
     next_zone: nextZone,
   });
 }
@@ -247,7 +249,10 @@ export async function linkCinematic({ clueA, clueB, caseData, fragmentsFound, fr
 // ── NPC Dialogue ──────────────────────────────────────────────────────────
 export async function getNPCDialogue({ npcId, agentStatement, gameState, caseData, agentStrategy, emotionLevel = 'calm', refusesTopic = null, signal = null }) {
   const npc = caseData.npcs?.find(n => n.npc_id === npcId);
-  if (!npc) return { response: 'No response.', npc_name: 'Unknown' };
+  if (!npc) return {
+    response: currentLang === 'en' ? 'No response.' : '没有回应。',
+    npc_name: currentLang === 'en' ? 'Unknown' : '未知人物',
+  };
 
   const main = await llmJson('npc', {
     case_id: caseData.case_id,
@@ -274,7 +279,9 @@ export async function getNPCDialogue({ npcId, agentStatement, gameState, caseDat
         case_id: caseData.case_id,
         npc_id: npc.npc_id,
         known_clue_ids: gameState.unlocked_clues || [],
-        agent_statement: `（探员发动破防审讯，步步紧逼）你在回避什么？我看到你的微表情了。关于「${caseData.clue_dictionary?.find(c => c.clue_id === bonusClueId)?.keyword || '那件事'}」，说实话。`,
+        agent_statement: currentLang === 'en'
+          ? `(The agent activates Breakthrough Interrogation and presses the opening.) What are you avoiding? I saw that micro-expression. Tell me the truth about “${caseData.clue_dictionary?.find(c => c.clue_id === bonusClueId)?.keyword || 'that matter'}”.`
+          : `（探员发动破防审讯，步步紧逼）你在回避什么？我看到你的微表情了。关于「${caseData.clue_dictionary?.find(c => c.clue_id === bonusClueId)?.keyword || '那件事'}」，说实话。`,
         emotion_level: emotionLevel,
       }, signal);
       return {
@@ -295,7 +302,11 @@ export async function judgeReport({ playerReport, caseData, signal = null }) {
   }, signal);
 
   if (!result || typeof result.score !== 'string') {
-    return { score: 'C', is_passed: false, critique: 'Unable to evaluate report. Please try again.' };
+    return {
+      score: 'C',
+      is_passed: false,
+      critique: currentLang === 'en' ? 'Unable to evaluate report. Please try again.' : '暂时无法评估报告，请重试。',
+    };
   }
   return result;
 }

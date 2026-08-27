@@ -16,6 +16,7 @@ import { getLore } from '@/game/agentLore';
 import { calcCaseMatchScore } from '@/game/casePresets';
 import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
 import { getActiveSupportAgent } from '@/game/agentMarket';
+import { getLobbyLighting } from '@/game/lobbyLighting';
 import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
 
 function LobbyAtmosphere() {
@@ -173,6 +174,7 @@ function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColo
 
 // ── Holographic Agent Figure ──────────────────────────────────────────────────
 function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
+  const { lang } = useLang();
   return (
     <div className={`td-holo-figure ${isSelected ? 'td-holo-selected' : ''}`} onClick={onClick}
       onMouseEnter={e => onHover?.(index, e.clientX, e.clientY)}
@@ -245,7 +247,7 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
           fontSize: '0.62rem', fontWeight: 900, color: agentDef.color,
           letterSpacing: '0.08em', textShadow: `0 0 10px ${agentDef.color}`,
         }}>{agentDef.id}</div>
-        <div style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>{agentDef.roleZh}</div>
+        <div style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>{lang === 'zh' ? agentDef.roleZh : agentDef.role}</div>
         <div style={{
           display: 'inline-block', marginTop: 4,
           fontSize: '0.42rem', color: agentDef.color,
@@ -263,6 +265,8 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
 
 // ── Draggable Priority List ───────────────────────────────────────────────────
 function PriorityList({ priorityList, onChange }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [dragging, setDragging] = useState(null);
   const [dragOver, setDragOver] = useState(null);
   const [expanded, setExpanded] = useState(false);
@@ -299,7 +303,7 @@ function PriorityList({ priorityList, onChange }) {
         fontSize: '0.5rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace',
         letterSpacing: '0.12em', marginBottom: 8,
       }}>
-        ◈ 行动优先级 <span style={{ opacity: 0.5 }}>优先执行前 3 项</span>
+        ◈ {zh ? '行动优先级' : 'ACTION PRIORITY'} <span style={{ opacity: 0.5 }}>{zh ? '优先执行前 3 项' : 'TOP 3 EXECUTE FIRST'}</span>
       </div>
       {visiblePriorities.map((id, idx) => {
         const action = getAction(id);
@@ -331,18 +335,20 @@ function PriorityList({ priorityList, onChange }) {
             }}>#{idx + 1}</div>
             <span style={{ fontSize: 14 }}>{action.icon}</span>
             <span style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: action.color, fontWeight: 700, flex: 1 }}>
-              {action.label}
+              {zh ? action.label : action.labelEn}
             </span>
             <span style={{ fontSize: '0.4rem', color: 'rgba(255,255,255,0.2)' }}>⠿⠿</span>
             <span className="td-mobile-only td-priority-mobile-buttons">
-              <button type="button" aria-label="上移" disabled={idx === 0} onClick={event => { event.stopPropagation(); move(id, -1); }}>↑</button>
-              <button type="button" aria-label="下移" disabled={priorityList.indexOf(id) === priorityList.length - 1} onClick={event => { event.stopPropagation(); move(id, 1); }}>↓</button>
+              <button type="button" aria-label={zh ? '上移' : 'Move up'} disabled={idx === 0} onClick={event => { event.stopPropagation(); move(id, -1); }}>↑</button>
+              <button type="button" aria-label={zh ? '下移' : 'Move down'} disabled={priorityList.indexOf(id) === priorityList.length - 1} onClick={event => { event.stopPropagation(); move(id, 1); }}>↓</button>
             </span>
           </div>
         );
       })}
       <button className="td-priority-expand" type="button" onClick={() => setExpanded(value => !value)}>
-        {expanded ? '收起次要行动 ↑' : `查看其余 ${Math.max(0, priorityList.length - 3)} 项 ↓`}
+        {expanded
+          ? (zh ? '收起次要行动 ↑' : 'HIDE SECONDARY ACTIONS ↑')
+          : (zh ? `查看其余 ${Math.max(0, priorityList.length - 3)} 项 ↓` : `SHOW ${Math.max(0, priorityList.length - 3)} MORE ↓`)}
       </button>
     </div>
   );
@@ -350,6 +356,7 @@ function PriorityList({ priorityList, onChange }) {
 
 // ── Left: Team Roster + Priority ──────────────────────────────────────────────
 function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorityChange, onHover, mobileActive }) {
+  const { lang } = useLang();
   const lvls = AGENT_DEFS.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
   return (
     <div className={`td-lobby-roster ${mobileActive ? 'td-mobile-active' : ''}`} style={{
@@ -367,7 +374,7 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
           fontSize: '0.52rem', color: '#00e5ff', fontWeight: 700,
           letterSpacing: '0.12em', fontFamily: 'monospace',
         }}>
-          TEAM ROSTER · 探员编组
+          {lang === 'zh' ? '探员编组' : 'TEAM ROSTER'}
         </div>
         {AGENT_DEFS.map((def, i) => {
           const isSelected = selectedIdx === i;
@@ -398,7 +405,7 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
                   <span style={{ fontSize: 11 }}>{def.icon}</span>
                   <span style={{ fontSize: '0.58rem', fontWeight: 700, color: def.color, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{def.id}</span>
                 </div>
-                <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{def.roleZh}</div>
+                <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{lang === 'zh' ? def.roleZh : def.role}</div>
                 {/* XP mini bar */}
                 <div style={{ marginTop: 3, height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1 }}>
                   <div style={{ width: `${xpInfo.pct}%`, height: '100%', background: def.color, borderRadius: 1, transition: 'width 0.5s ease' }}/>
@@ -426,6 +433,7 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
 
 // ── Center: Holographic Stage ─────────────────────────────────────────────────
 function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive }) {
+  const { lang } = useLang();
   const lvls = AGENT_DEFS.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
 
   return (
@@ -444,7 +452,9 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
       <div className="td-stage-focus">
         <span>AGENT CONFIGURATION</span>
         <strong style={{ color: AGENT_DEFS[selectedIdx].color }}>{AGENT_DEFS[selectedIdx].icon} {AGENT_DEFS[selectedIdx].id}</strong>
-        <small>{synergy.active.length ? `${synergy.active.length} 项协同已激活` : '选择探员并调整专长'}</small>
+        <small>{synergy.active.length
+          ? (lang === 'zh' ? `${synergy.active.length} 项协同已激活` : `${synergy.active.length} SYNERGIES ACTIVE`)
+          : (lang === 'zh' ? '选择探员并调整专长' : 'SELECT AN AGENT AND TUNE SPECIALTIES')}</small>
       </div>
 
       {/* Agents on stage */}
@@ -496,12 +506,13 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
 
 // ── Right: Attribute Config + Skill Tree ─────────────────────────────────────
 function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive }) {
+  const { lang } = useLang();
   const [tab, setTab] = useState('attrs'); // 'attrs' | 'skills' | 'dossier'
 
   const tabs = [
-    { key: 'attrs',   label: '属性配置', icon: '⚙️' },
-    { key: 'skills',  label: '技能树',   icon: '🌐' },
-    { key: 'dossier', label: '档案',     icon: '📁' },
+    { key: 'attrs', label: lang === 'zh' ? '属性配置' : 'ATTRIBUTES', icon: '⚙️' },
+    { key: 'skills', label: lang === 'zh' ? '技能树' : 'SKILLS', icon: '🌐' },
+    { key: 'dossier', label: lang === 'zh' ? '档案' : 'DOSSIER', icon: '📁' },
   ];
 
   return (
@@ -520,7 +531,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
             <span style={{ fontSize: 16 }}>{agentDef.icon}</span>
             <div>
               <div style={{ fontSize: '0.6rem', color: agentDef.color, fontWeight: 900, fontFamily: 'monospace' }}>{agentDef.id}</div>
-              <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{agentDef.roleZh}</div>
+              <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{lang === 'zh' ? agentDef.roleZh : agentDef.role}</div>
             </div>
           </div>
           {/* Tab bar */}
@@ -565,7 +576,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
               />
               <div style={{ marginTop: 8, padding: '8px 10px', border: `1px solid ${agentDef.color}25`, borderRadius: 8, background: `${agentDef.color}07` }}>
                 <div style={{ fontSize: '0.48rem', color: agentDef.color, fontWeight: 700, fontFamily: 'monospace', marginBottom: 4 }}>◎ AGENT TRAIT</div>
-                <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', lineHeight: 1.55 }}>{agentDef.desc}</div>
+                <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', lineHeight: 1.55 }}>{lang === 'zh' ? agentDef.desc : agentDef.descEn}</div>
               </div>
             </>
           )}
@@ -587,7 +598,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
 }
 
 // ── Status Bar ────────────────────────────────────────────────────────────────
-function StatusBar({ onBack, onOpenSettings, profile, readOnly }) {
+function StatusBar({ onBack, onOpenSettings, profile, readOnly, lighting }) {
   const [time, setTime] = useState(new Date());
   const { lang } = useLang();
   useEffect(() => { const id = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(id); }, []);
@@ -613,9 +624,13 @@ function StatusBar({ onBack, onOpenSettings, profile, readOnly }) {
         </span>
       </div>
       <div className="td-lobby-status-right" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <span className="td-lobby-wallet-pill">⚡ <b>{profile?.energy || 0}</b></span>
-        <span className="td-lobby-wallet-pill">💎 <b>{(profile?.diamonds || 0).toLocaleString('en-US')}</b></span>
-        <span className="td-lobby-wallet-pill">🪙 <b>{(profile?.gold || 0).toLocaleString('en-US')}</b></span>
+        <span className="td-lobby-light-state" title={lang === 'zh' ? `大厅亮度会随本地时间自动变化 · 当前 ${Math.round(lighting.brightness * 100)}%` : `Lobby lighting follows local time · ${Math.round(lighting.brightness * 100)}%`}>
+          {lighting.phase === 'day' ? '☀' : lighting.phase === 'dawn' ? '🌤' : lighting.phase === 'evening' ? '🌆' : '🌙'}
+          <b>{lang === 'zh' ? ({ dawn: '清晨', day: '日间', evening: '傍晚', night: '夜间' }[lighting.phase]) : lighting.phase.toUpperCase()}</b>
+        </span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-energy">⚡ <b>{profile?.energy || 0}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-diamonds">💎 <b>{(profile?.diamonds || 0).toLocaleString('en-US')}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-gold">🪙 <b>{(profile?.gold || 0).toLocaleString('en-US')}</b></span>
         <span className={`td-lobby-link-state ${readOnly ? 'is-readonly' : ''}`}>● {readOnly ? (lang === 'zh' ? '只读' : 'READ ONLY') : (lang === 'zh' ? '云端在线' : 'CLOUD ONLINE')}</span>
         <span style={{ color: '#00e5ff', fontWeight: 700 }}>
           {time.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -631,6 +646,8 @@ function StatusBar({ onBack, onOpenSettings, profile, readOnly }) {
 
 // ── Deploy Controls ───────────────────────────────────────────────────────────
 function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, synergy, onApplyPreset, disabled = false }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [deploying, setDeploying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -663,9 +680,9 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
   const barPct = Math.min(synergy, 100);
 
   const btns = [
-    { label: saving ? '同步中' : '保存编队', icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#00e5ff', disabled: saving || disabled },
-    { label: '加载预设', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#a78bfa' },
-    { label: '大厅教程', icon: '❓', onClick: () => { onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)' },
+    { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#00e5ff', disabled: saving || disabled },
+    { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#a78bfa' },
+    { label: zh ? '大厅教程' : 'HALL GUIDE', icon: '❓', onClick: () => { onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)' },
   ];
 
   return (
@@ -677,7 +694,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
     }}>
       <div className="td-lobby-tools-wrap">
         <button className="td-lobby-tools-toggle" type="button" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
-          <span>☰</span><span>编队工具</span><small>{toolsOpen ? '收起' : '预设 / 保存'}</small>
+          <span>☰</span><span>{zh ? '编队工具' : 'SQUAD TOOLS'}</span><small>{toolsOpen ? (zh ? '收起' : 'CLOSE') : (zh ? '预设 / 保存' : 'PRESETS / SAVE')}</small>
         </button>
         {toolsOpen && <div className="td-lobby-tools-popover">
           <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: button.color, borderColor: `${button.color}45`, background: `${button.color}0d` }}><span>{button.icon}</span>{button.label}</button>)}</div>
@@ -686,7 +703,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
       </div>
 
       <div className="td-lobby-synergy-compact" style={/** @type {React.CSSProperties & {'--synergy-color': string}} */ ({ '--synergy-color': c })}>
-        <span>{synergyOver ? '⚠ 专长过载' : '队伍协同'}</span>
+        <span>{synergyOver ? (zh ? '⚠ 专长过载' : '⚠ SPECIALTY OVERLOAD') : (zh ? '队伍协同' : 'TEAM SYNERGY')}</span>
         <strong style={{ transform: flash ? 'scale(1.08)' : 'scale(1)' }}>{synergy}<small>%</small></strong>
         <i><b style={{ width: `${barPct}%` }} /></i>
       </div>
@@ -695,7 +712,11 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
       <button
         onClick={handleDeploy}
         disabled={deploying || disabled}
-        title={disabled ? '当前设备为只读，请先接管此设备' : synergyOver ? '专长过载：三人专长雷同，部署后将承受协同惩罚（混乱增长 +15%）' : ''}
+        title={disabled
+          ? (zh ? '当前设备为只读，请先接管此设备' : 'This device is read-only. Take over this session first.')
+          : synergyOver
+            ? (zh ? '专长过载：三人专长雷同，部署后将承受协同惩罚（混乱增长 +15%）' : 'Specialty overload: overlapping specialties will increase confusion gain by 15%.')
+            : ''}
         style={{
           flex: 1, maxWidth: 330, marginLeft: 'auto',
           padding: '11px 24px', borderRadius: 10,
@@ -723,7 +744,9 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
           }}/>
         )}
         <span style={{ position: 'relative', zIndex: 1 }}>
-          {synergyOver ? '⚠ 专长过载 · 仍可部署' : deploying ? '⟳  DEPLOYING...' : '▶  部署探员'}
+          {synergyOver
+            ? (zh ? '⚠ 专长过载 · 仍可部署' : '⚠ OVERLOAD · DEPLOY ANYWAY')
+            : deploying ? (zh ? '⟳ 正在部署…' : '⟳ DEPLOYING...') : (zh ? '▶ 部署探员' : '▶ DEPLOY AGENTS')}
         </span>
       </button>
       <style>{`
@@ -736,6 +759,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
 
 // ── Main HolographicLobby ─────────────────────────────────────────────────────
 export default function HolographicLobby({ profile, readOnly = false, onDeploy, onBack, onTeamSave, onSkillLoadout }) {
+  const { lang } = useLang();
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -748,6 +772,20 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
   const progression = profile?.agent_progression || [];
   const activeSupport = getActiveSupportAgent(profile);
   const [mobileTab, setMobileTab] = useState('stage');
+  const [lightingNow, setLightingNow] = useState(() => new Date());
+  const lighting = getLobbyLighting(lightingNow);
+
+  useEffect(() => {
+    const updateLighting = () => setLightingNow(new Date());
+    const timer = window.setInterval(updateLighting, 30 * 60_000);
+    window.addEventListener('focus', updateLighting);
+    document.addEventListener('visibilitychange', updateLighting);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', updateLighting);
+      document.removeEventListener('visibilitychange', updateLighting);
+    };
+  }, []);
 
   const accentColor = '#00e5ff';
 
@@ -785,19 +823,24 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
       await onTeamSave?.(config);
       setShowSequence(true);
     } catch (cause) {
-      showNotice('⚠ 编队同步失败，请重试', 2400);
+      showNotice(lang === 'zh' ? '⚠ 编队同步失败，请重试' : '⚠ SQUAD SYNC FAILED. PLEASE RETRY.', 2400);
       throw cause;
     }
   };
 
   return (
-    <div className="td-lobby" style={{
+    <div className={`td-lobby td-lobby-light-${lighting.phase}`} style={/** @type {React.CSSProperties & Record<string, string | number>} */ ({
       height: '100dvh', display: 'flex', flexDirection: 'column',
       background: 'radial-gradient(ellipse at 30% 15%, #050e22 0%, #020810 55%, #010408 100%)',
       fontFamily: "'Courier New', monospace", color: 'white',
       overflow: 'hidden', position: 'relative',
-    }}>
+      '--td-lobby-brightness': lighting.brightness,
+      '--td-lobby-saturation': lighting.saturation,
+      '--td-lobby-day-glow': lighting.dayGlow,
+      '--td-lobby-night-veil': lighting.nightVeil,
+    })}>
       <LobbyAtmosphere />
+      <div className="td-lobby-time-light" aria-hidden="true" />
       {/* Scanlines */}
       {settings.scanlines && (
         <div style={{
@@ -816,7 +859,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
         <div key={i} style={{ position: 'absolute', width: 36, height: 36, pointerEvents: 'none', zIndex: 10, ...s }}/>
       ))}
 
-      <StatusBar profile={profile} readOnly={readOnly} onBack={onBack} onOpenSettings={() => setShowSettings(true)} />
+      <StatusBar profile={profile} readOnly={readOnly} lighting={lighting} onBack={onBack} onOpenSettings={() => setShowSettings(true)} />
 
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
@@ -830,18 +873,25 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
             border: '1px solid rgba(0,229,255,.45)', background: '#06101d',
             boxShadow: '0 0 45px rgba(0,229,255,.18)', fontFamily: 'monospace',
           }}>
-            <div style={{ color: '#7df1ff', fontWeight: 900, fontSize: '1rem' }}>探员大厅快速指南</div>
+            <div style={{ color: '#7df1ff', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '探员大厅快速指南' : 'AGENT HALL QUICK GUIDE'}</div>
             <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
-              <li>选择一名探员，为其分配专长点数。</li>
-              <li>拖动行动优先级，决定 AI 调查顺序。</li>
-              <li>保持三名探员专长互补，可激活协同能力。</li>
-              <li>点击“保存”记录预设，再部署进入案件簿。</li>
+              {(lang === 'zh' ? [
+                '选择一名探员，为其分配专长点数。',
+                '拖动行动优先级，决定 AI 调查顺序。',
+                '保持三名探员专长互补，可激活协同能力。',
+                '点击“保存”记录预设，再部署进入案件簿。',
+              ] : [
+                'Select an agent and allocate specialty points.',
+                'Reorder action priorities to define the AI investigation sequence.',
+                'Use complementary specialties to activate team synergies.',
+                'Save your preset, then deploy to the case archive.',
+              ]).map(item => <li key={item}>{item}</li>)}
             </ol>
             <button onClick={() => setShowTutorial(false)} style={{
               width: '100%', padding: 10, borderRadius: 8, cursor: 'pointer',
               border: '1px solid #00e5ff80', background: 'rgba(0,229,255,.12)', color: '#7df1ff',
               fontFamily: 'monospace', fontWeight: 900,
-            }}>明白了 · CONTINUE</button>
+            }}>{lang === 'zh' ? '明白了' : 'CONTINUE'}</button>
           </div>
         </div>
       )}
@@ -865,8 +915,10 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
         background: 'rgba(0,0,0,0.35)', flexShrink: 0, zIndex: 1,
       }}>
         <div className="td-lobby-title-copy">
-          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>探员编组</span>
-          <small>{activeSupport ? `支援 ${activeSupport.icon} ${activeSupport.id} 已接入 · 选择探员、调整专长，然后部署` : '选择探员、调整专长，然后部署'}</small>
+          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>{lang === 'zh' ? '探员编组' : 'AGENT SQUAD'}</span>
+          <small>{activeSupport
+            ? (lang === 'zh' ? `支援 ${activeSupport.icon} ${activeSupport.id} 已接入 · 选择探员、调整专长，然后部署` : `SUPPORT ${activeSupport.icon} ${activeSupport.id} ONLINE · SELECT, CONFIGURE AND DEPLOY`)
+            : (lang === 'zh' ? '选择探员、调整专长，然后部署' : 'SELECT AGENTS, TUNE SPECIALTIES, THEN DEPLOY')}</small>
         </div>
         <div className="td-lobby-readiness">
           <div><small>CASE MATCH</small><strong>{matchForecast}<em>%</em></strong></div>
@@ -876,7 +928,11 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
       </div>
 
       <div className="td-lobby-mobile-tabs" role="tablist">
-        {[['agents', '探员'], ['stage', '舞台'], ['attrs', '属性']].map(([key, label]) => (
+        {[
+          ['agents', lang === 'zh' ? '探员' : 'AGENTS'],
+          ['stage', lang === 'zh' ? '舞台' : 'STAGE'],
+          ['attrs', lang === 'zh' ? '属性' : 'ATTRIBUTES'],
+        ].map(([key, label]) => (
           <button key={key} type="button" role="tab" aria-selected={mobileTab === key} onClick={() => setMobileTab(key)}>{label}</button>
         ))}
       </div>
@@ -919,10 +975,10 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
       {/* 探员档案悬浮预览 */}
       {hover && (
         <AgentLoreTooltip
-          lore={getLore(hover.idx)}
+          lore={getLore(hover.idx, lang)}
           color={AGENT_DEFS[hover.idx].color}
           icon={AGENT_DEFS[hover.idx].icon}
-          roleZh={AGENT_DEFS[hover.idx].roleZh}
+          roleZh={lang === 'zh' ? AGENT_DEFS[hover.idx].roleZh : AGENT_DEFS[hover.idx].role}
           x={hover.x} y={hover.y}
         />
       )}
@@ -945,9 +1001,9 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
           const config = currentConfig();
           try {
             await onTeamSave?.(config);
-            showNotice('✓ 编队预设已保存');
+            showNotice(lang === 'zh' ? '✓ 编队预设已保存' : '✓ SQUAD PRESET SAVED');
           } catch (cause) {
-            showNotice('⚠ 编队同步失败，请重试', 2400);
+            showNotice(lang === 'zh' ? '⚠ 编队同步失败，请重试' : '⚠ SQUAD SYNC FAILED. PLEASE RETRY.', 2400);
             throw cause;
           }
         }}

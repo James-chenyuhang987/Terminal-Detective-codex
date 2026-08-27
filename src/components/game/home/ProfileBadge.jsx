@@ -1,12 +1,16 @@
 import React from 'react';
 import { XP_PER_LEVEL } from '@/game/playerProfile';
+import { useLang } from '@/lib/lang.jsx';
+import { detectiveTagLabel, rankTitleLabel } from '@/game/identityOptions';
 
 export default function ProfileBadge({ profile, onClick }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const pct = Math.min(100, ((profile.xp || 0) / XP_PER_LEVEL) * 100);
   const badgeIcons = { city: '🏙', private: '🗝', bureau: '🛰' };
   const tags = Array.isArray(profile.detective_tags) ? profile.detective_tags.slice(0, 3) : [];
   return (
-    <button onClick={onClick} title="侦探档案 / Detective profile" style={{
+    <button onClick={onClick} title={zh ? '侦探档案' : 'Detective profile'} style={{
       display: 'flex', alignItems: 'center', gap: 13, fontFamily: 'monospace',
       background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left',
     }}>
@@ -30,9 +34,9 @@ export default function ProfileBadge({ profile, onClick }) {
           fontSize: '0.78rem', fontWeight: 900, letterSpacing: '0.14em', display: 'flex', alignItems: 'center', gap: 6,
           background: 'linear-gradient(180deg, #ffffff, #d8b473)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-        }}><span style={{ WebkitTextFillColor: 'initial' }}>{badgeIcons[profile.identity_badge] || '🗝'}</span><span>侦探档案</span></div>
+        }}><span style={{ WebkitTextFillColor: 'initial' }}>{badgeIcons[profile.identity_badge] || '🗝'}</span><span>{zh ? '侦探档案' : 'DETECTIVE PROFILE'}</span></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 5 }}>
-          <span style={{ fontSize: '0.64rem', color: 'rgba(255,255,255,0.66)' }}>等级 {profile.level}</span>
+          <span style={{ fontSize: '0.64rem', color: 'rgba(255,255,255,0.66)' }}>{zh ? '等级' : 'LEVEL'} {profile.level}</span>
           <div style={{
             width: 118, height: 5, borderRadius: 3,
             background: 'rgba(255,255,255,0.1)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.6)', overflow: 'hidden',
@@ -46,7 +50,7 @@ export default function ProfileBadge({ profile, onClick }) {
           <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.32)' }}>{profile.xp}/{XP_PER_LEVEL}</span>
         </div>
         <div style={{ fontSize: '0.58rem', color: 'rgba(0,229,255,0.62)', marginTop: 4, letterSpacing: '0.08em' }}>
-          ◈ {profile.rank_title}
+          ◈ {rankTitleLabel(profile.rank_title, lang)}
         </div>
         {profile.signature && (
           <div style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.38)', marginTop: 3, maxWidth: 220 }}>
@@ -57,7 +61,7 @@ export default function ProfileBadge({ profile, onClick }) {
           {tags.map(tag => <span key={tag} style={{
             padding: '1px 5px', borderRadius: 999, border: '1px solid rgba(167,139,250,.28)',
             color: 'rgba(216,205,255,.65)', fontSize: '.45rem', lineHeight: 1.3,
-          }}>{tag}</span>)}
+          }}>{detectiveTagLabel(tag, lang)}</span>)}
         </div>}
       </div>
       <style>{`@keyframes badge-spin{to{transform:rotate(360deg)}}`}</style>

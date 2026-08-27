@@ -17,6 +17,7 @@ import {
   AGENT_MARKET_CATALOG, activateSupportAgent, getActiveSupportAgentId,
   getOwnedAgentIds, getOwnedAgents, purchaseAgent,
 } from '@/game/agentMarket';
+import { DETECTIVE_TAGS, IDENTITY_BADGES, detectiveTagLabel, identityBadgeLabel, rankTitleLabel } from '@/game/identityOptions';
 
 const GraphModule = lazy(() => import('./modules/GraphModule.jsx'));
 
@@ -107,8 +108,7 @@ function ProfileModule({ profile, onApply, tx, lang }) {
   const [tags, setTags] = useState(profile.detective_tags || []);
   const progression = profile.agent_progression || [];
   const avatars = ['🕵️', '🕵️‍♀️', '👁️', '🦉', '🐺', '🎩', '🦅', '🐍'];
-  const badges = [['city', '🏙 城市警局'], ['private', '🗝 私家侦探'], ['bureau', '🛰 特别调查局']];
-  const tagOptions = ['冷静', '直觉', '技术流', '心理侧写', '铁血', '书虫', '夜行者', '话术大师'];
+  const tagOptions = DETECTIVE_TAGS.map(item => item.key);
   return <>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
       <Stat label={lang === 'zh' ? '等级' : 'LEVEL'} value={profile.level} />
@@ -116,7 +116,7 @@ function ProfileModule({ profile, onApply, tx, lang }) {
       <Stat label={lang === 'zh' ? '已破案件' : 'SOLVED'} value={profile.solved_cases.length} />
       <Stat label={lang === 'zh' ? '成就' : 'ACHIEVEMENTS'} value={`${knownAchievementCount(profile)}/24`} />
     </div>
-    <Panel accent="#e8c98a" style={{ marginBottom: 14 }}><div style={{ color: '#e8c98a', fontWeight: 900 }}>{profile.rank_title}</div><div style={{ marginTop: 6, color: 'rgba(255,255,255,.42)', fontSize: '.56rem' }}>{lang === 'zh' ? `累计尝试 ${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} 次 · 有效连线 ${profile.activity_stats.valid_links}` : `${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} attempts · ${profile.activity_stats.valid_links} valid links`}</div></Panel>
+    <Panel accent="#e8c98a" style={{ marginBottom: 14 }}><div style={{ color: '#e8c98a', fontWeight: 900 }}>{rankTitleLabel(profile.rank_title, lang)}</div><div style={{ marginTop: 6, color: 'rgba(255,255,255,.42)', fontSize: '.56rem' }}>{lang === 'zh' ? `累计尝试 ${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} 次 · 有效连线 ${profile.activity_stats.valid_links}` : `${profile.case_records.reduce((sum, record) => sum + record.attempts, 0)} attempts · ${profile.activity_stats.valid_links} valid links`}</div></Panel>
     <Panel>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>{avatars.map(icon => <button className={`td-ui-button td-select-tile ${avatar === icon ? 'is-active' : ''}`} key={icon} onClick={() => setAvatar(icon)} style={{ width: 42, height: 42, borderRadius: 9, fontSize: 21, cursor: 'pointer', border: `1px solid ${avatar === icon ? '#e8c98a' : 'rgba(255,255,255,.12)'}`, background: avatar === icon ? 'rgba(232,201,138,.15)' : 'rgba(0,0,0,.3)' }}>{icon}</button>)}</div>
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? `侦探代号 · 剩余修改次数 ${profile.rename_count ? 0 : 1}` : `CODENAME · ${profile.rename_count ? 0 : 1} rename left`}</label>
@@ -124,12 +124,12 @@ function ProfileModule({ profile, onApply, tx, lang }) {
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? '个性签名' : 'SIGNATURE'}</label>
       <textarea className="td-ui-input" value={signature} maxLength={30} onChange={event => setSignature(event.target.value)} style={{ width: '100%', height: 68, margin: '7px 0 12px', padding: 10, resize: 'none', borderRadius: 8, border: '1px solid rgba(0,229,255,.3)', background: 'rgba(0,0,0,.45)', color: '#dff8ff', fontFamily: 'monospace' }} />
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? '身份徽章' : 'IDENTITY BADGE'}</label>
-      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', margin: '7px 0 12px' }}>{badges.map(([id, label]) => <ActionButton key={id} accent={badge === id ? '#e8c98a' : '#668899'} onClick={() => setBadge(id)}>{label}</ActionButton>)}</div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', margin: '7px 0 12px' }}>{IDENTITY_BADGES.map(item => <ActionButton key={item.key} accent={badge === item.key ? '#e8c98a' : '#668899'} onClick={() => setBadge(item.key)}>{identityBadgeLabel(item.key, lang)}</ActionButton>)}</div>
       <label style={{ fontSize: '.58rem', color: '#e8c98a' }}>{lang === 'zh' ? `侦探标签 · ${tags.length}/3` : `TAGS · ${tags.length}/3`}</label>
-      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', margin: '7px 0 14px' }}>{tagOptions.map(tag => <ActionButton key={tag} accent={tags.includes(tag) ? '#a78bfa' : '#668899'} onClick={() => setTags(current => current.includes(tag) ? current.filter(value => value !== tag) : current.length < 3 ? [...current, tag] : current)}>{tag}</ActionButton>)}</div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', margin: '7px 0 14px' }}>{tagOptions.map(tag => <ActionButton key={tag} accent={tags.includes(tag) ? '#a78bfa' : '#668899'} onClick={() => setTags(current => current.includes(tag) ? current.filter(value => value !== tag) : current.length < 3 ? [...current, tag] : current)}>{detectiveTagLabel(tag, lang)}</ActionButton>)}</div>
       <ActionButton onClick={() => onApply(editIdentity(profile, { detective_name: name, avatar, signature, identity_badge: badge, detective_tags: tags }), lang === 'zh' ? '档案已同步' : 'Profile synced')}>{tx.save}</ActionButton>
     </Panel>
-    <div style={{ marginTop: 14, color: 'rgba(255,255,255,.45)', fontSize: '.62rem' }}>{lang === 'zh' ? '探员等级' : 'AGENT LEVELS'} · {progression.map((p, i) => `${['隼目','破心','幽灵'][i]} Lv.${getLevelFromXP(p.xp)}`).join(' / ')}</div>
+    <div style={{ marginTop: 14, color: 'rgba(255,255,255,.45)', fontSize: '.62rem' }}>{lang === 'zh' ? '探员等级' : 'AGENT LEVELS'} · {progression.map((p, i) => `${lang === 'zh' ? ['隼目','破心','幽灵'][i] : ['NEXUS-01','AURORA-09','CIPHER-47'][i]} Lv.${getLevelFromXP(p.xp)}`).join(' / ')}</div>
   </>;
 }
 

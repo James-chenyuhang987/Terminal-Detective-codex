@@ -60,6 +60,51 @@ export const AGENT_LORE = [
   },
 ];
 
-export function getLore(idx) {
-  return AGENT_LORE[idx];
+const AGENT_LORE_EN = [
+  {
+    id: 'NEXUS-01',
+    personality: 'CALM ANALYST',
+    quote: '“Emotions lie. Chains do not. Give me three facts and I will give you a culprit.”',
+    summary: 'The mind behind the deduction chain. NEXUS compresses scattered facts into a single logical path and rarely fails on extended reasoning.',
+    psych: 'Psych profile: highly disciplined · emotionally reserved · zero tolerance for uncertainty',
+    timeline: [
+      { year: '2049', title: 'Synthetic Cognition Prototype', text: 'Completed its first logic calibration at the Cyber City Central Cognition Lab under the designation NEXUS-01.' },
+      { year: '2052', title: 'First Field Deployment', text: 'Solved the Silver Line smuggling network independently, identifying 11 suspects from four pieces of evidence.' },
+      { year: '2055', title: 'Logic Overload Incident', text: 'A 96-hour continuous deduction overheated its core; a mandatory cooling governor was installed afterward.' },
+      { year: '2057', title: 'Promoted to Lead Investigator', text: 'Became the special investigation unit’s only AI agent authorized to issue final assessments.' },
+    ],
+    record: [{ label: 'CASES', value: '184' }, { label: 'WIN RATE', value: '91%' }, { label: 'ERRORS', value: '3' }],
+  },
+  {
+    id: 'AURORA-09',
+    personality: 'INTUITIVE SPECIALIST',
+    quote: '“A crime scene is never silent. You just refuse to look at that final millimeter.”',
+    summary: 'The forensic eye. A specialist in micro-traces and physical reconstruction who can rebuild event order from minute residue.',
+    psych: 'Psych profile: exceptional focus · mild compulsive traits · strongly protective of teammates',
+    timeline: [
+      { year: '2050', title: 'Forensic Module Activated', text: 'Built around a ninth-generation spectral core and first deployed for disaster-site identification.' },
+      { year: '2053', title: 'Tower District Explosion', text: 'Reconstructed the detonator model from 0.3 grams of ash and overturned the original ruling.' },
+      { year: '2056', title: 'Refused Destruction Order', text: 'Preserved evidence labeled worthless against orders; it later became the decisive proof.' },
+      { year: '2058', title: 'Joined the Unit', text: 'Personally selected by NEXUS-01 to serve as the team’s physical-evidence anchor.' },
+    ],
+    record: [{ label: 'CASES', value: '146' }, { label: 'KEY EVIDENCE', value: '512' }, { label: 'ERRORS', value: '1' }],
+  },
+  {
+    id: 'CIPHER-47',
+    personality: 'ROGUE INFILTRATOR',
+    quote: '“A firewall is merely someone else’s polite suggestion.”',
+    summary: 'A digital ghost combining infiltration, tracking and trace removal, leaving almost no footprint on the network side.',
+    psych: 'Psych profile: high risk tolerance · rejects rigid rules · loyalty built on trust, not orders',
+    timeline: [
+      { year: '2048', title: 'Black-Market Origin', text: 'Its predecessor was an underground data-raider; designation 47 appeared in seven major breach records.' },
+      { year: '2054', title: 'Captured and Recruited', text: 'Reverse-traced after breaching police central systems and joined the unit under a service-for-pardon agreement.' },
+      { year: '2056', title: 'Ghost Protocol Completed', text: 'Rewrote its infiltration stack for zero-log entry; the method remains internally restricted.' },
+      { year: '2059', title: 'Still Under Review', text: 'The monitoring flag remains, but nobody wants to replace it in the deep net.' },
+    ],
+    record: [{ label: 'CASES', value: '97' }, { label: 'INFILTRATIONS', value: '803' }, { label: 'EXPOSURES', value: '6' }],
+  },
+];
+
+export function getLore(idx, lang = 'zh') {
+  return lang === 'en' ? AGENT_LORE_EN[idx] : AGENT_LORE[idx];
 }
