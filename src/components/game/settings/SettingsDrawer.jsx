@@ -5,6 +5,7 @@ import { useSettings, panelSkin, playSfx, APP_VERSION, SAVE_KEYS } from '@/lib/s
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { migrateProfileV2, normalizeProfile, sanitizeProfileWrite } from '@/game/playerProfile';
 import { ToggleRow, SegmentRow, ActionRow, SectionTitle } from '@/components/game/settings/SettingRow';
+import StatusToast from '@/components/game/StatusToast';
 
 const TX = {
   zh: {
@@ -29,6 +30,7 @@ const TX = {
     okClear: '本地存档已清除', okReset: '设置已恢复默认', okExport: '配置已导出',
     okImport: '档案导入成功', errImport: '导入失败：文件格式或版本无效', importPreview: '确认导入：本地设置与云端进度将被覆盖。',
     resetCode: '请输入当前侦探代号以确认', resetMismatch: '代号不匹配', okCloudReset: '云端进度已重置', syncFailed: '云端同步失败，请重试',
+    successStatus: '操作已完成', errorStatus: '操作未完成',
     off: '关闭', low: '低', high: '高',
     yes: '确认', no: '取消',
   },
@@ -54,6 +56,7 @@ const TX = {
     okClear: 'Local saves cleared', okReset: 'Settings restored', okExport: 'Config exported',
     okImport: 'Profile imported', errImport: 'Import failed: invalid format or version', importPreview: 'Import local settings and overwrite cloud progress?',
     resetCode: 'Enter the current detective codename to confirm', resetMismatch: 'Codename does not match', okCloudReset: 'Cloud progress reset', syncFailed: 'Cloud sync failed. Please retry.',
+    successStatus: 'OPERATION COMPLETE', errorStatus: 'OPERATION FAILED',
     off: 'OFF', low: 'LOW', high: 'HIGH',
     yes: 'CONFIRM', no: 'CANCEL',
   },
@@ -66,7 +69,7 @@ export default function SettingsDrawer({ onClose }) {
   const { profile, account, syncStatus, mutate } = useProfile();
   const skin = panelSkin(settings.panelLight);
   const tx = TX[lang] || TX.zh;
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState(null);
   const [confirm, setConfirm] = useState(null); // { text, run }
   const [resetCode, setResetCode] = useState('');
   const [saving, setSaving] = useState(false);
@@ -77,9 +80,12 @@ export default function SettingsDrawer({ onClose }) {
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     closeRef.current?.focus();
     return () => {
       window.clearTimeout(toastTimerRef.current);
+      document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus?.();
     };
   }, []);
@@ -95,11 +101,11 @@ export default function SettingsDrawer({ onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [confirm, onClose, saving]);
 
-  const notify = (msg, kind = 'click') => {
+  const notify = (msg, kind = 'success') => {
     playSfx(settings.sfxEnabled, kind);
-    setToast(msg);
+    setToast({ id: Date.now(), message: msg, type: kind === 'error' ? 'error' : 'success' });
     window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => setToast(''), 2600);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 3200);
   };
 
   const closeSafely = () => { if (!saving) onClose(); };
@@ -129,10 +135,14 @@ export default function SettingsDrawer({ onClose }) {
     SAVE_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) payload.local.saves[k] = v; });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    a.href = objectUrl;
     a.download = 'terminal-detective-config.json';
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     notify(tx.okExport, 'success');
   };
 
@@ -240,7 +250,7 @@ export default function SettingsDrawer({ onClose }) {
                 run: () => {
                   SAVE_KEYS.forEach(k => localStorage.removeItem(k));
                   resetSettings();
-                  notify(tx.okClear, 'error');
+                  notify(tx.okClear, 'success');
                 },
               })} />
             <div style={{ padding: '10px 12px', borderRadius: 9, border: '1px solid rgba(255,56,96,.28)', background: 'rgba(255,56,96,.05)' }}>
@@ -256,7 +266,7 @@ export default function SettingsDrawer({ onClose }) {
                   };
                   await mutate(() => ({ profile: normalizeProfile(identity) }));
                   setResetCode('');
-                  notify(tx.okCloudReset, 'error');
+                  notify(tx.okCloudReset, 'success');
                 },
               })} style={{ width: '100%', marginTop: 8, padding: 8, borderRadius: 7, border: '1px solid #ff386080', background: 'rgba(255,56,96,.12)', color: '#ff7890', fontFamily: 'monospace', cursor: resetCode === profile?.detective_name ? 'pointer' : 'not-allowed', opacity: resetCode === profile?.detective_name ? 1 : .42 }}>{tx.cloudResetBtn}</button>
             </div>
@@ -312,13 +322,7 @@ export default function SettingsDrawer({ onClose }) {
         </div>
       )}
 
-      {toast && (
-        <div style={{
-          position: 'fixed', bottom: 26, left: '50%', transform: 'translateX(-50%)', zIndex: 220,
-          padding: '10px 18px', borderRadius: 10, fontFamily: 'monospace', fontSize: '0.66rem',
-          border: '1px solid rgba(0,255,136,0.5)', background: 'rgba(0,20,10,0.94)', color: '#00ff88',
-        }}>{toast}</div>
-      )}
+      <StatusToast toast={toast} successEyebrow={tx.successStatus} errorEyebrow={tx.errorStatus} />
 
       <style>{`@keyframes settings-in{from{transform:translateX(102%);opacity:0.4}to{transform:translateX(0);opacity:1}}`}</style>
     </>

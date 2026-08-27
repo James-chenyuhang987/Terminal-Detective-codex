@@ -1,5 +1,4 @@
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, diffProfileWrite, knownAchievementCount, markActivity } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { useLang } from '@/lib/lang.jsx';
@@ -12,30 +11,12 @@ import SideNavIcons from '@/components/game/home/SideNavIcons';
 import FooterShortcuts from '@/components/game/home/FooterShortcuts';
 import HomeBackdrop from '@/components/game/home/HomeBackdrop';
 import CheckinCelebration from '@/components/game/home/CheckinCelebration';
+import StatusToast from '@/components/game/StatusToast';
 import { transactionErrorMessage } from '@/game/transactionFeedback';
 
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
 const BUILD_ID = String(import.meta.env.VITE_BUILD_SHA || 'local').slice(0, 7);
-
-function FeedbackToast({ toast, lang }) {
-  if (!toast || typeof document === 'undefined') return null;
-  const isError = toast.type === 'error';
-  const eyebrow = isError
-    ? (lang === 'zh' ? '交易未完成' : 'TRANSACTION DECLINED')
-    : (lang === 'zh' ? '交易已确认' : 'TRANSACTION CONFIRMED');
-
-  return createPortal(
-    <div className="td-toast-layer" aria-live={isError ? 'assertive' : 'polite'}>
-      <div key={toast.id} className={`td-toast is-${toast.type}`} role={isError ? 'alert' : 'status'}>
-        <span className="td-toast-icon" aria-hidden="true">{isError ? '!' : '✓'}</span>
-        <span className="td-toast-copy"><small>{eyebrow}</small><strong>{toast.message}</strong></span>
-        <span className="td-toast-timer" aria-hidden="true" />
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
   const { lang } = useLang();
@@ -74,7 +55,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   };
 
   const patch = async (next, message = '') => {
-    if (busyRef.current || isReadOnly) return false;
+    if (isReadOnly) {
+      notify(lang === 'zh' ? '当前设备为只读模式，请先接管此设备' : 'This device is read-only. Take over this device before making changes.', 'error');
+      return false;
+    }
+    if (busyRef.current) {
+      notify(lang === 'zh' ? '正在同步上一项操作，请稍候' : 'The previous action is still syncing. Please wait.', 'error');
+      return false;
+    }
     const changes = diffProfileWrite(profile, next);
     if (!Object.keys(changes).length) {
       if (message) notify(message);
@@ -96,7 +84,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   };
 
   const applyResult = async (result, message = '') => {
-    if (busyRef.current || isReadOnly) return false;
+    if (isReadOnly) {
+      notify(lang === 'zh' ? '当前设备为只读模式，请先接管此设备' : 'This device is read-only. Take over this device before making changes.', 'error');
+      return false;
+    }
+    if (busyRef.current) {
+      notify(lang === 'zh' ? '正在同步上一项操作，请稍候' : 'The previous action is still syncing. Please wait.', 'error');
+      return false;
+    }
     if (!result?.profile || result.error) {
       const errors = {
         not_owned: lang === 'zh' ? '尚未持有该物品' : 'Item not owned',
@@ -317,7 +312,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         </Suspense>
       )}
 
-      <FeedbackToast toast={toast} lang={lang} />
+      <StatusToast
+        toast={toast}
+        successEyebrow={lang === 'zh' ? '交易已确认' : 'TRANSACTION CONFIRMED'}
+        errorEyebrow={lang === 'zh' ? '交易未完成' : 'TRANSACTION DECLINED'}
+      />
       {checkinCelebration && (
         <CheckinCelebration
           reward={checkinCelebration.reward}
