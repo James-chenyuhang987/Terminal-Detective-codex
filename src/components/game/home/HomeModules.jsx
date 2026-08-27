@@ -13,6 +13,10 @@ import {
 } from '@/game/playerProfile';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import HomeDrawer from './HomeDrawer';
+import {
+  AGENT_MARKET_CATALOG, activateSupportAgent, getActiveSupportAgentId,
+  getOwnedAgentIds, getOwnedAgents, purchaseAgent,
+} from '@/game/agentMarket';
 
 const GraphModule = lazy(() => import('./modules/GraphModule.jsx'));
 
@@ -32,6 +36,7 @@ const TEXT = {
     cases: ['🗂 未解案件', '档案状态、最佳评分与调查成本'], achievements: ['🏅 成就徽章', '24 项长期调查目标'],
     checkin: ['📅 每日签到', '七日奖励循环，连续签到进度保留'], events: ['🎁 活动中心', '每周轮换的单人挑战'],
     tutorial: ['📖 新手任务', '完成基础调查流程并领取奖励'], goals: ['🎯 七日目标', '按旅程天数逐步解锁'],
+    agent_market: ['◈ 全息探员市场', '使用游戏内钻石签约高阶支援探员'], agents: ['🕵️ 探员名册', '三名核心探员与已签约的支援成员'],
     buy: '购买', use: '使用', equip: '装备', unequip: '卸下', claim: '领取', claimed: '已领取', locked: '未完成',
     go: '前往调查', save: '保存档案', todayBonus: '今日首次侦破额外 +250 金币',
   },
@@ -43,6 +48,7 @@ const TEXT = {
     cases: ['🗂 OPEN CASES', 'Status, best score and investigation cost'], achievements: ['🏅 ACHIEVEMENTS', '24 long-term detective goals'],
     checkin: ['📅 DAILY CHECK-IN', 'Seven-day reward cycle with persistent streak'], events: ['🎁 EVENT CENTER', 'A rotating weekly solo challenge'],
     tutorial: ['📖 ROOKIE TASKS', 'Learn the core loop and claim rewards'], goals: ['🎯 SEVEN-DAY GOALS', 'Unlock objectives as the journey advances'],
+    agent_market: ['◈ HOLOGRAPHIC AGENT MARKET', 'Recruit advanced support agents with earned diamonds'], agents: ['🕵️ AGENT ROSTER', 'Your three core agents and recruited support members'],
     buy: 'BUY', use: 'USE', equip: 'EQUIP', unequip: 'REMOVE', claim: 'CLAIM', claimed: 'CLAIMED', locked: 'INCOMPLETE',
     go: 'INVESTIGATE', save: 'SAVE PROFILE', todayBonus: 'First solve today: +250 gold',
   },
@@ -172,6 +178,51 @@ function DiamondSources({ profile, onOpen, lang }) {
   return <><WalletOverview profile={profile} lang={lang} /><Panel accent="#5fd8ff" style={{ marginBottom: 12 }}><div style={{ color: '#8fe8ff', fontWeight: 900 }}>{lang === 'zh' ? '钻石只来自调查进度' : 'DIAMONDS ARE PROGRESSION-ONLY'}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.56rem', lineHeight: 1.7, marginTop: 5 }}>{economy.nextTech ? (lang === 'zh' ? `下一项可研发科技需要 ${economy.nextTech.cost} 钻石${economy.nextTech.affordable ? '，当前可解锁。' : `，还差 ${economy.nextTech.cost - economy.wallet.diamonds}。`}` : `The next available research costs ${economy.nextTech.cost} diamonds${economy.nextTech.affordable ? ' and is affordable now.' : '.'}`) : (lang === 'zh' ? '九项科技已经全部解锁。' : 'All nine technologies are unlocked.')}</div></Panel><div style={{ display: 'grid', gap: 10 }}>{sources.map(([key, icon, label, value]) => <Panel key={key}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 24 }}>{icon}</span><div style={{ flex: 1 }}><div>{label}</div><div style={{ color: '#5fd8ff', marginTop: 4, fontSize: '.62rem' }}>{value}</div></div><ActionButton onClick={() => onOpen(key)}>›</ActionButton></div></Panel>)}</div></>;
 }
 
+function AgentCard({ agent, lang, owned, active, profile, onBuy = null, onActivate = null, market = false }) {
+  const copy = agent[lang] || agent.zh;
+  const affordable = profile.diamonds >= agent.cost;
+  return <article className={`td-agent-card ${active ? 'is-active' : ''}`} style={/** @type {import('react').CSSProperties & {'--agent-color': string}} */ ({ '--agent-color': agent.color })}>
+    <div className="td-agent-card-portrait"><span>{agent.icon}</span><small>{agent.tier}</small></div>
+    <div className="td-agent-card-copy">
+      <div className="td-agent-card-title"><strong>{agent.id}</strong><em>{copy.role}</em></div>
+      <small>{copy.name}</small>
+      <div className="td-agent-card-power"><span>POWER</span><i><b style={{ width: `${agent.power}%` }} /></i><strong>{agent.power}</strong></div>
+      <div className="td-agent-card-ability">{copy.ability}</div>
+      <div className="td-agent-card-actions">
+        {agent.core ? <span>{lang === 'zh' ? '初始核心' : 'CORE AGENT'}</span> : market ? <span>💎 {agent.cost}</span> : <span>{active ? (lang === 'zh' ? '● 当前支援' : '● ACTIVE') : (lang === 'zh' ? '支援待命' : 'STANDBY')}</span>}
+        {!agent.core && market && <button type="button" disabled={owned || !affordable} onClick={() => onBuy?.(agent)}>{owned ? (lang === 'zh' ? '已拥有' : 'OWNED') : affordable ? (lang === 'zh' ? '签约探员' : 'RECRUIT') : (lang === 'zh' ? `还差 ${agent.cost - profile.diamonds}` : `NEED ${agent.cost - profile.diamonds}`)}</button>}
+        {!agent.core && !market && <button type="button" disabled={active} onClick={() => onActivate?.(agent)}>{active ? (lang === 'zh' ? '已接入' : 'ACTIVE') : (lang === 'zh' ? '设为支援' : 'SET SUPPORT')}</button>}
+      </div>
+    </div>
+  </article>;
+}
+
+function AgentMarketModule({ profile, onApply, onOpenModule, onEnterLobby, lang }) {
+  const ownedIds = new Set(getOwnedAgentIds(profile));
+  const marketAgents = AGENT_MARKET_CATALOG.filter(agent => !agent.core);
+  return <>
+    <WalletOverview profile={profile} lang={lang} />
+    <div className="td-agent-market-hero">
+      <div><div style={{ color: '#f0d28b', fontWeight: 900, letterSpacing: '.08em' }}>{lang === 'zh' ? '全息签约中心' : 'HOLOGRAPHIC RECRUITMENT'}</div><p style={{ margin: '6px 0 0', color: 'rgba(237,248,255,.46)', fontSize: '.58rem', lineHeight: 1.7 }}>{lang === 'zh' ? '能力指数越高，签约所需钻石越多。新探员作为支援加入下一局，不替换三名核心编队。' : 'Higher power requires more diamonds. Recruits support your next case without replacing the three core agents.'}</p></div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}><ActionButton accent="#e8c98a" onClick={() => onOpenModule('agents')}>{lang === 'zh' ? '查看我的探员' : 'MY AGENTS'}</ActionButton><ActionButton onClick={onEnterLobby}>{lang === 'zh' ? '进入编队大厅' : 'SQUAD LOBBY'}</ActionButton></div>
+    </div>
+    <div className="td-agent-market-grid">{marketAgents.map(agent => <AgentCard key={agent.id} agent={agent} lang={lang} market profile={profile} owned={ownedIds.has(agent.id)} active={getActiveSupportAgentId(profile) === agent.id} onBuy={selected => onApply(purchaseAgent(profile, selected.id), lang === 'zh' ? `${selected.zh.name} 已加入名册${getActiveSupportAgentId(profile) ? '' : '并设为支援'}` : `${selected.en.name} recruited`)} />)}</div>
+    <Panel accent="#e8c98a" style={{ marginTop: 12 }}><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.55rem', lineHeight: 1.75 }}>{lang === 'zh' ? '钻石不接入真实付费，可通过成就、案件首通、签到、七日目标与每周挑战获得。支援效果继续遵守现有 AP 折扣和混乱抗性安全上限。' : 'Diamonds remain gameplay-only. Support bonuses still obey existing AP discount and confusion-resistance safety caps.'}</div></Panel>
+  </>;
+}
+
+function OwnedAgentsModule({ profile, onApply, onOpenModule, onEnterLobby, lang }) {
+  const agents = getOwnedAgents(profile);
+  const activeId = getActiveSupportAgentId(profile);
+  const supportCount = agents.filter(agent => !agent.core).length;
+  return <>
+    <div className="td-agent-roster-summary"><div><strong>{agents.length}</strong><small>{lang === 'zh' ? '已拥有' : 'OWNED'}</small></div><div><strong>3</strong><small>{lang === 'zh' ? '核心编队' : 'CORE TEAM'}</small></div><div><strong>{supportCount}</strong><small>{lang === 'zh' ? '支援探员' : 'SUPPORT'}</small></div></div>
+    {!activeId && <Panel accent="#e8c98a" style={{ marginBottom: 12 }}><div style={{ color: '#e8c98a', fontWeight: 900 }}>{lang === 'zh' ? '尚未设置支援探员' : 'NO SUPPORT AGENT SELECTED'}</div><div style={{ marginTop: 5, color: 'rgba(255,255,255,.42)', fontSize: '.55rem' }}>{lang === 'zh' ? '初始三名核心探员已就绪；可前往市场签约更多支援。' : 'Your three core agents are ready. Recruit support from the market.'}</div></Panel>}
+    <div className="td-agent-market-grid">{agents.map(agent => <AgentCard key={agent.id} agent={agent} lang={lang} profile={profile} owned active={activeId === agent.id} onActivate={selected => onApply(activateSupportAgent(profile, selected.id), lang === 'zh' ? `${selected.zh.name} 已设为当前支援` : `${selected.en.name} is now active support`)} />)}</div>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}><ActionButton accent="#e8c98a" onClick={() => onOpenModule('agent_market')}>{lang === 'zh' ? '前往探员市场' : 'AGENT MARKET'}</ActionButton><ActionButton onClick={onEnterLobby}>{lang === 'zh' ? '进入编队大厅' : 'SQUAD LOBBY'}</ActionButton></div>
+  </>;
+}
+
 function WarehouseModule({ profile, onApply, lang, tx }) {
   const [tab, setTab] = useState('inventory');
   const [quantities, setQuantities] = useState({});
@@ -251,7 +302,7 @@ function EventModule({ profile, onApply, lang, tx, onNavigate }) {
   return <><Panel accent={DIFF_COLOR[caseData.difficulty]}><div style={{ textAlign: 'center', fontSize: 42 }}>{CASE_ICON[caseData.case_id]}</div><div style={{ textAlign: 'center', color: '#fff', fontWeight: 900 }}>{lang === 'en' ? caseData.en?.title : caseData.title}</div><div style={{ textAlign: 'center', color: 'rgba(255,255,255,.35)', fontSize: '.54rem', marginTop: 5 }}>{challenge.cycleId}</div><div style={{ textAlign: 'center', marginTop: 10 }}><ActionButton onClick={() => onNavigate(caseData.case_id)}>{tx.go}</ActionButton></div></Panel><div style={{ display: 'grid', gap: 8, marginTop: 12 }}>{tasks.map(([done, label]) => <Panel key={label} accent={done ? '#00ff88' : '#668899'}><span style={{ color: done ? '#00ff88' : 'rgba(255,255,255,.4)' }}>{done ? '✓' : '○'} {label}</span></Panel>)}</div><Panel style={{ marginTop: 12, textAlign: 'center' }}><div style={{ marginBottom: 10 }}>🪙 1000 · 💎 40</div><ActionButton disabled={claimed || tasks.some(([done]) => !done)} onClick={() => onApply(claimWeeklyReward(profile), lang === 'zh' ? '每周奖励已领取' : 'Weekly reward claimed')}>{claimed ? tx.claimed : tx.claim}</ActionButton></Panel></>;
 }
 
-export default function HomeModules({ moduleKey, profile, busy, onClose, onApply, onCheckin, onOpenModule, onNavigate, hasSavedTeam }) {
+export default function HomeModules({ moduleKey, profile, busy, onClose, onApply, onCheckin, onOpenModule, onNavigate, hasSavedTeam, onEnterLobby }) {
   const { lang } = useLang();
   const tx = TEXT[lang] || TEXT.zh;
   if (moduleKey === 'settings') return <SettingsDrawer onClose={onClose} />;
@@ -261,6 +312,8 @@ export default function HomeModules({ moduleKey, profile, busy, onClose, onApply
   if (moduleKey === 'profile') content = <ProfileModule {...props} />;
   else if (moduleKey === 'supply') content = <SupplyModule {...props} />;
   else if (moduleKey === 'diamonds') content = <DiamondSources profile={profile} onOpen={onOpenModule} lang={lang} />;
+  else if (moduleKey === 'agent_market') content = <AgentMarketModule {...props} onOpenModule={onOpenModule} onEnterLobby={onEnterLobby} />;
+  else if (moduleKey === 'agents') content = <OwnedAgentsModule {...props} onOpenModule={onOpenModule} onEnterLobby={onEnterLobby} />;
   else if (moduleKey === 'warehouse') content = <WarehouseModule {...props} />;
   else if (moduleKey === 'tech') content = <TechModule {...props} />;
   else if (moduleKey === 'cases') content = <CaseArchive profile={profile} lang={lang} onNavigate={onNavigate} hasSavedTeam={hasSavedTeam} />;
@@ -272,5 +325,5 @@ export default function HomeModules({ moduleKey, profile, busy, onClose, onApply
   else if (moduleKey === 'events') content = <EventModule {...props} onNavigate={onNavigate} />;
   else if (moduleKey === 'tutorial') content = <TaskModule kind="tutorial" {...props} />;
   else if (moduleKey === 'goals') content = <TaskModule kind="seven" {...props} />;
-  return <HomeDrawer title={meta[0]} subtitle={meta[1]} onClose={onClose} busy={busy}>{content}</HomeDrawer>;
+  return <HomeDrawer title={meta[0]} subtitle={meta[1]} onClose={onClose} busy={busy} width={moduleKey === 'agent_market' || moduleKey === 'agents' ? 820 : 620}>{content}</HomeDrawer>;
 }

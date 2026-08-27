@@ -1,5 +1,6 @@
 import { DEFAULT_AGENT_CONFIG } from './caseData.js';
 import { calcTeamSynergy, effectiveAttrs, getEquippedSkillEffects } from './specialtySystem.js';
+import { getAgentById, getSupportAgentEffects } from './agentMarket.js';
 
 export const AGENT_DEFS = [
   {
@@ -62,7 +63,7 @@ export function normalizeSavedTeamConfig(saved) {
   };
 }
 
-export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_index ?? 1, skillLoadout = null) {
+export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_index ?? 1, skillLoadout = null, supportAgentId = null) {
   const specs = Array.isArray(saved.specs) && saved.specs.length === 3 ? saved.specs : defaultSpecs();
   const priorities = normalizePriorities(saved.priorities);
   const agents = specs.map((spec, index) => ({
@@ -73,6 +74,16 @@ export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_i
     priority_list: priorities[index],
   }));
   const synergy = calcTeamSynergy(specs);
+  const equippedEffects = getEquippedSkillEffects(skillLoadout);
+  const supportEffects = /** @type {Record<string, number | boolean>} */ (getSupportAgentEffects(supportAgentId));
+  const skillEffects = { ...equippedEffects };
+  Object.entries(supportEffects).forEach(([key, value]) => {
+    if (key === 'initial_ap_bonus') return;
+    skillEffects[key] = typeof value === 'number'
+      ? (Number(skillEffects[key]) || 0) + value
+      : value || skillEffects[key];
+  });
+  const supportAgent = getAgentById(supportAgentId);
   return {
     ...DEFAULT_AGENT_CONFIG,
     agent_id: agents.map(agent => agent.agent_id).join('+'),
@@ -91,7 +102,15 @@ export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_i
     synergy_skills: synergy.active.map(skill => skill.id),
     specialty_match: synergy.matchScore,
     specialty_overload: synergy.overload,
-    skill_effects: getEquippedSkillEffects(skillLoadout),
+    skill_effects: skillEffects,
+    support_agent: supportAgent && !supportAgent.core ? {
+      agent_id: supportAgent.id,
+      power: supportAgent.power,
+      effects: supportEffects,
+    } : null,
+    support_effects: {
+      initial_ap_bonus: Math.max(0, Number(supportEffects.initial_ap_bonus) || 0),
+    },
     priority_list: agents[selectedIdx]?.priority_list || PRIORITY_ACTIONS.map(item => item.id),
   };
 }

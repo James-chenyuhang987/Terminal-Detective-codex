@@ -26,7 +26,7 @@ export default function HomePortal({ onEnter }) {
         全息探员大厅 🔍
       </div>
       <div style={{ fontSize: '0.62rem', color: 'rgba(200,235,255,0.5)', marginTop: 8, letterSpacing: '0.05em' }}>
-        进入全息探员大厅，接受任务，结识同伴
+        进入全息探员市场，签约支援成员并管理编队
       </div>
 
       {/* 全息拱门 + 侦探剪影 */}
@@ -79,10 +79,10 @@ export default function HomePortal({ onEnter }) {
           letterSpacing: '0.24em', fontSize: '0.88rem', textShadow: '0 0 14px #00e5ff',
           boxShadow: '0 0 22px rgba(0,229,255,0.35)', transition: 'all 0.24s',
         }}>
-        进入大厅 ≫
+        进入探员市场 ≫
       </button>
       <div style={{ fontSize: '0.5rem', color: 'rgba(200,235,255,0.3)', marginTop: 9, letterSpacing: '0.24em' }}>
-        — 当前主厅 / LOBBY —
+        — 探员交换站 / AGENT EXCHANGE —
       </div>
       <style>{`
         @keyframes portal-pulse{0%,100%{opacity:.5}50%{opacity:1}}

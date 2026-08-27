@@ -1,14 +1,19 @@
-import React, { lazy, Suspense, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import GameLanding from '@/components/game/GameLanding';
 import DetectiveRegistration from '@/components/game/DetectiveRegistration';
 import { markActivity, startCase } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { buildTeamConfig } from '@/game/teamConfig';
+import { getActiveSupportAgentId } from '@/game/agentMarket';
 
-const AgentLobby = lazy(() => import('@/components/game/AgentLobby'));
-const InvestigationTerminal = lazy(() => import('@/components/game/InvestigationTerminal'));
-const CaseSelect = lazy(() => import('@/components/game/CaseSelect'));
-const DetectiveHome = lazy(() => import('@/components/game/DetectiveHome'));
+const loadAgentLobby = () => import('@/components/game/AgentLobby');
+const loadInvestigationTerminal = () => import('@/components/game/InvestigationTerminal');
+const loadCaseSelect = () => import('@/components/game/CaseSelect');
+const loadDetectiveHome = () => import('@/components/game/DetectiveHome');
+const AgentLobby = lazy(loadAgentLobby);
+const InvestigationTerminal = lazy(loadInvestigationTerminal);
+const CaseSelect = lazy(loadCaseSelect);
+const DetectiveHome = lazy(loadDetectiveHome);
 
 function ScreenFallback() {
   return (
@@ -27,6 +32,25 @@ export default function TerminalDetective() {
   const registrationRef = useRef(false);
   const [regError, setRegError] = useState('');
   const [preferredCaseId, setPreferredCaseId] = useState(null);
+
+  useEffect(() => {
+    const preload = () => {
+      if (screen === 'LANDING' || screen === 'REGISTRATION') void loadDetectiveHome();
+      if (screen === 'HOME') {
+        void loadAgentLobby();
+        void loadCaseSelect();
+      }
+      if (screen === 'LOBBY') void loadCaseSelect();
+      if (screen === 'CASE_SELECT') void loadInvestigationTerminal();
+    };
+    if (typeof window === 'undefined') return undefined;
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(preload, { timeout: 900 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(preload, 120);
+    return () => clearTimeout(id);
+  }, [screen]);
 
   const handleStart = async () => {
     const current = profile || await refresh();
@@ -86,7 +110,7 @@ export default function TerminalDetective() {
     setAgentStrategy({
       ...(agentStrategy || {}), skill_effects: skillEffects,
       home_effects: {
-        initial_ap_bonus: result.effects.initial_ap_bonus,
+        initial_ap_bonus: result.effects.initial_ap_bonus + Math.max(0, Number(agentStrategy?.support_effects?.initial_ap_bonus) || 0),
         ignore_first_trap: result.effects.ignore_first_trap,
       },
     });
@@ -110,7 +134,7 @@ export default function TerminalDetective() {
       openLobbyForCase(caseId);
       return;
     }
-    setAgentStrategy(buildTeamConfig(saved, saved.primary_agent_index, profile?.skill_loadout));
+    setAgentStrategy(buildTeamConfig(saved, saved.primary_agent_index, profile?.skill_loadout, getActiveSupportAgentId(profile)));
     setPreferredCaseId(caseId);
     setScreen('CASE_SELECT');
   };

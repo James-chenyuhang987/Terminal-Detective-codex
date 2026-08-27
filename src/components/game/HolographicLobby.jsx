@@ -15,6 +15,7 @@ import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
 import { calcCaseMatchScore } from '@/game/casePresets';
 import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
+import { getActiveSupportAgent } from '@/game/agentMarket';
 import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
 
 function LobbyAtmosphere() {
@@ -745,6 +746,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
     updateSpec, updatePriority, applyPreset, currentConfig, loadSaved,
   } = useTeamBuilder(profile);
   const progression = profile?.agent_progression || [];
+  const activeSupport = getActiveSupportAgent(profile);
   const [mobileTab, setMobileTab] = useState('stage');
 
   const accentColor = '#00e5ff';
@@ -864,7 +866,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
       }}>
         <div className="td-lobby-title-copy">
           <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>探员编组</span>
-          <small>选择探员、调整专长，然后部署</small>
+          <small>{activeSupport ? `支援 ${activeSupport.icon} ${activeSupport.id} 已接入 · 选择探员、调整专长，然后部署` : '选择探员、调整专长，然后部署'}</small>
         </div>
         <div className="td-lobby-readiness">
           <div><small>CASE MATCH</small><strong>{matchForecast}<em>%</em></strong></div>
@@ -931,7 +933,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
           matchScore={matchForecast}
           onComplete={() => {
             setShowSequence(false);
-            onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout));
+            onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout, activeSupport?.id));
           }}
         />
       )}

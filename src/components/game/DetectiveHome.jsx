@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, diffProfileWrite, knownAchievementCount, markActivity } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { useLang } from '@/lib/lang.jsx';
@@ -10,8 +10,10 @@ import InfoCard from '@/components/game/home/InfoCard';
 import SideNavIcons from '@/components/game/home/SideNavIcons';
 import FooterShortcuts from '@/components/game/home/FooterShortcuts';
 import HomeBackdrop from '@/components/game/home/HomeBackdrop';
+import CheckinCelebration from '@/components/game/home/CheckinCelebration';
 
-const HomeModules = lazy(() => import('@/components/game/home/HomeModules'));
+const loadHomeModules = () => import('@/components/game/home/HomeModules');
+const HomeModules = lazy(loadHomeModules);
 const BUILD_ID = String(import.meta.env.VITE_BUILD_SHA || 'local').slice(0, 7);
 
 export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
@@ -20,12 +22,25 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const [busy, setBusy] = useState(false);
   const [module, setModule] = useState(null);
   const [toast, setToast] = useState('');
+  const [checkinCelebration, setCheckinCelebration] = useState(null);
   const toastTimerRef = useRef(null);
   const busyRef = useRef(false);
   const hasSavedTeam = !!profile?.saved_team_config;
   const loadError = syncStatus === 'error';
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
+
+  useEffect(() => {
+    const preload = () => { void loadHomeModules(); };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(preload, { timeout: 650 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(preload, 80);
+    return () => clearTimeout(id);
+  }, []);
+
+  const closeCheckinCelebration = useCallback(() => setCheckinCelebration(null), []);
 
   const retryLoad = () => {
     void refresh().catch(() => {});
@@ -75,6 +90,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         locked: lang === 'zh' ? '成就尚未解锁' : 'Achievement locked',
         rename_used: lang === 'zh' ? '代号修改次数已用完' : 'Codename rename already used',
         energy_full: lang === 'zh' ? '体力已达到临时上限' : 'Energy is at the overflow cap',
+        already_owned: lang === 'zh' ? '该探员已在你的名册中' : 'This agent is already in your roster',
+        unknown_agent: lang === 'zh' ? '未找到该探员档案' : 'Agent record not found',
       };
       notify(errors[result?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'));
       return false;
@@ -87,15 +104,18 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   };
 
   const handleCheckin = async () => {
-    const { profile: next, reward } = applyCheckin(profile);
+    const { profile: next, reward, day } = applyCheckin(profile);
     if (!reward) return;
     const parts = [reward.energy ? `⚡+${reward.energy}` : '', reward.gold ? `🪙+${reward.gold}` : '', reward.diamonds ? `💎+${reward.diamonds}` : ''].filter(Boolean).join(' · ');
-    await patch(next, `${lang === 'zh' ? '签到成功' : 'Check-in complete'} · ${parts || '🎁'}`);
+    const saved = await patch(next, `${lang === 'zh' ? '签到成功' : 'Check-in complete'} · ${parts || '🎁'}`);
+    if (saved) setCheckinCelebration({ reward, day });
   };
 
-  const enterLobby = async (targetCaseId = null) => {
-    const next = markActivity(profile, 'lobby_visits');
-    if (await patch(next)) onEnterLobby(targetCaseId);
+  const enterLobby = (targetCaseId = null) => {
+    onEnterLobby(targetCaseId);
+    if (!isReadOnly) {
+      void mutate(current => ({ profile: markActivity(current, 'lobby_visits') })).catch(() => {});
+    }
   };
 
   const openCase = (caseId) => {
@@ -118,12 +138,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
 
   const named = !!profile.detective_name;
   const sideItems = lang === 'zh' ? [
+    { key: 'agents', icon: '🕵️', label: '探员', desc: '已拥有探员' },
     { key: 'warehouse', icon: '🎒', label: '物品仓库', desc: '道具与材料' },
     { key: 'graph', icon: '🕸', label: '线索图谱', desc: '线索关联分析' },
     { key: 'tech', icon: '⚙️', label: '科技研发', desc: '解锁科技能力' },
     { key: 'comms', icon: '✉️', label: '探员通讯', desc: '系统与剧情联络' },
     { key: 'settings', icon: '🔧', label: '设置', desc: '游戏与账户设置' },
   ] : [
+    { key: 'agents', icon: '🕵️', label: 'AGENTS', desc: 'Owned roster' },
     { key: 'warehouse', icon: '🎒', label: 'WAREHOUSE', desc: 'Items and materials' },
     { key: 'graph', icon: '🕸', label: 'CLUE GRAPH', desc: 'Cross-case evidence' },
     { key: 'tech', icon: '⚙️', label: 'RESEARCH', desc: 'Permanent upgrades' },
@@ -244,7 +266,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
                 }}>✎ {lang === 'zh' ? '修改档案' : 'EDIT PROFILE'}</button>
               </div>
             )}
-            <HomePortal onEnter={() => void enterLobby()} />
+            <HomePortal onEnter={() => setModule('agent_market')} />
           </div>
         </div>
 
@@ -270,7 +292,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
           <HomeModules
             moduleKey={module} profile={profile} busy={busy} onClose={() => setModule(null)}
             onApply={applyResult} onCheckin={handleCheckin} onOpenModule={setModule} onNavigate={openCase}
-            hasSavedTeam={hasSavedTeam}
+            hasSavedTeam={hasSavedTeam} onEnterLobby={() => enterLobby()}
           />
         </Suspense>
       )}
@@ -281,6 +303,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
           border: '1px solid rgba(0,255,136,0.5)', borderRadius: 10, padding: '10px 18px',
           background: 'rgba(0,20,10,0.92)', color: '#00ff88', fontSize: '0.7rem', letterSpacing: '0.08em',
         }}>{toast}</div>
+      )}
+      {checkinCelebration && (
+        <CheckinCelebration
+          reward={checkinCelebration.reward}
+          day={checkinCelebration.day}
+          lang={lang}
+          onDone={closeCheckinCelebration}
+        />
       )}
     </div>
   );

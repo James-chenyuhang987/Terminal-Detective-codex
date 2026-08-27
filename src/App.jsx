@@ -5,6 +5,7 @@ import { SettingsProvider } from '@/lib/settings.jsx';
 import { ProfileProvider, SessionReadOnlyBanner } from '@/lib/ProfileContext.jsx';
 import AuthGate from '@/components/AuthGate';
 import AppErrorBoundary from '@/components/AppErrorBoundary.jsx';
+import GlobalClickEffects from '@/components/game/GlobalClickEffects.jsx';
 
 const TerminalDetective = lazy(() => import('./pages/TerminalDetective'));
 
@@ -36,6 +37,7 @@ function App() {
   return (
     <LangProvider>
       <SettingsProvider>
+        <GlobalClickEffects />
         <AuthProvider>
           <ProfileProvider>
             <AppErrorBoundary>
