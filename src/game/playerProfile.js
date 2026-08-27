@@ -209,13 +209,27 @@ async function invokeDirectProfile(action, payload, headers, signal) {
   const isPatch = action === 'patch';
   const patch = isPatch ? sanitizeProfilePatch(payload.patch) : null;
   if (isPatch && !patch) throw profileRequestError('INVALID_PATCH', 'Profile patch contains unsupported fields.', 400);
-  const response = await fetch(url, {
-    method: isPatch ? 'PUT' : 'GET',
-    headers,
-    signal,
-    ...(isPatch ? { body: JSON.stringify(patch) } : {}),
-  });
-  const body = await response.json().catch(() => ({}));
+  const request = async (bodyPatch = null) => {
+    const response = await fetch(url, {
+      method: isPatch ? 'PUT' : 'GET',
+      headers,
+      signal,
+      ...(isPatch ? { body: JSON.stringify(bodyPatch) } : {}),
+    });
+    return { response, body: await response.json().catch(() => ({})) };
+  };
+  let { response, body } = await request(patch);
+  let unsupportedFields = [];
+  if (isPatch && !response.ok && [400, 422].includes(response.status)) {
+    const legacyFields = ['detective_name', 'avatar', 'signature'];
+    const legacyPatch = Object.fromEntries(legacyFields
+      .filter(key => Object.prototype.hasOwnProperty.call(patch, key))
+      .map(key => [key, patch[key]]));
+    unsupportedFields = Object.keys(patch).filter(key => !legacyFields.includes(key));
+    if (Object.keys(legacyPatch).length && unsupportedFields.length) {
+      ({ response, body } = await request(legacyPatch));
+    }
+  }
   const current = body?.data ?? body;
   if (!response.ok || !current || typeof current !== 'object' || Array.isArray(current) || !current.id) {
     const code = body?.error || (response.status === 401 || response.status === 403 ? 'UNAUTHENTICATED' : 'PROFILE_UNAVAILABLE');
@@ -225,6 +239,7 @@ async function invokeDirectProfile(action, payload, headers, signal) {
     profile: current,
     account: { id: current.id, email: current.email, full_name: current.full_name },
     compatibility_mode: true,
+    unsupported_fields: unsupportedFields,
   };
 }
 
@@ -250,7 +265,7 @@ export async function invokePlayerProfile(action, payload = {}) {
       // envelope. It must never be treated as a successful profile write.
       return invokeDirectProfile(action, payload, headers, controller.signal);
     }
-    if (response.status === 404 || response.status === 405) {
+    if (response.status === 404 || response.status === 405 || (response.status >= 500 && body?.error === 'PROFILE_UNAVAILABLE')) {
       return invokeDirectProfile(action, payload, headers, controller.signal);
     }
     const result = unwrapFunctionResponse(body);

@@ -12,6 +12,7 @@ import FooterShortcuts from '@/components/game/home/FooterShortcuts';
 import HomeBackdrop from '@/components/game/home/HomeBackdrop';
 
 const HomeModules = lazy(() => import('@/components/game/home/HomeModules'));
+const BUILD_ID = String(import.meta.env.VITE_BUILD_SHA || 'local').slice(0, 7);
 
 export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
   const { lang } = useLang();
@@ -155,7 +156,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
             {[['✉️', 'comms'], ['📅', 'checkin'], ['🔧', 'settings']].map(([ic, k]) => (
               <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => setModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
             ))}
-            <span title={syncStatus === 'online' ? 'Base44 connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed'} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶</span>
+            <span title={`${syncStatus === 'online' ? 'Base44 connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed'} · BUILD ${BUILD_ID}`} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
           </div>
         </div>
       </div>

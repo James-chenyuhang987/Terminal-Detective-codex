@@ -41,9 +41,15 @@ export default function TerminalDetective() {
     try {
       const result = await mutate(current => ({ profile: { ...current, ...identity } }));
       if (!result?.profile?.detective_name) throw new Error('Identity was not persisted.');
+      const verified = await refresh();
+      if (verified?.detective_name !== identity.detective_name) {
+        throw new Error('Identity did not survive cloud verification.');
+      }
       setScreen('HOME');
-    } catch {
-      setRegError('云端注册失败，请检查网络后重试。');
+    } catch (cause) {
+      setRegError(cause?.code === 'UNAUTHENTICATED'
+        ? '登录状态已失效，请重新登录后再注册。'
+        : '身份尚未写入云端，已保留当前输入，请检查网络后重试。');
     } finally {
       registrationRef.current = false;
       setRegBusy(false);

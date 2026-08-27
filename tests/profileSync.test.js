@@ -210,3 +210,40 @@ test('empty successful function envelope is treated as incompatible and reloads 
     globalThis.fetch = originalFetch;
   }
 });
+
+test('legacy User schema still saves core detective identity when new fields are rejected', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    globalThis.fetch = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (String(url).includes('/functions/playerProfile')) {
+        return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (calls.length === 2) {
+        return new Response(JSON.stringify({ detail: 'Unknown User fields' }), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({
+        id: 'user-3', detective_name: '晨钟', avatar: '🦅', signature: '保持怀疑',
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    const result = await invokePlayerProfile('patch', {
+      session_id: 'web-1234567890123456',
+      patch: {
+        detective_name: '晨钟', avatar: '🦅', signature: '保持怀疑',
+        identity_badge: 'bureau', detective_tags: ['冷静'],
+      },
+    });
+    assert.equal(result.profile.detective_name, '晨钟');
+    assert.deepEqual(result.unsupported_fields, ['identity_badge', 'detective_tags']);
+    assert.equal(calls.length, 3);
+    assert.deepEqual(JSON.parse(calls[2].options.body), {
+      detective_name: '晨钟', avatar: '🦅', signature: '保持怀疑',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
