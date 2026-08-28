@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import StoryBriefing from '@/components/game/StoryBriefing';
 import { decisionForecast, recommendExecutor } from '@/game/commandSystem';
@@ -28,6 +28,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
   const [preview, setPreview] = useState(false);
   const [joint, setJoint] = useState(false);
   const resolvedRef = useRef(false);
+  const overlayRef = useRef(null);
   const selectedCard = cards[selectedIndex] || cards[0];
   const points = Math.max(0, Number(commandState?.points) || 0);
   const reserved = Number(preview) + Number(joint);
@@ -68,6 +69,21 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
     }
   }, [cards, chooseOnce, executorId, left, team]);
 
+  useLayoutEffect(() => {
+    const overlay = overlayRef.current;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    if (overlay) overlay.scrollTop = 0;
+    const body = overlay?.querySelector('.td-decision-fixed-body');
+    if (body) body.scrollTop = 0;
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+    };
+  }, []);
+
   const toggleCommand = (id) => {
     const active = id === 'preview' ? preview : joint;
     if (!active && reserved + 1 > points) {
@@ -89,46 +105,50 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
   };
 
   return (
-    <div className="td-decision-overlay">
-      <StoryBriefing story={story} />
-      <div className="td-decision-heading">
-        <div>{zh ? '◈ 指挥席 · 关键决策' : '◈ COMMAND DESK · KEY DECISION'}</div>
-        <small className={left <= 10 ? 'is-urgent' : ''}>{zh ? `指令窗口 ${Math.max(0, left)} 秒` : `COMMAND WINDOW ${Math.max(0, left)}s`}</small>
-        <b>◆ {points - reserved}/{commandState?.max_points || 5}</b>
-      </div>
-
-      <div className="td-decision-assistant-tip" role="note">
-        <span>🤖</span>
-        <div><small>NOVA · {zh ? '决策提示' : 'DECISION TIP'}</small><strong>{zh ? '先阅读白色的「证据及发现」，再比较收益和风险。' : 'Read the white EVIDENCE & FINDINGS text before comparing benefit and risk.'}</strong></div>
-      </div>
-
-      <div className="td-decision-cards">
-        {cards.map((card, index) => {
-          const meta = STYLE_META[card.style] || STYLE_META.steady;
-          const riskColor = RISK_COLOR[card.risk_level] || '#ffaa00';
-          const forecast = decisionForecast(card.action_tag, card.risk_level);
-          const isSelected = index === selectedIndex;
-          return <button type="button" className={`td-decision-card ${isSelected ? 'is-selected' : ''}`} key={`${card.action_tag}-${index}`}
-            onClick={() => setSelectedIndex(index)} style={/** @type {React.CSSProperties & Record<string, string>} */ ({ '--decision-color': meta.color, '--risk-color': riskColor })}>
-            <div className="td-decision-card-head"><span>{meta.icon}</span><strong>{zh ? meta.zh : meta.en}</strong><i>{isSelected ? 'SELECTED' : `0${index + 1}`}</i></div>
-            <div className="td-decision-card-copy"><h3>{card.label}</h3><p className="is-benefit">＋ {card.benefit_desc}</p><p className="is-risk">⚠ {card.risk_desc}</p><code>[{String(card.action_tag).toUpperCase()}]</code></div>
-            {preview && <div className="td-decision-forecast"><span>AP {forecast.ap[0]}–{forecast.ap[1]}</span><span>{zh ? '混乱' : 'CONF'} {forecast.confusion[0]}–{forecast.confusion[1]}</span><span>{zh ? '陷阱' : 'TRAP'} {forecast.trap}%</span></div>}
-            <i className="td-decision-risk-line" />
-          </button>;
-        })}
-      </div>
-
-      <section className="td-decision-command-desk">
-        <div className="td-decision-executors">
-          <header><span>{zh ? '执行探员' : 'EXECUTING AGENT'}</span><small>{zh ? '系统推荐已标记，仍可自由改派' : 'RECOMMENDATION MARKED · MANUAL OVERRIDE ALLOWED'}</small></header>
-          <div>{team.slice(0, 3).map(agent => <button type="button" key={agent.agent_id} className={executorId === agent.agent_id ? 'is-active' : ''} onClick={() => setExecutorId(agent.agent_id)}><span>{AGENT_ICONS[agent.agent_id] || '◈'}</span><strong>{agent.agent_id}</strong>{recommendedId === agent.agent_id && <small>{zh ? '推荐' : 'REC'}</small>}</button>)}</div>
-          {joint && <div className="td-decision-assist"><small>{zh ? '协助探员' : 'ASSIST AGENT'}</small>{team.filter(agent => agent.agent_id !== executorId).slice(0, 2).map(agent => <button type="button" key={agent.agent_id} className={assistantId === agent.agent_id ? 'is-active' : ''} onClick={() => setAssistantId(agent.agent_id)}>{AGENT_ICONS[agent.agent_id] || '◈'} {agent.agent_id}</button>)}</div>}
+    <div ref={overlayRef} className="td-decision-overlay">
+      <div className="td-decision-fixed-top">
+        <StoryBriefing story={story} compact />
+        <div className="td-decision-heading">
+          <div>{zh ? '◈ 指挥席 · 关键决策' : '◈ COMMAND DESK · KEY DECISION'}</div>
+          <small className={left <= 10 ? 'is-urgent' : ''}>{zh ? `指令窗口 ${Math.max(0, left)} 秒` : `COMMAND WINDOW ${Math.max(0, left)}s`}</small>
+          <b>◆ {points - reserved}/{commandState?.max_points || 5}</b>
         </div>
-        <div className="td-decision-command-options">
-          <CommandToggle active={preview} disabled={!preview && reserved >= points} icon="⌁" title={zh ? '战术预演' : 'TACTICAL PREVIEW'} detail={zh ? '显示本地风险预测' : 'SHOW LOCAL FORECAST'} onClick={() => toggleCommand('preview')} />
-          <CommandToggle active={joint} disabled={!joint && reserved >= points} icon="◇" title={zh ? '联合行动' : 'JOINT ACTION'} detail={zh ? '双人取高值，AP -1' : 'BEST ATTRIBUTE · AP -1'} onClick={() => toggleCommand('joint')} />
+
+        <div className="td-decision-assistant-tip" role="note">
+          <span>🤖</span>
+          <div><small>NOVA · {zh ? '决策提示' : 'DECISION TIP'}</small><strong>{zh ? '先阅读白色的「证据及发现」，再比较收益和风险。' : 'Read the white EVIDENCE & FINDINGS text before comparing benefit and risk.'}</strong></div>
         </div>
-      </section>
+      </div>
+
+      <div className="td-decision-fixed-body">
+        <div className="td-decision-cards">
+          {cards.map((card, index) => {
+            const meta = STYLE_META[card.style] || STYLE_META.steady;
+            const riskColor = RISK_COLOR[card.risk_level] || '#ffaa00';
+            const forecast = decisionForecast(card.action_tag, card.risk_level);
+            const isSelected = index === selectedIndex;
+            return <button type="button" className={`td-decision-card ${isSelected ? 'is-selected' : ''}`} key={`${card.action_tag}-${index}`}
+              onClick={() => setSelectedIndex(index)} style={/** @type {React.CSSProperties & Record<string, string>} */ ({ '--decision-color': meta.color, '--risk-color': riskColor })}>
+              <div className="td-decision-card-head"><span>{meta.icon}</span><strong>{zh ? meta.zh : meta.en}</strong><i>{isSelected ? 'SELECTED' : `0${index + 1}`}</i></div>
+              <div className="td-decision-card-copy"><h3>{card.label}</h3><p className="is-benefit">＋ {card.benefit_desc}</p><p className="is-risk">⚠ {card.risk_desc}</p><code>[{String(card.action_tag).toUpperCase()}]</code></div>
+              {preview && <div className="td-decision-forecast"><span>AP {forecast.ap[0]}–{forecast.ap[1]}</span><span>{zh ? '混乱' : 'CONF'} {forecast.confusion[0]}–{forecast.confusion[1]}</span><span>{zh ? '陷阱' : 'TRAP'} {forecast.trap}%</span></div>}
+              <i className="td-decision-risk-line" />
+            </button>;
+          })}
+        </div>
+
+        <section className="td-decision-command-desk">
+          <div className="td-decision-executors">
+            <header><span>{zh ? '执行探员' : 'EXECUTING AGENT'}</span><small>{zh ? '系统推荐已标记，仍可自由改派' : 'RECOMMENDATION MARKED · MANUAL OVERRIDE ALLOWED'}</small></header>
+            <div>{team.slice(0, 3).map(agent => <button type="button" key={agent.agent_id} className={executorId === agent.agent_id ? 'is-active' : ''} onClick={() => setExecutorId(agent.agent_id)}><span>{AGENT_ICONS[agent.agent_id] || '◈'}</span><strong>{agent.agent_id}</strong>{recommendedId === agent.agent_id && <small>{zh ? '推荐' : 'REC'}</small>}</button>)}</div>
+            {joint && <div className="td-decision-assist"><small>{zh ? '协助探员' : 'ASSIST AGENT'}</small>{team.filter(agent => agent.agent_id !== executorId).slice(0, 2).map(agent => <button type="button" key={agent.agent_id} className={assistantId === agent.agent_id ? 'is-active' : ''} onClick={() => setAssistantId(agent.agent_id)}>{AGENT_ICONS[agent.agent_id] || '◈'} {agent.agent_id}</button>)}</div>}
+          </div>
+          <div className="td-decision-command-options">
+            <CommandToggle active={preview} disabled={!preview && reserved >= points} icon="⌁" title={zh ? '战术预演' : 'TACTICAL PREVIEW'} detail={zh ? '显示本地风险预测' : 'SHOW LOCAL FORECAST'} onClick={() => toggleCommand('preview')} />
+            <CommandToggle active={joint} disabled={!joint && reserved >= points} icon="◇" title={zh ? '联合行动' : 'JOINT ACTION'} detail={zh ? '双人取高值，AP -1' : 'BEST ATTRIBUTE · AP -1'} onClick={() => toggleCommand('joint')} />
+          </div>
+        </section>
+      </div>
 
       <div className="td-decision-order-row">
         <input className="td-ui-input" value={custom} onChange={event => setCustom(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') submitCustom(); }} placeholder={zh ? '可选：输入自由指令覆盖所选卡片…' : 'OPTIONAL: TYPE A FREE ORDER TO OVERRIDE THE CARD…'} />

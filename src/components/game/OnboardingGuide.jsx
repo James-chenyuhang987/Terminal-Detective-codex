@@ -18,31 +18,36 @@ const STEPS = [
   },
   {
     icon: '⚙️',
+    target: '[data-onboarding-target="execute"]',
+    label: 'EXECUTE',
     zh: { t: '执行循环', d: '核心按钮。每次点击，AI 探员会完成一轮「观察 → 思考 → 行动」，并消耗 1 点行动力（AP）。每轮你都会收到 3 张策略卡，由你决定行动方向。' },
     en: { t: 'EXECUTE CYCLE', d: 'The core button. Each click runs one Observe → Think → Act loop and costs 1 AP. Every round you pick from 3 strategy cards.' },
   },
   {
-    icon: '🗃️',
-    zh: { t: '证据库', d: '右侧面板存放已发现的线索。线索有权重等级，越关键的线索越接近真相。' },
-    en: { t: 'EVIDENCE LOCKER', d: 'The right panel holds discovered clues. Higher-weight clues sit closer to the truth.' },
-  },
-  {
     icon: '🔗',
-    zh: { t: '推理连线 LINK', d: '打开 LINK 面板，把两条线索连起来。逻辑成立会触发「推理重演」过场并拼合真相碎片；连错则会招来凶手反制。' },
-    en: { t: 'LINK BOARD', d: 'Open LINK and connect two clues. Valid logic triggers a Deduction Replay; a wrong link invites the killer\'s counterstrike.' },
+    target: '[data-onboarding-target="evidence"]',
+    label: 'EVIDENCE / LINK',
+    zh: { t: '证据库与推理连线', d: '右侧证据库存放已发现的线索；打开 LINK 面板可把两条线索连接起来。逻辑成立会拼合真相碎片，错误连线则会增加风险。' },
+    en: { t: 'EVIDENCE & LINK BOARD', d: 'The evidence locker stores discovered clues. Open LINK to connect two clues: valid logic assembles the truth, while a bad link raises the risk.' },
   },
   {
     icon: '🗣️',
+    target: '[data-onboarding-target="interrogate"]',
+    label: 'NPC',
     zh: { t: '审讯嫌疑人', d: '底部行动栏的角色按钮可直接审讯。注意情绪徽章：激怒证人可能让其撤回证词。' },
     en: { t: 'INTERROGATION', d: 'Use the character buttons in the action bar. Watch the emotion badge — enraged witnesses retract testimony.' },
   },
   {
     icon: '⚠️',
+    target: '[data-onboarding-target="confusion"]',
+    label: 'CONFUSION',
     zh: { t: '混乱值', d: '错误行动会累积混乱值。达到 100% 时探员逻辑崩溃（蓝屏），需要重启并损失 AP。' },
     en: { t: 'CONFUSION', d: 'Bad moves raise confusion. At 100% the agent crashes (BSoD), costing you a reboot and AP.' },
   },
   {
     icon: '📮',
+    target: '[data-onboarding-target="report"]',
+    label: 'REPORT',
     zh: { t: '结案报告', d: '掌握足够线索后点击「报告」提交你的结论。评级 B 以上结案，错误指控会重罚 AP 与声望。' },
     en: { t: 'CASE REPORT', d: 'Submit your conclusion via REPORT. Grade B or above closes the case; false accusations cost AP and reputation.' },
   },
@@ -76,6 +81,10 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
 
     const updateRect = () => {
       const rect = target.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) {
+        setTargetRect(null);
+        return;
+      }
       setTargetRect({
         top: rect.top,
         left: rect.left,
@@ -115,11 +124,15 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
     if (!targetRect || typeof window === 'undefined') return undefined;
     const gutter = 14;
     const width = Math.min(460, window.innerWidth - (gutter * 2));
-    return {
+    const horizontal = {
       width,
       left: clamp(targetRect.left + (targetRect.width / 2) - (width / 2), gutter, window.innerWidth - width - gutter),
-      bottom: Math.max(gutter, window.innerHeight - targetRect.top + 16),
     };
+    const estimatedCardHeight = Math.min(360, window.innerHeight - (gutter * 2));
+    if (targetRect.top >= estimatedCardHeight + 36) {
+      return { ...horizontal, bottom: Math.max(gutter, window.innerHeight - targetRect.top + 16) };
+    }
+    return { ...horizontal, top: clamp(targetRect.bottom + 16, gutter, window.innerHeight - estimatedCardHeight - gutter) };
   }, [targetRect]);
 
   return (
@@ -185,7 +198,7 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
           </button>
         </footer>
 
-        {targetRect && <div className="td-onboarding-target-label" aria-hidden="true">↓ NOVA</div>}
+        {targetRect && <div className="td-onboarding-target-label" aria-hidden="true">↓ {step.label || 'NOVA'}</div>}
       </section>
     </div>
   );

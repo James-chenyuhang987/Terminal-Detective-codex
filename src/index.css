@@ -315,7 +315,20 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-clue-card.is-compact { min-height: 42px; }
 
 .td-investigation-hud button { backdrop-filter: blur(10px); }
-.td-terminal-surface { background-image: radial-gradient(circle at 48% 0%,rgba(0,229,255,.045),transparent 42%),linear-gradient(rgba(0,229,255,.018) 1px,transparent 1px); background-size: auto,100% 28px; mask-image: linear-gradient(to bottom,#000 94%,transparent); }
+.td-investigation-minimap {
+  position: fixed;
+  right: 12px;
+  bottom: calc(90px + env(safe-area-inset-bottom));
+  transition: bottom .2s ease, transform .3s ease;
+}
+.td-terminal-surface {
+  background-image: radial-gradient(circle at 48% 0%,rgba(0,229,255,.045),transparent 42%),linear-gradient(rgba(0,229,255,.018) 1px,transparent 1px);
+  background-size: auto,100% 28px;
+  mask-image: none;
+  -webkit-mask-image: none;
+  padding-bottom: 34px !important;
+  scroll-padding-bottom: 34px;
+}
 .td-action-dock { background: linear-gradient(180deg,rgba(1,6,13,.82),rgba(0,3,8,.96)) !important; backdrop-filter: blur(18px); box-shadow: 0 -10px 32px rgba(0,0,0,.3), inset 0 1px rgba(125,241,255,.05); }
 .td-npc-chip:hover { border-color: rgba(125,241,255,.58) !important; background: rgba(0,229,255,.12) !important; }
 .td-investigation-tools { box-shadow: -10px 0 34px rgba(0,0,0,.28), inset 1px 0 rgba(255,255,255,.025); }
@@ -860,13 +873,13 @@ button, input, textarea, select { box-sizing: border-box; }
   position: fixed;
   inset: 0;
   z-index: 120;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 14px;
-  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
-  overflow-y: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  justify-items: center;
+  gap: 10px;
+  height: 100dvh;
+  padding: max(10px, env(safe-area-inset-top)) 18px max(10px, env(safe-area-inset-bottom));
+  overflow: hidden;
   background:
     linear-gradient(rgba(0, 229, 255, .028) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 229, 255, .028) 1px, transparent 1px),
@@ -874,6 +887,43 @@ button, input, textarea, select { box-sizing: border-box; }
   background-size: 32px 32px, 32px 32px, auto;
   backdrop-filter: blur(8px);
   font-family: monospace;
+}
+
+.td-decision-fixed-top {
+  display: grid;
+  width: min(980px, 100%);
+  min-height: 0;
+  gap: 8px;
+}
+
+.td-decision-fixed-body {
+  display: grid;
+  grid-template-rows: minmax(230px, 1fr) auto;
+  width: min(980px, 100%);
+  min-height: 0;
+  gap: 10px;
+  padding: 2px 5px 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.td-decision-fixed-body .td-decision-cards,
+.td-decision-fixed-body .td-decision-command-desk { width: 100%; }
+.td-decision-fixed-body .td-decision-cards { min-height: 0; height: 100%; }
+.td-decision-fixed-body .td-decision-card { min-height: 230px; height: 100%; }
+
+@media (min-width: 721px) {
+  .td-story-briefing.is-compact {
+    display: grid;
+    grid-template-columns: minmax(154px, 220px) 1fr;
+    align-items: stretch;
+  }
+  .td-story-briefing.is-compact > :first-child {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 94px;
+  }
 }
 
 .td-decision-heading {
@@ -1034,7 +1084,16 @@ button, input, textarea, select { box-sizing: border-box; }
 
 @media (max-width: 720px) {
   .td-decision-assistant-tip { align-items: flex-start; }
-  .td-decision-overlay { justify-content: flex-start; padding-inline: 10px; }
+  .td-decision-overlay {
+    display: block;
+    height: 100dvh;
+    padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)) !important;
+    overflow-y: auto;
+  }
+  .td-decision-fixed-top, .td-decision-fixed-body { display: grid; width: 100%; gap: 10px; }
+  .td-decision-fixed-body { padding: 0; overflow: visible; }
+  .td-decision-fixed-body .td-decision-cards { height: auto; justify-items: center; }
+  .td-decision-fixed-body .td-decision-card { height: auto; }
   .td-decision-heading { grid-template-columns: 1fr auto; }
   .td-decision-heading > div { grid-column: 1 / -1; }
   .td-decision-heading > small { grid-column: 1; text-align: left; }

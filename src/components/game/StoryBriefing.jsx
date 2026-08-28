@@ -3,7 +3,7 @@ import { useLang } from '@/lib/lang.jsx';
 import SceneIllustration from '@/components/game/SceneIllustration';
 
 // 决策卡上方的剧情面板：抽象插图 + 本轮推理 + 观察摘要
-export default function StoryBriefing({ story }) {
+export default function StoryBriefing({ story, compact = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   if (!story) return null;
@@ -16,8 +16,8 @@ export default function StoryBriefing({ story }) {
   ].filter(s => s.val !== undefined && s.val !== null && s.val !== '');
 
   return (
-    <div style={{
-      width: '100%', maxWidth: 830, marginBottom: 18,
+    <div className={`td-story-briefing ${compact ? 'is-compact' : ''}`} style={{
+      width: '100%', maxWidth: compact ? 980 : 830, marginBottom: compact ? 0 : 18,
       border: '1px solid rgba(0,229,255,0.22)', borderRadius: 16, overflow: 'hidden',
       background: 'linear-gradient(180deg, rgba(10,18,32,0.55) 0%, rgba(2,6,14,0.4) 100%)',
       backdropFilter: 'blur(18px) saturate(180%)',
@@ -25,9 +25,9 @@ export default function StoryBriefing({ story }) {
       boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 32px rgba(0,0,0,0.5)',
       animation: 'story-in 0.5s cubic-bezier(.22,1,.36,1) both',
     }}>
-      <SceneIllustration zone={story.zone} actionTag={story.actionTag} />
+      <SceneIllustration zone={story.zone} actionTag={story.actionTag} height={compact ? 92 : undefined} />
 
-      <div style={{ padding: '14px 18px 16px' }}>
+      <div style={{ padding: compact ? '9px 14px 10px' : '14px 18px 16px' }}>
         <div style={{
           fontSize: '0.55rem', letterSpacing: '0.26em', color: '#00e5ff99', marginBottom: 10,
         }}>
@@ -37,7 +37,7 @@ export default function StoryBriefing({ story }) {
         {story.thought && (
           <div style={{
             fontSize: '0.75rem', lineHeight: 1.85, color: '#d8d8e8',
-            maxHeight: 118, overflowY: 'auto', whiteSpace: 'pre-wrap',
+            maxHeight: compact ? 44 : 118, overflowY: 'auto', whiteSpace: 'pre-wrap',
             paddingRight: 6,
           }}>
             {story.thought}

@@ -15,7 +15,7 @@ export default function ToolPanelTabs({ active, onChange, accentColor, badges = 
   const zh = lang === 'zh';
 
   return (
-    <div style={{ borderBottom: `1px solid ${accentColor}20` }}>
+    <div data-onboarding-target="evidence" style={{ borderBottom: `1px solid ${accentColor}20` }}>
       <div style={{
         fontSize: '0.5rem', letterSpacing: '0.26em', color: `${accentColor}80`,
         padding: '10px 12px 6px',

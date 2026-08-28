@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { ReAct_Enum, Legal_Actions_List, Phase_Color_Map, Case_Data_Lvl_01, localizeCase } from '@/game/caseData';
 import { useLang } from '@/lib/lang.jsx';
 import MiniMap from '@/components/game/MiniMap';
@@ -48,7 +48,6 @@ import {
   recommendExecutor,
 } from '@/game/commandSystem';
 
-const ONBOARD_KEY = 'td_onboarding_nova_seen_v1';
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
 const PHASE_COLORS = Phase_Color_Map;
@@ -104,9 +103,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [showGameOver, setShowGameOver] = useState(false);
   const [showCommandConsole, setShowCommandConsole] = useState(false);
   const [commandNotice, setCommandNotice] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    try { return !localStorage.getItem(ONBOARD_KEY); } catch { return true; }
-  });
+  const [showOnboarding, setShowOnboarding] = useState(() => settings.investigationTutorialEnabled !== false);
   const [finalJudgeResult, setFinalJudgeResult] = useState(null);
   // ── 关键决策 / 危机事件 / 推理连线 ──
   const [decisionCards, setDecisionCards] = useState(null);
@@ -140,6 +137,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }, []);
 
   const terminalRef = useRef(null);
+  const terminalScrollFrameRef = useRef(null);
   const stressTimerRef = useRef(null);
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
@@ -156,6 +154,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     actionCinematicResolveRef.current = null;
     clearInterval(stressTimerRef.current);
     clearTimeout(commandNoticeTimerRef.current);
+    window.cancelAnimationFrame(terminalScrollFrameRef.current);
   }, []);
 
   // Apply the opening passive once; the state guard prevents language changes
@@ -178,10 +177,16 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const phaseColor = PHASE_COLORS[reactState] || PHASE_COLORS.IDLE;
 
   const scrollToBottom = useCallback(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
+    window.cancelAnimationFrame(terminalScrollFrameRef.current);
+    terminalScrollFrameRef.current = window.requestAnimationFrame(() => {
+      const terminal = terminalRef.current;
+      if (terminal) terminal.scrollTop = terminal.scrollHeight;
+    });
   }, []);
+
+  useLayoutEffect(() => {
+    scrollToBottom();
+  }, [terminalLines.length, thoughtText, isProcessing, scrollToBottom]);
 
   const addLine = useCallback((text, type = 'default', prefix = '') => {
     setTerminalLines(prev => [...prev, { text, type, prefix, id: Date.now() + Math.random() }]);
@@ -1120,7 +1125,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           accentColor={accentColor}
           onClose={() => {
             setShowOnboarding(false);
-            try { localStorage.setItem(ONBOARD_KEY, '1'); } catch { /* ignore */ }
           }}
         />
       )}
@@ -1248,7 +1252,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             ?
           </button>
           <button onClick={() => setShowMiniMap(value => !value)} className="td-ui-button td-icon-button td-mobile-only text-xs px-3 py-1 rounded border" style={{ borderColor: `${accentColor}50`, color: accentColor }}>🗺</button>
-          <button onClick={() => setReportMode(r => !r)}
+          <button data-onboarding-target="report" onClick={() => setReportMode(r => !r)}
             className="td-ui-button td-button-secondary text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
             {t.btnReport}
@@ -1262,7 +1266,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       </div>
 
       {/* MiniMap — floating bottom-right */}
-      {showMiniMap && <div className="td-investigation-minimap" style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 30, pointerEvents: 'auto' }}>
+      {showMiniMap && <div className="td-investigation-minimap" style={{ zIndex: 30, pointerEvents: 'auto' }}>
         <MiniMap
           gameState={gameState}
           caseData={caseData}
@@ -1281,7 +1285,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         <div className="td-investigation-terminal flex flex-col flex-1 min-w-0">
           {/* Terminal output */}
           <div ref={terminalRef} className="td-terminal-surface flex-1 overflow-y-auto p-4 space-y-1"
-            style={{ scrollBehavior: 'smooth' }}>
+            style={{ scrollBehavior: isProcessing ? 'auto' : 'smooth' }}>
             <div className="text-xs opacity-30 mb-4" style={{ color: accentColor }}>
               ═══ TERMINAL DETECTIVE SYSTEM · CASE: {caseData.case_id} · AGENT: {agentStrategy?.agent_id} ═══
             </div>
@@ -1357,7 +1361,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           {/* Action Bar */}
           <div className="td-investigation-actions td-action-dock p-4 border-t flex items-center gap-3 flex-wrap"
             style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <button onClick={runReActCycle} disabled={isProcessing || gameState.action_points_left <= 0}
+            <button data-onboarding-target="execute" onClick={runReActCycle} disabled={isProcessing || gameState.action_points_left <= 0}
               className="td-ui-button td-button-primary px-6 py-2 text-xs font-bold tracking-widest rounded border transition-all disabled:opacity-30"
               style={{
                 borderColor: accentColor, color: accentColor,
@@ -1375,7 +1379,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               </button>
             )}
             <button type="button" className="td-ui-button td-button-secondary td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}>🧰 {lang === 'zh' ? '工具' : 'TOOLS'}</button>
-            <div className="td-investigation-npc-list flex gap-2 flex-wrap">
+            <div data-onboarding-target="interrogate" className="td-investigation-npc-list flex gap-2 flex-wrap">
               {caseData.npcs.map(npc => (
                 <button key={npc.npc_id} onClick={() => handleNPCTalk(npc)}
                   disabled={isProcessing}
@@ -1460,7 +1464,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           )}
 
           {/* Confusion Meter */}
-          <div className="p-3 border-t" style={{ borderColor: `${accentColor}20` }}>
+          <div data-onboarding-target="confusion" className="p-3 border-t" style={{ borderColor: `${accentColor}20` }}>
             <div className="flex justify-between text-xs mb-1">
               <span style={{ color: accentColor }}>{t.confusionLabel}</span>
               <span style={{ color: gameState.confusion_score > 60 ? '#ff3860' : accentColor }}>
