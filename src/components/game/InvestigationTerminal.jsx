@@ -977,25 +977,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     selectedNpcId: selectedNPC?.npc_id || null,
   }), [caseData, decisionCards, gameState, isProcessing, lang, linkedPairs, newClueIds.length, reportMode, selectedNPC?.npc_id]);
 
-  const handleAssistantAction = (action) => {
-    if (action === 'execute_cycle') {
-      void runReActCycle();
-      return;
-    }
-    if (action === 'open_command') {
-      setShowCommandConsole(true);
-      return;
-    }
-    if (action === 'open_report') {
-      setReportMode(true);
-      return;
-    }
-    if (action === 'review_evidence' || action === 'open_link') {
-      setToolTab(action === 'open_link' ? 'link' : 'evidence');
-      setMobileToolsOpen(true);
-    }
-  };
-
   const bgColor = phaseColor.bg;
   const accentColor = phaseColor.accent;
 
@@ -1270,12 +1251,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             </div>
           )}
 
-          <InvestigationAssistant
-            brief={assistantBrief}
-            busy={isProcessing}
-            onAction={handleAssistantAction}
-          />
-
           {/* Action Bar */}
           <div className="td-investigation-actions td-action-dock p-4 border-t flex items-center gap-3 flex-wrap"
             style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -1297,7 +1272,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               </button>
             )}
             <button type="button" className="td-ui-button td-button-secondary td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}>🧰 {lang === 'zh' ? '工具' : 'TOOLS'}</button>
-            <div className="flex gap-2 flex-wrap">
+            <div className="td-investigation-npc-list flex gap-2 flex-wrap">
               {caseData.npcs.map(npc => (
                 <button key={npc.npc_id} onClick={() => handleNPCTalk(npc)}
                   disabled={isProcessing}
@@ -1308,6 +1283,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
                 </button>
               ))}
             </div>
+            <InvestigationAssistant brief={assistantBrief} />
           </div>
         </div>
 
