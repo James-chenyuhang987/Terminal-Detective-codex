@@ -84,6 +84,10 @@ test('warehouse purchase, use and loadout rules are deterministic', () => {
   current = consumeEnergyCell(current).profile;
   assert.equal(current.energy, 130);
   assert.equal(current.inventory.energy_cell, 0);
+  const repeatedUse = consumeEnergyCell(current);
+  assert.equal(repeatedUse.error, 'not_owned');
+  assert.equal(repeatedUse.profile.energy, 130);
+  assert.equal(repeatedUse.profile.inventory.energy_cell, 0);
 
   current = purchaseItem(current, 'ap_booster').profile;
   current = purchaseItem(current, 'firewall_shield').profile;

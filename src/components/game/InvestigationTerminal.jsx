@@ -40,7 +40,7 @@ import {
   recommendExecutor,
 } from '@/game/commandSystem';
 
-const ONBOARD_KEY = 'td_onboarding_seen_v2';
+const ONBOARD_KEY = 'td_onboarding_nova_seen_v1';
 
 const PHASE_COLORS = Phase_Color_Map;
 

@@ -92,7 +92,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       notify(lang === 'zh' ? '正在同步上一项操作，请稍候' : 'The previous action is still syncing. Please wait.', 'error');
       return false;
     }
-    if (!result?.profile || result.error) {
+    const rejectResult = (failedResult) => {
       const errors = {
         not_owned: lang === 'zh' ? '尚未持有该物品' : 'Item not owned',
         equip_limit: lang === 'zh' ? '最多装备两件任务道具' : 'Only two mission items can be equipped',
@@ -102,9 +102,29 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         locked: lang === 'zh' ? '成就尚未解锁' : 'Achievement locked',
         rename_used: lang === 'zh' ? '代号修改次数已用完' : 'Codename rename already used',
       };
-      notify(transactionErrorMessage(result?.error, lang) || errors[result?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'), 'error');
+      notify(transactionErrorMessage(failedResult?.error, lang) || errors[failedResult?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'), 'error');
       return false;
+    };
+    // Inventory actions must be evaluated against the newest queued profile.
+    // Computing them in the click handler can reuse a stale item count while a
+    // previous cloud write is finishing.
+    if (typeof result === 'function') {
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        const evaluated = await mutate(current => result(current));
+        if (!evaluated?.profile || evaluated.error) return rejectResult(evaluated);
+        if (message) notify(message);
+        return true;
+      } catch {
+        notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
+        return false;
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
+    if (!result?.profile || result.error) return rejectResult(result);
     return patch(result.profile, message);
   };
 

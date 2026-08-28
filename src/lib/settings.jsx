@@ -19,6 +19,8 @@ export const SAVE_KEYS = [
   'save_checkpoints',
   'td_team_presets',
   'td_onboarding_seen_v1',
+  'td_onboarding_seen_v2',
+  'td_onboarding_nova_seen_v1',
 ];
 
 export const LEGACY_CLOUD_KEYS = [

@@ -134,7 +134,7 @@ function ProfileModule({ profile, onApply, tx, lang }) {
   </>;
 }
 
-function SupplyModule({ profile, onApply, lang, tx }) {
+function SupplyModule({ profile, onApply, lang, tx, busy }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (profile.energy >= ENERGY_MAX) return undefined;
@@ -147,6 +147,12 @@ function SupplyModule({ profile, onApply, lang, tx }) {
   const snapshot = getEconomySnapshot(profile);
   const canBuyDirect = profile.gold >= 400;
   const directRestore = Math.min(30, ENERGY_OVERFLOW_MAX - profile.energy);
+  const energyCells = Math.max(0, Math.floor(Number(profile.inventory?.energy_cell) || 0));
+  const canUseStoredCell = !busy && energyCells > 0 && profile.energy < ENERGY_OVERFLOW_MAX;
+  const useStoredCell = () => {
+    if (!canUseStoredCell) return;
+    void onApply(current => consumeEnergyCell(current), lang === 'zh' ? '体力 +30' : 'Energy +30');
+  };
   return <>
     <WalletOverview profile={profile} lang={lang} />
     <Panel accent="#ffd34d" style={{ textAlign: 'center', marginBottom: 14 }}>
@@ -156,11 +162,11 @@ function SupplyModule({ profile, onApply, lang, tx }) {
       <div style={{ color: 'rgba(255,255,255,.3)', fontSize: '.54rem', marginTop: 4 }}>{lang === 'zh' ? `道具溢出上限 ${ENERGY_OVERFLOW_MAX}` : `Item overflow cap ${ENERGY_OVERFLOW_MAX}`}</div>
     </Panel>
     <Panel>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 30 }}>🔋</span><div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 800 }}>{lang === 'zh' ? '能量电池' : 'Energy Cell'}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.58rem' }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory.energy_cell}</div></div></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 30 }}>🔋</span><div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 800 }}>{lang === 'zh' ? '能量电池' : 'Energy Cell'}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.58rem' }}>{lang === 'zh' ? '持有' : 'OWNED'} × {energyCells}</div></div></div>
       <div style={{ color: 'rgba(255,255,255,.35)', fontSize: '.54rem', lineHeight: 1.6, marginTop: 8 }}>{lang === 'zh' ? `400 金币恢复 ${directRestore} 点体力；购买后立即使用，不占库存。` : `Spend 400 gold to restore ${directRestore} energy instantly without using inventory space.`}</div>
       <div style={{ display: 'flex', gap: 9, marginTop: 12, flexWrap: 'wrap' }}>
-        <ActionButton style={!canBuyDirect || profile.energy >= ENERGY_OVERFLOW_MAX ? { opacity: .52 } : {}} onClick={() => onApply(buyAndUseEnergyCell(profile), purchaseSuccessMessage(`${lang === 'zh' ? '体力' : 'Energy'} +${directRestore}`, lang))}>🪙 400 · {lang === 'zh' ? '购买并使用' : 'BUY & USE'}</ActionButton>
-        <ActionButton disabled={!profile.inventory.energy_cell || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(consumeEnergyCell(profile), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use} +30</ActionButton>
+        <ActionButton disabled={busy || profile.energy >= ENERGY_OVERFLOW_MAX} style={!canBuyDirect || profile.energy >= ENERGY_OVERFLOW_MAX ? { opacity: .52 } : {}} onClick={() => onApply(current => buyAndUseEnergyCell(current), purchaseSuccessMessage(`${lang === 'zh' ? '体力' : 'Energy'} +${directRestore}`, lang))}>🪙 400 · {lang === 'zh' ? '购买并使用' : 'BUY & USE'}</ActionButton>
+        <ActionButton disabled={!canUseStoredCell} onClick={useStoredCell}>{tx.use} +30</ActionButton>
       </div>
       {!canBuyDirect && <div className="td-economy-hint">{lang === 'zh' ? `还差 ${400 - profile.gold} 金币` : `${400 - profile.gold} more gold required`}</div>}
     </Panel>
@@ -224,7 +230,7 @@ function OwnedAgentsModule({ profile, onApply, onOpenModule, onEnterLobby, lang 
   </>;
 }
 
-function WarehouseModule({ profile, onApply, lang, tx }) {
+function WarehouseModule({ profile, onApply, lang, tx, busy }) {
   const [tab, setTab] = useState('inventory');
   const [quantities, setQuantities] = useState({});
   return <>
@@ -237,7 +243,7 @@ function WarehouseModule({ profile, onApply, lang, tx }) {
       const quantity = quantities[item.id] || 1;
       const quote = quotePurchase(profile, item.id, quantity);
       const room = Math.max(1, Math.min(10, item.stackLimit - profile.inventory[item.id]));
-      return <Panel key={item.id} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'}><div className="td-store-item"><span className="td-store-item-icon">{item.icon}</span><div className="td-store-item-copy"><div style={{ fontWeight: 900 }}>{text.name}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.56rem', marginTop: 4 }}>{text.desc}</div><div style={{ color: '#7df1ff', fontSize: '.56rem', marginTop: 5 }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory[item.id]} / {item.stackLimit}</div></div>{tab === 'shop' ? <div className="td-store-buy"><QuantityPicker value={quantity} max={room} onChange={value => setQuantities(current => ({ ...current, [item.id]: value }))} /><ActionButton style={!quote.canPurchase ? { opacity: .52 } : {}} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'} onClick={() => onApply(purchaseItem(profile, item.id, quantity), purchaseSuccessMessage(`${text.name} ×${quantity}`, lang))}>{item.currency === 'gold' ? '🪙' : '💎'} {quote.totalCost || item.cost}</ActionButton>{!quote.canPurchase && <small>{quote.error === 'inventory_full' ? (lang === 'zh' ? '库存已满' : 'FULL') : (lang === 'zh' ? '资源不足' : 'INSUFFICIENT FUNDS')}</small>}</div> : item.id === 'energy_cell' ? <ActionButton disabled={!profile.inventory.energy_cell || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(consumeEnergyCell(profile), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use}</ActionButton> : <ActionButton onClick={() => onApply(toggleEquipItem(profile, item.id), equipped ? (lang === 'zh' ? '已卸下' : 'Removed') : (lang === 'zh' ? '已装备' : 'Equipped'))}>{equipped ? tx.unequip : tx.equip}</ActionButton>}</div></Panel>;
+      return <Panel key={item.id} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'}><div className="td-store-item"><span className="td-store-item-icon">{item.icon}</span><div className="td-store-item-copy"><div style={{ fontWeight: 900 }}>{text.name}</div><div style={{ color: 'rgba(255,255,255,.42)', fontSize: '.56rem', marginTop: 4 }}>{text.desc}</div><div style={{ color: '#7df1ff', fontSize: '.56rem', marginTop: 5 }}>{lang === 'zh' ? '持有' : 'OWNED'} × {profile.inventory[item.id]} / {item.stackLimit}</div></div>{tab === 'shop' ? <div className="td-store-buy"><QuantityPicker value={quantity} max={room} onChange={value => setQuantities(current => ({ ...current, [item.id]: value }))} /><ActionButton style={!quote.canPurchase ? { opacity: .52 } : {}} accent={item.currency === 'gold' ? '#e8c98a' : '#5fd8ff'} onClick={() => onApply(purchaseItem(profile, item.id, quantity), purchaseSuccessMessage(`${text.name} ×${quantity}`, lang))}>{item.currency === 'gold' ? '🪙' : '💎'} {quote.totalCost || item.cost}</ActionButton>{!quote.canPurchase && <small>{quote.error === 'inventory_full' ? (lang === 'zh' ? '库存已满' : 'FULL') : (lang === 'zh' ? '资源不足' : 'INSUFFICIENT FUNDS')}</small>}</div> : item.id === 'energy_cell' ? <ActionButton disabled={busy || Number(profile.inventory.energy_cell) < 1 || profile.energy >= ENERGY_OVERFLOW_MAX} onClick={() => onApply(current => consumeEnergyCell(current), lang === 'zh' ? '体力 +30' : 'Energy +30')}>{tx.use}</ActionButton> : <ActionButton onClick={() => onApply(toggleEquipItem(profile, item.id), equipped ? (lang === 'zh' ? '已卸下' : 'Removed') : (lang === 'zh' ? '已装备' : 'Equipped'))}>{equipped ? tx.unequip : tx.equip}</ActionButton>}</div></Panel>;
     })}</div>
     {tab !== 'shop' && ITEM_CATALOG.every(item => tab === 'equipped' ? !profile.equipped_items.includes(item.id) : !profile.inventory[item.id]) && <Panel><div style={{ color: 'rgba(255,255,255,.4)', fontSize: '.65rem' }}>{lang === 'zh' ? '这里暂时是空的。' : 'Nothing here yet.'}</div></Panel>}
     <div style={{ marginTop: 12, color: 'rgba(255,255,255,.32)', fontSize: '.55rem' }}>{lang === 'zh' ? `任务道具最多装备 2 件 · 当前 ${profile.equipped_items.length}/2` : `Equip up to 2 mission items · ${profile.equipped_items.length}/2`}</div>
@@ -310,7 +316,7 @@ export default function HomeModules({ moduleKey, profile, busy, onClose, onApply
   const tx = TEXT[lang] || TEXT.zh;
   if (moduleKey === 'settings') return <SettingsDrawer onClose={onClose} />;
   const meta = tx[moduleKey] || tx.warehouse;
-  const props = { profile, onApply, lang, tx };
+  const props = { profile, onApply, lang, tx, busy };
   let content = null;
   if (moduleKey === 'profile') content = <ProfileModule {...props} />;
   else if (moduleKey === 'supply') content = <SupplyModule {...props} />;
