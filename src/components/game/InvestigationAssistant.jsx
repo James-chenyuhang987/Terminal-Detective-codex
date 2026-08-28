@@ -4,6 +4,7 @@ export default function InvestigationAssistant({ brief }) {
   return (
     <aside
       className={`td-investigation-assistant is-${brief.tone || 'cyan'}`}
+      data-onboarding-target="nova"
       role="status"
       aria-live="polite"
       aria-atomic="true"

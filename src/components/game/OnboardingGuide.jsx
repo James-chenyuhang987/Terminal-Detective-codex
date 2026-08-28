@@ -1,7 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 
 const STEPS = [
+  {
+    icon: '🤖',
+    target: '[data-onboarding-target="nova"]',
+    zh: {
+      t: '认识 NOVA 战术助理',
+      d: '留意下方发光的 NOVA 头像与对话气泡：它会根据调查进度告诉你下一步，并总结已经发现的证据、提供不剧透的推理提示。',
+      hint: 'NOVA 的提示会随调查状态自动更新，不需要额外点击。',
+    },
+    en: {
+      t: 'MEET NOVA, YOUR TACTICAL ASSISTANT',
+      d: 'Watch the glowing NOVA portrait and message below. NOVA tracks the investigation, recommends your next step, and summarizes only the evidence you have already discovered.',
+      hint: 'NOVA updates automatically as the investigation changes — no extra click is needed.',
+    },
+  },
   {
     icon: '⚙️',
     zh: { t: '执行循环', d: '核心按钮。每次点击，AI 探员会完成一轮「观察 → 思考 → 行动」，并消耗 1 点行动力（AP）。每轮你都会收到 3 张策略卡，由你决定行动方向。' },
@@ -34,80 +48,145 @@ const STEPS = [
   },
 ];
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
 export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [i, setI] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
+  const dialogRef = useRef(null);
   const step = STEPS[i];
   const c = zh ? step.zh : step.en;
   const isLast = i === STEPS.length - 1;
 
+  useLayoutEffect(() => {
+    if (!step.target) {
+      setTargetRect(null);
+      return undefined;
+    }
+
+    const target = document.querySelector(step.target);
+    if (!target) {
+      setTargetRect(null);
+      return undefined;
+    }
+
+    const updateRect = () => {
+      const rect = target.getBoundingClientRect();
+      setTargetRect({
+        top: rect.top,
+        left: rect.left,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+
+    updateRect();
+    window.addEventListener('resize', updateRect);
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(updateRect) : null;
+    observer?.observe(target);
+
+    return () => {
+      window.removeEventListener('resize', updateRect);
+      observer?.disconnect();
+    };
+  }, [step.target]);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, [i]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key === 'ArrowRight') setI(current => Math.min(STEPS.length - 1, current + 1));
+      if (event.key === 'ArrowLeft') setI(current => Math.max(0, current - 1));
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const cardStyle = useMemo(() => {
+    if (!targetRect || typeof window === 'undefined') return undefined;
+    const gutter = 14;
+    const width = Math.min(460, window.innerWidth - (gutter * 2));
+    return {
+      width,
+      left: clamp(targetRect.left + (targetRect.width / 2) - (width / 2), gutter, window.innerWidth - width - gutter),
+      bottom: Math.max(gutter, window.innerHeight - targetRect.top + 16),
+    };
+  }, [targetRect]);
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 300, fontFamily: 'monospace',
-      background: 'radial-gradient(ellipse at center, rgba(4,10,26,0.88) 0%, rgba(0,0,0,0.95) 100%)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }}>
-      <div style={{
-        width: '100%', maxWidth: 520, padding: '28px 26px 22px',
-        border: `1px solid ${accentColor}45`, borderRadius: 18,
-        background: 'linear-gradient(160deg, rgba(12,22,40,0.75) 0%, rgba(2,6,14,0.85) 100%)',
-        boxShadow: `0 0 40px ${accentColor}22, inset 0 1px 0 rgba(255,255,255,0.12)`,
-        animation: 'onb-in 0.35s cubic-bezier(.22,1,.36,1) both',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: '0.6rem', letterSpacing: '0.24em', color: `${accentColor}99` }}>
-            {zh ? '新 手 指 引' : 'FIELD BRIEFING'} · {i + 1}/{STEPS.length}
-          </div>
-          <button onClick={onClose} style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'rgba(255,255,255,0.4)', fontSize: '0.62rem', letterSpacing: '0.14em',
-          }}>{zh ? '跳过 ✕' : 'SKIP ✕'}</button>
+    <div
+      className={`td-onboarding-overlay ${targetRect ? 'has-target' : ''}`}
+      style={/** @type {React.CSSProperties & {'--onboarding-accent': string}} */ ({ '--onboarding-accent': accentColor })}
+    >
+      {targetRect && (
+        <div
+          className="td-onboarding-spotlight"
+          aria-hidden="true"
+          style={{
+            top: targetRect.top - 7,
+            left: targetRect.left - 7,
+            width: targetRect.width + 14,
+            height: targetRect.height + 14,
+          }}
+        />
+      )}
+
+      <section
+        ref={dialogRef}
+        className={`td-onboarding-card ${targetRect ? 'is-anchored' : ''}`}
+        style={cardStyle}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="td-onboarding-title"
+        aria-describedby="td-onboarding-description"
+        tabIndex={-1}
+      >
+        <header className="td-onboarding-header">
+          <div>{zh ? '新 手 指 引' : 'FIELD BRIEFING'} · {i + 1}/{STEPS.length}</div>
+          <button type="button" onClick={onClose}>{zh ? '跳过 ✕' : 'SKIP ✕'}</button>
+        </header>
+
+        <div className="td-onboarding-title-block">
+          <span>{step.icon}</span>
+          <h2 id="td-onboarding-title">{c.t}</h2>
         </div>
 
-        <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 46, lineHeight: 1, filter: `drop-shadow(0 0 14px ${accentColor})` }}>{step.icon}</div>
-          <div style={{
-            marginTop: 12, fontSize: '1.05rem', fontWeight: 900, color: accentColor,
-            letterSpacing: '0.1em', textShadow: `0 0 14px ${accentColor}80`,
-          }}>{c.t}</div>
-        </div>
+        <p id="td-onboarding-description" className="td-onboarding-description">{c.d}</p>
+        {c.hint && <p className="td-onboarding-hint"><span>◆</span>{c.hint}</p>}
 
-        <div style={{ fontSize: '0.78rem', lineHeight: 1.9, color: 'rgba(235,240,255,0.85)', minHeight: 90 }}>
-          {c.d}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 7, margin: '20px 0 18px' }}>
-          {STEPS.map((_, idx) => (
-            <div key={idx} onClick={() => setI(idx)} style={{
-              width: idx === i ? 18 : 7, height: 7, borderRadius: 4, cursor: 'pointer',
-              background: idx === i ? accentColor : 'rgba(255,255,255,0.18)',
-              boxShadow: idx === i ? `0 0 10px ${accentColor}` : 'none',
-              transition: 'all 0.25s',
-            }}/>
+        <nav className="td-onboarding-progress" aria-label={zh ? '引导步骤' : 'Tutorial steps'}>
+          {STEPS.map((item, idx) => (
+            <button
+              type="button"
+              key={item.en.t}
+              onClick={() => setI(idx)}
+              className={idx === i ? 'is-active' : ''}
+              aria-label={`${zh ? '步骤' : 'Step'} ${idx + 1}`}
+              aria-current={idx === i ? 'step' : undefined}
+            />
           ))}
-        </div>
+        </nav>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          {i > 0 && (
-            <button onClick={() => setI(i - 1)} style={{
-              padding: '11px 18px', borderRadius: 10, cursor: 'pointer',
-              border: '1px solid rgba(255,255,255,0.2)', background: 'transparent',
-              color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace', fontSize: '0.72rem',
-            }}>{zh ? '◀ 上一步' : '◀ BACK'}</button>
-          )}
-          <button onClick={() => (isLast ? onClose() : setI(i + 1))} style={{
-            flex: 1, padding: '11px 18px', borderRadius: 10, cursor: 'pointer',
-            border: `1px solid ${accentColor}80`, background: `${accentColor}1e`,
-            color: accentColor, fontFamily: 'monospace', fontSize: '0.75rem',
-            fontWeight: 700, letterSpacing: '0.14em',
-          }}>
-            {isLast ? (zh ? '▶ 开始调查' : '▶ START INVESTIGATION') : (zh ? '下一步 ▶' : 'NEXT ▶')}
+        <footer className="td-onboarding-actions">
+          {i > 0 && <button type="button" className="is-back" onClick={() => setI(i - 1)}>{zh ? '◀ 上一步' : '◀ BACK'}</button>}
+          <button type="button" className="is-next" onClick={() => (isLast ? onClose() : setI(i + 1))}>
+            {isLast
+              ? (zh ? '▶ 开始调查' : '▶ START INVESTIGATION')
+              : (i === 0 ? (zh ? '明白，继续 ▶' : 'GOT IT, CONTINUE ▶') : (zh ? '下一步 ▶' : 'NEXT ▶'))}
           </button>
-        </div>
-      </div>
-      <style>{`@keyframes onb-in{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}`}</style>
+        </footer>
+
+        {targetRect && <div className="td-onboarding-target-label" aria-hidden="true">↓ NOVA</div>}
+      </section>
     </div>
   );
 }
