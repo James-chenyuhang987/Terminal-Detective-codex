@@ -1,20 +1,47 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import StoryBriefing from '@/components/game/StoryBriefing';
+import { decisionForecast, recommendExecutor } from '@/game/commandSystem';
 
 const STYLE_META = {
   aggressive: { icon: '⚔️', zh: '激进', en: 'AGGRESSIVE', color: '#ff3860' },
-  steady:     { icon: '🛡️', zh: '稳健', en: 'STEADY',     color: '#00ff88' },
-  deceptive:  { icon: '🎭', zh: '欺骗', en: 'DECEPTIVE',   color: '#a78bfa' },
+  steady: { icon: '🛡️', zh: '稳健', en: 'STEADY', color: '#00ff88' },
+  deceptive: { icon: '🎭', zh: '欺骗', en: 'DECEPTIVE', color: '#a78bfa' },
 };
 const RISK_COLOR = { high: '#ff3860', medium: '#ffaa00', low: '#00ff88' };
+const AGENT_ICONS = { 'NEXUS-01': '👁️', 'AURORA-09': '🔬', 'CIPHER-47': '💻' };
 
-export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }) {
+function CommandToggle({ active, disabled, icon, title, detail, onClick }) {
+  return <button type="button" className={`td-decision-command ${active ? 'is-active' : ''}`} disabled={disabled} onClick={onClick}>
+    <span>{icon}</span><strong>{title}</strong><small>{detail}</small><b>◆ 1</b>
+  </button>;
+}
+
+export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, team = [], commandState, onCommandError }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [left, setLeft] = useState(timeLimit);
   const [custom, setCustom] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(() => cards[1] ? 1 : 0);
+  const [executorId, setExecutorId] = useState(commandState?.active_agent_id || team[0]?.agent_id || '');
+  const [assistantId, setAssistantId] = useState('');
+  const [preview, setPreview] = useState(false);
+  const [joint, setJoint] = useState(false);
   const resolvedRef = useRef(false);
+  const selectedCard = cards[selectedIndex] || cards[0];
+  const points = Math.max(0, Number(commandState?.points) || 0);
+  const reserved = Number(preview) + Number(joint);
+
+  const recommendedId = useMemo(
+    () => recommendExecutor(team, selectedCard?.action_tag || 'search_area'),
+    [selectedCard?.action_tag, team],
+  );
+
+  useEffect(() => {
+    const next = recommendedId || commandState?.active_agent_id || team[0]?.agent_id || '';
+    setExecutorId(next);
+    setAssistantId(team.find(agent => agent.agent_id !== next)?.agent_id || '');
+  }, [recommendedId, commandState?.active_agent_id, team]);
 
   const chooseOnce = useCallback((choice) => {
     if (resolvedRef.current) return;
@@ -22,101 +49,88 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story }
     onChoose(choice);
   }, [onChoose]);
 
+  const buildChoice = useCallback((base) => ({
+    ...base,
+    executorAgentId: executorId || recommendedId,
+    assistAgentId: joint ? assistantId : null,
+    commandIds: [preview && 'tactical_preview', joint && 'joint_action'].filter(Boolean),
+  }), [assistantId, executorId, joint, preview, recommendedId]);
+
   useEffect(() => {
-    const id = setInterval(() => setLeft(value => Math.max(0, value - 1)), 1000);
-    return () => clearInterval(id);
+    const id = window.setInterval(() => setLeft(value => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
     const fallbackCard = cards[1] || cards[0];
-    if (left === 0 && fallbackCard) chooseOnce({ card: fallbackCard });
-  }, [cards, chooseOnce, left]);
+    if (left === 0 && fallbackCard) {
+      chooseOnce({ card: fallbackCard, executorAgentId: recommendExecutor(team, fallbackCard.action_tag) || executorId, assistAgentId: null, commandIds: [] });
+    }
+  }, [cards, chooseOnce, executorId, left, team]);
+
+  const toggleCommand = (id) => {
+    const active = id === 'preview' ? preview : joint;
+    if (!active && reserved + 1 > points) {
+      onCommandError?.('insufficient_command_points');
+      return;
+    }
+    if (id === 'preview') setPreview(value => !value);
+    else setJoint(value => !value);
+  };
+
+  const confirm = () => {
+    if (!selectedCard || reserved > points) return onCommandError?.('insufficient_command_points');
+    chooseOnce(buildChoice({ card: selectedCard }));
+  };
+
+  const submitCustom = () => {
+    if (!custom.trim() || reserved > points) return;
+    chooseOnce(buildChoice({ freeform: custom.trim() }));
+  };
 
   return (
-    <div className="td-decision-overlay" style={{
-      position: 'fixed', inset: 0, zIndex: 120,
-      background: 'radial-gradient(ellipse at center, rgba(4,10,26,0.86) 0%, rgba(0,0,0,0.94) 100%)',
-      backdropFilter: 'blur(6px)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'monospace', padding: 20, overflowY: 'auto',
-    }}>
+    <div className="td-decision-overlay">
       <StoryBriefing story={story} />
-
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ color: '#00e5ff', fontSize: '1.15rem', fontWeight: 900, letterSpacing: '0.2em', textShadow: '0 0 14px #00e5ff' }}>
-          {zh ? '◈ 关键决策 · 行动策略卡' : '◈ KEY DECISION · STRATEGY CARDS'}
-        </div>
-        <div style={{ color: left <= 10 ? '#ff3860' : 'rgba(255,255,255,0.4)', fontSize: '0.8rem', marginTop: 8 }}>
-          {zh ? `架构师指令倒计时 ${Math.max(0, left)}s` : `ARCHITECT ORDER IN ${Math.max(0, left)}s`}
-        </div>
+      <div className="td-decision-heading">
+        <div>{zh ? '◈ 指挥席 · 关键决策' : '◈ COMMAND DESK · KEY DECISION'}</div>
+        <small className={left <= 10 ? 'is-urgent' : ''}>{zh ? `指令窗口 ${Math.max(0, left)} 秒` : `COMMAND WINDOW ${Math.max(0, left)}s`}</small>
+        <b>◆ {points - reserved}/{commandState?.max_points || 5}</b>
       </div>
 
-      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {cards.map((c, i) => {
-          const m = STYLE_META[c.style] || STYLE_META.steady;
-          const rc = RISK_COLOR[c.risk_level] || '#ffaa00';
-          return (
-            <button className="td-ui-button td-ui-card td-decision-card" key={i} onClick={() => chooseOnce({ card: c })}
-              style={{
-                width: 214, minHeight: 258, textAlign: 'left', cursor: 'pointer',
-                display: 'flex', flexDirection: 'column',
-                border: `1px solid ${m.color}55`, borderRadius: 16, overflow: 'hidden',
-                background: `linear-gradient(160deg, ${m.color}18 0%, rgba(0,0,0,0.6) 70%)`,
-                color: '#fff', padding: 0,
-                boxShadow: `0 0 18px ${m.color}22`,
-                animation: `card-in 0.35s ${i * 0.08}s cubic-bezier(.22,1,.36,1) both`,
-                transition: 'transform 0.2s, box-shadow 0.2s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = `0 0 30px ${m.color}55`; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = `0 0 18px ${m.color}22`; }}
-            >
-              <div style={{ padding: '14px 14px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 34, lineHeight: 1 }}>{m.icon}</div>
-                <div style={{ fontSize: '0.8rem', color: m.color, fontWeight: 900, letterSpacing: '0.12em', marginTop: 8 }}>
-                  {zh ? m.zh : m.en}
-                </div>
-              </div>
-              <div style={{ padding: '0 16px 8px', flex: 1 }}>
-                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#fff', marginBottom: 10, lineHeight: 1.4 }}>{c.label}</div>
-                <div style={{ fontSize: '0.72rem', color: '#00ff88cc', lineHeight: 1.6, marginBottom: 7 }}>＋ {c.benefit_desc}</div>
-                <div style={{ fontSize: '0.72rem', color: '#ff3860cc', lineHeight: 1.6 }}>⚠ {c.risk_desc}</div>
-                <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: 10 }}>
-                  [{String(c.action_tag).toUpperCase()}]
-                </div>
-              </div>
-              <div style={{ height: 7, background: rc, boxShadow: `0 0 12px ${rc}` }}/>
-            </button>
-          );
+      <div className="td-decision-cards">
+        {cards.map((card, index) => {
+          const meta = STYLE_META[card.style] || STYLE_META.steady;
+          const riskColor = RISK_COLOR[card.risk_level] || '#ffaa00';
+          const forecast = decisionForecast(card.action_tag, card.risk_level);
+          const isSelected = index === selectedIndex;
+          return <button type="button" className={`td-decision-card ${isSelected ? 'is-selected' : ''}`} key={`${card.action_tag}-${index}`}
+            onClick={() => setSelectedIndex(index)} style={/** @type {React.CSSProperties & Record<string, string>} */ ({ '--decision-color': meta.color, '--risk-color': riskColor })}>
+            <div className="td-decision-card-head"><span>{meta.icon}</span><strong>{zh ? meta.zh : meta.en}</strong><i>{isSelected ? 'SELECTED' : `0${index + 1}`}</i></div>
+            <div className="td-decision-card-copy"><h3>{card.label}</h3><p className="is-benefit">＋ {card.benefit_desc}</p><p className="is-risk">⚠ {card.risk_desc}</p><code>[{String(card.action_tag).toUpperCase()}]</code></div>
+            {preview && <div className="td-decision-forecast"><span>AP {forecast.ap[0]}–{forecast.ap[1]}</span><span>{zh ? '混乱' : 'CONF'} {forecast.confusion[0]}–{forecast.confusion[1]}</span><span>{zh ? '陷阱' : 'TRAP'} {forecast.trap}%</span></div>}
+            <i className="td-decision-risk-line" />
+          </button>;
         })}
       </div>
 
-      <div style={{ marginTop: 26, width: '100%', maxWidth: 830, display: 'flex', gap: 10 }}>
-        <input
-          className="td-ui-input"
-          value={custom}
-          onChange={e => setCustom(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && custom.trim()) chooseOnce({ freeform: custom.trim() }); }}
-          placeholder={zh ? '输入自定义指令覆盖所有卡片…' : 'Type a custom order to override all cards…'}
-          style={{
-            flex: 1, background: 'rgba(0,0,0,0.6)', border: '1px solid #00e5ff45',
-            borderRadius: 10, padding: '14px 16px', color: '#00e5ff',
-            fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none',
-          }}
-        />
-        <button className="td-ui-button td-button-primary" onClick={() => custom.trim() && chooseOnce({ freeform: custom.trim() })}
-          disabled={!custom.trim()}
-          style={{
-            padding: '14px 26px', borderRadius: 10, border: '1px solid #00e5ff70',
-            background: custom.trim() ? '#00e5ff20' : 'transparent',
-            color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.85rem',
-            fontWeight: 700, cursor: custom.trim() ? 'pointer' : 'not-allowed',
-            opacity: custom.trim() ? 1 : 0.35,
-          }}>
-          {zh ? '▶ 下达' : '▶ ORDER'}
-        </button>
-      </div>
+      <section className="td-decision-command-desk">
+        <div className="td-decision-executors">
+          <header><span>{zh ? '执行探员' : 'EXECUTING AGENT'}</span><small>{zh ? '系统推荐已标记，仍可自由改派' : 'RECOMMENDATION MARKED · MANUAL OVERRIDE ALLOWED'}</small></header>
+          <div>{team.slice(0, 3).map(agent => <button type="button" key={agent.agent_id} className={executorId === agent.agent_id ? 'is-active' : ''} onClick={() => setExecutorId(agent.agent_id)}><span>{AGENT_ICONS[agent.agent_id] || '◈'}</span><strong>{agent.agent_id}</strong>{recommendedId === agent.agent_id && <small>{zh ? '推荐' : 'REC'}</small>}</button>)}</div>
+          {joint && <div className="td-decision-assist"><small>{zh ? '协助探员' : 'ASSIST AGENT'}</small>{team.filter(agent => agent.agent_id !== executorId).slice(0, 2).map(agent => <button type="button" key={agent.agent_id} className={assistantId === agent.agent_id ? 'is-active' : ''} onClick={() => setAssistantId(agent.agent_id)}>{AGENT_ICONS[agent.agent_id] || '◈'} {agent.agent_id}</button>)}</div>}
+        </div>
+        <div className="td-decision-command-options">
+          <CommandToggle active={preview} disabled={!preview && reserved >= points} icon="⌁" title={zh ? '战术预演' : 'TACTICAL PREVIEW'} detail={zh ? '显示本地风险预测' : 'SHOW LOCAL FORECAST'} onClick={() => toggleCommand('preview')} />
+          <CommandToggle active={joint} disabled={!joint && reserved >= points} icon="◇" title={zh ? '联合行动' : 'JOINT ACTION'} detail={zh ? '双人取高值，AP -1' : 'BEST ATTRIBUTE · AP -1'} onClick={() => toggleCommand('joint')} />
+        </div>
+      </section>
 
-      <style>{`@keyframes card-in{from{opacity:0;transform:translateY(24px) scale(.94)}to{opacity:1;transform:none}}`}</style>
+      <div className="td-decision-order-row">
+        <input className="td-ui-input" value={custom} onChange={event => setCustom(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') submitCustom(); }} placeholder={zh ? '可选：输入自由指令覆盖所选卡片…' : 'OPTIONAL: TYPE A FREE ORDER TO OVERRIDE THE CARD…'} />
+        {custom.trim()
+          ? <button type="button" className="td-ui-button td-button-primary" onClick={submitCustom}>{zh ? '▶ 下达自由指令' : '▶ ISSUE FREE ORDER'}</button>
+          : <button type="button" className="td-ui-button td-button-primary" onClick={confirm}>{zh ? '▶ 确认战术' : '▶ CONFIRM TACTIC'}</button>}
+      </div>
     </div>
   );
 }

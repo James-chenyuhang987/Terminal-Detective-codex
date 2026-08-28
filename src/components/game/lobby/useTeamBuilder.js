@@ -3,6 +3,7 @@ import { effectiveAttrs } from '@/game/specialtySystem';
 import {
   AGENT_DEFS, defaultPriorities, defaultSpecs, normalizePriorities, normalizePriorityList,
 } from '@/game/teamConfig';
+import { normalizeCommandPlan } from '@/game/commandSystem';
 
 export function useTeamBuilder(profile) {
   const [specs, setSpecs] = useState(() => {
@@ -17,6 +18,7 @@ export function useTeamBuilder(profile) {
   });
   const [selectedIdx, setSelectedIdx] = useState(() => profile?.saved_team_config?.primary_agent_index ?? 1);
   const [skillLoadout, setSkillLoadout] = useState(() => profile?.skill_loadout || []);
+  const [commandPlan, setCommandPlan] = useState(() => normalizeCommandPlan(profile?.saved_team_config?.command_plan));
 
   const agents = useMemo(() => specs.map((spec, index) => ({
     agent_id: AGENT_DEFS[index].id,
@@ -42,8 +44,8 @@ export function useTeamBuilder(profile) {
   }, []);
 
   const currentConfig = useCallback(() => ({
-    specs, priorities, primary_agent_index: selectedIdx,
-  }), [priorities, selectedIdx, specs]);
+    specs, priorities, primary_agent_index: selectedIdx, command_plan: normalizeCommandPlan(commandPlan),
+  }), [commandPlan, priorities, selectedIdx, specs]);
 
   const loadSaved = useCallback(() => {
     const saved = profile?.saved_team_config;
@@ -51,11 +53,12 @@ export function useTeamBuilder(profile) {
     setSpecs(saved.specs.map(spec => ({ ...spec })));
     setPriorities(normalizePriorities(saved.priorities));
     setSelectedIdx(saved.primary_agent_index ?? 1);
+    setCommandPlan(normalizeCommandPlan(saved.command_plan));
     return true;
   }, [profile?.saved_team_config]);
 
   return {
-    agents, specs, priorities, selectedIdx, setSelectedIdx, skillLoadout, setSkillLoadout,
+    agents, specs, priorities, selectedIdx, setSelectedIdx, skillLoadout, setSkillLoadout, commandPlan, setCommandPlan,
     updateSpec, updatePriority, applyPreset, currentConfig, loadSaved,
   };
 }

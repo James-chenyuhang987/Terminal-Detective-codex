@@ -6,6 +6,7 @@ import { useProfile } from '@/lib/ProfileContext.jsx';
 import { buildTeamConfig } from '@/game/teamConfig';
 import { getActiveSupportAgentId } from '@/game/agentMarket';
 import { useLang } from '@/lib/lang.jsx';
+import { ALL_CASES } from '@/game/caseData';
 
 const loadAgentLobby = () => import('@/components/game/AgentLobby');
 const loadInvestigationTerminal = () => import('@/components/game/InvestigationTerminal');
@@ -35,6 +36,7 @@ export default function TerminalDetective() {
   const registrationRef = useRef(false);
   const [regError, setRegError] = useState('');
   const [preferredCaseId, setPreferredCaseId] = useState(null);
+  const [lobbyReturnScreen, setLobbyReturnScreen] = useState('HOME');
 
   useEffect(() => {
     const preload = () => {
@@ -43,7 +45,10 @@ export default function TerminalDetective() {
         void loadAgentLobby();
         void loadCaseSelect();
       }
-      if (screen === 'LOBBY') void loadCaseSelect();
+      if (screen === 'LOBBY') {
+        void loadCaseSelect();
+        if (preferredCaseId) void loadInvestigationTerminal();
+      }
       if (screen === 'CASE_SELECT') void loadInvestigationTerminal();
     };
     if (typeof window === 'undefined') return undefined;
@@ -53,10 +58,15 @@ export default function TerminalDetective() {
     }
     const id = setTimeout(preload, 120);
     return () => clearTimeout(id);
-  }, [screen]);
+  }, [preferredCaseId, screen]);
 
   const handleStart = async () => {
     const current = profile || await refresh();
+    if (current.detective_name) {
+      void loadDetectiveHome();
+      void loadAgentLobby();
+      void loadCaseSelect();
+    }
     setScreen(current.detective_name ? 'HOME' : 'REGISTRATION');
   };
 
@@ -85,7 +95,13 @@ export default function TerminalDetective() {
 
   const handleDeploy = async (strategy) => {
     setAgentStrategy(strategy);
+    if (preferredCaseId) {
+      const targetCase = ALL_CASES.find(item => item.case_id === preferredCaseId);
+      if (targetCase) return handleCaseSelect(targetCase, strategy);
+    }
+    void loadCaseSelect();
     setScreen('CASE_SELECT');
+    return { error: null };
   };
 
   const handleTeamSave = async (teamConfig) => {
@@ -101,19 +117,21 @@ export default function TerminalDetective() {
     return mutate(current => ({ profile: { ...current, skill_loadout: skillLoadout } }));
   };
 
-  const handleCaseSelect = async (caseData) => {
+  const handleCaseSelect = async (caseData, strategyOverride = null) => {
+    await loadInvestigationTerminal();
+    const currentStrategy = strategyOverride || agentStrategy;
     const result = await mutate(current => startCase(current, caseData));
     if (result?.error) return result;
-    const currentSkills = agentStrategy?.skill_effects || {};
+    const currentSkills = currentStrategy?.skill_effects || {};
     const extraSkills = result.effects.skill_effects || {};
     const skillEffects = { ...currentSkills };
     Object.entries(extraSkills).forEach(([key, value]) => {
       skillEffects[key] = typeof value === 'number' ? (Number(skillEffects[key]) || 0) + value : value || skillEffects[key];
     });
     setAgentStrategy({
-      ...(agentStrategy || {}), skill_effects: skillEffects,
+      ...(currentStrategy || {}), skill_effects: skillEffects,
       home_effects: {
-        initial_ap_bonus: result.effects.initial_ap_bonus + Math.max(0, Number(agentStrategy?.support_effects?.initial_ap_bonus) || 0),
+        initial_ap_bonus: result.effects.initial_ap_bonus + Math.max(0, Number(currentStrategy?.support_effects?.initial_ap_bonus) || 0),
         ignore_first_trap: result.effects.ignore_first_trap,
       },
     });
@@ -126,12 +144,15 @@ export default function TerminalDetective() {
     return settle(summary);
   };
 
-  const openLobbyForCase = (caseId = null) => {
+  const openLobbyForCase = (caseId = null, returnScreen = 'HOME') => {
+    void loadAgentLobby();
     setPreferredCaseId(caseId);
+    setLobbyReturnScreen(returnScreen);
     setScreen('LOBBY');
   };
 
   const openCasesWithSavedTeam = async (caseId = null) => {
+    void loadCaseSelect();
     const saved = profile?.saved_team_config;
     if (!saved) {
       openLobbyForCase(caseId);
@@ -163,9 +184,30 @@ export default function TerminalDetective() {
       />
     );
   } else if (screen === 'LOBBY') {
-    content = <AgentLobby profile={profile} readOnly={isReadOnly} onDeploy={handleDeploy} onBack={() => setScreen('HOME')} onTeamSave={handleTeamSave} onSkillLoadout={handleSkillLoadout} />;
+    content = (
+      <AgentLobby
+        profile={profile}
+        readOnly={isReadOnly}
+        targetCase={ALL_CASES.find(item => item.case_id === preferredCaseId) || null}
+        onDeploy={handleDeploy}
+        onBack={() => setScreen(lobbyReturnScreen)}
+        onTeamSave={handleTeamSave}
+        onSkillLoadout={handleSkillLoadout}
+      />
+    );
   } else if (screen === 'CASE_SELECT') {
-    content = <CaseSelect profile={profile} onSelect={handleCaseSelect} onBack={() => setScreen('LOBBY')} preferredCaseId={preferredCaseId} />;
+    content = (
+      <CaseSelect
+        profile={profile}
+        onSelect={handleCaseSelect}
+        onPlan={caseId => openLobbyForCase(caseId, 'CASE_SELECT')}
+        onBack={() => {
+          setPreferredCaseId(null);
+          setScreen('LOBBY');
+        }}
+        preferredCaseId={preferredCaseId}
+      />
+    );
   } else {
     content = (
       <InvestigationTerminal

@@ -6,9 +6,10 @@
 import { DEFAULT_AGENT_CONFIG } from './caseData.js';
 import { getInitialZone, getZoneClueIds, isValidZoneTransition } from './caseRuntime.js';
 import { normalizeSettlementResult } from './settlementResult.js';
+import { createCommandState } from './commandSystem.js';
 
 // ── Initial State Factory ─────────────────────────────────────────────────
-export function createInitialGameState(caseData, runtimeEffects = {}) {
+export function createInitialGameState(caseData, runtimeEffects = {}, commandPlan = {}, primaryAgentId = 'AURORA-09') {
   const initialZone = getInitialZone(caseData);
   return {
     run_id: `${caseData.case_id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -17,6 +18,8 @@ export function createInitialGameState(caseData, runtimeEffects = {}) {
     current_hp: 100,
     action_points_left: 20 + Math.max(0, Number(runtimeEffects.initial_ap_bonus) || 0),
     ap_discount_credit: 0,
+    command_ap_credit: 0,
+    command_state: createCommandState(commandPlan, primaryAgentId),
     unlocked_clues: [],
     unlocked_clues_set: new Set(), // fast lookup
     current_zone: initialZone,
@@ -127,13 +130,17 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
   const isFreeDecrypt = fx.free_decrypt === true &&
     ['hack_terminal', 'access_database'].includes(settlement.action_name);
   const exactApCost = rawApCost * (1 - apDiscount);
+  const commandCredit = Math.max(0, Number(state.command_ap_credit) || 0)
+    + Math.max(0, Number(agentStrategy?.command_effects?.ap_reduction) || 0);
+  const discountedAfterCommand = Math.max(0, exactApCost - commandCredit);
   const priorCredit = Math.max(0, Number(state.ap_discount_credit) || 0);
   const apCost = isFreeDecrypt
     ? 0
-    : Math.max(0, Math.ceil(exactApCost - priorCredit - Number.EPSILON));
+    : Math.max(0, Math.ceil(discountedAfterCommand - priorCredit - Number.EPSILON));
   newState.ap_discount_credit = isFreeDecrypt
     ? priorCredit
-    : Math.max(0, priorCredit + apCost - exactApCost);
+    : Math.max(0, priorCredit + apCost - discountedAfterCommand);
+  newState.command_ap_credit = 0;
   newState.action_points_left = Math.max(0, newState.action_points_left - apCost);
 
   // New clues — strict ID validation

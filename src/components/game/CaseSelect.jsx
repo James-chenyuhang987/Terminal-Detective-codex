@@ -11,7 +11,7 @@ const DIFFICULTY_CONFIG = {
 
 const CASE_COVER_ICONS = ['🏙️', '🔬', '🦋'];
 
-export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, profile }) {
+export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId = null, profile }) {
   const { lang, t } = useLang();
   const [hovered, setHovered] = useState(null);
   const [selected, setSelected] = useState(preferredCaseId);
@@ -207,6 +207,10 @@ export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, p
 
               <button
                 className="td-ui-button td-case-start-button"
+                onClick={event => {
+                  event.stopPropagation();
+                  void handleStart(c);
+                }}
                 disabled={!canStart || isStarting}
                 style={{
                   width: '100%', padding: '10px 0',
@@ -229,6 +233,17 @@ export default function CaseSelect({ onSelect, onBack, preferredCaseId = null, p
                   : canStart
                     ? t.startCase
                     : (lang === 'zh' ? '体力不足' : 'LOW ENERGY')}
+              </button>
+              <button
+                type="button"
+                className="td-ui-button td-case-plan-button"
+                disabled={isStarting}
+                onClick={event => {
+                  event.stopPropagation();
+                  onPlan?.(c.case_id);
+                }}
+              >
+                ◈ {lang === 'zh' ? '战术编组' : 'TACTICAL PLAN'}
               </button>
             </div>
           );

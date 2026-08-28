@@ -132,6 +132,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     onOpenCases(caseId);
   };
 
+  const planCase = (caseId) => {
+    setModule(null);
+    enterLobby(caseId);
+  };
+
   const quickStart = () => {
     if (profile.saved_team_config) setModule('cases');
     else void enterLobby();
@@ -307,7 +312,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
           <HomeModules
             moduleKey={module} profile={profile} busy={busy} onClose={() => setModule(null)}
             onApply={applyResult} onCheckin={handleCheckin} onOpenModule={setModule} onNavigate={openCase}
-            hasSavedTeam={hasSavedTeam} onEnterLobby={() => enterLobby()}
+            onPlanCase={planCase} hasSavedTeam={hasSavedTeam} onEnterLobby={() => enterLobby()}
           />
         </Suspense>
       )}

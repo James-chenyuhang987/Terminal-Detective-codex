@@ -7,6 +7,7 @@
 import { base44 } from '@/api/base44Client';
 import { getAvailableClueIds, resolveNextZone } from '@/game/caseRuntime';
 import { normalizeSettlementResult } from '@/game/settlementResult';
+import { getActionFocus } from '@/game/commandSystem';
 
 const LEGAL_ACTIONS = new Set([
   'talk_to_npc', 'search_area', 'examine_clue', 'check_alibi',
@@ -76,14 +77,18 @@ async function llmJson(task, payload, signal) {
 // ── Think Phase — streaming with typewriter ───────────────────────────────
 export async function streamThink({ gameState, agentStrategy, chatHistory, banList, observation, onChunk, onDone, signal }) {
   const team = agentStrategy?.team || [];
-  const primary = team[0] || agentStrategy || {};
+  const primary = team.find(member => member.agent_id === agentStrategy?.executing_agent_id)
+    || team.find(member => member.agent_id === agentStrategy?.primary_agent_id)
+    || team[0]
+    || agentStrategy
+    || {};
   const combat = agentStrategy?.combat_attributes || primary.combat_attributes || primary;
 
   const text = await llmText('think', {
     agent: {
-      agent_id: agentStrategy?.agent_id || primary.agent_id,
-      role: agentStrategy?.role || primary.role,
-      base_stance: agentStrategy?.base_stance || primary.base_stance,
+      agent_id: primary.agent_id || agentStrategy?.agent_id,
+      role: primary.role || agentStrategy?.role,
+      base_stance: primary.base_stance || agentStrategy?.base_stance,
       logic_power: combat.logic_power,
       observation_focus: combat.observation_focus,
     },
@@ -155,7 +160,16 @@ export async function settleAction({ actionName, actionTag = null, gameState, ca
   const hackBonus = isHackAction
     ? Math.max(0, agentStrategy?.skill_effects?.hack_success_rate || 0)
     : 0;
-  const clueChance = Math.min(0.9, 0.4 + hackBonus);
+  const executor = (agentStrategy?.team || []).find(agent => agent.agent_id === agentStrategy?.executing_agent_id)
+    || agentStrategy?.team?.[0]
+    || {};
+  const capabilityValues = {
+    ...(agentStrategy?.combat_attributes || {}),
+    confusion_resistance: Number(executor.confusion_resistance) || 0,
+  };
+  const relevantCapability = Math.max(...getActionFocus(effectiveAction).map(key => Number(capabilityValues[key]) || 0));
+  const executorBonus = Math.max(0, relevantCapability - 10) / 100;
+  const clueChance = Math.min(0.9, 0.4 + hackBonus + executorBonus);
   const randomNewClue = !isIllegal && Math.random() < clueChance && lockedClues.length > 0
     ? lockedClues[Math.floor(Math.random() * lockedClues.length)]
     : null;
@@ -164,6 +178,9 @@ export async function settleAction({ actionName, actionTag = null, gameState, ca
     case_title: caseData.title,
     scene_description: caseData.scene?.description || '',
     action_name: actionName,
+    executing_agent: agentStrategy?.executing_agent_id || agentStrategy?.primary_agent_id || null,
+    assisting_agent: agentStrategy?.assisting_agent_id || null,
+    command_effects: agentStrategy?.command_effects || null,
     known_clues: knownClues,
     turn_count: gameState.turn_count,
     is_illegal: isIllegal,

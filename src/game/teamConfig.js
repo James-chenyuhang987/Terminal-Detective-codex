@@ -1,6 +1,7 @@
 import { DEFAULT_AGENT_CONFIG } from './caseData.js';
 import { calcTeamSynergy, effectiveAttrs, getEquippedSkillEffects } from './specialtySystem.js';
 import { getAgentById, getSupportAgentEffects } from './agentMarket.js';
+import { normalizeCommandPlan } from './commandSystem.js';
 
 export const AGENT_DEFS = [
   {
@@ -63,10 +64,11 @@ export function normalizeSavedTeamConfig(saved) {
     specs,
     priorities: normalizePriorities(saved.priorities),
     primary_agent_index: Math.max(0, Math.min(AGENT_DEFS.length - 1, Math.floor(Number(saved.primary_agent_index) || 0))),
+    command_plan: normalizeCommandPlan(saved.command_plan),
   };
 }
 
-export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_index ?? 1, skillLoadout = null, supportAgentId = null) {
+export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_index ?? 1, skillLoadout = null, supportAgentId = null, targetCaseId = null) {
   const specs = Array.isArray(saved.specs) && saved.specs.length === 3 ? saved.specs : defaultSpecs();
   const priorities = normalizePriorities(saved.priorities);
   const agents = specs.map((spec, index) => ({
@@ -90,6 +92,7 @@ export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_i
   return {
     ...DEFAULT_AGENT_CONFIG,
     agent_id: agents.map(agent => agent.agent_id).join('+'),
+    primary_agent_id: agents[selectedIdx]?.agent_id || agents[1]?.agent_id || agents[0]?.agent_id,
     role: 'Multi_Agent_Team',
     base_stance: agents[selectedIdx]?.base_stance || 'analytical',
     team: agents,
@@ -115,5 +118,7 @@ export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_i
       initial_ap_bonus: Math.max(0, Number(supportEffects.initial_ap_bonus) || 0),
     },
     priority_list: agents[selectedIdx]?.priority_list || PRIORITY_ACTIONS.map(item => item.id),
+    command_plan: normalizeCommandPlan(saved.command_plan),
+    target_case_id: typeof targetCaseId === 'string' && targetCaseId ? targetCaseId : null,
   };
 }

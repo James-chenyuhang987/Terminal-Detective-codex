@@ -81,3 +81,22 @@ test('free decrypt and passive scan skill effects change settlement', () => {
     Math.random = originalRandom;
   }
 });
+
+test('command AP credits apply to one successful action and are then consumed', () => {
+  const state = {
+    ...createInitialGameState(Case_Data_Lvl_02),
+    command_ap_credit: 2,
+  };
+  const first = applySettlementResult(state, {
+    action_name: 'search_area',
+    time_cost: 4,
+  }, { command_effects: { ap_reduction: 1 } }, Case_Data_Lvl_02).newState;
+  assert.equal(first.action_points_left, 19);
+  assert.equal(first.command_ap_credit, 0);
+
+  const second = applySettlementResult(first, {
+    action_name: 'search_area',
+    time_cost: 4,
+  }, {}, Case_Data_Lvl_02).newState;
+  assert.equal(second.action_points_left, 15);
+});

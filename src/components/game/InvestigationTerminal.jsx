@@ -28,6 +28,15 @@ import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import { useSettings, panelSkin } from '@/lib/settings.jsx';
 import { JudgeResult, NPCDialogBox, TerminalLine } from '@/components/game/investigation/TerminalPanels';
 import { useManagedTimers } from '@/components/game/investigation/useManagedTimers';
+import CommandConsole from '@/components/game/CommandConsole';
+import {
+  applyCommandContingency,
+  applyDecisionCommandCost,
+  applyEmergencyStabilize,
+  awardCommandMilestone,
+  buildExecutingStrategy,
+  recommendExecutor,
+} from '@/game/commandSystem';
 
 const ONBOARD_KEY = 'td_onboarding_seen_v1';
 
@@ -42,7 +51,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const caseDataResolved = selectedCase || Case_Data_Lvl_01;
   const [runtimePriority, setRuntimePriority] = useState(() => agentStrategy?.priority_list || []);
   const activeAgentStrategy = useMemo(() => ({
-    ...(agentStrategy || {}), priority_list: runtimePriority,
+    ...(agentStrategy || {}),
+    priority_list: runtimePriority,
+    team: (agentStrategy?.team || []).map(agent => agent.agent_id === agentStrategy?.primary_agent_id
+      ? { ...agent, priority_list: runtimePriority }
+      : agent),
   }), [agentStrategy, runtimePriority]);
 
   const caseData = useMemo(
@@ -52,7 +65,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   // AI 叙事输出语言跟随界面语言
   useEffect(() => { setLLMLang(lang); }, [lang]);
 
-  const [gameState, setGameState] = useState(() => createInitialGameState(caseDataResolved, agentStrategy?.home_effects));
+  const [gameState, setGameState] = useState(() => createInitialGameState(
+    caseDataResolved,
+    agentStrategy?.home_effects,
+    agentStrategy?.command_plan,
+    agentStrategy?.primary_agent_id,
+  ));
   const [reactState, setReactState] = useState(ReAct_Enum.IDLE);
   const [terminalLines, setTerminalLines] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -73,6 +91,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [thoughtText, setThoughtText] = useState('');
   const [synergyEvent, setSynergyEvent] = useState(null);
   const [showGameOver, setShowGameOver] = useState(false);
+  const [showCommandConsole, setShowCommandConsole] = useState(false);
+  const [commandNotice, setCommandNotice] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try { return !localStorage.getItem(ONBOARD_KEY); } catch { return true; }
   });
@@ -93,6 +113,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const activeRunRef = useRef(0);
   const nextCrisisTurnRef = useRef(nextCrisisIn());
   const bsodCountRef = useRef(0);
+  const commandNoticeTimerRef = useRef(null);
 
   const triggerSynergy = useCallback((type, clue) => {
     setSynergyEvent({
@@ -115,6 +136,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     decisionResolveRef.current?.(null);
     decisionResolveRef.current = null;
     clearInterval(stressTimerRef.current);
+    clearTimeout(commandNoticeTimerRef.current);
   }, []);
 
   // Apply the opening passive once; the state guard prevents language changes
@@ -146,6 +168,48 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     setTerminalLines(prev => [...prev, { text, type, prefix, id: Date.now() + Math.random() }]);
     schedule(scrollToBottom, 50);
   }, [schedule, scrollToBottom]);
+
+  const notifyCommand = useCallback((message, type = 'success') => {
+    window.clearTimeout(commandNoticeTimerRef.current);
+    setCommandNotice({ message, type });
+    commandNoticeTimerRef.current = window.setTimeout(() => setCommandNotice(null), 2600);
+  }, []);
+
+  useEffect(() => {
+    const result = applyCommandContingency(gameState);
+    if (!result.event || result.gameState === gameState) return;
+    setGameState(result.gameState);
+    if (result.event.type === 'error') {
+      const message = lang === 'zh' ? '应急预案未执行：指挥点不足' : 'CONTINGENCY MISSED: INSUFFICIENT COMMAND POINTS';
+      notifyCommand(message, 'error');
+      addLine(`\n⚠ ${message}`, 'error');
+      return;
+    }
+    const messages = {
+      cognitive_stabilizer: lang === 'zh' ? '认知稳压已执行 · 混乱 -12' : 'COGNITIVE STABILIZER EXECUTED · CONFUSION -12',
+      emergency_throttle: lang === 'zh' ? '紧急节流已待命 · 下一行动 AP -2' : 'EMERGENCY THROTTLE ARMED · NEXT ACTION AP -2',
+      evidence_lockdown: lang === 'zh' ? '证据封存已执行 · 销毁期限 +1 回合' : 'EVIDENCE LOCKDOWN EXECUTED · DEADLINE +1 TURN',
+    };
+    const message = messages[result.event.id] || (lang === 'zh' ? '应急预案已执行' : 'CONTINGENCY EXECUTED');
+    notifyCommand(message);
+    addLine(`\n◆ ${message}`, 'success');
+  }, [addLine, gameState, lang, notifyCommand]);
+
+  const handleEmergencyStabilize = useCallback(() => {
+    if (isProcessing) return;
+    const result = applyEmergencyStabilize(gameStateRef.current);
+    if (result.error) {
+      const message = result.error === 'insufficient_command_points'
+        ? (lang === 'zh' ? '指挥点不足' : 'INSUFFICIENT COMMAND POINTS')
+        : (lang === 'zh' ? '紧急稳态本案已使用' : 'EMERGENCY STABILIZE ALREADY USED');
+      notifyCommand(message, 'error');
+      return;
+    }
+    setGameState(result.gameState);
+    const message = lang === 'zh' ? '紧急稳态执行成功 · 混乱 -12' : 'EMERGENCY STABILIZE EXECUTED · CONFUSION -12';
+    notifyCommand(message);
+    addLine(`\n◇ ${message}`, 'success');
+  }, [addLine, isProcessing, lang, notifyCommand]);
 
   // Check for auto-released hidden clues on turn change
   useEffect(() => {
@@ -269,6 +333,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       let playerOverride = null;
       let cardStyle = null;
       let hiddenBranch = false;
+      let executorAgentId = gameStateRef.current.command_state?.active_agent_id
+        || activeAgentStrategy?.primary_agent_id
+        || recommendExecutor(activeAgentStrategy?.team, actionTag || 'search_area');
+      let assistAgentId = null;
+      let commandIds = [];
 
       // ── 关键决策节点：挂起自动执行，玩家 30 秒内选择 ──────────────────
       // 每一轮都交由架构师决策 —— 玩家始终掌握剧情走向
@@ -308,12 +377,23 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         decisionResolveRef.current = null;
         if (!choice || isCancelled()) return;
 
+        executorAgentId = choice.executorAgentId || executorAgentId;
+        assistAgentId = choice.assistAgentId || null;
+        commandIds = Array.isArray(choice.commandIds) ? choice.commandIds : [];
+
         if (choice.freeform) {
           addLine(`\n${lang === 'zh' ? '🎙 架构师自由指令：' : '🎙 ARCHITECT FREE ORDER: '}"${choice.freeform}"`, 'action');
+          const overrideStrategy = buildExecutingStrategy(
+            activeAgentStrategy,
+            fallbackTag,
+            executorAgentId,
+            assistAgentId,
+            commandIds.includes('joint_action'),
+          );
           const overrideText = await getAction({
             thoughtProcess: `${fullThought}\n\n[ARCHITECT OVERRIDE ORDER — player_override=true] ${choice.freeform}`,
             gameState: gs,
-            agentStrategy: activeAgentStrategy,
+            agentStrategy: overrideStrategy,
             signal: ctrl.signal,
           });
           if (isCancelled()) return;
@@ -330,10 +410,21 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
 
       const isLegal = actionTag && Legal_Actions_List.includes(actionTag);
+      const executingStrategy = buildExecutingStrategy(
+        activeAgentStrategy,
+        actionTag || 'search_area',
+        executorAgentId,
+        assistAgentId,
+        commandIds.includes('joint_action'),
+      );
 
       if (actionTag) {
         const actionMsg = lang === 'zh' ? `▶ 行动已下达：[${actionTag.toUpperCase()}]` : `▶ ACTION ISSUED: [${actionTag.toUpperCase()}]`;
         addLine(`\n${actionMsg}`, isLegal ? 'action' : 'error');
+        const executorMessage = lang === 'zh'
+          ? `执行探员 ${executingStrategy.executing_agent_id}${executingStrategy.assisting_agent_id ? ` · 协助 ${executingStrategy.assisting_agent_id}` : ''}`
+          : `EXECUTOR ${executingStrategy.executing_agent_id}${executingStrategy.assisting_agent_id ? ` · ASSIST ${executingStrategy.assisting_agent_id}` : ''}`;
+        addLine(`   └─ ${executorMessage}`, 'system');
       }
 
       // ── Settlement ────────────────────────────────────────────────────
@@ -346,7 +437,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           : actionTag || 'search_area',
         gameState: gs,
         caseData,
-        agentStrategy: activeAgentStrategy,
+        agentStrategy: executingStrategy,
         actionTag: actionTag || 'search_area',
         isIllegal: !isLegal,
         signal: ctrl.signal,
@@ -355,9 +446,27 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
       // Apply results — pass agentStrategy for resistance/discount/skill modifiers
       settlement.action_name = actionTag || 'search_area';
-      const { newState, newClues } = applySettlementResult(gs, settlement, activeAgentStrategy, caseData);
+      let { newState, newClues } = applySettlementResult(gs, settlement, executingStrategy, caseData);
       newState.lastAction = actionTag;
       newState.last_action = actionTag;
+      const committedCommand = applyDecisionCommandCost(newState, commandIds);
+      if (committedCommand.error) {
+        throw new Error(lang === 'zh' ? '指挥命令结算失败：指挥点不足。' : 'COMMAND SETTLEMENT FAILED: INSUFFICIENT COMMAND POINTS.');
+      }
+      newState = {
+        ...committedCommand.gameState,
+        command_state: {
+          ...committedCommand.gameState.command_state,
+          active_agent_id: executingStrategy.executing_agent_id,
+        },
+      };
+      if (commandIds.length) {
+        const commandMessage = lang === 'zh'
+          ? `指挥命令生效 · 消耗 ${committedCommand.cost} 点`
+          : `COMMANDS COMMITTED · ${committedCommand.cost} POINTS SPENT`;
+        addLine(`\n◆ ${commandMessage}`, 'success');
+        notifyCommand(commandMessage);
+      }
 
       // 高风险策略卡：撬开隐藏分支，额外保全一条线索
       if (hiddenBranch) {
@@ -380,7 +489,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
 
       // Push checkpoint at key zones
-      if (caseData.checkpoints?.includes(newState.current_zone)) {
+      if (newState.current_zone !== gs.current_zone && caseData.checkpoints?.includes(newState.current_zone)) {
+        const milestone = awardCommandMilestone(newState.command_state, `checkpoint:${newState.current_zone}`);
+        newState.command_state = milestone.state;
+        if (milestone.awarded) {
+          const message = lang === 'zh' ? `检查点抵达 · 指挥点 +${milestone.awarded}` : `CHECKPOINT REACHED · COMMAND +${milestone.awarded}`;
+          addLine(`\n◇ ${message}`, 'success');
+          notifyCommand(message);
+        }
         newState.checkpoint_stack = pushCheckpoint(newState);
       }
       newState.chat_history = [
@@ -742,6 +858,15 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       setLinkedPairs(prev => [...prev, { a: aId, b: bId, valid: result.is_valid }]);
       if (result.is_valid) {
         addLine(`\n${t.insightBreak}${clueA.visual_icon} ${clueA.keyword} ⟺ ${clueB.visual_icon} ${clueB.keyword}`, 'success');
+        if (gameStateRef.current.command_state?.doctrine_id === 'evidence_control') {
+          const milestone = awardCommandMilestone(gameStateRef.current.command_state, 'doctrine:first-valid-link');
+          if (milestone.awarded) {
+            setGameState(prev => ({ ...prev, command_state: milestone.state }));
+            const message = lang === 'zh' ? '精准取证触发 · 指挥点 +1' : 'EVIDENCE CONTROL TRIGGERED · COMMAND +1';
+            addLine(`\n◇ ${message}`, 'success');
+            notifyCommand(message);
+          }
+        }
         // ── 推理重演过场：暂停主流程，全屏播放 ──
         const cine = await linkCinematic({
           clueA,
@@ -907,11 +1032,25 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
+      {commandNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${commandNotice.type}`}>
+        <span>{commandNotice.type === 'error' ? '!' : '◆'}</span><strong>{commandNotice.message}</strong>
+      </div>}
+
+      {showCommandConsole && <CommandConsole
+        commandState={gameState.command_state}
+        busy={isProcessing}
+        onStabilize={handleEmergencyStabilize}
+        onClose={() => setShowCommandConsole(false)}
+      />}
+
       {/* 关键决策 · 行动策略卡 */}
       {decisionCards && (
         <DecisionCards
           cards={decisionCards}
           story={decisionStory}
+          team={activeAgentStrategy.team}
+          commandState={gameState.command_state}
+          onCommandError={() => notifyCommand(lang === 'zh' ? '指挥点不足' : 'INSUFFICIENT COMMAND POINTS', 'error')}
           onChoose={(choice) => decisionResolveRef.current?.(choice)}
         />
       )}
@@ -961,6 +1100,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             { label: lang === 'zh' ? 'AP' : 'AP', val: `${gameState.action_points_left}/20` },
             { label: lang === 'zh' ? '线索' : 'CLUES', val: `${gameState.unlocked_clues.length}/${caseData.clue_dictionary.length}` },
             { label: lang === 'zh' ? '混乱' : 'CONFUSION', val: `${gameState.confusion_score}%` },
+            { label: lang === 'zh' ? '指挥' : 'COMMAND', val: `◆ ${gameState.command_state?.points || 0}/${gameState.command_state?.max_points || 5}` },
           ].map(s => (
             <div key={s.label} className="text-center">
               <div className="opacity-40" style={{ color: accentColor }}>{s.label}</div>
@@ -972,6 +1112,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           ))}
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setShowCommandConsole(true)}
+            title={lang === 'zh' ? '打开全息指挥台' : 'Open Holographic Command'}
+            className="td-ui-button td-command-hud-button text-xs px-3 py-1 rounded border transition-all"
+            style={{ borderColor: '#e8c98a80', color: '#f4d99f', backgroundColor: 'rgba(232,201,138,.08)' }}>
+            ◆ {lang === 'zh' ? '指挥台' : 'COMMAND'}
+          </button>
           <button onClick={() => setShowSettings(true)}
             title={lang === 'zh' ? '设置' : 'Settings'}
             className="td-ui-button td-icon-button text-xs px-3 py-1 rounded border transition-all"

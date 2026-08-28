@@ -5,24 +5,47 @@
 import { ATTR_MAX } from './specialtySystem.js';
 
 // 案件难度权重系数（霓虹血迹）
-export const CASE_NEON_BLOOD = {
-  id: 'neon_blood',
-  name: '霓虹血迹 · NEON BLOOD',
-  nameEn: 'NEON BLOOD',
-  threat: 'HIGH',
-  weights: { logic_power: 0.40, hack_level: 0.35, observation_focus: 0.25 },
-};
+export const CASE_MATCH_CONFIGS = Object.freeze({
+  Lvl_01: {
+    id: 'Lvl_01', name: '霓虹血迹 · NEON BLOOD', nameEn: 'NEON BLOOD', threat: 'OMEGA',
+    weights: { hack_level: 0.40, logic_power: 0.35, observation_focus: 0.25 },
+    threats: ['深层网络封锁', '高复杂度推理', '隐蔽物证'],
+    threatsEn: ['Deep network lockdown', 'Complex deductions', 'Concealed evidence'],
+  },
+  Lvl_02: {
+    id: 'Lvl_02', name: '幽灵协议 · GHOST PROTOCOL', nameEn: 'GHOST PROTOCOL', threat: 'HARD',
+    weights: { logic_power: 0.40, observation_focus: 0.35, hack_level: 0.25 },
+    threats: ['密室逻辑', '量子物证', '受限数据库'],
+    threatsEn: ['Locked-room logic', 'Quantum evidence', 'Restricted databases'],
+  },
+  Lvl_03: {
+    id: 'Lvl_03', name: '红蝶陷阱 · RED BUTTERFLY', nameEn: 'RED BUTTERFLY', threat: 'NORMAL',
+    weights: { observation_focus: 0.35, confusion_resistance: 0.35, logic_power: 0.30 },
+    threats: ['感官干扰', '人群证词', '神经混乱'],
+    threatsEn: ['Sensory interference', 'Crowd testimony', 'Neural confusion'],
+  },
+});
+
+export const CASE_NEON_BLOOD = CASE_MATCH_CONFIGS.Lvl_01;
+
+export function getCaseMatchConfig(caseId) {
+  return CASE_MATCH_CONFIGS[caseId] || CASE_NEON_BLOOD;
+}
 
 const ATTR_LABEL = {
   logic_power: '逻辑推演',
   hack_level: '黑客渗透',
   observation_focus: '现场观察',
+  confusion_resistance: '抗干扰',
+  ap_cost_discount: '行动效率',
 };
 
 const ATTR_OWNER = {
   logic_power: 'NEXUS',
   hack_level: 'CIPHER',
   observation_focus: 'AURORA',
+  confusion_resistance: 'NEXUS',
+  ap_cost_discount: 'CIPHER',
 };
 
 // agents: 三人有效属性数组；返回 { score, color, advice }
@@ -50,7 +73,10 @@ export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD, lang = 
   } else if (ratios[weakest] >= 0.95) {
     advice = lang === 'zh' ? '三项主要能力均已到顶，剩余专长点可自由分配。' : 'All primary capabilities are capped. Allocate remaining specialty points freely.';
   } else {
-    const labelEn = { logic_power: 'Logic', hack_level: 'Hacking', observation_focus: 'Observation' };
+    const labelEn = {
+      logic_power: 'Logic', hack_level: 'Hacking', observation_focus: 'Observation',
+      confusion_resistance: 'Anti-Chaos', ap_cost_discount: 'AP Efficiency',
+    };
     advice = lang === 'zh'
       ? `${ATTR_LABEL[weakest]}能力不足，${ATTR_OWNER[weakest]} 专长可继续强化。`
       : `${labelEn[weakest]} is underpowered. Improve ${ATTR_OWNER[weakest]}'s specialty.`;

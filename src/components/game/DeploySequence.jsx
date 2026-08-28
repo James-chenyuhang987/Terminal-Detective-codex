@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 
 // 部署过场动画 — 三段式：探员召唤 → 任务简报 → 出发倒计时
@@ -66,18 +66,26 @@ function DataParticles() {
   );
 }
 
-export default function DeploySequence({ matchScore = 0, onComplete }) {
+export default function DeploySequence({ matchScore = 0, caseBrief = null, onComplete }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [phase, setPhase] = useState(1); // 1 召唤 · 2 简报 · 3 倒计时
   const [count, setCount] = useState(3);
+  const completedRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  const complete = useCallback(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    void onCompleteRef.current?.();
+  }, []);
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase(2), 1600);
     const t2 = setTimeout(() => setPhase(3), 3100);
-    const t3 = setTimeout(() => onComplete(), 4400);
+    const t3 = setTimeout(complete, 4400);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, []);
+  }, [complete]);
 
   useEffect(() => {
     if (phase !== 3) return;
@@ -85,10 +93,16 @@ export default function DeploySequence({ matchScore = 0, onComplete }) {
     return () => clearInterval(id);
   }, [phase]);
 
+  const doctrineNames = {
+    evidence_control: zh ? '精准取证' : 'EVIDENCE CONTROL',
+    rapid_pursuit: zh ? '快速追击' : 'RAPID PURSUIT',
+    steady_control: zh ? '稳态控制' : 'STEADY CONTROL',
+  };
   const brief = [
-    { label: zh ? '案件' : 'CASE', value: zh ? '霓虹血迹' : 'NEON BLOOD', color: '#ff6b35' },
-    { label: zh ? '威胁等级' : 'THREAT', value: 'HIGH', color: '#ff3860' },
+    { label: zh ? '案件' : 'CASE', value: caseBrief?.title || (zh ? '部署后选择' : 'SELECT AFTER DEPLOYMENT'), color: '#ff6b35' },
+    { label: zh ? '威胁等级' : 'THREAT', value: caseBrief?.threat || (zh ? '待定' : 'PENDING'), color: '#ff3860' },
     { label: zh ? '预测成功率' : 'FORECAST', value: `${matchScore}%`, color: matchScore < 50 ? '#ff3860' : matchScore <= 75 ? '#ffaa00' : '#00ff88' },
+    { label: zh ? '指挥学说' : 'DOCTRINE', value: doctrineNames[caseBrief?.doctrine] || (zh ? '通用方案' : 'GENERAL PLAN'), color: '#e8c98a' },
     { label: zh ? '编组' : 'SQUAD', value: 'NEXUS-01 + AURORA-09 + CIPHER-47', color: '#00e5ff' },
   ];
 
@@ -108,7 +122,7 @@ export default function DeploySequence({ matchScore = 0, onComplete }) {
       <DataParticles />
 
       {/* SKIP */}
-      <button onClick={onComplete} style={{
+      <button onClick={complete} style={{
         position: 'absolute', top: 18, right: 20, zIndex: 20,
         padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
         border: '1px solid rgba(0,229,255,0.45)', background: 'rgba(0,229,255,0.08)',

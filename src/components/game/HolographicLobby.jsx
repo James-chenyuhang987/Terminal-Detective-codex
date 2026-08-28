@@ -13,11 +13,13 @@ import AgentDossierPanel from '@/components/game/AgentDossierPanel';
 import PresetChips from '@/components/game/PresetChips';
 import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
-import { calcCaseMatchScore } from '@/game/casePresets';
+import { calcCaseMatchScore, getCaseMatchConfig } from '@/game/casePresets';
 import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
 import { getActiveSupportAgent } from '@/game/agentMarket';
 import { getLobbyLighting } from '@/game/lobbyLighting';
 import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
+import CommandPlanPanel from '@/components/game/lobby/CommandPlanPanel';
+import { CASE_ENERGY_COST } from '@/game/playerProfile';
 
 function LobbyAtmosphere() {
   return <div className="td-lobby-atmosphere" aria-hidden="true">
@@ -30,7 +32,7 @@ function LobbyAtmosphere() {
 }
 
 // ── Particle Canvas — neural network lines ────────────────────────────────────
-function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColor }) {
+function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColor, hasTarget = false }) {
   const { settings } = useSettings();
   const canvasRef = useRef(null);
   const particles = useRef([]);
@@ -73,6 +75,41 @@ function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColo
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
       const nodes = getNodePositions();
+      const commandNode = { x: w * 0.5, y: h * 0.9, color: '#e8c98a' };
+      const targetNode = { x: w * 0.5, y: h * 0.16, color: hasTarget ? '#ff6685' : '#00e5ff' };
+
+      // The player is a real fourth node in the command network. Target-case
+      // links are public tactical telemetry only; no hidden case data is used.
+      nodes.forEach((node, index) => {
+        const selected = index === selectedIdx;
+        const commandGradient = ctx.createLinearGradient(commandNode.x, commandNode.y, node.x, node.y);
+        commandGradient.addColorStop(0, commandNode.color + (selected ? 'a0' : '45'));
+        commandGradient.addColorStop(1, node.color + (selected ? 'a0' : '45'));
+        ctx.beginPath();
+        ctx.moveTo(commandNode.x, commandNode.y);
+        ctx.lineTo(node.x, node.y);
+        ctx.strokeStyle = commandGradient;
+        ctx.lineWidth = selected ? 1.8 : 0.75;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(targetNode.x, targetNode.y);
+        ctx.strokeStyle = node.color + (selected ? '6f' : '28');
+        ctx.lineWidth = selected ? 1.2 : 0.6;
+        ctx.setLineDash([4, 7]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      const pulseT = (Date.now() % 1900) / 1900;
+      [commandNode, targetNode].forEach((node, index) => {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 8 + Math.sin(pulseT * Math.PI * 2 + index) * 2, 0, Math.PI * 2);
+        ctx.strokeStyle = node.color + '80';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
 
       // Draw inter-agent connection lines
       for (let i = 0; i < nodes.length; i++) {
@@ -160,7 +197,7 @@ function ParticleCanvas({ agents: _agents, selectedIdx, accentColor: _accentColo
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(frameRef.current);
     };
-  }, [selectedIdx, settings.particles]);
+  }, [hasTarget, selectedIdx, settings.particles]);
 
   if (!settings.particles) return null;
 
@@ -432,7 +469,7 @@ function TeamRosterPanel({ agents, selectedIdx, onSelect, progression, onPriorit
 }
 
 // ── Center: Holographic Stage ─────────────────────────────────────────────────
-function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive }) {
+function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive, targetCase, activeSupport, commanderName }) {
   const { lang } = useLang();
   const lvls = AGENT_DEFS.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
 
@@ -447,15 +484,27 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
       }}/>
 
       {/* Particle network canvas */}
-      <ParticleCanvas agents={agents} selectedIdx={selectedIdx} accentColor={accentColor} />
+      <ParticleCanvas agents={agents} selectedIdx={selectedIdx} accentColor={accentColor} hasTarget={Boolean(targetCase)} />
 
       <div className="td-stage-focus">
-        <span>AGENT CONFIGURATION</span>
+        <span>{targetCase ? 'MISSION COMMAND UPLINK' : 'AGENT CONFIGURATION'}</span>
         <strong style={{ color: AGENT_DEFS[selectedIdx].color }}>{AGENT_DEFS[selectedIdx].icon} {AGENT_DEFS[selectedIdx].id}</strong>
         <small>{synergy.active.length
           ? (lang === 'zh' ? `${synergy.active.length} 项协同已激活` : `${synergy.active.length} SYNERGIES ACTIVE`)
           : (lang === 'zh' ? '选择探员并调整专长' : 'SELECT AN AGENT AND TUNE SPECIALTIES')}</small>
       </div>
+
+      <div className={`td-mission-target ${targetCase ? 'is-targeted' : ''}`}>
+        <span>{targetCase ? '◆' : '◇'}</span>
+        <strong>{targetCase ? (lang === 'zh' ? targetCase.title : targetCase.en?.title || targetCase.title) : (lang === 'zh' ? '等待案件指派' : 'AWAITING CASE')}</strong>
+        <small>{targetCase ? targetCase.difficulty : (lang === 'zh' ? '通用编组模式' : 'GENERAL FORMATION')}</small>
+      </div>
+
+      {activeSupport && (
+        <div className="td-support-node" style={/** @type {React.CSSProperties & {'--support-color': string}} */ ({ '--support-color': activeSupport.color || '#e8c98a' })}>
+          <span>{activeSupport.icon}</span><div><small>{lang === 'zh' ? '支援链路' : 'SUPPORT LINK'}</small><strong>{activeSupport.id}</strong></div>
+        </div>
+      )}
 
       {/* Agents on stage */}
       <div style={{
@@ -494,6 +543,11 @@ function HoloStage({ agents, selectedIdx, onSelect, accentColor, progression, sy
             AGENT DISPATCH CENTER · AI INVESTIGATION UNIT
           </text>
         </svg>
+      </div>
+
+      <div className="td-commander-node">
+        <span>⌁</span>
+        <div><small>COMMAND</small><strong>{commanderName || (lang === 'zh' ? '侦探指挥席' : 'DETECTIVE')}</strong></div>
       </div>
 
       <style>{`
@@ -758,20 +812,20 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
 }
 
 // ── Main HolographicLobby ─────────────────────────────────────────────────────
-export default function HolographicLobby({ profile, readOnly = false, onDeploy, onBack, onTeamSave, onSkillLoadout }) {
+export default function HolographicLobby({ profile, readOnly = false, targetCase = null, onDeploy, onBack, onTeamSave, onSkillLoadout }) {
   const { lang } = useLang();
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [saveNotice, setSaveNotice] = useState('');
+  const [saveNotice, setSaveNotice] = useState(null);
   const noticeTimerRef = useRef(null);
   const {
     agents, specs, selectedIdx, setSelectedIdx, skillLoadout, setSkillLoadout,
-    updateSpec, updatePriority, applyPreset, currentConfig, loadSaved,
+    commandPlan, setCommandPlan, updateSpec, updatePriority, applyPreset, currentConfig, loadSaved,
   } = useTeamBuilder(profile);
   const progression = profile?.agent_progression || [];
   const activeSupport = getActiveSupportAgent(profile);
-  const [mobileTab, setMobileTab] = useState('stage');
+  const [mobileTab, setMobileTab] = useState('briefing');
   const [lightingNow, setLightingNow] = useState(() => new Date());
   const lighting = getLobbyLighting(lightingNow);
 
@@ -789,10 +843,10 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
 
   const accentColor = '#00e5ff';
 
-  const showNotice = useCallback((message, duration = 1800) => {
+  const showNotice = useCallback((message, duration = 1800, type = 'success') => {
     window.clearTimeout(noticeTimerRef.current);
-    setSaveNotice(message);
-    noticeTimerRef.current = window.setTimeout(() => setSaveNotice(''), duration);
+    setSaveNotice({ message, type });
+    noticeTimerRef.current = window.setTimeout(() => setSaveNotice(null), duration);
   }, []);
 
   useEffect(() => () => window.clearTimeout(noticeTimerRef.current), []);
@@ -815,7 +869,13 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
   }, []);
 
   const [showSequence, setShowSequence] = useState(false);
-  const matchForecast = calcCaseMatchScore(agents).score;
+  const matchConfig = getCaseMatchConfig(targetCase?.case_id);
+  const matchDetails = calcCaseMatchScore(agents, matchConfig, lang);
+  const matchForecast = matchDetails.score;
+  const caseTitle = targetCase
+    ? (lang === 'zh' ? targetCase.title : targetCase.en?.title || targetCase.title)
+    : (lang === 'zh' ? '通用编组' : 'GENERAL FORMATION');
+  const threats = targetCase ? (lang === 'zh' ? matchConfig.threats : matchConfig.threatsEn) : [];
 
   const prepareDeploy = async () => {
     const config = currentConfig();
@@ -823,7 +883,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
       await onTeamSave?.(config);
       setShowSequence(true);
     } catch (cause) {
-      showNotice(lang === 'zh' ? '⚠ 编队同步失败，请重试' : '⚠ SQUAD SYNC FAILED. PLEASE RETRY.', 2400);
+      showNotice(lang === 'zh' ? '⚠ 编队同步失败，请重试' : '⚠ SQUAD SYNC FAILED. PLEASE RETRY.', 2400, 'error');
       throw cause;
     }
   };
@@ -876,15 +936,15 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
             <div style={{ color: '#7df1ff', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '探员大厅快速指南' : 'AGENT HALL QUICK GUIDE'}</div>
             <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
               {(lang === 'zh' ? [
-                '选择一名探员，为其分配专长点数。',
-                '拖动行动优先级，决定 AI 调查顺序。',
-                '保持三名探员专长互补，可激活协同能力。',
-                '点击“保存”记录预设，再部署进入案件簿。',
+                '查看案件简报，再选择主探员并分配专长点数。',
+                '调整每名探员的行动优先级，决定其执行倾向。',
+                '在指挥方案台选择一项指挥学说和应急预案。',
+                targetCase ? '保存方案后部署，将直接开始目标案件。' : '保存方案后部署，将进入案件簿选择目标。',
               ] : [
-                'Select an agent and allocate specialty points.',
-                'Reorder action priorities to define the AI investigation sequence.',
-                'Use complementary specialties to activate team synergies.',
-                'Save your preset, then deploy to the case archive.',
+                'Review the briefing, then select a primary agent and allocate specialty points.',
+                'Set each agent’s action priorities to define their execution style.',
+                'Choose one command doctrine and one contingency plan.',
+                targetCase ? 'Save and deploy to begin the target case directly.' : 'Save and deploy to choose a target in the case archive.',
               ]).map(item => <li key={item}>{item}</li>)}
             </ol>
             <button onClick={() => setShowTutorial(false)} style={{
@@ -896,11 +956,10 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
         </div>
       )}
 
-      {saveNotice && <div role="status" style={{
-        position: 'fixed', right: 18, bottom: 78, zIndex: 70, padding: '9px 14px',
-        borderRadius: 9, border: '1px solid rgba(0,255,136,.45)',
-        background: 'rgba(0,24,18,.94)', color: '#00ff88', fontSize: '.58rem', fontFamily: 'monospace',
-      }}>{saveNotice}</div>}
+      {saveNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${saveNotice.type}`}>
+        <span>{saveNotice.type === 'error' ? '!' : '✓'}</span>
+        <strong>{saveNotice.message.replace(/^[✓⚠]\s*/, '')}</strong>
+      </div>}
 
       {/* 协同技能解锁特效 */}
       <SynergyUnlockFX
@@ -914,14 +973,17 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
         padding: '7px 20px', borderBottom: '1px solid rgba(0,229,255,0.1)',
         background: 'rgba(0,0,0,0.35)', flexShrink: 0, zIndex: 1,
       }}>
-        <div className="td-lobby-title-copy">
-          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>{lang === 'zh' ? '探员编组' : 'AGENT SQUAD'}</span>
-          <small>{activeSupport
-            ? (lang === 'zh' ? `支援 ${activeSupport.icon} ${activeSupport.id} 已接入 · 选择探员、调整专长，然后部署` : `SUPPORT ${activeSupport.icon} ${activeSupport.id} ONLINE · SELECT, CONFIGURE AND DEPLOY`)
-            : (lang === 'zh' ? '选择探员、调整专长，然后部署' : 'SELECT AGENTS, TUNE SPECIALTIES, THEN DEPLOY')}</small>
+      <div className="td-lobby-title-copy">
+          <span className="td-lobby-eyebrow">{targetCase ? (lang === 'zh' ? '◆ 目标案件战术简报' : '◆ TARGET-CASE BRIEFING') : (lang === 'zh' ? '◇ 全息指挥中心' : '◇ HOLOGRAPHIC COMMAND')}</span>
+          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>{caseTitle}</span>
+          <small>{targetCase
+            ? `${targetCase.difficulty} · ⚡ ${CASE_ENERGY_COST[targetCase.difficulty] || 10} · ${threats.join(' / ')} · ${matchDetails.advice}`
+            : activeSupport
+              ? (lang === 'zh' ? `支援 ${activeSupport.icon} ${activeSupport.id} 已接入 · 部署后进入案件簿` : `SUPPORT ${activeSupport.icon} ${activeSupport.id} ONLINE · DEPLOY TO CASE ARCHIVE`)
+              : (lang === 'zh' ? '配置通用编组，部署后进入案件簿' : 'CONFIGURE A GENERAL SQUAD, THEN OPEN THE CASE ARCHIVE')}</small>
         </div>
         <div className="td-lobby-readiness">
-          <div><small>CASE MATCH</small><strong>{matchForecast}<em>%</em></strong></div>
+          <div title={matchDetails.advice}><small>{targetCase ? 'CASE MATCH' : 'READINESS'}</small><strong style={{ color: matchDetails.color }}>{matchForecast}<em>%</em></strong></div>
           <i />
           <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: AGENT_DEFS[selectedIdx].color }}>{AGENT_DEFS[selectedIdx].icon} {AGENT_DEFS[selectedIdx].id}</strong></div>
         </div>
@@ -929,9 +991,10 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
 
       <div className="td-lobby-mobile-tabs" role="tablist">
         {[
-          ['agents', lang === 'zh' ? '探员' : 'AGENTS'],
-          ['stage', lang === 'zh' ? '舞台' : 'STAGE'],
-          ['attrs', lang === 'zh' ? '属性' : 'ATTRIBUTES'],
+          ['briefing', lang === 'zh' ? '简报' : 'BRIEF'],
+          ['formation', lang === 'zh' ? '编组' : 'SQUAD'],
+          ['agent', lang === 'zh' ? '探员' : 'AGENT'],
+          ['command', lang === 'zh' ? '指挥' : 'COMMAND'],
         ].map(([key, label]) => (
           <button key={key} type="button" role="tab" aria-selected={mobileTab === key} onClick={() => setMobileTab(key)}>{label}</button>
         ))}
@@ -944,7 +1007,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
           onSelect={setSelectedIdx} progression={progression}
           onPriorityChange={updatePriority}
           onHover={handleHover}
-          mobileActive={mobileTab === 'agents'}
+          mobileActive={mobileTab === 'formation'}
         />
         <HoloStage
           agents={agents} selectedIdx={selectedIdx}
@@ -952,7 +1015,10 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
           progression={progression}
           synergy={synergy}
           onHover={handleHover}
-          mobileActive={mobileTab === 'stage'}
+          mobileActive={mobileTab === 'briefing'}
+          targetCase={targetCase}
+          activeSupport={activeSupport}
+          commanderName={profile?.detective_name}
         />
         <AttributePanel
           agent={agents[selectedIdx]}
@@ -968,9 +1034,23 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
             setSkillLoadout(next);
             try { await onSkillLoadout?.(next); } catch { setSkillLoadout(profile?.skill_loadout || []); }
           }}
-          mobileActive={mobileTab === 'attrs'}
+          mobileActive={mobileTab === 'agent'}
+        />
+        <CommandPlanPanel
+          className="td-command-plan-mobile"
+          value={commandPlan}
+          onChange={setCommandPlan}
+          targetCase={targetCase}
+          mobileActive={mobileTab === 'command'}
         />
       </div>
+
+      <CommandPlanPanel
+        className="td-command-plan-desktop"
+        value={commandPlan}
+        onChange={setCommandPlan}
+        targetCase={targetCase}
+      />
 
       {/* 探员档案悬浮预览 */}
       {hover && (
@@ -987,9 +1067,24 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
       {showSequence && (
         <DeploySequence
           matchScore={matchForecast}
-          onComplete={() => {
+          caseBrief={targetCase ? {
+            title: caseTitle,
+            threat: targetCase.difficulty,
+            doctrine: commandPlan.doctrine_id,
+          } : null}
+          onComplete={async () => {
             setShowSequence(false);
-            onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout, activeSupport?.id));
+            try {
+              const result = await onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout, activeSupport?.id, targetCase?.case_id));
+              if (result?.error) {
+                const message = result.error === 'insufficient_energy'
+                  ? (lang === 'zh' ? `体力不足，需要 ${result.cost} 点体力` : `Not enough energy. ${result.cost} required.`)
+                  : (lang === 'zh' ? '案件启动失败，请重试' : 'Unable to start case. Please retry.');
+                showNotice(`⚠ ${message}`, 2800, 'error');
+              }
+            } catch {
+              showNotice(lang === 'zh' ? '⚠ 案件启动失败，请检查网络' : '⚠ CASE START FAILED. CHECK YOUR CONNECTION.', 2800, 'error');
+            }
           }}
         />
       )}
@@ -1003,7 +1098,7 @@ export default function HolographicLobby({ profile, readOnly = false, onDeploy, 
             await onTeamSave?.(config);
             showNotice(lang === 'zh' ? '✓ 编队预设已保存' : '✓ SQUAD PRESET SAVED');
           } catch (cause) {
-            showNotice(lang === 'zh' ? '⚠ 编队同步失败，请重试' : '⚠ SQUAD SYNC FAILED. PLEASE RETRY.', 2400);
+            showNotice(lang === 'zh' ? '⚠ 编队同步失败，请重试' : '⚠ SQUAD SYNC FAILED. PLEASE RETRY.', 2400, 'error');
             throw cause;
           }
         }}

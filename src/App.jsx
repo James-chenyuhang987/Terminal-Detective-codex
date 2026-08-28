@@ -2,12 +2,11 @@ import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { LangProvider } from '@/lib/lang.jsx';
 import { SettingsProvider } from '@/lib/settings.jsx';
-import { ProfileProvider, SessionReadOnlyBanner } from '@/lib/ProfileContext.jsx';
 import AuthGate from '@/components/AuthGate';
 import AppErrorBoundary from '@/components/AppErrorBoundary.jsx';
 import GlobalClickEffects from '@/components/game/GlobalClickEffects.jsx';
 
-const TerminalDetective = lazy(() => import('./pages/TerminalDetective'));
+const ProfileAppShell = lazy(() => import('@/components/ProfileAppShell.jsx'));
 
 function AppLoading() {
   return (
@@ -28,7 +27,7 @@ const AuthenticatedApp = () => {
     return <AuthGate />;
   }
 
-  return <TerminalDetective />;
+  return <ProfileAppShell />;
 };
 
 
@@ -39,14 +38,11 @@ function App() {
       <SettingsProvider>
         <GlobalClickEffects />
         <AuthProvider>
-          <ProfileProvider>
-            <AppErrorBoundary>
-              <SessionReadOnlyBanner />
-              <Suspense fallback={<AppLoading />}>
-                <AuthenticatedApp />
-              </Suspense>
-            </AppErrorBoundary>
-          </ProfileProvider>
+          <AppErrorBoundary>
+            <Suspense fallback={<AppLoading />}>
+              <AuthenticatedApp />
+            </Suspense>
+          </AppErrorBoundary>
         </AuthProvider>
       </SettingsProvider>
     </LangProvider>
