@@ -31,6 +31,14 @@ import { useManagedTimers } from '@/components/game/investigation/useManagedTime
 import CommandConsole from '@/components/game/CommandConsole';
 import InvestigationAssistant from '@/components/game/InvestigationAssistant';
 import { buildInvestigationBrief } from '@/game/investigationAssistant';
+import ActionCinematicFallback from '@/components/game/cinematics/ActionCinematicFallback';
+import CinematicErrorBoundary from '@/components/game/cinematics/CinematicErrorBoundary';
+import { loadActionCinematic, preloadActionCinematic } from '@/components/game/cinematics/actionCinematicLoader';
+import {
+  buildCinematicEvent,
+  detectCinematicPlayback,
+  shouldPlayActionCinematic,
+} from '@/game/actionCinematic';
 import {
   applyCommandContingency,
   applyDecisionCommandCost,
@@ -41,6 +49,7 @@ import {
 } from '@/game/commandSystem';
 
 const ONBOARD_KEY = 'td_onboarding_nova_seen_v1';
+const LazyActionCinematic = React.lazy(loadActionCinematic);
 
 const PHASE_COLORS = Phase_Color_Map;
 
@@ -103,6 +112,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [decisionCards, setDecisionCards] = useState(null);
   const [decisionStory, setDecisionStory] = useState(null);
   const [cinematic, setCinematic] = useState(null);
+  const [actionCinematic, setActionCinematic] = useState(null);
   const [npcEmotionState, setNpcEmotionState] = useState({});
   const [truthFragments, setTruthFragments] = useState(0);
   const [redFlash, setRedFlash] = useState(0);
@@ -116,6 +126,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const nextCrisisTurnRef = useRef(nextCrisisIn());
   const bsodCountRef = useRef(0);
   const commandNoticeTimerRef = useRef(null);
+  const actionCinematicResolveRef = useRef(null);
+  const actionCinematicTimerRef = useRef(null);
+  const playedActionCinematicsRef = useRef(new Set());
 
   const triggerSynergy = useCallback((type, clue) => {
     setSynergyEvent({
@@ -137,6 +150,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     abortCtrlRef.current = null;
     decisionResolveRef.current?.(null);
     decisionResolveRef.current = null;
+    window.clearTimeout(actionCinematicTimerRef.current);
+    actionCinematicTimerRef.current = null;
+    actionCinematicResolveRef.current?.('unmounted');
+    actionCinematicResolveRef.current = null;
     clearInterval(stressTimerRef.current);
     clearTimeout(commandNoticeTimerRef.current);
   }, []);
@@ -176,6 +193,43 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     setCommandNotice({ message, type });
     commandNoticeTimerRef.current = window.setTimeout(() => setCommandNotice(null), 2600);
   }, []);
+
+  const finishActionCinematic = useCallback((reason = 'completed') => {
+    const resolve = actionCinematicResolveRef.current;
+    if (!resolve) return;
+    actionCinematicResolveRef.current = null;
+    window.clearTimeout(actionCinematicTimerRef.current);
+    actionCinematicTimerRef.current = null;
+    setActionCinematic(null);
+    resolve(reason);
+  }, []);
+
+  const handleActionCinematicComplete = useCallback((reason = 'completed') => {
+    if (reason === 'fallback') {
+      setActionCinematic(current => current?.mode === '3d'
+        ? { ...current, mode: '2d', fallbackReason: 'renderer_lost' }
+        : current);
+      return;
+    }
+    finishActionCinematic(reason);
+  }, [finishActionCinematic]);
+
+  const playActionCinematic = useCallback((event) => {
+    if (!event || playedActionCinematicsRef.current.has(event.eventId)) {
+      return Promise.resolve('duplicate');
+    }
+    playedActionCinematicsRef.current.add(event.eventId);
+    const playback = detectCinematicPlayback({ enabled: settings.cinematicsEnabled !== false });
+
+    return new Promise(resolve => {
+      if (actionCinematicResolveRef.current) finishActionCinematic('replaced');
+      actionCinematicResolveRef.current = resolve;
+      setActionCinematic({ event, ...playback });
+      actionCinematicTimerRef.current = window.setTimeout(() => {
+        finishActionCinematic('timeout');
+      }, 8000);
+    });
+  }, [finishActionCinematic, settings.cinematicsEnabled]);
 
   useEffect(() => {
     const result = applyCommandContingency(gameState);
@@ -372,6 +426,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           turn: gs.turn_count + 1,
           thought: fullThought,
         });
+        if (settings.cinematicsEnabled !== false) {
+          void preloadActionCinematic();
+        }
         setDecisionCards(cards);
         const choice = await new Promise(resolve => { decisionResolveRef.current = resolve; });
         setDecisionCards(null);
@@ -449,6 +506,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       // Apply results — pass agentStrategy for resistance/discount/skill modifiers
       settlement.action_name = actionTag || 'search_area';
       let { newState, newClues } = applySettlementResult(gs, settlement, executingStrategy, caseData);
+      const deferredOutcomeLines = [];
+      const deferredNotices = [];
+      let removedCrisisClueId = null;
       newState.lastAction = actionTag;
       newState.last_action = actionTag;
       const committedCommand = applyDecisionCommandCost(newState, commandIds);
@@ -480,14 +540,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           newState.unlocked_clues = [...newState.unlocked_clues, bonus];
           newState.unlocked_clues_set = new Set(newState.unlocked_clues);
           newClues.push(bonus);
-          addLine(`\n${lang === 'zh' ? '🩸 高风险策略撬开了隐藏分支 — 一条本不该出现的证据浮出水面。' : '🩸 THE HIGH-RISK PLAY CRACKED A HIDDEN BRANCH — evidence surfaces that never should have.'}`, 'trap');
+          deferredOutcomeLines.push([`\n${lang === 'zh' ? '🩸 高风险策略撬开了隐藏分支 — 一条本不该出现的证据浮出水面。' : '🩸 THE HIGH-RISK PLAY CRACKED A HIDDEN BRANCH — evidence surfaces that never should have.'}`, 'trap']);
         }
       }
 
       // Conflict dictionary check — extra confusion for mutually exclusive clues
       if (checkConflictClues(newState.unlocked_clues, caseData.conflict_dictionary)) {
         newState.confusion_score = Math.min(100, newState.confusion_score + 15);
-        addLine(`\n${t.logicConflict}`, 'warning');
+        deferredOutcomeLines.push([`\n${t.logicConflict}`, 'warning']);
       }
 
       // Push checkpoint at key zones
@@ -496,8 +556,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         newState.command_state = milestone.state;
         if (milestone.awarded) {
           const message = lang === 'zh' ? `检查点抵达 · 指挥点 +${milestone.awarded}` : `CHECKPOINT REACHED · COMMAND +${milestone.awarded}`;
-          addLine(`\n◇ ${message}`, 'success');
-          notifyCommand(message);
+          deferredOutcomeLines.push([`\n◇ ${message}`, 'success']);
+          deferredNotices.push(message);
         }
         newState.checkpoint_stack = pushCheckpoint(newState);
       }
@@ -513,19 +573,35 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         if (newState.unlocked_clues.includes(ec.clue_id) === false) {
           newState.evidence_crisis = null;
         } else if (Math.random() < 0.5) {
-          addLine(lang === 'zh'
+          deferredOutcomeLines.push([lang === 'zh'
             ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${ec.keyword}」！威胁解除。`
-            : `\n🛡️ This action also encrypted and secured “${ec.keyword}”. Threat cleared.`, 'success');
+            : `\n🛡️ This action also encrypted and secured “${ec.keyword}”. Threat cleared.`, 'success']);
           newState.evidence_crisis = null;
         } else if (newState.turn_count > ec.deadline) {
           newState.unlocked_clues = newState.unlocked_clues.filter(id => id !== ec.clue_id);
           newState.unlocked_clues_set = new Set(newState.unlocked_clues);
-          setLinkedPairs(prev => prev.filter(p => p.a !== ec.clue_id && p.b !== ec.clue_id));
-          addLine(lang === 'zh' ? `\n💀 证据「${ec.keyword}」已被销毁，永久丢失！` : `\n💀 Evidence “${ec.keyword}” was destroyed and is permanently lost.`, 'error');
+          removedCrisisClueId = ec.clue_id;
+          deferredOutcomeLines.push([lang === 'zh' ? `\n💀 证据「${ec.keyword}」已被销毁，永久丢失！` : `\n💀 Evidence “${ec.keyword}” was destroyed and is permanently lost.`, 'error']);
           newState.evidence_crisis = null;
         } else {
-          addLine(lang === 'zh' ? `\n⏳ 证据「${ec.keyword}」仍处于销毁倒计时（第 ${ec.deadline} 轮前需保全）` : `\n⏳ Evidence “${ec.keyword}” remains on a purge timer (secure it before turn ${ec.deadline}).`, 'warning');
+          deferredOutcomeLines.push([lang === 'zh' ? `\n⏳ 证据「${ec.keyword}」仍处于销毁倒计时（第 ${ec.deadline} 轮前需保全）` : `\n⏳ Evidence “${ec.keyword}” remains on a purge timer (secure it before turn ${ec.deadline}).`, 'warning']);
         }
+      }
+
+      const actualTrapTriggered = (Number(newState.traps_triggered) || 0) > (Number(gs.traps_triggered) || 0);
+      const cinematicSettlement = { ...settlement, is_trap: actualTrapTriggered };
+      if (shouldPlayActionCinematic(gs, newState, cinematicSettlement, caseData)) {
+        const event = buildCinematicEvent({
+          previousState: gs,
+          nextState: newState,
+          settlement: cinematicSettlement,
+          caseData,
+          actionTag: actionTag || 'search_area',
+          executorAgentId: executingStrategy.executing_agent_id,
+          assistAgentId: executingStrategy.assisting_agent_id,
+        });
+        await playActionCinematic(event);
+        if (isCancelled()) return;
       }
 
       // ── 危机事件引擎：每 4-6 轮随机触发 ──────────────────────────────
@@ -536,6 +612,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
 
       setGameState(newState);
+      if (removedCrisisClueId) {
+        setLinkedPairs(prev => prev.filter(pair => pair.a !== removedCrisisClueId && pair.b !== removedCrisisClueId));
+      }
+      deferredOutcomeLines.forEach(([message, type]) => addLine(message, type));
+      deferredNotices.forEach(message => notifyCommand(message));
 
       // ── Build decision log entry ──────────────────────────────────────
       const isKeyDecision = newClues.length > 0
@@ -1067,6 +1148,28 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           onCommandError={() => notifyCommand(lang === 'zh' ? '指挥点不足' : 'INSUFFICIENT COMMAND POINTS', 'error')}
           onChoose={(choice) => decisionResolveRef.current?.(choice)}
         />
+      )}
+
+      {/* 行动结算后的 3D / 2D 现场重演；独立懒加载，不增加调查终端初始包。 */}
+      {actionCinematic && (
+        <CinematicErrorBoundary
+          event={actionCinematic.event}
+          onComplete={handleActionCinematicComplete}
+        >
+          {actionCinematic.mode === '3d' ? (
+            <React.Suspense
+              fallback={<ActionCinematicFallback event={actionCinematic.event} onComplete={handleActionCinematicComplete} loading />}
+            >
+              <LazyActionCinematic
+                event={actionCinematic.event}
+                quality={actionCinematic.quality}
+                onComplete={handleActionCinematicComplete}
+              />
+            </React.Suspense>
+          ) : (
+            <ActionCinematicFallback event={actionCinematic.event} onComplete={handleActionCinematicComplete} />
+          )}
+        </CinematicErrorBoundary>
       )}
 
       {/* 推理重演过场 */}

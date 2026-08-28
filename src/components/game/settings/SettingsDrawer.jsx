@@ -17,6 +17,7 @@ const TX = {
     scanlines: 'CRT 扫描线', scanlinesDesc: '复古显示器横向扫描纹理',
     glitch: '故障特效强度', glitchDesc: '混乱值升高时的画面撕裂程度',
     particles: '粒子动画', particlesDesc: '大厅神经网络粒子与浮动光点',
+    cinematics: '行动 3D 演示', cinematicsDesc: '每两回合及重大事件播放全屏现场重演；关闭后使用快速 2D 结果镜头',
     data: '游戏数据 · DATA',
     exportL: '导出档案', exportDesc: '导出版本化本地设置与合法云端进度字段', exportBtn: '导出',
     importL: '导入档案', importDesc: '校验并预览 JSON 后恢复设置与云端进度', importBtn: '导入',
@@ -43,6 +44,7 @@ const TX = {
     scanlines: 'CRT Scanlines', scanlinesDesc: 'Retro monitor scanline texture',
     glitch: 'Glitch Intensity', glitchDesc: 'Screen tearing as confusion rises',
     particles: 'Particle FX', particlesDesc: 'Lobby neural particles and floating motes',
+    cinematics: '3D Action Replays', cinematicsDesc: 'Play full-screen reenactments every two turns and on major events; disabled mode uses a quick 2D result shot',
     data: 'DATA',
     exportL: 'Export Profile', exportDesc: 'Export versioned local preferences and valid cloud progress fields', exportBtn: 'EXPORT',
     importL: 'Import Profile', importDesc: 'Validate and preview JSON before restoring local and cloud data', importBtn: 'IMPORT',
@@ -230,6 +232,8 @@ export default function SettingsDrawer({ onClose }) {
               onChange={(v) => change('glitchLevel', v)} />
             <ToggleRow skin={skin} label={tx.particles} desc={tx.particlesDesc}
               value={settings.particles} onChange={(v) => change('particles', v)} />
+            <ToggleRow skin={skin} label={tx.cinematics} desc={tx.cinematicsDesc}
+              value={settings.cinematicsEnabled} onChange={(v) => change('cinematicsEnabled', v)} />
           </div>
 
           <SectionTitle skin={skin}>{tx.data}</SectionTitle>

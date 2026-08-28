@@ -10,11 +10,15 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "test": "node --test tests/*.test.js",
+    "assets:cinematics": "node scripts/generate-cinematic-props.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "three": "^0.168.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

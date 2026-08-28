@@ -9,9 +9,11 @@ export const DEFAULT_SETTINGS = {
   scanlines: true,        // CRT 扫描线
   glitchLevel: 'high',    // off | low | high
   particles: true,        // 粒子动画
+  cinematicsEnabled: true,// 调查行动 3D 过场
+  cinematicQuality: 'auto', // 自动按设备能力选择质量
 };
 
-export const APP_VERSION = 'TERMINAL DETECTIVE · v2.1.57';
+export const APP_VERSION = 'TERMINAL DETECTIVE · v2.2.0';
 
 // 本地存档键位（数据管理用）
 export const SAVE_KEYS = [
