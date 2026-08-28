@@ -29,6 +29,8 @@ import { useSettings, panelSkin } from '@/lib/settings.jsx';
 import { JudgeResult, NPCDialogBox, TerminalLine } from '@/components/game/investigation/TerminalPanels';
 import { useManagedTimers } from '@/components/game/investigation/useManagedTimers';
 import CommandConsole from '@/components/game/CommandConsole';
+import InvestigationAssistant from '@/components/game/InvestigationAssistant';
+import { buildInvestigationBrief } from '@/game/investigationAssistant';
 import {
   applyCommandContingency,
   applyDecisionCommandCost,
@@ -963,6 +965,37 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     }
   };
 
+  const assistantBrief = useMemo(() => buildInvestigationBrief({
+    gameState,
+    caseData,
+    lang,
+    isProcessing,
+    decisionPending: Boolean(decisionCards),
+    reportMode,
+    hasNewEvidence: newClueIds.length > 0,
+    linkedPairs,
+    selectedNpcId: selectedNPC?.npc_id || null,
+  }), [caseData, decisionCards, gameState, isProcessing, lang, linkedPairs, newClueIds.length, reportMode, selectedNPC?.npc_id]);
+
+  const handleAssistantAction = (action) => {
+    if (action === 'execute_cycle') {
+      void runReActCycle();
+      return;
+    }
+    if (action === 'open_command') {
+      setShowCommandConsole(true);
+      return;
+    }
+    if (action === 'open_report') {
+      setReportMode(true);
+      return;
+    }
+    if (action === 'review_evidence' || action === 'open_link') {
+      setToolTab(action === 'open_link' ? 'link' : 'evidence');
+      setMobileToolsOpen(true);
+    }
+  };
+
   const bgColor = phaseColor.bg;
   const accentColor = phaseColor.accent;
 
@@ -1236,6 +1269,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               {judgeResult && <JudgeResult result={judgeResult} />}
             </div>
           )}
+
+          <InvestigationAssistant
+            brief={assistantBrief}
+            busy={isProcessing}
+            onAction={handleAssistantAction}
+          />
 
           {/* Action Bar */}
           <div className="td-investigation-actions td-action-dock p-4 border-t flex items-center gap-3 flex-wrap"

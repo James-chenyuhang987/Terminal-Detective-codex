@@ -80,6 +80,62 @@ const CASE_SECRETS = {
       },
     },
   },
+  Lvl_04: {
+    truth: `Dr. Noor was murdered by archive supervisor Elias Venn. Noor discovered that Elias was selling the station's polar prediction model abroad and scheduled a dawn audit. Elias used his administrator token to wake the D-4 maintenance drone, route it through the tunnel, open the nitrogen bypass, and fire a liquid-nitrogen jet through the vault service hatch. He looped eleven minutes of climate data to stage an accident. The decisive chain is the frost direction, drone residue, overwritten climate log, Elias's token, valve tool marks, model-sale draft, and drone route cache.`,
+    clues: {
+      f_01: 'Abnormal frost fractures', f_02: 'Eleven-minute climate-log gap', f_03: 'D-4 maintenance drone residue',
+      f_04: "Elias's administrator token", f_05: 'Foreign climate-model deal', f_06: "Mira's continuous repair footage",
+      f_07: 'Nitrogen valve tool marks', f_08: "Noor's audit appointment", f_secret_99: 'D-4 override route cache',
+    },
+    npcs: {
+      npc_01: { name: 'Elias Venn', role: 'Archive station supervisor', publicPersona: 'Calm and dependable; blames the death on equipment failure during the blizzard.', personality: 'Controls conversations and redirects scrutiny toward procedure when his token is mentioned.', motive: 'He killed Noor to prevent her dawn audit from exposing his sale of the polar prediction model.' },
+      npc_02: { name: 'Mira Sol', role: 'Cryogenic systems engineer', publicPersona: 'Skilled but hot-tempered; publicly argued with Noor.', personality: 'Blunt and angry when accused, but exact about equipment and timing.', motive: 'She is innocent; her argument creates suspicion, but continuous hangar footage proves her location.' },
+      npc_03: { name: 'Sol Adebayo', role: 'Climate Authority auditor', publicPersona: 'Cautious and neutral; arrived before dawn for Noor’s audit.', personality: 'Relies on documentary evidence and avoids premature accusations.', motive: 'He is an innocent auditor who can confirm Noor was investigating a management-level export.' },
+    },
+    validEdges: [['f_01','f_03'],['f_02','f_04'],['f_03','f_07'],['f_04','f_05'],['f_05','f_08'],['f_06','f_04'],['f_secret_99','f_03'],['f_secret_99','f_04']],
+    branches: {
+      b_blame_mira: {
+        trigger: 'The final report primarily accuses engineer Mira Sol because of her argument with Noor.',
+        apLoss: 35,
+        zh: '探员因公开争执而指控 Mira，但连续机库影像证明她不在现场。Elias 借机清除交易记录，暴风雪掩盖了最后的数据传输。',
+        en: 'The team accused Mira because of her public argument, but continuous hangar footage clears her. Elias used the diversion to erase the sale records.',
+      },
+      b_accident: {
+        trigger: 'The report concludes the death was only a climate-control accident.',
+        apLoss: 30,
+        zh: '案件被草率归档为设备事故。D-4 无人机的路线和管理员令牌没有得到解释，真正的模型交易继续进行。',
+        en: 'The death was hastily filed as an equipment accident. The drone route and administrator token remained unexplained while the model sale continued.',
+      },
+    },
+  },
+  Lvl_05: {
+    truth: `Captain Jonah Vale was murdered by orbital elevator director Cassian Rook. Jonah discovered that Rook and courier Ivo Marek were moving weapons-grade cargo under forged medical manifests. Rook copied Jonah's neural authorization, used his master account to open the lifeboat diagnostic valve, disabled alarm forwarding, and forged a container release while looped camera footage hid the transfer. Ivo handled the cargo and knew of the smuggling but did not operate the lifeboat. The decisive chain is the directed depressurization, forged captain order, weapons isotope, Rook access log, Ivo manifest, camera parallax ghost, beacon warning, and offline ledger.`,
+    clues: {
+      g_01: 'Directed lifeboat depressurization', g_02: 'Forged captain release order', g_03: 'Weapons-grade isotope residue',
+      g_04: "Rook's master-control access", g_05: "Yara's independent calibration record", g_06: "Ivo's shadow manifest",
+      g_07: 'Looped camera parallax ghost', g_08: "Jonah's emergency beacon", g_secret_99: 'Offline military-container ledger',
+    },
+    npcs: {
+      npc_01: { name: 'Cassian Rook', role: 'Orbital elevator director', publicPersona: 'Calm and imposing; claims he coordinated storm safety during the death.', personality: 'Uses safety regulations to suppress questions and reacts sharply to his private company and master account.', motive: 'He killed Jonah to protect a profitable weapons-smuggling route and forged the captain’s release authorization.' },
+      npc_02: { name: 'Yara Sen', role: 'Tether systems engineer', publicPersona: 'Quiet and precise; responsible for dangerous tether calibration.', personality: 'Trusts sensor data and resists political pressure.', motive: 'She is innocent; six independent calibration sensors prove she was away from the dock.' },
+      npc_03: { name: 'Ivo Marek', role: 'Independent orbital courier', publicPersona: 'Smooth and talkative; claims he carried legal coolant.', personality: 'Evades cargo origins and bargains when confronted with documentary evidence.', motive: 'He knowingly transported Rook’s illegal weapons cargo but did not execute the lifeboat murder.' },
+    },
+    validEdges: [['g_01','g_04'],['g_02','g_04'],['g_03','g_06'],['g_04','g_07'],['g_05','g_04'],['g_06','g_secret_99'],['g_08','g_02'],['g_secret_99','g_04']],
+    branches: {
+      b_blame_ivo: {
+        trigger: 'The final report accuses courier Ivo of personally killing Jonah while ignoring Rook’s diagnostic access.',
+        apLoss: 40,
+        zh: 'Ivo 因走私被捕，但救生舱谋杀缺乏对他的直接证据。Rook 以主管权限封存主控记录，并将剩余货柜送入轨道暗港。',
+        en: 'Ivo was arrested for smuggling, but no evidence tied him directly to the lifeboat murder. Rook sealed the master logs and moved the remaining cargo.',
+      },
+      b_blame_yara: {
+        trigger: 'The final report blames engineer Yara despite her independent calibration record.',
+        apLoss: 45,
+        zh: '对 Yara 的错误指控让缆索系统失去唯一愿意作证的工程师。Rook 利用安全紧急状态中止调查，真相坠入云层。',
+        en: 'The false accusation against Yara silenced the only engineer willing to testify. Rook invoked a safety emergency and terminated the investigation.',
+      },
+    },
+  },
 };
 
 export function getCaseSecret(caseId) {

@@ -1,4 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
+
+import { Case_Data_Lvl_04, Case_Data_Lvl_05 } from './caseDataExtra.js';
+
+export { Case_Data_Lvl_04, Case_Data_Lvl_05 } from './caseDataExtra.js';
 // data_config.js — Static Case Database & Enums
 // The absolute source of truth for all case data. No logic, no state.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -302,7 +306,7 @@ export const Case_Data_Lvl_03 = {
 };
 
 // ─── Case catalogue (for selection screen) ────────────────────────────────────
-export const ALL_CASES = [Case_Data_Lvl_01, Case_Data_Lvl_02, Case_Data_Lvl_03];
+export const ALL_CASES = [Case_Data_Lvl_01, Case_Data_Lvl_02, Case_Data_Lvl_03, Case_Data_Lvl_04, Case_Data_Lvl_05];
 
 export const DEFAULT_AGENT_CONFIG = {
   agent_id: "AXIOM-7",

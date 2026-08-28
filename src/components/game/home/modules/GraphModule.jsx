@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ALL_CASES, localizeCase } from '@/game/caseData';
 
-const CASE_ICON = { Lvl_01: '🏙️', Lvl_02: '🔬', Lvl_03: '🦋' };
+const CASE_ICON = { Lvl_01: '🏙️', Lvl_02: '🔬', Lvl_03: '🦋', Lvl_04: '🧊', Lvl_05: '🛰️' };
 
 function Button({ children, onClick, active }) {
   return <button type="button" onClick={onClick} style={{ minHeight: 38, border: `1px solid ${active ? '#00e5ff' : '#66889980'}`, borderRadius: 8, padding: '6px 10px', background: active ? '#00e5ff18' : 'transparent', color: active ? '#7df1ff' : '#8aa2ad', font: '10px monospace', cursor: 'pointer' }}>{children}</button>;

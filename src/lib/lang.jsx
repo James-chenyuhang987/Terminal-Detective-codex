@@ -29,7 +29,7 @@ export const LANG = {
     selectInvestigation: 'SELECT INVESTIGATION',
     clueStat: '线索', npcStat: 'NPC', zoneStat: '区域',
     startCase: '▶ 开始调查', loadingCase: '▶ 正在载入...',
-    caseArchiveFooter: 'TERMINAL DETECTIVE · 案件档案 · 3个案件可选',
+    caseArchiveFooter: 'TERMINAL DETECTIVE · 案件档案 · 5个案件可选',
     // InvestigationTerminal HUD
     hudPhase: '阶段', hudHp: 'HP', hudAp: 'AP', hudClues: '线索', hudConfusion: '混乱',
     btnMap: '🗺 地图', btnBoard: '🕸 证物板', btnLog: '📓 日志', btnReport: '📋 报告', btnEnd: '⏹ 结束',
@@ -113,7 +113,7 @@ export const LANG = {
     selectInvestigation: 'SELECT INVESTIGATION',
     clueStat: 'Clues', npcStat: 'NPCs', zoneStat: 'Zones',
     startCase: '▶ START CASE', loadingCase: '▶ LOADING...',
-    caseArchiveFooter: 'TERMINAL DETECTIVE · CASE ARCHIVE · 3 INVESTIGATIONS AVAILABLE',
+    caseArchiveFooter: 'TERMINAL DETECTIVE · CASE ARCHIVE · 5 INVESTIGATIONS AVAILABLE',
     // InvestigationTerminal HUD
     hudPhase: 'PHASE', hudHp: 'HP', hudAp: 'AP', hudClues: 'CLUES', hudConfusion: 'CONFUSION',
     btnMap: '🗺 MAP', btnBoard: '🕸 BOARD', btnLog: '📓 LOG', btnReport: '📋 REPORT', btnEnd: '⏹ END',

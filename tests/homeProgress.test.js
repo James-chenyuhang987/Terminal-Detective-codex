@@ -23,12 +23,12 @@ test('legacy profiles migrate without losing existing progress', () => {
   assert.equal(migrated.gold, 321);
   assert.deepEqual(migrated.achievements, ['legacy_badge']);
   assert.deepEqual(migrated.solved_cases, ['Lvl_01']);
-  assert.equal(migrated.unsolved_count, 2);
+  assert.equal(migrated.unsolved_count, 4);
   assert.deepEqual(migrated.equipped_items, []);
   assert.equal(migrated.inventory.ap_booster, 0);
 });
 
-test('unknown legacy cases never inflate the three-case archive or evidence achievements', () => {
+test('unknown legacy cases never inflate the current case archive or evidence achievements', () => {
   const legacy = evaluateAchievements(profile({
     solved_cases: ['Legacy_01', 'Legacy_02', 'Legacy_03'],
     case_records: ['Legacy_01', 'Legacy_02', 'Legacy_03'].map(caseId => ({
@@ -36,7 +36,7 @@ test('unknown legacy cases never inflate the three-case archive or evidence achi
       discovered_clues: Array.from({ length: 12 }, (_, index) => `${caseId}-${index}`),
     })),
   }));
-  assert.equal(legacy.unsolved_count, 3);
+  assert.equal(legacy.unsolved_count, 5);
   assert.equal(legacy.achievements.includes('three_archived'), false);
   assert.equal(legacy.achievements.includes('all_s'), false);
   assert.equal(legacy.achievements.includes('ten_clues'), false);
@@ -202,9 +202,11 @@ test('all 24 achievements expose bounded progress and can be unlocked', () => {
     ['c_01', 'c_02', 'c_03', 'c_04', 'c_05', 'c_06', 'c_07', 'c_08', 'c_secret_99'],
     ['d_01', 'd_02', 'd_03', 'd_04', 'd_05', 'd_06', 'd_07', 'd_08', 'd_secret_99'],
     ['e_01', 'e_02', 'e_03', 'e_04', 'e_05', 'e_06', 'e_07', 'e_08', 'e_secret_99'],
+    ['f_01', 'f_02', 'f_03', 'f_04', 'f_05', 'f_06', 'f_07', 'f_08', 'f_secret_99'],
+    ['g_01', 'g_02', 'g_03', 'g_04', 'g_05', 'g_06', 'g_07', 'g_08', 'g_secret_99'],
   ];
   const complete = profile({
-    solved_cases: ['Lvl_01', 'Lvl_02', 'Lvl_03'],
+    solved_cases: ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05'],
     case_records: clueSets.map((clues, index) => ({
       case_id: `Lvl_0${index + 1}`, best_score: 'S', discovered_clues: clues,
       valid_links: [`${clues[0]}|${clues[1]}`], attempts: 1, solves: 1,
@@ -216,7 +218,7 @@ test('all 24 achievements expose bounded progress and can be unlocked', () => {
       'seven:day1', 'seven:day2', 'seven:day3', 'seven:day4', 'seven:day5', 'seven:day6', 'seven:day7',
     ],
     activity_stats: {
-      cases_started: 3, cases_solved: 3, valid_links: 5, invalid_links: 0,
+      cases_started: 5, cases_solved: 5, valid_links: 5, invalid_links: 0,
       best_agent_level: 5, all_agents_min_level: 5,
     },
   });

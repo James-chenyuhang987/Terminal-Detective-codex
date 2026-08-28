@@ -3,15 +3,15 @@ export const ENERGY_OVERFLOW_MAX = 180;
 export const ENERGY_MINUTES_PER_POINT = 5;
 export const XP_PER_LEVEL = 4800;
 export const ACHIEVEMENT_TOTAL = 24;
-export const KNOWN_CASE_IDS = ['Lvl_01', 'Lvl_02', 'Lvl_03'];
+export const KNOWN_CASE_IDS = ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05'];
 export const CURRENCY_CAPS = Object.freeze({ gold: 9_999_999, diamonds: 999_999 });
 
 export const CASE_ENERGY_COST = { NORMAL: 10, HARD: 15, OMEGA: 20 };
 export const CASE_GOLD_REWARD = { S: 1000, A: 750, B: 500, C: 300, D: 150 };
 export const FIRST_CLEAR_DIAMONDS = { NORMAL: 20, HARD: 35, OMEGA: 50 };
 export const SCORE_ORDER = { D: 1, C: 2, B: 3, A: 4, S: 5 };
-const DEFAULT_CASE_TOTALS = { Lvl_01: 9, Lvl_02: 9, Lvl_03: 9 };
-const HIDDEN_CLUE_IDS = ['c_secret_99', 'd_secret_99', 'e_secret_99'];
+const DEFAULT_CASE_TOTALS = { Lvl_01: 9, Lvl_02: 9, Lvl_03: 9, Lvl_04: 9, Lvl_05: 9 };
+const HIDDEN_CLUE_IDS = ['c_secret_99', 'd_secret_99', 'e_secret_99', 'f_secret_99', 'g_secret_99'];
 
 export const ITEM_CATALOG = [
   { id: 'energy_cell', icon: '🔋', currency: 'gold', cost: 400, stackLimit: 20, mission: false,
@@ -54,12 +54,12 @@ const REWARD_STEPS = [10, 20, 50, 100];
 export const ACHIEVEMENTS = [
   ['first_deploy', 'investigation', 0, '初次出勤', 'First Deployment', '开始第一起案件', 'Start your first case'],
   ['first_solve', 'investigation', 1, '首案告破', 'First Truth', '成功侦破第一起案件', 'Solve your first case'],
-  ['three_archived', 'investigation', 2, '三案归档', 'Archive Keeper', '侦破全部三起案件', 'Solve all three cases'],
+  ['three_archived', 'investigation', 2, '五案归档', 'Archive Keeper', '侦破全部五起案件', 'Solve all five cases'],
   ['all_s', 'investigation', 3, '真相架构师', 'Truth Architect', '全部案件获得 S 级', 'Earn S rank in all cases'],
   ['first_clue', 'evidence', 0, '第一线索', 'First Clue', '发现第一条线索', 'Discover your first clue'],
   ['ten_clues', 'evidence', 1, '证据猎手', 'Evidence Hunter', '累计发现 10 条不同线索', 'Discover 10 unique clues'],
   ['one_case_all_clues', 'evidence', 2, '完整证物链', 'Complete Chain', '收集任一案件全部线索', 'Collect every clue in one case'],
-  ['all_case_clues', 'evidence', 3, '全域证物库', 'Omni Archive', '收集三案全部线索', 'Collect every clue in all cases'],
+  ['all_case_clues', 'evidence', 3, '全域证物库', 'Omni Archive', '收集五案全部线索', 'Collect every clue in all five cases'],
   ['first_link', 'reasoning', 0, '逻辑初连', 'First Connection', '建立第一条有效连线', 'Create your first valid link'],
   ['five_links', 'reasoning', 1, '推理网络', 'Reasoning Network', '累计建立 5 条有效连线', 'Create 5 valid links'],
   ['zero_invalid', 'reasoning', 2, '零误连破案', 'Flawless Logic', '零无效连线侦破案件', 'Solve a case with no invalid links'],
@@ -111,7 +111,7 @@ export const PROFILE_DEFAULTS = {
   level: 1, xp: 0, rank_title: '新手侦探', energy: ENERGY_MAX,
   energy_updated_at: null, diamonds: 0, gold: 0, last_checkin: null,
   checkin_streak: 0, checkin_history: [], achievements: [], solved_cases: [],
-  unsolved_count: 3, inventory: {}, equipped_items: [], tech_unlocks: [],
+  unsolved_count: 5, inventory: {}, equipped_items: [], tech_unlocks: [],
   case_records: [], activity_stats: DEFAULT_STATS, reward_claims: [],
   journey_started_on: null, mail_read_ids: [], mail_reply_choices: [],
   rewarded_runs: [], weekly_records: [], agent_progression: [], skill_loadout: [],
@@ -441,11 +441,11 @@ function pairKey(pair) {
   return values.filter(Boolean).sort().join('|');
 }
 
-export function dailyIntelCaseId(date = new Date(), caseIds = ['Lvl_01', 'Lvl_02', 'Lvl_03']) {
+export function dailyIntelCaseId(date = new Date(), caseIds = KNOWN_CASE_IDS) {
   return caseIds[Math.abs(localDayNumber(date)) % caseIds.length];
 }
 
-export function weeklyChallenge(date = new Date(), caseIds = ['Lvl_01', 'Lvl_02', 'Lvl_03']) {
+export function weeklyChallenge(date = new Date(), caseIds = KNOWN_CASE_IDS) {
   const cycleId = isoWeekKey(date);
   const weekNumber = finite(cycleId.split('W')[1], 1);
   return { cycleId, caseId: caseIds[(weekNumber - 1) % caseIds.length] };
@@ -519,7 +519,8 @@ function totalUniqueClues(profile) {
 
 function allCaseClues(profile, caseTotals = {}) {
   const ids = Object.keys(caseTotals);
-  return ids.length >= 3 && ids.every(id => (profile.case_records.find(record => record.case_id === id)?.discovered_clues.length || 0) >= caseTotals[id]);
+  return KNOWN_CASE_IDS.every(id => ids.includes(id)
+    && (profile.case_records.find(record => record.case_id === id)?.discovered_clues.length || 0) >= caseTotals[id]);
 }
 
 function achievementMet(id, profile, latest = {}, caseTotals = DEFAULT_CASE_TOTALS) {
@@ -532,7 +533,7 @@ function achievementMet(id, profile, latest = {}, caseTotals = DEFAULT_CASE_TOTA
     first_deploy: stats.cases_started >= 1,
     first_solve: stats.cases_solved >= 1,
     three_archived: unique(profile.solved_cases.filter(id => KNOWN_CASE_IDS.includes(id))).length >= KNOWN_CASE_IDS.length,
-    all_s: records.filter(record => record.best_score === 'S').length >= 3,
+    all_s: records.filter(record => record.best_score === 'S').length >= KNOWN_CASE_IDS.length,
     first_clue: totalClues >= 1,
     ten_clues: totalClues >= 10,
     one_case_all_clues: Object.entries(caseTotals).some(([id, total]) => (records.find(record => record.case_id === id)?.discovered_clues.length || 0) >= total),
@@ -574,7 +575,7 @@ export function achievementProgress(profile, id, caseTotals = DEFAULT_CASE_TOTAL
   const values = {
     first_deploy: [stats.cases_started, 1], first_solve: [stats.cases_solved, 1],
     three_archived: [unique(profile.solved_cases.filter(id => KNOWN_CASE_IDS.includes(id))).length, KNOWN_CASE_IDS.length],
-    all_s: [records.filter(record => record.best_score === 'S').length, 3],
+    all_s: [records.filter(record => record.best_score === 'S').length, KNOWN_CASE_IDS.length],
     first_clue: [totalClues, 1], ten_clues: [totalClues, 10],
     one_case_all_clues: [Math.max(0, ...records.map(record => record.discovered_clues.length)), Math.max(...Object.values(caseTotals))],
     all_case_clues: [totalClues, Object.values(caseTotals).reduce((sum, total) => sum + total, 0)],

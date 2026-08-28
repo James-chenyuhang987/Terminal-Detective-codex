@@ -24,6 +24,18 @@ export const CASE_MATCH_CONFIGS = Object.freeze({
     threats: ['感官干扰', '人群证词', '神经混乱'],
     threatsEn: ['Sensory interference', 'Crowd testimony', 'Neural confusion'],
   },
+  Lvl_04: {
+    id: 'Lvl_04', name: '零度回声 · ZERO ECHO', nameEn: 'ZERO ECHO', threat: 'HARD',
+    weights: { observation_focus: 0.40, logic_power: 0.35, hack_level: 0.25 },
+    threats: ['极寒物证', '无人机路径', '日志覆写'],
+    threatsEn: ['Cryogenic evidence', 'Drone routing', 'Log overwrites'],
+  },
+  Lvl_05: {
+    id: 'Lvl_05', name: '天穹失联 · SKYFALL SILENCE', nameEn: 'SKYFALL SILENCE', threat: 'OMEGA',
+    weights: { hack_level: 0.35, confusion_resistance: 0.35, logic_power: 0.30 },
+    threats: ['轨道网络封锁', '伪造授权', '高压审讯'],
+    threatsEn: ['Orbital network lockdown', 'Forged authorization', 'High-pressure interrogation'],
+  },
 });
 
 export const CASE_NEON_BLOOD = CASE_MATCH_CONFIGS.Lvl_01;

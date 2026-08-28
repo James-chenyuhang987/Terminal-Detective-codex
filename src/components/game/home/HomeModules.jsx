@@ -22,7 +22,7 @@ import { purchaseSuccessMessage } from '@/game/transactionFeedback';
 
 const GraphModule = lazy(() => import('./modules/GraphModule.jsx'));
 
-const CASE_ICON = { Lvl_01: '🏙️', Lvl_02: '🔬', Lvl_03: '🦋' };
+const CASE_ICON = { Lvl_01: '🏙️', Lvl_02: '🔬', Lvl_03: '🦋', Lvl_04: '🧊', Lvl_05: '🛰️' };
 const DIFF_COLOR = { NORMAL: '#00ff88', HARD: '#ffaa00', OMEGA: '#ff3860' };
 const GROUP_LABEL = {
   investigation: ['调查', 'INVESTIGATION'], evidence: ['证据', 'EVIDENCE'], reasoning: ['推理', 'REASONING'],
@@ -171,7 +171,7 @@ function DiamondSources({ profile, onOpen, lang }) {
   const economy = getEconomySnapshot(profile);
   const sources = [
     ['achievements', '🏅', lang === 'zh' ? '成就奖励' : 'Achievement rewards', economy.pendingDiamonds ? `${economy.pendingDiamonds} 💎 ${lang === 'zh' ? '待领取' : 'READY'}` : `${knownAchievementCount(profile)}/24`],
-    ['cases', '🗂', lang === 'zh' ? '案件首通' : 'First clears', `${profile.solved_cases.filter(id => KNOWN_CASE_IDS.includes(id)).length}/3`],
+    ['cases', '🗂', lang === 'zh' ? '案件首通' : 'First clears', `${profile.solved_cases.filter(id => KNOWN_CASE_IDS.includes(id)).length}/${KNOWN_CASE_IDS.length}`],
     ['checkin', '📅', lang === 'zh' ? '签到奖励' : 'Check-in rewards', `${profile.checkin_streak}d`],
     ['goals', '🎯', lang === 'zh' ? '七日目标' : 'Seven-day goals', '100 💎'],
     ['events', '🎁', lang === 'zh' ? '每周挑战' : 'Weekly challenge', '40 💎'],
@@ -267,6 +267,8 @@ const MAILS = [
   { id: 'case1', when: p => p.solved_cases.includes('Lvl_01'), icon: '🏙️', zh: ['匿名线人', '霓虹城记住了你的名字。那条暗线，也许还没有真正结束。'], en: ['Anonymous Source', 'Neon City remembers your name. That hidden thread may not be over.'] },
   { id: 'case2', when: p => p.solved_cases.includes('Lvl_02'), icon: '🔬', zh: ['量子研究所', '幽灵协议档案已解封。感谢你保住了真相。'], en: ['Quantum Institute', 'The Ghost Protocol file is unsealed. Thank you for preserving the truth.'] },
   { id: 'case3', when: p => p.solved_cases.includes('Lvl_03'), icon: '🦋', zh: ['Lena', '我终于敢开口了。谢谢你让我相信证词有意义。'], en: ['Lena', 'I can finally speak. Thank you for proving testimony matters.'] },
+  { id: 'case4', when: p => p.solved_cases.includes('Lvl_04'), icon: '🧊', zh: ['极地档案署', '零度回声已被封存。你让一段被冰封的记录重新开口。'], en: ['Polar Archive Authority', 'Zero Echo is secured. You made a frozen record speak again.'] },
+  { id: 'case5', when: p => p.solved_cases.includes('Lvl_05'), icon: '🛰️', zh: ['天穹调度中心', '升降梯已恢复运行。轨道之上的人们会记住这次调查。'], en: ['Skyline Control', 'The elevator is operational again. Those above the clouds will remember this investigation.'] },
   { id: 'tech', when: p => p.tech_unlocks.length > 0, icon: '⚙️', zh: ['研发终端', '首项科技已接入调查矩阵。'], en: ['Research Terminal', 'Your first technology is now wired into the investigation matrix.'] },
   { id: 'week', when: p => SEVEN_DAY_TASKS.every(task => p.reward_claims.includes(`seven:${task.id}`)), icon: '🏅', zh: ['档案管理局', '首周评估完成。你已不再是见习侦探。'], en: ['Archive Bureau', 'First-week assessment complete. You are no longer a trainee.'] },
 ];

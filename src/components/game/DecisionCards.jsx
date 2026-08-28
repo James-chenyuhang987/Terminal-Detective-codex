@@ -97,6 +97,11 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
         <b>◆ {points - reserved}/{commandState?.max_points || 5}</b>
       </div>
 
+      <div className="td-decision-assistant-tip" role="note">
+        <span>🤖</span>
+        <div><small>NOVA · {zh ? '决策提示' : 'DECISION TIP'}</small><strong>{zh ? '先阅读白色的「证据及发现」，再比较收益和风险。' : 'Read the white EVIDENCE & FINDINGS text before comparing benefit and risk.'}</strong></div>
+      </div>
+
       <div className="td-decision-cards">
         {cards.map((card, index) => {
           const meta = STYLE_META[card.style] || STYLE_META.steady;
