@@ -52,24 +52,24 @@ export function specRemaining(spec) {
 }
 
 // 有效属性 = 基础 + 专长加成（受属性上限约束）
-export function effectiveAttrs(agentIdx, spec) {
+export function effectiveAttrs(agentIdx, spec, attributeBonus = {}) {
   const def = AGENT_SPECIALTIES[agentIdx];
   const out = {};
   Object.entries(def.base_attrs).forEach(([k, base]) => {
     const bonus = def.specialty_slots.includes(k) ? (spec?.[k] || 0) : 0;
-    out[k] = Math.min(ATTR_MAX[k], base + bonus);
+    out[k] = Math.min(ATTR_MAX[k], base + bonus + (Number(attributeBonus?.[k]) || 0));
   });
   return out;
 }
 
 // 该属性还能加多少点（余额 + 上限双重约束）
-export function maxBonusFor(agentIdx, spec, attrKey) {
+export function maxBonusFor(agentIdx, spec, attrKey, attributeBonus = {}) {
   const def = AGENT_SPECIALTIES[agentIdx];
   if (!def.specialty_slots.includes(attrKey)) return 0;
   const current = spec?.[attrKey] || 0;
   const byBudget = current + specRemaining(spec);
-  const byCap = ATTR_MAX[attrKey] - def.base_attrs[attrKey];
-  return Math.min(byBudget, byCap);
+  const byCap = ATTR_MAX[attrKey] - def.base_attrs[attrKey] - (Number(attributeBonus?.[attrKey]) || 0);
+  return Math.max(0, Math.min(byBudget, byCap));
 }
 
 // ── 协同技能定义 ────────────────────────────────────────────────────────────
@@ -115,8 +115,8 @@ export const SYNERGY_SKILLS = [
 
 // ── 协同计算（升级版）──────────────────────────────────────────────────────
 // specs: [{...spec}, {...spec}, {...spec}]
-export function calcTeamSynergy(specs) {
-  const attrs = specs.map((spec, i) => effectiveAttrs(i, spec));
+export function calcTeamSynergy(specs, attributeBonuses = []) {
+  const attrs = specs.map((spec, i) => effectiveAttrs(i, spec, attributeBonuses[i]));
 
   const active = SYNERGY_SKILLS.filter(s => s.check(attrs));
   const inactive = SYNERGY_SKILLS.filter(s => !s.check(attrs));

@@ -25,7 +25,7 @@ test('legacy profiles migrate without losing existing progress', () => {
   assert.equal(migrated.gold, 321);
   assert.deepEqual(migrated.achievements, ['legacy_badge']);
   assert.deepEqual(migrated.solved_cases, ['Lvl_01']);
-  assert.equal(migrated.unsolved_count, 4);
+  assert.equal(migrated.unsolved_count, 7);
   assert.deepEqual(migrated.equipped_items, []);
   assert.equal(migrated.inventory.ap_booster, 0);
 });
@@ -38,7 +38,7 @@ test('unknown legacy cases never inflate the current case archive or evidence ac
       discovered_clues: Array.from({ length: 12 }, (_, index) => `${caseId}-${index}`),
     })),
   }));
-  assert.equal(legacy.unsolved_count, 5);
+  assert.equal(legacy.unsolved_count, 8);
   assert.equal(legacy.achievements.includes('three_archived'), false);
   assert.equal(legacy.achievements.includes('all_s'), false);
   assert.equal(legacy.achievements.includes('ten_clues'), false);
@@ -254,9 +254,12 @@ test('all 24 achievements expose bounded progress and can be unlocked', () => {
     ['e_01', 'e_02', 'e_03', 'e_04', 'e_05', 'e_06', 'e_07', 'e_08', 'e_secret_99'],
     ['f_01', 'f_02', 'f_03', 'f_04', 'f_05', 'f_06', 'f_07', 'f_08', 'f_secret_99'],
     ['g_01', 'g_02', 'g_03', 'g_04', 'g_05', 'g_06', 'g_07', 'g_08', 'g_secret_99'],
+    ['h_01', 'h_02', 'h_03', 'h_04', 'h_05', 'h_06', 'h_07', 'h_08', 'h_secret_99'],
+    ['i_01', 'i_02', 'i_03', 'i_04', 'i_05', 'i_06', 'i_07', 'i_08', 'i_secret_99'],
+    ['j_01', 'j_02', 'j_03', 'j_04', 'j_05', 'j_06', 'j_07', 'j_08', 'j_secret_99'],
   ];
   const complete = profile({
-    solved_cases: ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05'],
+    solved_cases: ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05', 'Lvl_06', 'Lvl_07', 'Lvl_08'],
     case_records: clueSets.map((clues, index) => ({
       case_id: `Lvl_0${index + 1}`, best_score: 'S', discovered_clues: clues,
       valid_links: [`${clues[0]}|${clues[1]}`], attempts: 1, solves: 1,
@@ -268,7 +271,7 @@ test('all 24 achievements expose bounded progress and can be unlocked', () => {
       'seven:day1', 'seven:day2', 'seven:day3', 'seven:day4', 'seven:day5', 'seven:day6', 'seven:day7',
     ],
     activity_stats: {
-      cases_started: 5, cases_solved: 5, valid_links: 5, invalid_links: 0,
+      cases_started: 8, cases_solved: 8, valid_links: 8, invalid_links: 0,
       best_agent_level: 5, all_agents_min_level: 5,
     },
   });

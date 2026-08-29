@@ -9,7 +9,7 @@ const DIFFICULTY_CONFIG = {
   OMEGA:  { label: 'OMEGA',  color: '#ff3860', bg: 'rgba(255,56,96,0.12)', stars: 3 },
 };
 
-const CASE_COVER_ICONS = ['🏙️', '🔬', '🦋', '🧊', '🛰️'];
+const CASE_COVER_ICONS = ['🏙️', '🔬', '🦋', '🧊', '🛰️', '🏛️', '🌊', '♾️'];
 
 export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId = null, profile }) {
   const { lang, t } = useLang();

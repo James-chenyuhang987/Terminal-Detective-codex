@@ -4,7 +4,7 @@ import DetectiveRegistration from '@/components/game/DetectiveRegistration';
 import { markActivity, startCase } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { buildTeamConfig } from '@/game/teamConfig';
-import { getActiveSupportAgentId } from '@/game/agentMarket';
+import { getActiveSupportAgentId, getSelectedCoreAgentIds, purchaseAgent } from '@/game/agentMarket';
 import { useLang } from '@/lib/lang.jsx';
 import { ALL_CASES } from '@/game/caseData';
 
@@ -117,6 +117,8 @@ export default function TerminalDetective() {
     return mutate(current => ({ profile: { ...current, skill_loadout: skillLoadout } }));
   };
 
+  const handleAgentPurchase = async (agentId) => mutate(current => purchaseAgent(current, agentId));
+
   const handleCaseSelect = async (caseData, strategyOverride = null) => {
     await loadInvestigationTerminal();
     const currentStrategy = strategyOverride || agentStrategy;
@@ -158,7 +160,12 @@ export default function TerminalDetective() {
       openLobbyForCase(caseId);
       return;
     }
-    setAgentStrategy(buildTeamConfig(saved, saved.primary_agent_index, profile?.skill_loadout, getActiveSupportAgentId(profile)));
+    setAgentStrategy(buildTeamConfig(
+      { ...saved, core_agent_ids: getSelectedCoreAgentIds(profile) },
+      saved.primary_agent_index,
+      profile?.skill_loadout,
+      getActiveSupportAgentId(profile),
+    ));
     setPreferredCaseId(caseId);
     setScreen('CASE_SELECT');
   };
@@ -193,6 +200,7 @@ export default function TerminalDetective() {
         onBack={() => setScreen(lobbyReturnScreen)}
         onTeamSave={handleTeamSave}
         onSkillLoadout={handleSkillLoadout}
+        onAgentPurchase={handleAgentPurchase}
       />
     );
   } else if (screen === 'CASE_SELECT') {

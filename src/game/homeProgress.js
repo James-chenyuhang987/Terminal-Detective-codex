@@ -4,15 +4,15 @@ export const ENERGY_MINUTES_PER_POINT = 5;
 export const XP_PER_LEVEL = 300;
 export const DETECTIVE_LEVEL_CAP = 20;
 export const ACHIEVEMENT_TOTAL = 24;
-export const KNOWN_CASE_IDS = ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05'];
+export const KNOWN_CASE_IDS = ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05', 'Lvl_06', 'Lvl_07', 'Lvl_08'];
 export const CURRENCY_CAPS = Object.freeze({ gold: 9_999_999, diamonds: 999_999 });
 
 export const CASE_ENERGY_COST = { NORMAL: 10, HARD: 15, OMEGA: 20 };
 export const CASE_GOLD_REWARD = { S: 1000, A: 750, B: 500, C: 300, D: 150 };
 export const FIRST_CLEAR_DIAMONDS = { NORMAL: 20, HARD: 35, OMEGA: 50 };
 export const SCORE_ORDER = { D: 1, C: 2, B: 3, A: 4, S: 5 };
-const DEFAULT_CASE_TOTALS = { Lvl_01: 9, Lvl_02: 9, Lvl_03: 9, Lvl_04: 9, Lvl_05: 9 };
-const HIDDEN_CLUE_IDS = ['c_secret_99', 'd_secret_99', 'e_secret_99', 'f_secret_99', 'g_secret_99'];
+const DEFAULT_CASE_TOTALS = { Lvl_01: 9, Lvl_02: 9, Lvl_03: 9, Lvl_04: 9, Lvl_05: 9, Lvl_06: 9, Lvl_07: 9, Lvl_08: 9 };
+const HIDDEN_CLUE_IDS = ['c_secret_99', 'd_secret_99', 'e_secret_99', 'f_secret_99', 'g_secret_99', 'h_secret_99', 'i_secret_99', 'j_secret_99'];
 
 export const LEVEL_REWARDS = Object.freeze([
   { level: 2, reward: { gold: 300 } },
@@ -87,12 +87,12 @@ const REWARD_STEPS = [10, 20, 50, 100];
 export const ACHIEVEMENTS = [
   ['first_deploy', 'investigation', 0, '初次出勤', 'First Deployment', '开始第一起案件', 'Start your first case'],
   ['first_solve', 'investigation', 1, '首案告破', 'First Truth', '成功侦破第一起案件', 'Solve your first case'],
-  ['three_archived', 'investigation', 2, '五案归档', 'Archive Keeper', '侦破全部五起案件', 'Solve all five cases'],
+  ['three_archived', 'investigation', 2, '八案归档', 'Archive Keeper', '侦破全部八起案件', 'Solve all eight cases'],
   ['all_s', 'investigation', 3, '真相架构师', 'Truth Architect', '全部案件获得 S 级', 'Earn S rank in all cases'],
   ['first_clue', 'evidence', 0, '第一线索', 'First Clue', '发现第一条线索', 'Discover your first clue'],
   ['ten_clues', 'evidence', 1, '证据猎手', 'Evidence Hunter', '累计发现 10 条不同线索', 'Discover 10 unique clues'],
   ['one_case_all_clues', 'evidence', 2, '完整证物链', 'Complete Chain', '收集任一案件全部线索', 'Collect every clue in one case'],
-  ['all_case_clues', 'evidence', 3, '全域证物库', 'Omni Archive', '收集五案全部线索', 'Collect every clue in all five cases'],
+  ['all_case_clues', 'evidence', 3, '全域证物库', 'Omni Archive', '收集八案全部线索', 'Collect every clue in all eight cases'],
   ['first_link', 'reasoning', 0, '逻辑初连', 'First Connection', '建立第一条有效连线', 'Create your first valid link'],
   ['five_links', 'reasoning', 1, '推理网络', 'Reasoning Network', '累计建立 5 条有效连线', 'Create 5 valid links'],
   ['zero_invalid', 'reasoning', 2, '零误连破案', 'Flawless Logic', '零无效连线侦破案件', 'Solve a case with no invalid links'],
@@ -144,7 +144,7 @@ export const PROFILE_DEFAULTS = {
   level: 1, xp: 0, rank_title: '新手侦探', energy: ENERGY_MAX,
   energy_updated_at: null, diamonds: 0, gold: 0, last_checkin: null,
   checkin_streak: 0, checkin_history: [], achievements: [], solved_cases: [],
-  unsolved_count: 5, inventory: {}, equipped_items: [], tech_unlocks: [],
+  unsolved_count: 8, inventory: {}, equipped_items: [], tech_unlocks: [],
   case_records: [], activity_stats: DEFAULT_STATS, reward_claims: [],
   journey_started_on: null, mail_read_ids: [], mail_reply_choices: [],
   rewarded_runs: [], weekly_records: [], agent_progression: [], skill_loadout: [],

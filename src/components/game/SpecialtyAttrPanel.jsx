@@ -74,14 +74,14 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
   );
 }
 
-export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agentColor }) {
+export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agentColor, attributeBonus = {} }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const def = AGENT_SPECIALTIES[agentIdx];
   const used = specUsed(spec);
   const remaining = specRemaining(spec);
   const locked = remaining === 0;
-  const attrs = effectiveAttrs(agentIdx, spec);
+  const attrs = effectiveAttrs(agentIdx, spec, attributeBonus);
 
   return (
     <div>
@@ -126,11 +126,11 @@ export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agent
           <SpecAttrRow
             key={meta.key}
             meta={meta}
-            base={def.base_attrs[meta.key]}
+            base={Math.min(ATTR_MAX[meta.key], def.base_attrs[meta.key] + (Number(attributeBonus?.[meta.key]) || 0))}
             bonus={isSpecialty ? (spec?.[meta.key] || 0) : 0}
             isSpecialty={isSpecialty}
             locked={locked}
-            maxBonus={maxBonusFor(agentIdx, spec, meta.key)}
+            maxBonus={maxBonusFor(agentIdx, spec, meta.key, attributeBonus)}
             onChange={(v) => onSpecChange({ ...spec, [meta.key]: Math.max(0, v) })}
           />
         );

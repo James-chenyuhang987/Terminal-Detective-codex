@@ -1,8 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { Case_Data_Lvl_04, Case_Data_Lvl_05 } from './caseDataExtra.js';
+import { Case_Data_Lvl_06, Case_Data_Lvl_07, Case_Data_Lvl_08 } from './caseDataExpansion.js';
 
 export { Case_Data_Lvl_04, Case_Data_Lvl_05 } from './caseDataExtra.js';
+export { Case_Data_Lvl_06, Case_Data_Lvl_07, Case_Data_Lvl_08 } from './caseDataExpansion.js';
 // data_config.js — Static Case Database & Enums
 // The absolute source of truth for all case data. No logic, no state.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -171,7 +173,7 @@ export const Case_Data_Lvl_02 = {
   conflict_dictionary: [{ clue_A: "d_02", clue_B: "d_06", reason: "If she never left via the main door (d_02), the roof exit sensor (d_06) confirms an alternate escape route." }],
   hidden_clues: [{ clue_id: "d_secret_99", unlock_turn: 7, text: "系统检测到：数据回收站中存在未完全覆写的残留数据..." }],
   checkpoints: ["zone_lab_core", "zone_server"],
-  zone_clue_map: { zone_lab_core: ['d_01','d_02','d_03','d_07'], zone_server: ['d_04','d_secret_99'], zone_lounge: ['d_05'], zone_roof_exit: ['d_06'] },
+  zone_clue_map: { zone_lab_core: ['d_01','d_02','d_03','d_07'], zone_server: ['d_04','d_08','d_secret_99'], zone_lounge: ['d_05'], zone_roof_exit: ['d_06'] },
   zone_layout: {
     zone_lab_core:  { x: 50, y: 18, label: '量子核心实验室', sublabel: '案发现场', icon: '⚛️',  color: '#ff3860' },
     zone_server:    { x: 80, y: 55, label: '服务器间',        sublabel: '数字入口', icon: '💾',  color: '#a78bfa' },
@@ -306,7 +308,10 @@ export const Case_Data_Lvl_03 = {
 };
 
 // ─── Case catalogue (for selection screen) ────────────────────────────────────
-export const ALL_CASES = [Case_Data_Lvl_01, Case_Data_Lvl_02, Case_Data_Lvl_03, Case_Data_Lvl_04, Case_Data_Lvl_05];
+export const ALL_CASES = [
+  Case_Data_Lvl_01, Case_Data_Lvl_02, Case_Data_Lvl_03, Case_Data_Lvl_04,
+  Case_Data_Lvl_05, Case_Data_Lvl_06, Case_Data_Lvl_07, Case_Data_Lvl_08,
+];
 
 export const DEFAULT_AGENT_CONFIG = {
   agent_id: "AXIOM-7",

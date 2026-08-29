@@ -1,6 +1,6 @@
 import { DEFAULT_AGENT_CONFIG } from './caseData.js';
 import { calcTeamSynergy, effectiveAttrs, getEquippedSkillEffects } from './specialtySystem.js';
-import { getAgentById, getSupportAgentEffects } from './agentMarket.js';
+import { getAgentById, getSupportAgentEffects, normalizeCoreAgentIds } from './agentMarket.js';
 import { normalizeCommandPlan } from './commandSystem.js';
 
 export const AGENT_DEFS = [
@@ -26,6 +26,34 @@ export const AGENT_DEFS = [
     attrs: { logic_power: 10, observation_focus: 10, confusion_resistance: 10, ap_cost_discount: 10, hack_level: 20 },
   },
 ];
+
+export function getCoreAgentDefs(coreAgentIds) {
+  const ids = normalizeCoreAgentIds(coreAgentIds);
+  return AGENT_DEFS.map((base, slot) => {
+    const market = getAgentById(ids[slot]);
+    if (!market || market.id === base.id) return { ...base, attribute_bonus: {} };
+    return {
+      ...base,
+      id: market.id,
+      name: market.id,
+      icon: market.icon,
+      color: market.color,
+      role: market.en?.role || base.role,
+      roleZh: market.zh?.role || base.roleZh,
+      stance: market.stance || base.stance,
+      traitEn: market.traitEn || base.traitEn,
+      desc: market.desc || market.zh?.ability || base.desc,
+      descEn: market.descEn || market.en?.ability || base.descEn,
+      attribute_bonus: { ...(market.attribute_bonus || {}) },
+      power: market.power,
+      tier: market.tier,
+      cost: market.cost,
+      zh: market.zh,
+      en: market.en,
+      core_slot: market.core_slot,
+    };
+  });
+}
 
 export const PRIORITY_ACTIONS = [
   { id: 'search_area', label: '区域搜索', labelEn: 'AREA SEARCH', icon: '🔭', color: '#00e5ff' },
@@ -65,20 +93,23 @@ export function normalizeSavedTeamConfig(saved) {
     priorities: normalizePriorities(saved.priorities),
     primary_agent_index: Math.max(0, Math.min(AGENT_DEFS.length - 1, Math.floor(Number(saved.primary_agent_index) || 0))),
     command_plan: normalizeCommandPlan(saved.command_plan),
+    core_agent_ids: normalizeCoreAgentIds(saved.core_agent_ids),
   };
 }
 
 export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_index ?? 1, skillLoadout = null, supportAgentId = null, targetCaseId = null) {
   const specs = Array.isArray(saved.specs) && saved.specs.length === 3 ? saved.specs : defaultSpecs();
   const priorities = normalizePriorities(saved.priorities);
+  const coreAgentIds = normalizeCoreAgentIds(saved.core_agent_ids);
+  const agentDefs = getCoreAgentDefs(coreAgentIds);
   const agents = specs.map((spec, index) => ({
-    agent_id: AGENT_DEFS[index].id,
-    role: AGENT_DEFS[index].roleZh,
-    base_stance: AGENT_DEFS[index].stance,
-    ...effectiveAttrs(index, spec),
+    agent_id: agentDefs[index].id,
+    role: agentDefs[index].roleZh,
+    base_stance: agentDefs[index].stance,
+    ...effectiveAttrs(index, spec, agentDefs[index].attribute_bonus),
     priority_list: priorities[index],
   }));
-  const synergy = calcTeamSynergy(specs);
+  const synergy = calcTeamSynergy(specs, agentDefs.map(agent => agent.attribute_bonus));
   const equippedEffects = getEquippedSkillEffects(skillLoadout);
   const supportEffects = /** @type {Record<string, number | boolean>} */ (getSupportAgentEffects(supportAgentId));
   const skillEffects = { ...equippedEffects };
@@ -119,6 +150,7 @@ export function buildTeamConfig(saved = {}, selectedIdx = saved?.primary_agent_i
     },
     priority_list: agents[selectedIdx]?.priority_list || PRIORITY_ACTIONS.map(item => item.id),
     command_plan: normalizeCommandPlan(saved.command_plan),
+    core_agent_ids: coreAgentIds,
     target_case_id: typeof targetCaseId === 'string' && targetCaseId ? targetCaseId : null,
   };
 }

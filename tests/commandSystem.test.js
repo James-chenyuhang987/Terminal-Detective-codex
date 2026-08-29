@@ -104,8 +104,8 @@ test('all contingencies trigger once and report insufficient points', () => {
 
 test('case forecasts use independent public requirements without hidden data', () => {
   const strategy = buildTeamConfig(baseSaved);
-  const scores = ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05'].map(id => calcCaseMatchScore(strategy.team, getCaseMatchConfig(id)).score);
-  assert.equal(scores.length, 5);
+  const scores = ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05', 'Lvl_06', 'Lvl_07', 'Lvl_08'].map(id => calcCaseMatchScore(strategy.team, getCaseMatchConfig(id)).score);
+  assert.equal(scores.length, 8);
   scores.forEach(score => assert.ok(score >= 0 && score <= 100));
   assert.deepEqual(Object.keys(getCaseMatchConfig('Lvl_03').weights), [
     'observation_focus', 'confusion_resistance', 'logic_power',

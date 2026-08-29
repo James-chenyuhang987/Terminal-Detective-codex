@@ -36,6 +36,24 @@ export const CASE_MATCH_CONFIGS = Object.freeze({
     threats: ['轨道网络封锁', '伪造授权', '高压审讯'],
     threatsEn: ['Orbital network lockdown', 'Forged authorization', 'High-pressure interrogation'],
   },
+  Lvl_06: {
+    id: 'Lvl_06', name: '午夜拍卖 · MIDNIGHT AUCTION', nameEn: 'MIDNIGHT AUCTION', threat: 'NORMAL',
+    weights: { observation_focus: 0.40, logic_power: 0.35, hack_level: 0.25 },
+    threats: ['纳米毒物', '底座暗道', '匿名资金'],
+    threatsEn: ['Nanofiber toxin', 'Hidden pedestal path', 'Anonymous funds'],
+  },
+  Lvl_07: {
+    id: 'Lvl_07', name: '深潮回声 · ABYSSAL ECHO', nameEn: 'ABYSSAL ECHO', threat: 'HARD',
+    weights: { confusion_resistance: 0.40, observation_focus: 0.35, hack_level: 0.25 },
+    threats: ['深海高压', '伪造声呐', '远程阀门'],
+    threatsEn: ['Abyssal pressure', 'Forged sonar', 'Remote valve control'],
+  },
+  Lvl_08: {
+    id: 'Lvl_08', name: '白塔悖论 · WHITE TOWER PARADOX', nameEn: 'WHITE TOWER PARADOX', threat: 'OMEGA',
+    weights: { logic_power: 0.40, hack_level: 0.35, confusion_resistance: 0.25 },
+    threats: ['预测核心', '权限覆写', '因果伪装'],
+    threatsEn: ['Prediction core', 'Privilege override', 'Causal camouflage'],
+  },
 });
 
 export const CASE_NEON_BLOOD = CASE_MATCH_CONFIGS.Lvl_01;

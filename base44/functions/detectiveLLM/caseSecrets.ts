@@ -136,6 +136,84 @@ const CASE_SECRETS = {
       },
     },
   },
+  Lvl_06: {
+    truth: `Chief appraiser Mara Ilyan was murdered by restoration chief Tessa Vale. Tessa had used restoration batch R-41 to create a forgery of Memory in Rain and arranged an anonymous sale of the original through transporter Pavel Orr. When Mara identified the replica source and scheduled a disclosure, Tessa authorized the display pedestal's hidden maintenance arm, exchanged the original into her marked flight case, and pressed heat-activated toxic nanofibers into Mara's glove. Pavel knowingly transported an undeclared artwork but did not commit the murder. The decisive chain is the glove fibers, pedestal maintenance window, Tessa's biometric signature, matching replica resin, auction fund loop, Mara's memo, and pedestal-arm cache.`,
+    clues: {
+      h_01: 'Nanofiber poison trace', h_02: 'Hidden display maintenance window', h_03: "Tessa's biometric maintenance signature",
+      h_04: 'Matching forgery resin spectrum', h_05: 'Anonymous auction fund loop', h_06: "Juno's continuous patrol record",
+      h_07: 'Original sculpture marker in flight case', h_08: "Mara's appraisal disclosure memo", h_secret_99: 'Pedestal exchange-arm cache',
+    },
+    npcs: {
+      npc_01: { name: 'Tessa Vale', role: 'Museum restoration chief', publicPersona: 'Calm and restrained; calls the maintenance event routine artifact protection.', personality: 'Hides responsibility behind technical language and becomes hurried around R-41 or her offshore fund.', motive: 'She killed Mara to conceal the forgery, sell the original, and protect the laundering fund.' },
+      npc_02: { name: 'Juno Kade', role: 'Night security archivist', publicPersona: 'Disciplined and more trusting of system records than testimony.', personality: 'Dislikes management interference but needs hard access evidence before cooperating.', motive: 'She is innocent; her continuous outer-ring patrol record proves she never reached the pedestal service level.' },
+      npc_03: { name: 'Pavel Orr', role: 'Private art transporter', publicPersona: 'Smooth and worldly; says he only accepts sealed legal cargo.', personality: 'Fears losing his license and identifies the handoff once shown the quantum marker.', motive: 'He knowingly moved an undeclared original for Tessa but did not poison Mara or operate the pedestal.' },
+    },
+    validEdges: [['h_01','h_04'],['h_02','h_03'],['h_03','h_05'],['h_04','h_08'],['h_05','h_07'],['h_06','h_03'],['h_secret_99','h_01'],['h_secret_99','h_03']],
+    branches: {
+      b_blame_pavel: {
+        trigger: 'The report accuses transporter Pavel of murdering Mara while ignoring Tessa’s pedestal access.', apLoss: 30,
+        zh: 'Pavel 因非法运输被扣押，但毒纤维与展柜机械臂都不受他控制。Tessa 借机清空离岸基金，真品再次消失。',
+        en: 'Pavel was detained for illegal transport, but he controlled neither the toxic fibers nor the pedestal arm. Tessa emptied the offshore fund and moved the original again.',
+      },
+      b_blame_juno: {
+        trigger: 'The report blames security archivist Juno despite her continuous patrol record.', apLoss: 35,
+        zh: '错误指控 Juno 让安保部门撤回合作。Tessa 封存修复室并以文化保密为由终止调查。',
+        en: 'The false accusation made museum security withdraw cooperation. Tessa sealed the restoration lab and terminated the investigation under heritage secrecy rules.',
+      },
+    },
+  },
+  Lvl_07: {
+    truth: `Sonar engineer Oren Pike was murdered by abyssal station director Neris Quill. Oren discovered that Neris had authorized six illegal collections of protected thermal-vent organisms for a longevity buyer. Neris remotely doubled the diving bell pressure through the trench uplink, looped Oren's old drill recording across sonar to disguise the timeline, launched the sampler with her private navigation key, and hijacked Sana's robot to erase the uplink log. Lio and Sana are innocent. The decisive chain is the remote pressure command, looped voiceprint, Neris's navigation key, protected colony sample, Oren's disclosure packet, early insurance draft, and sampler black box.`,
+    clues: {
+      i_01: 'Remote diving-bell pressure command', i_02: 'Looped sonar distress voiceprint', i_03: "Neris's private navigation key",
+      i_04: 'Protected thermal-vent colony sample', i_05: "Oren's illegal-sampling disclosure packet", i_06: "Lio's continuous medical record",
+      i_07: "Sana's hijacked repair robot trail", i_08: 'Prewritten equipment-failure insurance claim', i_secret_99: 'Sampler command black box',
+    },
+    npcs: {
+      npc_01: { name: 'Neris Quill', role: 'Abyssal station director', publicPersona: 'Calm and decisive; blames cascading equipment failure under extreme pressure.', personality: 'Invokes station survival rules when the protected samples or early insurance draft appears.', motive: 'She killed Oren to conceal illegal bio-sampling and protect a lucrative longevity-research contract.' },
+      npc_02: { name: 'Dr. Lio An', role: 'Diving medicine director', publicPersona: 'Tired but candid and responsible for decompression safety.', personality: 'Hates management hiding risk and reveals Oren’s disclosure plan once the sample source is verified.', motive: 'He is innocent; medical locks and patient vitals continuously confirm his location.' },
+      npc_03: { name: 'Sana Reef', role: 'Submersible robotics mechanic', publicPersona: 'Direct and practical; repaired the pump bay during the death.', personality: 'Feels guilty her robot was hijacked and holds abnormal uplink maintenance traces.', motive: 'She is innocent. Neris stole her robot credentials to erase records while Sana remained in the damaged pump bay.' },
+    },
+    validEdges: [['i_01','i_03'],['i_02','i_07'],['i_03','i_04'],['i_04','i_05'],['i_05','i_08'],['i_06','i_03'],['i_secret_99','i_01'],['i_secret_99','i_03']],
+    branches: {
+      b_blame_sana: {
+        trigger: 'The report blames Sana because her robot erased records while ignoring the hijacked credential trail.', apLoss: 35,
+        zh: 'Sana 被当作替罪羊，泵舱无人维护后全站被迫撤离。Neris 带着最后一批保护区样本消失在海沟航道。',
+        en: 'Sana became the scapegoat and the station evacuated without its pump mechanic. Neris vanished into the trench route with the final protected samples.',
+      },
+      b_accident: {
+        trigger: 'The report concludes the pressure death was a natural deep-sea equipment accident.', apLoss: 30,
+        zh: '案件以设备事故结案，循环求救声和私有航行密钥无人追查。非法采样艇继续驶向保护区。',
+        en: 'The death was filed as equipment failure. The looped distress call and private navigation key went unexplained while illegal sampling continued.',
+      },
+    },
+  },
+  Lvl_08: {
+    truth: `Ethics auditor Amara Saye was murdered by council agenda director Lucan Veil. Amara planned to expose a covert emotion-guidance trial targeting twenty thousand low-credit residents. Lucan's consultancy profited from the trial's predicted stability score. He copied technician Tomas's badge, authorized silent presentation mode with his own encrypted signature, filled the hearing chamber with an argon-xenon mixture that bypassed toxin sensors, disabled the air alarm, and ordered the civic prediction core to erase every risk path involving Amara. Journalist Iria and technician Tomas are innocent. The decisive chain is the inert gas film, deleted risk paths, Lucan's environment order, trial registry, consultancy contract, copied badge trail, Amara's testimony, and causal snapshot.`,
+    clues: {
+      j_01: 'Inert argon-xenon gas film', j_02: 'Deleted Amara risk paths', j_03: "Lucan's silent-presentation environment order",
+      j_04: 'Secret emotion-guidance trial registry', j_05: "Lucan's prediction-bias consultancy contract", j_06: "Iria's independently archived broadcast",
+      j_07: "Tomas's copied badge and elevator trail", j_08: "Amara's offline testimony", j_secret_99: 'White Tower causal simulation snapshot',
+    },
+    npcs: {
+      npc_01: { name: 'Lucan Veil', role: 'Autonomous council agenda director', publicPersona: 'Elegant and calm; insists the prediction system cannot intentionally harm a citizen.', personality: 'Turns ethical questions into statistics and tries to terminate access around his consultancy or causal simulations.', motive: 'He killed Amara to protect the covert trial, its political value, and the consultancy payments tied to its outcome.' },
+      npc_02: { name: 'Iria Moss', role: 'Independent investigative journalist', publicPersona: 'Sharp and direct; has tracked White Tower credit experiments for years.', personality: 'Distrusts official investigators but trades original broadcasts and Amara’s lead for protection.', motive: 'She is innocent and wanted Amara’s evidence published; her independently archived live stream proves her location.' },
+      npc_03: { name: 'Tomas Grey', role: 'White Tower environment technician', publicPersona: 'Cautious and afraid his copied badge makes him the scapegoat.', personality: 'Understands the air system and explains silent presentation mode once protected.', motive: 'He is innocent; he was trapped in a failed elevator while a cloned badge entered the air plant.' },
+    },
+    validEdges: [['j_01','j_03'],['j_02','j_03'],['j_03','j_07'],['j_04','j_05'],['j_05','j_02'],['j_06','j_03'],['j_08','j_04'],['j_secret_99','j_03']],
+    branches: {
+      b_blame_tomas: {
+        trigger: 'The report blames technician Tomas based on the copied badge while ignoring his elevator distress trail.', apLoss: 45,
+        zh: 'Tomas 被错误拘押，白塔以维护事故为由删除剩余环境记录。秘密试验在没有公开监督的情况下启动。',
+        en: 'Tomas was falsely detained and the tower erased the remaining environment logs as maintenance noise. The covert trial launched without public scrutiny.',
+      },
+      b_blame_system: {
+        trigger: 'The report blames the prediction AI alone and does not identify Lucan’s signed commands or financial motive.', apLoss: 40,
+        zh: '调查只追究预测系统，Lucan 以「算法偏差」为由重置核心。他保留了权力、合同和下一轮试验。',
+        en: 'The inquiry blamed the prediction system alone. Lucan reset the core as algorithmic bias and retained his power, contract, and next trial.',
+      },
+    },
+  },
 };
 
 export function getCaseSecret(caseId) {

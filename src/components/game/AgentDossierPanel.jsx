@@ -3,10 +3,10 @@ import { getLore } from '@/game/agentLore';
 import { useLang } from '@/lib/lang.jsx';
 
 // 完整档案 Tab — 时间线布局 + 战绩 + 心理评估
-export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _roleZh }) {
+export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _roleZh, lore: loreOverride = null }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
-  const lore = getLore(agentIdx, lang);
+  const lore = loreOverride || getLore(agentIdx, lang);
   if (!lore) return null;
 
   return (

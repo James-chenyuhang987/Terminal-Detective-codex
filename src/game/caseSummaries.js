@@ -24,6 +24,21 @@ export const CASE_SUMMARIES = Object.freeze([
     title: '天穹失联', subtitle: 'Skyfall Silence', setting: '2163年，轨道电梯上的救生舱谋杀与军用货柜失踪同时发生。',
     en: { title: 'Skyfall Silence', subtitle: 'Case LVL-05', setting: '2163. A lifeboat murder and a missing military container collide aboard an orbital elevator.' },
   },
+  {
+    case_id: 'Lvl_06', difficulty: 'NORMAL', clue_total: 9,
+    title: '午夜拍卖', subtitle: 'Midnight Auction', setting: '2160年，悬浮博物馆的匿名拍卖以鉴定师死亡和国宝失踪收场。',
+    en: { title: 'Midnight Auction', subtitle: 'Case LVL-06', setting: '2160. An anonymous auction at a floating museum ends with a dead appraiser and a vanished national treasure.' },
+  },
+  {
+    case_id: 'Lvl_07', difficulty: 'HARD', clue_total: 9,
+    title: '深潮回声', subtitle: 'Abyssal Echo', setting: '2164年，深海研究站的锁闭潜水钟内发生异常死亡，声呐播放着死者的求救声。',
+    en: { title: 'Abyssal Echo', subtitle: 'Case LVL-07', setting: '2164. An impossible death inside a locked diving bell is masked by a dead engineer\'s sonar distress call.' },
+  },
+  {
+    case_id: 'Lvl_08', difficulty: 'OMEGA', clue_total: 9,
+    title: '白塔悖论', subtitle: 'White Tower Paradox', setting: '2166年，城市预测系统否认了一名伦理审计官本应发生的死亡。',
+    en: { title: 'White Tower Paradox', subtitle: 'Case LVL-08', setting: '2166. A civic prediction system denies the supposedly impossible death of an ethics auditor.' },
+  },
 ]);
 
 export function getCaseSummary(caseId) {
