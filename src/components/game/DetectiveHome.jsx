@@ -117,6 +117,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         incomplete: lang === 'zh' ? '目标尚未完成' : 'Objective incomplete',
         day_locked: lang === 'zh' ? '该目标尚未解锁' : 'This day is still locked',
         locked: lang === 'zh' ? '成就尚未解锁' : 'Achievement locked',
+        invalid_level: lang === 'zh' ? '该等级奖励不存在' : 'This level reward does not exist',
+        level_locked: lang === 'zh' ? '尚未达到该等级' : 'This level has not been reached yet',
         rename_used: lang === 'zh' ? '代号修改次数已用完' : 'Codename rename already used',
       };
       notify(transactionErrorMessage(failedResult?.error, lang) || errors[failedResult?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'), 'error');
@@ -228,7 +230,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         boxShadow: '0 6px 26px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
         flexWrap: 'wrap',
       }}>
-        <ProfileBadge profile={profile} onClick={() => openModule('profile')} />
+        <ProfileBadge
+          profile={profile}
+          onClick={() => openModule('profile')}
+          onOpenLevelRoad={() => openModule('level_road')}
+        />
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <ResourceBar profile={profile} onPick={openModule} />
           <div style={{ display: 'flex', gap: 10, fontSize: 15 }}>

@@ -21,6 +21,8 @@ const RANK_EN = {
   '资深探员': 'SENIOR AGENT',
   '首席侦探': 'CHIEF DETECTIVE',
   '逻辑架构师': 'LOGIC ARCHITECT',
+  '真相指挥官': 'TRUTH COMMANDER',
+  '传奇侦探': 'LEGENDARY DETECTIVE',
 };
 
 export function identityBadgeLabel(id, lang = 'zh') {

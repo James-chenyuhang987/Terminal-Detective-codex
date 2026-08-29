@@ -1,6 +1,7 @@
 const MODULE_META = {
   zh: {
     profile: ['🪪 侦探档案', '身份、等级与调查统计'],
+    level_road: ['🛤 等级之路', '积累调查经验，领取每一级成长奖励'],
     supply: ['⚡ 补给中心', '体力每 5 分钟恢复 1 点'],
     diamonds: ['💎 钻石来源', '仅通过游戏进度获得，不含真实付费'],
     warehouse: ['🎒 物品仓库', '道具、商店与下一局装备'],
@@ -20,6 +21,7 @@ const MODULE_META = {
   },
   en: {
     profile: ['🪪 DETECTIVE PROFILE', 'Identity, level and investigation statistics'],
+    level_road: ['🛤 LEVEL ROAD', 'Earn investigation XP and claim every level reward'],
     supply: ['⚡ SUPPLY CENTER', 'Recover 1 energy every 5 minutes'],
     diamonds: ['💎 DIAMOND SOURCES', 'Earned through play only; no real-money purchases'],
     warehouse: ['🎒 WAREHOUSE', 'Inventory, store and next-case loadout'],
@@ -45,7 +47,6 @@ export function getHomeModuleMeta(moduleKey, lang = 'zh') {
   return {
     title,
     subtitle,
-    width: moduleKey === 'agent_market' || moduleKey === 'agents' ? 820 : moduleKey === 'settings' ? 400 : 620,
+    width: moduleKey === 'agent_market' || moduleKey === 'agents' || moduleKey === 'level_road' ? 820 : moduleKey === 'settings' ? 400 : 620,
   };
 }
-

@@ -5,7 +5,9 @@ import { getLevelFromXP } from '@/game/agentProgression';
 import {
   ACHIEVEMENTS, CASE_ENERGY_COST, ENERGY_MAX, ENERGY_OVERFLOW_MAX, ITEM_CATALOG,
   SEVEN_DAY_TASKS, TECH_CATALOG, TUTORIAL_TASKS,
+  DETECTIVE_LEVEL_CAP, LEVEL_REWARDS, XP_PER_LEVEL,
   achievementProgress, canCheckin, claimAchievement, claimTask, claimWeeklyReward,
+  claimLevelReward, claimableLevelRewardCount,
   dailyIntelCaseId, daysBetween, editIdentity, energyCountdown, purchaseItem,
   consumeEnergyCell, buyAndUseEnergyCell, getEconomySnapshot, quotePurchase,
   sevenDayTaskDone, toggleEquipItem, tutorialTaskDone, unlockTech,
@@ -129,6 +131,70 @@ function ProfileModule({ profile, onApply, tx, lang }) {
       <ActionButton onClick={() => onApply(editIdentity(profile, { detective_name: name, avatar, signature, identity_badge: badge, detective_tags: tags }), lang === 'zh' ? '档案已同步' : 'Profile synced')}>{tx.save}</ActionButton>
     </Panel>
     <div style={{ marginTop: 14, color: 'rgba(255,255,255,.45)', fontSize: '.62rem' }}>{lang === 'zh' ? '探员等级' : 'AGENT LEVELS'} · {progression.map((p, i) => `${lang === 'zh' ? ['隼目','破心','幽灵'][i] : ['NEXUS-01','AURORA-09','CIPHER-47'][i]} Lv.${getLevelFromXP(p.xp)}`).join(' / ')}</div>
+  </>;
+}
+
+function LevelRoadModule({ profile, onApply, lang, busy }) {
+  const zh = lang === 'zh';
+  const isMax = profile.level >= DETECTIVE_LEVEL_CAP;
+  const progress = isMax ? 100 : Math.min(100, Math.max(0, (profile.xp / XP_PER_LEVEL) * 100));
+  const pendingCount = claimableLevelRewardCount(profile);
+  const claimedIds = new Set(profile.reward_claims || []);
+
+  return <>
+    <Panel accent="#e8c98a" style={{ marginBottom: 16, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(circle at 85% 20%, rgba(232,201,138,.16), transparent 38%)' }} />
+      <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 14 }}>
+        <div style={{ width: 62, height: 62, borderRadius: '50%', display: 'grid', placeItems: 'center', border: '2px solid rgba(232,201,138,.72)', boxShadow: '0 0 24px rgba(232,201,138,.22), inset 0 0 18px rgba(232,201,138,.12)', color: '#f5d995', fontWeight: 900, fontSize: '1.2rem' }}>{profile.level}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: '#f4dca7', fontWeight: 900, letterSpacing: '.1em' }}>{zh ? `侦探等级 ${profile.level}` : `DETECTIVE LEVEL ${profile.level}`}</div>
+          <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,.07)', overflow: 'hidden', marginTop: 10, boxShadow: 'inset 0 1px 3px rgba(0,0,0,.7)' }}>
+            <div style={{ width: `${progress}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,#00bfe8,#7df1ff 62%,#f0d28b)', boxShadow: '0 0 12px rgba(0,229,255,.55)', transition: 'width .45s ease' }} />
+          </div>
+          <div style={{ marginTop: 6, color: 'rgba(230,247,255,.44)', fontSize: '.56rem' }}>{isMax ? (zh ? '已达到当前最高等级' : 'CURRENT MAXIMUM LEVEL REACHED') : `${profile.xp}/${XP_PER_LEVEL} XP · ${zh ? `还需 ${XP_PER_LEVEL - profile.xp} XP` : `${XP_PER_LEVEL - profile.xp} XP TO NEXT LEVEL`}`}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <strong style={{ display: 'block', color: pendingCount ? '#00ff88' : '#7df1ff', fontSize: '1.25rem' }}>{pendingCount}</strong>
+          <small style={{ color: 'rgba(230,247,255,.4)', fontSize: '.5rem', letterSpacing: '.08em' }}>{zh ? '待领取' : 'READY'}</small>
+        </div>
+      </div>
+      <div style={{ position: 'relative', marginTop: 13, paddingTop: 11, borderTop: '1px solid rgba(232,201,138,.13)', color: 'rgba(235,246,255,.5)', fontSize: '.57rem', lineHeight: 1.7 }}>
+        {zh
+          ? '每次正式调查都会获得侦探经验；成功结案可获得完整经验，调查失败也会保留与进度对应的过程经验。'
+          : 'Every completed investigation grants detective XP; solved cases grant full XP, while failed reports retain progress-based process XP.'}
+      </div>
+    </Panel>
+
+    <div className="td-level-road-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
+      {LEVEL_REWARDS.map(entry => {
+        const claimId = `level:${entry.level}`;
+        const claimed = claimedIds.has(claimId);
+        const unlocked = profile.level >= entry.level;
+        const current = profile.level === entry.level;
+        const accent = claimed ? '#00ff88' : unlocked ? '#e8c98a' : '#526979';
+        return <div key={entry.level} className={`td-level-road-node ${claimed ? 'is-claimed' : unlocked ? 'is-unlocked' : 'is-locked'}`}><Panel accent={accent} style={{ padding: 12, opacity: unlocked || claimed ? 1 : .62, position: 'relative', height: '100%' }}>
+          {current && <span style={{ position: 'absolute', right: 10, top: 9, color: '#7df1ff', fontSize: '.47rem', letterSpacing: '.1em' }}>{zh ? '当前等级' : 'CURRENT'}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', border: `1px solid ${accent}90`, color: accent, background: `${accent}10`, fontWeight: 900 }}>{entry.level}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: unlocked ? '#eefaff' : 'rgba(220,235,245,.45)', fontWeight: 800, fontSize: '.65rem' }}>{zh ? `${entry.level} 级奖励` : `LEVEL ${entry.level} REWARD`}</div>
+              <div style={{ color: accent, marginTop: 5, fontSize: '.58rem', lineHeight: 1.5 }}><RewardText reward={entry.reward} /></div>
+            </div>
+          </div>
+          <ActionButton
+            accent={accent}
+            disabled={busy || claimed || !unlocked}
+            style={{ width: '100%', marginTop: 11 }}
+            onClick={() => onApply(
+              currentProfile => claimLevelReward(currentProfile, entry.level),
+              zh ? `${entry.level} 级奖励领取成功` : `Level ${entry.level} reward claimed`,
+            )}
+          >
+            {claimed ? (zh ? '✓ 已领取' : '✓ CLAIMED') : unlocked ? (zh ? '领取奖励' : 'CLAIM REWARD') : (zh ? `等级 ${entry.level} 解锁` : `UNLOCKS AT LEVEL ${entry.level}`)}
+          </ActionButton>
+        </Panel></div>;
+      })}
+    </div>
   </>;
 }
 
@@ -315,6 +381,7 @@ export default function HomeModules({ moduleKey, profile, busy, onApply, onCheck
   const props = { profile, onApply, lang, tx, busy };
   let content = null;
   if (moduleKey === 'profile') content = <ProfileModule {...props} />;
+  else if (moduleKey === 'level_road') content = <LevelRoadModule {...props} />;
   else if (moduleKey === 'supply') content = <SupplyModule {...props} />;
   else if (moduleKey === 'diamonds') content = <DiamondSources profile={profile} onOpen={onOpenModule} lang={lang} />;
   else if (moduleKey === 'agent_market') content = <AgentMarketModule {...props} onOpenModule={onOpenModule} onEnterLobby={onEnterLobby} />;

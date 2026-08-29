@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  ACHIEVEMENTS, ENERGY_MAX, achievementProgress, applyCheckin, claimAchievement, claimTask,
-  buyAndUseEnergyCell, claimWeeklyReward, consumeEnergyCell, dailyIntelCaseId, evaluateAchievements,
+  ACHIEVEMENTS, DETECTIVE_LEVEL_CAP, ENERGY_MAX, LEVEL_REWARDS, XP_PER_LEVEL,
+  achievementProgress, applyCheckin, claimAchievement, claimTask,
+  buyAndUseEnergyCell, claimLevelReward, claimableLevelRewardCount, claimWeeklyReward,
+  consumeEnergyCell, dailyIntelCaseId, evaluateAchievements,
   getEconomySnapshot, localDateKey, normalizeProfile, purchaseItem, quotePurchase,
   regenEnergy, settleCase, startCase,
   toggleEquipItem, unlockTech, weeklyChallenge,
@@ -199,6 +201,50 @@ test('weekly reward requires all three objectives for the current cycle', () => 
   assert.equal(result.profile.gold, 1000);
   assert.equal(result.profile.diamonds, 40);
   assert.equal(claimWeeklyReward(result.profile, NOW).error, 'already_claimed');
+});
+
+test('detective XP advances every settled run and carries across level boundaries', () => {
+  assert.equal(XP_PER_LEVEL, 300);
+  const processRun = settleCase(profile(), {
+    run_id: 'level-process-1', case_id: 'Lvl_01', difficulty: 'NORMAL',
+    score: 'D', is_passed: false, clues: ['c_01'], turns: 5, xp_gain: 65,
+  }, NOW);
+  assert.equal(processRun.profile.level, 1);
+  assert.equal(processRun.profile.xp, 65);
+
+  const solvedRun = settleCase(processRun.profile, {
+    run_id: 'level-solved-2', case_id: 'Lvl_01', difficulty: 'NORMAL',
+    score: 'S', is_passed: true, clues: ['c_01', 'c_02'], turns: 6, xp_gain: 300,
+  }, NOW);
+  assert.equal(solvedRun.profile.level, 2);
+  assert.equal(solvedRun.profile.xp, 65);
+
+  const capped = settleCase(profile({ level: DETECTIVE_LEVEL_CAP - 1, xp: 250 }), {
+    run_id: 'level-cap-20', case_id: 'Lvl_02', difficulty: 'HARD',
+    score: 'C', is_passed: true, clues: ['d_01'], turns: 8, xp_gain: 110,
+  }, NOW);
+  assert.equal(capped.profile.level, DETECTIVE_LEVEL_CAP);
+  assert.equal(capped.profile.xp, 0);
+});
+
+test('level road rewards unlock by level and cannot be claimed twice', () => {
+  assert.equal(LEVEL_REWARDS.length, DETECTIVE_LEVEL_CAP - 1);
+  let current = profile({ level: 3, xp: 20, gold: 100, reward_claims: [] });
+  assert.equal(claimableLevelRewardCount(current), 2);
+
+  const levelTwo = claimLevelReward(current, 2, NOW);
+  assert.equal(levelTwo.error, undefined);
+  assert.equal(levelTwo.profile.gold, 400);
+  assert.ok(levelTwo.profile.reward_claims.includes('level:2'));
+  current = levelTwo.profile;
+  assert.equal(claimableLevelRewardCount(current), 1);
+  assert.equal(claimLevelReward(current, 2, NOW).error, 'already_claimed');
+  assert.equal(claimLevelReward(current, 4, NOW).error, 'level_locked');
+  assert.equal(claimLevelReward(current, 99, NOW).error, 'invalid_level');
+
+  const levelThree = claimLevelReward(current, 3, NOW);
+  assert.equal(levelThree.profile.diamonds, 10);
+  assert.equal(claimableLevelRewardCount(levelThree.profile), 0);
 });
 
 test('all 24 achievements expose bounded progress and can be unlocked', () => {

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   getLevelFromXP, getXPToNextLevel, SKILL_TREES, LEVEL_XP_TABLE, MAX_LEVEL,
 } from '@/game/agentProgression';
-import { normalizeAgentProgression } from '@/game/playerProfile';
+import { DETECTIVE_LEVEL_CAP, XP_PER_LEVEL, normalizeAgentProgression } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import LevelUpModal from '@/components/game/LevelUpModal';
 import { useLang } from '@/lib/lang.jsx';
@@ -253,7 +253,9 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
   const { profile } = useProfile();
   const xpGain = calculateCaseXP(judgeResult, gameState, caseData, rewardEligible);
   const [oldProg] = useState(() => normalizeAgentProgression(profile?.agent_progression));
+  const [oldDetective] = useState(() => ({ level: profile?.level || 1, xp: profile?.xp || 0 }));
   const [newProg, setNewProg] = useState(null);
+  const [settledDetective, setSettledDetective] = useState(null);
   const [phase, setPhase] = useState('summary');
   const settlementSentRef = useRef(false);
   const [settlementStatus, setSettlementStatus] = useState('saving');
@@ -279,6 +281,10 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
       });
       if (result?.error) throw new Error(result.error);
       setNewProg(normalizeAgentProgression(result?.profile?.agent_progression || oldProg));
+      setSettledDetective(result?.profile ? {
+        level: result.profile.level,
+        xp: result.profile.xp,
+      } : null);
       setSettlementStatus('saved');
     } catch {
       settlementSentRef.current = false;
@@ -381,6 +387,36 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
             </span>
           </div>
         </div>
+
+        {phase === 'xp' && settledDetective && (
+          <div className={`td-ui-card td-result-panel td-detective-level-result ${settledDetective.level > oldDetective.level ? 'is-level-up' : ''}`} style={{
+            border: `1px solid ${settledDetective.level > oldDetective.level ? 'rgba(232,201,138,.48)' : 'rgba(0,229,255,.2)'}`,
+            borderRadius: 14, padding: '14px 16px', marginBottom: 20, position: 'relative', overflow: 'hidden',
+            background: settledDetective.level > oldDetective.level
+              ? 'linear-gradient(135deg,rgba(232,201,138,.15),rgba(0,229,255,.07))'
+              : 'linear-gradient(135deg,rgba(0,229,255,.08),rgba(0,0,0,.5))',
+            animation: 'go-in .55s cubic-bezier(.22,1,.36,1) both',
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 13 }}>
+              <div style={{ width: 46, height: 46, borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1px solid rgba(232,201,138,.72)', background: 'rgba(232,201,138,.1)', color: '#f1d28c', fontWeight: 900, boxShadow: '0 0 18px rgba(232,201,138,.2)' }}>{settledDetective.level}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: settledDetective.level > oldDetective.level ? '#f4d99c' : '#7df1ff', fontSize: '.67rem', fontWeight: 900, letterSpacing: '.1em' }}>
+                  {settledDetective.level > oldDetective.level
+                    ? (zh ? `侦探等级提升 · LV.${settledDetective.level}` : `DETECTIVE LEVEL UP · LV.${settledDetective.level}`)
+                    : (zh ? `侦探成长 · LV.${settledDetective.level}` : `DETECTIVE PROGRESS · LV.${settledDetective.level}`)}
+                </div>
+                <div style={{ height: 6, borderRadius: 999, overflow: 'hidden', background: 'rgba(255,255,255,.08)', marginTop: 8 }}>
+                  <div style={{ width: `${settledDetective.level >= DETECTIVE_LEVEL_CAP ? 100 : Math.min(100, settledDetective.xp / XP_PER_LEVEL * 100)}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,#00c8ff,#7df1ff,#f0d28b)', boxShadow: '0 0 12px rgba(0,229,255,.5)' }} />
+                </div>
+                <div style={{ color: 'rgba(230,247,255,.42)', fontSize: '.52rem', marginTop: 5 }}>
+                  {settledDetective.level >= DETECTIVE_LEVEL_CAP ? 'MAX' : `${settledDetective.xp}/${XP_PER_LEVEL} XP`}
+                </div>
+              </div>
+              <div style={{ color: '#00ff88', fontWeight: 900, fontSize: '.75rem', whiteSpace: 'nowrap' }}>+{xpGain.total} XP</div>
+            </div>
+            {settledDetective.level > oldDetective.level && <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid rgba(232,201,138,.15)', color: 'rgba(244,220,167,.68)', fontSize: '.54rem' }}>{zh ? '新的等级奖励已解锁，可在首页“等级之路”领取。' : 'A new reward is ready on the Level Road at Home.'}</div>}
+          </div>
+        )}
 
         {/* Agent XP bars */}
         {phase === 'xp' && newProg && (

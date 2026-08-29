@@ -11,15 +11,16 @@ import {
 
 export {
   ACHIEVEMENT_TOTAL, ENERGY_MAX, ENERGY_OVERFLOW_MAX, ENERGY_MINUTES_PER_POINT,
-  XP_PER_LEVEL, CURRENCY_CAPS, CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS,
+  XP_PER_LEVEL, DETECTIVE_LEVEL_CAP, CURRENCY_CAPS, CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS,
   ITEM_CATALOG, TECH_CATALOG, ACHIEVEMENTS,
-  TUTORIAL_TASKS, SEVEN_DAY_TASKS, KNOWN_CASE_IDS, localDateKey, isoWeekKey,
+  TUTORIAL_TASKS, SEVEN_DAY_TASKS, LEVEL_REWARDS, KNOWN_CASE_IDS, localDateKey, isoWeekKey,
   daysBetween, regenEnergy, energyCountdown, canCheckin, applyCheckin,
   quotePurchase, purchaseItem, consumeEnergyCell, buyAndUseEnergyCell, getEconomySnapshot,
   toggleEquipItem, unlockTech, getTechEffects,
   startCase, settleCase, dailyIntelCaseId, weeklyChallenge, evaluateAchievements,
   achievementProgress, claimAchievement, tutorialTaskDone, sevenDayTaskDone,
-  claimTask, claimWeeklyReward, markActivity, editIdentity, normalizeProfile,
+  claimTask, claimWeeklyReward, claimLevelReward, claimableLevelRewardCount,
+  markActivity, editIdentity, normalizeProfile,
 } from './homeProgress.js';
 
 export const PROFILE_VERSION = 2;

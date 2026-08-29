@@ -1,7 +1,8 @@
 export const ENERGY_MAX = 120;
 export const ENERGY_OVERFLOW_MAX = 180;
 export const ENERGY_MINUTES_PER_POINT = 5;
-export const XP_PER_LEVEL = 4800;
+export const XP_PER_LEVEL = 300;
+export const DETECTIVE_LEVEL_CAP = 20;
 export const ACHIEVEMENT_TOTAL = 24;
 export const KNOWN_CASE_IDS = ['Lvl_01', 'Lvl_02', 'Lvl_03', 'Lvl_04', 'Lvl_05'];
 export const CURRENCY_CAPS = Object.freeze({ gold: 9_999_999, diamonds: 999_999 });
@@ -12,6 +13,38 @@ export const FIRST_CLEAR_DIAMONDS = { NORMAL: 20, HARD: 35, OMEGA: 50 };
 export const SCORE_ORDER = { D: 1, C: 2, B: 3, A: 4, S: 5 };
 const DEFAULT_CASE_TOTALS = { Lvl_01: 9, Lvl_02: 9, Lvl_03: 9, Lvl_04: 9, Lvl_05: 9 };
 const HIDDEN_CLUE_IDS = ['c_secret_99', 'd_secret_99', 'e_secret_99', 'f_secret_99', 'g_secret_99'];
+
+export const LEVEL_REWARDS = Object.freeze([
+  { level: 2, reward: { gold: 300 } },
+  { level: 3, reward: { diamonds: 10 } },
+  { level: 4, reward: { energy: 30 } },
+  { level: 5, reward: { gold: 600, items: { energy_cell: 1 } } },
+  { level: 6, reward: { diamonds: 15 } },
+  { level: 7, reward: { items: { ap_booster: 1 } } },
+  { level: 8, reward: { gold: 900 } },
+  { level: 9, reward: { diamonds: 20 } },
+  { level: 10, reward: { gold: 1200, diamonds: 30 } },
+  { level: 11, reward: { energy: 45 } },
+  { level: 12, reward: { items: { firewall_shield: 1 } } },
+  { level: 13, reward: { gold: 1500 } },
+  { level: 14, reward: { items: { clue_scanner: 1 } } },
+  { level: 15, reward: { diamonds: 50, items: { ap_booster: 1 } } },
+  { level: 16, reward: { gold: 1800 } },
+  { level: 17, reward: { diamonds: 60 } },
+  { level: 18, reward: { items: { firewall_shield: 1, clue_scanner: 1 } } },
+  { level: 19, reward: { gold: 2200 } },
+  { level: 20, reward: { gold: 2500, diamonds: 100 } },
+]);
+
+export function detectiveRankForLevel(level) {
+  const titles = [
+    { minimum: 20, title: '传奇侦探' }, { minimum: 15, title: '真相指挥官' },
+    { minimum: 10, title: '逻辑架构师' }, { minimum: 8, title: '首席侦探' },
+    { minimum: 5, title: '资深探员' }, { minimum: 3, title: '现场调查员' },
+    { minimum: 1, title: '新手侦探' },
+  ];
+  return titles.find(entry => level >= entry.minimum)?.title || '新手侦探';
+}
 
 export const ITEM_CATALOG = [
   { id: 'energy_cell', icon: '🔋', currency: 'gold', cost: 400, stackLimit: 20, mission: false,
@@ -161,8 +194,14 @@ export function normalizeProfile(raw = {}, now = new Date()) {
   p.signature = typeof p.signature === 'string' ? p.signature.trim().slice(0, 30) : '';
   p.identity_badge = ['city', 'private', 'bureau'].includes(p.identity_badge) ? p.identity_badge : 'private';
   p.detective_tags = unique(p.detective_tags).filter(tag => typeof tag === 'string').map(tag => tag.slice(0, 16)).slice(0, 3);
-  p.level = Math.max(1, finite(p.level, 1));
+  p.level = clamp(Math.floor(finite(p.level, 1)), 1, DETECTIVE_LEVEL_CAP);
   p.xp = Math.max(0, finite(p.xp));
+  while (p.xp >= XP_PER_LEVEL && p.level < DETECTIVE_LEVEL_CAP) {
+    p.xp -= XP_PER_LEVEL;
+    p.level += 1;
+  }
+  if (p.level >= DETECTIVE_LEVEL_CAP) p.xp = 0;
+  p.rank_title = detectiveRankForLevel(p.level);
   p.energy = clamp(finite(p.energy, ENERGY_MAX), 0, ENERGY_OVERFLOW_MAX);
   p.diamonds = currencyAmount(p.diamonds, 'diamonds');
   p.gold = currencyAmount(p.gold, 'gold');
@@ -250,9 +289,30 @@ function rewardProfile(profile, reward = {}) {
 function addProfileXP(profile, amount) {
   let level = profile.level;
   let xp = profile.xp + Math.max(0, finite(amount));
-  while (xp >= XP_PER_LEVEL) { xp -= XP_PER_LEVEL; level += 1; }
-  const titles = [[10, '逻辑架构师'], [8, '首席侦探'], [5, '资深探员'], [3, '现场调查员'], [1, '新手侦探']];
-  return { ...profile, level, xp, rank_title: titles.find(([min]) => level >= min)?.[1] || '新手侦探' };
+  while (xp >= XP_PER_LEVEL && level < DETECTIVE_LEVEL_CAP) { xp -= XP_PER_LEVEL; level += 1; }
+  if (level >= DETECTIVE_LEVEL_CAP) xp = 0;
+  return { ...profile, level, xp, rank_title: detectiveRankForLevel(level) };
+}
+
+export function levelRewardClaimId(level) {
+  return `level:${Math.floor(finite(level))}`;
+}
+
+export function claimableLevelRewardCount(profile) {
+  const p = normalizeProfile(profile);
+  return LEVEL_REWARDS.filter(item => item.level <= p.level && !p.reward_claims.includes(levelRewardClaimId(item.level))).length;
+}
+
+export function claimLevelReward(profile, level, now = new Date()) {
+  const p = normalizeProfile(profile, now);
+  const entry = LEVEL_REWARDS.find(item => item.level === Math.floor(finite(level)));
+  if (!entry) return { profile: p, error: 'invalid_level' };
+  const claimId = levelRewardClaimId(entry.level);
+  if (p.reward_claims.includes(claimId)) return { profile: p, error: 'already_claimed' };
+  if (p.level < entry.level) return { profile: p, error: 'level_locked' };
+  const next = rewardProfile(p, entry.reward);
+  next.reward_claims = [...next.reward_claims, claimId];
+  return { profile: next, reward: entry.reward, level: entry.level };
 }
 
 export function canCheckin(profile, now = new Date()) { return profile.last_checkin !== localDateKey(now); }
