@@ -52,6 +52,7 @@ import {
   getTerminalTurns,
   stepTerminalTurn,
 } from '@/game/turnArchive';
+import { getRejectedReportPenalty } from '@/game/caseEvaluation';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
@@ -1065,14 +1066,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         setFinalJudgeResult(result);
         schedule(() => setShowGameOver(true), 1800);
       } else {
-        const apLoss = result.score === 'D' ? Math.floor(gameStateRef.current.action_points_left * 0.5) : 3;
+        const penalty = getRejectedReportPenalty(gameStateRef.current);
         setGameState(prev => ({
           ...prev,
-          action_points_left: Math.max(0, prev.action_points_left - apLoss),
-          reputation: Math.max(0, prev.reputation - 20),
-          confusion_score: Math.min(100, prev.confusion_score + 10),
+          action_points_left: Math.max(0, prev.action_points_left - penalty.apLoss),
+          reputation: Math.max(0, prev.reputation - penalty.reputationLoss),
+          confusion_score: Math.min(100, prev.confusion_score + penalty.confusionIncrease),
         }));
-        addLine(`\n${t.reportRejected} [${result.score}]. AP -${apLoss}. Reputation -20.`, 'error');
+        addLine(`\n${t.reportRejected} [${result.score}]. AP -${penalty.apLoss}. ${lang === 'zh' ? `声望 -${penalty.reputationLoss}，混乱 +${penalty.confusionIncrease}。` : `Reputation -${penalty.reputationLoss}, confusion +${penalty.confusionIncrease}.`}`, 'error');
         addLine(`\n${t.judgeLabel}${result.critique}`, 'warning');
       }
     } catch (err) {
@@ -1110,7 +1111,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         judgeResult={finalJudgeResult}
         gameState={gameState}
         caseData={caseData}
-        rewardEligible={finalJudgeResult?.is_passed === true}
+        rewardEligible={Boolean(finalJudgeResult?.score)}
         onSettlement={({ xpGain }) => onSettlement?.({
           run_id: gameState.run_id,
           case_id: caseDataResolved.case_id,

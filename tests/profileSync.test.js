@@ -129,6 +129,32 @@ test('unbounded rewarded run ids keep economy and agent XP idempotent after 150 
   assert.ok(duplicate.profile.rewarded_runs.includes('old-0'));
 });
 
+test('a failed formal report grants process XP once without granting clear rewards', () => {
+  const base = normalizeProfile({
+    home_progress_version: 2,
+    gold: 0,
+    diamonds: 0,
+    agent_progression: [
+      { agent_id: 'NEXUS-01', xp: 0 }, { agent_id: 'AURORA-09', xp: 0 }, { agent_id: 'CIPHER-47', xp: 0 },
+    ],
+  });
+  const summary = {
+    run_id: 'failed-run', case_id: 'Lvl_01', difficulty: 'NORMAL', score: 'D', is_passed: false,
+    clues: ['c_01', 'c_02', 'c_03'], valid_links: [], valid_link_count: 0, invalid_link_count: 0,
+    turns: 6, ap_left: 14, confusion: 10, bsod_count: 0, clue_ratio: 1 / 3, xp_gain: 65,
+  };
+  const first = applySettlementToProfile(base, summary);
+  assert.deepEqual(first.profile.agent_progression.map(row => row.xp), [65, 65, 65]);
+  assert.equal(first.profile.xp, 65);
+  assert.equal(first.profile.gold, 0);
+  assert.equal(first.profile.diamonds, 0);
+  assert.equal(first.profile.solved_cases.includes('Lvl_01'), false);
+
+  const duplicate = applySettlementToProfile(first.profile, summary);
+  assert.deepEqual(duplicate.profile.agent_progression.map(row => row.xp), [65, 65, 65]);
+  assert.equal(duplicate.profile.xp, 65);
+});
+
 test('known achievement count ignores preserved legacy badges', () => {
   assert.equal(knownAchievementCount({ achievements: ['first_deploy', 'legacy_badge'] }), 1);
 });

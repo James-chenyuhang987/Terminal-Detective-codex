@@ -482,13 +482,13 @@ export function settleCase(profile, summary, now = new Date()) {
     best_score_value: Math.max(next.activity_stats.best_score_value, passed ? (SCORE_ORDER[score] || 0) : 0),
   };
   const firstClear = passed && !next.solved_cases.includes(summary.case_id);
+  next = addProfileXP(next, Math.max(0, finite(summary.xp_gain)));
   if (passed) {
     next.solved_cases = unique([...next.solved_cases, summary.case_id]);
     next = rewardProfile(next, {
       gold: CASE_GOLD_REWARD[score] || 0,
       diamonds: firstClear ? (FIRST_CLEAR_DIAMONDS[summary.difficulty] || 0) : 0,
     });
-    next = addProfileXP(next, summary.xp_gain);
     const dailyKey = `intel:${localDateKey(now)}`;
     if (dailyIntelCaseId(now) === summary.case_id && !next.reward_claims.includes(dailyKey)) {
       next.gold = currencyAmount(next.gold + 250, 'gold');

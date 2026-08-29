@@ -174,9 +174,7 @@ export function applySettlementToProfile(profile, summary) {
   if (profile?.rewarded_runs?.includes(summary?.run_id)) return settleCase(profile, summary);
   const progression = normalizeAgentProgression(profile.agent_progression);
   const xpGain = Math.max(0, Number(summary?.xp_gain) || 0);
-  const nextProgression = summary?.is_passed
-    ? progression.map(agent => ({ ...agent, xp: agent.xp + xpGain }))
-    : progression;
+  const nextProgression = progression.map(agent => ({ ...agent, xp: agent.xp + xpGain }));
   const levels = nextProgression.map(agent => getLevelFromXP(agent.xp));
   return settleCase({ ...profile, agent_progression: nextProgression }, {
     ...summary,

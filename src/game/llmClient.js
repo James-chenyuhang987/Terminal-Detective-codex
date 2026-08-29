@@ -8,6 +8,7 @@ import { base44 } from '@/api/base44Client';
 import { getAvailableClueIds, resolveNextZone } from '@/game/caseRuntime';
 import { normalizeSettlementResult } from '@/game/settlementResult';
 import { getActionFocus } from '@/game/commandSystem';
+import { normalizeJudgeResult } from '@/game/caseEvaluation';
 
 const LEGAL_ACTIONS = new Set([
   'talk_to_npc', 'search_area', 'examine_clue', 'check_alibi',
@@ -325,7 +326,7 @@ export async function judgeReport({ playerReport, caseData, signal = null }) {
       critique: currentLang === 'en' ? 'Unable to evaluate report. Please try again.' : '暂时无法评估报告，请重试。',
     };
   }
-  return result;
+  return normalizeJudgeResult(result);
 }
 
 // ── Branch Check ──────────────────────────────────────────────────────────

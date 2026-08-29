@@ -49,8 +49,8 @@ const STEPS = [
     icon: '📮',
     target: '[data-onboarding-target="report"]',
     label: 'REPORT',
-    zh: { t: '结案报告', d: '掌握足够线索后点击「报告」提交你的结论。评级 B 以上结案，错误指控会重罚 AP 与声望。' },
-    en: { t: 'CASE REPORT', d: 'Submit your conclusion via REPORT. Grade B or above closes the case; false accusations cost AP and reputation.' },
+    zh: { t: '结案报告', d: '掌握关键线索后点击「报告」提交结论。评级 C 以上即可结案；错误结论会受到少量 AP、声望与混乱惩罚，但调查过程经验仍会保留。' },
+    en: { t: 'CASE REPORT', d: 'Submit your conclusion via REPORT after finding key evidence. Grade C or above closes the case. A wrong conclusion has a small AP, reputation, and confusion penalty, but process XP is retained.' },
   },
 ];
 

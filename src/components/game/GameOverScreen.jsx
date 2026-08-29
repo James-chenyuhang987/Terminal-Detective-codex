@@ -6,33 +6,19 @@ import { normalizeAgentProgression } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import LevelUpModal from '@/components/game/LevelUpModal';
 import { useLang } from '@/lib/lang.jsx';
+import {
+  calculateCaseXP,
+  isPassingCaseScore,
+  normalizeCaseScore,
+} from '@/game/caseEvaluation';
 
 // ── XP formula ────────────────────────────────────────────────────────────────
-const SCORE_XP = { S: 300, A: 220, B: 150, C: 80, D: 30 };
 const SCORE_TITLES = {
-  S: '至尊侦探', A: '精英探员', B: '资深调查官', C: '初级探员', D: '见习侦探',
+  S: '至尊侦探', A: '精英探员', B: '资深调查官', C: '合格调查员', D: '见习侦探',
 };
 const SCORE_TITLES_EN = {
-  S: 'MASTER DETECTIVE', A: 'ELITE AGENT', B: 'SENIOR INVESTIGATOR', C: 'JUNIOR AGENT', D: 'DETECTIVE TRAINEE',
+  S: 'MASTER DETECTIVE', A: 'ELITE AGENT', B: 'SENIOR INVESTIGATOR', C: 'QUALIFIED INVESTIGATOR', D: 'DETECTIVE TRAINEE',
 };
-
-function calcXPGain(judgeResult, gameState, caseData) {
-  if (!judgeResult?.is_passed) {
-    return { base: 0, clueBonus: 0, apBonus: 0, confusionBonus: 0, noBSoD: 0, passed: 0, total: 0 };
-  }
-  const base = SCORE_XP[judgeResult?.score] || 0;
-  const cluePct = (gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1);
-  const clueBonus = Math.round(cluePct * 60);
-  const apBonus = Math.min((gameState.action_points_left || 0) * 5, 80);
-  const confusionCtrl = Math.max(0, 100 - (gameState.confusion_score || 0));
-  const confusionBonus = Math.round((confusionCtrl / 100) * 50);
-  const noBSoD = (gameState.confusion_score || 0) < 100 ? 40 : 0;
-  const passedPenalty = judgeResult?.is_passed ? 0 : -50;
-  return {
-    base, clueBonus, apBonus, confusionBonus, noBSoD, passed: passedPenalty,
-    total: Math.max(0, base + clueBonus + apBonus + confusionBonus + noBSoD + passedPenalty),
-  };
-}
 
 // ── Particle burst on level up ────────────────────────────────────────────────
 function LevelUpParticles({ color, trigger }) {
@@ -265,7 +251,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
   const { lang } = useLang();
   const zh = lang === 'zh';
   const { profile } = useProfile();
-  const xpGain = calcXPGain(rewardEligible ? judgeResult : null, gameState, caseData);
+  const xpGain = calculateCaseXP(judgeResult, gameState, caseData, rewardEligible);
   const [oldProg] = useState(() => normalizeAgentProgression(profile?.agent_progression));
   const [newProg, setNewProg] = useState(null);
   const [phase, setPhase] = useState('summary');
@@ -318,18 +304,18 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
     setModalQueue(q => [...q, { agentIdx, fromLevel, toLevel, newSkills }]);
   }, []);
 
-  const score = judgeResult?.score || 'D';
-  const isPassed = !!judgeResult?.is_passed;
+  const score = normalizeCaseScore(judgeResult?.score);
+  const isPassed = isPassingCaseScore(score);
   const scoreTitle = zh ? (SCORE_TITLES[score] || '见习侦探') : (SCORE_TITLES_EN[score] || 'DETECTIVE TRAINEE');
   const mainColor = isPassed ? '#00ff88' : '#ff3860';
 
   const BONUS_ROWS = [
     { label: zh ? `案件评分 · ${score} 级` : `CASE RANK · ${score}`, sublabel: scoreTitle, val: xpGain.base, color: { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' }[score] || '#888', icon: { S: '🏆', A: '⭐', B: '🔰', C: '📋', D: '📝' }[score] || '📋' },
-    { label: `${zh ? '线索收集' : 'CLUES COLLECTED'} · ${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, sublabel: `${zh ? '完成度' : 'COMPLETION'} ${Math.round(((gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1)) * 100)}%`, val: xpGain.clueBonus, color: '#a78bfa', icon: '🔍' },
-    { label: `${zh ? 'AP 效率 · 剩余' : 'AP EFFICIENCY · REMAINING'} ${gameState.action_points_left || 0}${zh ? ' 点' : ''}`, sublabel: zh ? '每点 AP = 5 XP，上限 80' : '5 XP per AP, maximum 80', val: xpGain.apBonus, color: '#ffaa00', icon: '⚡' },
-    { label: `${zh ? '混乱控制 · 最终' : 'CONFUSION CONTROL · FINAL'} ${gameState.confusion_score || 0}%`, sublabel: zh ? '越低奖励越高（满分 50 XP）' : 'Lower is better (maximum 50 XP)', val: xpGain.confusionBonus, color: '#00ff88', icon: '🧠' },
+    { label: `${zh ? '线索收集' : 'CLUES COLLECTED'} · ${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, sublabel: `${zh ? '完成度' : 'COMPLETION'} ${Math.round(((gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1)) * 100)}%${isPassed ? '' : (zh ? ' · 过程经验减半' : ' · PROCESS XP AT 50%')}`, val: xpGain.clueBonus, color: '#a78bfa', icon: '🔍' },
+    { label: `${zh ? 'AP 效率 · 剩余' : 'AP EFFICIENCY · REMAINING'} ${gameState.action_points_left || 0}${zh ? ' 点' : ''}`, sublabel: zh ? '结合调查完成度计算，上限 60 XP' : 'Weighted by investigation progress, maximum 60 XP', val: xpGain.apBonus, color: '#ffaa00', icon: '⚡' },
+    { label: `${zh ? '混乱控制 · 最终' : 'CONFUSION CONTROL · FINAL'} ${gameState.confusion_score || 0}%`, sublabel: zh ? '结合调查完成度计算（满分 45 XP）' : 'Weighted by investigation progress (maximum 45 XP)', val: xpGain.confusionBonus, color: '#00ff88', icon: '🧠' },
     { label: zh ? '无系统崩溃' : 'NO SYSTEM CRASH', sublabel: gameState.confusion_score < 100 ? (zh ? '全程稳定运行' : 'Stable throughout the case') : (zh ? '触发过 BSoD' : 'BSoD triggered'), val: xpGain.noBSoD, color: '#ff3aff', icon: '🛡️' },
-    ...(xpGain.passed < 0 ? [{ label: zh ? '破案失败惩罚' : 'FAILED CASE PENALTY', sublabel: zh ? '报告未通过审判' : 'Report rejected by the judge', val: xpGain.passed, color: '#ff3860', icon: '💀' }] : []),
+    ...(xpGain.outcomeAdjustment < 0 ? [{ label: zh ? '未结案经验调整' : 'UNSOLVED CASE ADJUSTMENT', sublabel: zh ? '报告未通过，但已保留调查过程经验' : 'The report was rejected, but process XP is retained', val: xpGain.outcomeAdjustment, color: '#ff3860', icon: '📝' }] : []),
   ];
 
   return (
@@ -361,6 +347,11 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ color: mainColor, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4, letterSpacing: '0.08em' }}>{scoreTitle}</div>
             <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.68rem', lineHeight: 1.7, marginBottom: 10 }}>{judgeResult?.critique || (zh ? '调查记录已归档。' : 'Investigation record archived.')}</div>
+            <div style={{ color: isPassed ? 'rgba(0,255,136,.72)' : 'rgba(255,170,0,.78)', fontSize: '0.56rem', lineHeight: 1.6, marginBottom: 10 }}>
+              {isPassed
+                ? (zh ? 'C 级为基础结案门槛；效率与证据完整度用于提高评级和经验。' : 'Grade C is the closure threshold; efficiency and evidence completeness improve rank and XP.')
+                : (zh ? 'D 级表示核心结论仍不正确；本局调查过程经验不会清零。' : 'Grade D means the core conclusion is still incorrect; process XP from this run is retained.')}
+            </div>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               {[
                 { label: zh ? '总回合' : 'TURNS', val: gameState.turn_count || 0, icon: '🔄' },

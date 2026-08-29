@@ -213,7 +213,13 @@ Player's report: ${str(p.player_report)}
 Evaluate the report. Return JSON only:
 {"score": "S/A/B/C/D", "is_passed": true/false, "critique": "brief feedback under 80 words"}
 
-Score guide: S=perfect, A=mostly correct, B=partially correct (pass threshold), C/D=wrong/missing key facts. B and above = passed.`,
+Score guide:
+- S = the central conclusion and causal chain are complete and exceptionally well supported.
+- A = the central conclusion is correct and supported by strong evidence, with only minor omissions.
+- B = the culprit/core conclusion is correct and the main method or motive is substantially supported.
+- C = the core conclusion is correct and at least one relevant supporting fact is present, even if the report is incomplete. C is the minimum pass threshold.
+- D = the core conclusion or culprit is wrong, or the report contains no usable case reasoning.
+Be tolerant of wording, translations, transliterations, and missing secondary details. C and above = passed.`,
         schema: {
           type: 'object',
           properties: {
@@ -391,7 +397,7 @@ export default async function (req) {
           data: {
             ...result,
             score,
-            is_passed: ['S', 'A', 'B'].includes(score),
+            is_passed: ['S', 'A', 'B', 'C'].includes(score),
           },
         });
       }
