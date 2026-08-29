@@ -47,6 +47,11 @@ import {
   buildExecutingStrategy,
   recommendExecutor,
 } from '@/game/commandSystem';
+import {
+  getTerminalLinesForTurn,
+  getTerminalTurns,
+  stepTerminalTurn,
+} from '@/game/turnArchive';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
@@ -83,6 +88,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   ));
   const [reactState, setReactState] = useState(ReAct_Enum.IDLE);
   const [terminalLines, setTerminalLines] = useState([]);
+  const [activeTerminalTurn, setActiveTerminalTurn] = useState(() => Math.max(0, Number(gameState.turn_count) || 0));
+  const [viewedTerminalTurn, setViewedTerminalTurn] = useState(() => Math.max(0, Number(gameState.turn_count) || 0));
   const [isProcessing, setIsProcessing] = useState(false);
   const [stressLevel, setStressLevel] = useState(0);
   const [newClueIds, setNewClueIds] = useState([]);
@@ -141,6 +148,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const stressTimerRef = useRef(null);
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
+  const activeTerminalTurnRef = useRef(activeTerminalTurn);
+  activeTerminalTurnRef.current = activeTerminalTurn;
+  const viewedTerminalTurnRef = useRef(viewedTerminalTurn);
+  viewedTerminalTurnRef.current = viewedTerminalTurn;
 
   useEffect(() => () => {
     activeRunRef.current += 1;
@@ -175,6 +186,17 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }, [agentStrategy, caseData]);
 
   const phaseColor = PHASE_COLORS[reactState] || PHASE_COLORS.IDLE;
+  const terminalTurns = useMemo(
+    () => getTerminalTurns(terminalLines, activeTerminalTurn),
+    [activeTerminalTurn, terminalLines],
+  );
+  const visibleTerminalLines = useMemo(
+    () => getTerminalLinesForTurn(terminalLines, viewedTerminalTurn),
+    [terminalLines, viewedTerminalTurn],
+  );
+  const latestTerminalTurn = terminalTurns[terminalTurns.length - 1] || 0;
+  const viewedTerminalTurnIndex = Math.max(0, terminalTurns.indexOf(viewedTerminalTurn));
+  const isViewingActiveTerminalTurn = viewedTerminalTurn === activeTerminalTurn;
 
   const scrollToBottom = useCallback(() => {
     window.cancelAnimationFrame(terminalScrollFrameRef.current);
@@ -185,12 +207,22 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }, []);
 
   useLayoutEffect(() => {
-    scrollToBottom();
-  }, [terminalLines.length, thoughtText, isProcessing, scrollToBottom]);
+    if (isViewingActiveTerminalTurn) scrollToBottom();
+  }, [visibleTerminalLines.length, thoughtText, isProcessing, isViewingActiveTerminalTurn, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    window.cancelAnimationFrame(terminalScrollFrameRef.current);
+    terminalScrollFrameRef.current = window.requestAnimationFrame(() => {
+      const terminal = terminalRef.current;
+      if (!terminal) return;
+      terminal.scrollTop = isViewingActiveTerminalTurn ? terminal.scrollHeight : 0;
+    });
+  }, [isViewingActiveTerminalTurn, viewedTerminalTurn]);
 
   const addLine = useCallback((text, type = 'default', prefix = '') => {
-    setTerminalLines(prev => [...prev, { text, type, prefix, id: Date.now() + Math.random() }]);
-    schedule(scrollToBottom, 50);
+    const turn = activeTerminalTurnRef.current;
+    setTerminalLines(prev => [...prev, { text, type, prefix, turn, id: Date.now() + Math.random() }]);
+    if (viewedTerminalTurnRef.current === turn) schedule(scrollToBottom, 50);
   }, [schedule, scrollToBottom]);
 
   const notifyCommand = useCallback((message, type = 'success') => {
@@ -332,6 +364,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       return;
     }
 
+    const nextTurn = Math.max(1, (Number(gs.turn_count) || 0) + 1);
+    activeTerminalTurnRef.current = nextTurn;
+    viewedTerminalTurnRef.current = nextTurn;
+    setActiveTerminalTurn(nextTurn);
+    setViewedTerminalTurn(nextTurn);
+
     const { ctrl, operationId: runId } = beginAbortableOperation();
     setIsProcessing(true);
     const isCancelled = () => ctrl.signal.aborted || activeRunRef.current !== runId;
@@ -364,7 +402,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         onChunk: (char) => {
           fullThought += char;
           setThoughtText(prev => prev + char);
-          scrollToBottom();
+          if (viewedTerminalTurnRef.current === activeTerminalTurnRef.current) scrollToBottom();
         },
         onDone: (text) => { fullThought = text; }
       });
@@ -1286,22 +1324,57 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           {/* Terminal output */}
           <div ref={terminalRef} className="td-terminal-surface flex-1 overflow-y-auto p-4 space-y-1"
             style={{ scrollBehavior: isProcessing ? 'auto' : 'smooth' }}>
-            <div className="text-xs opacity-30 mb-4" style={{ color: accentColor }}>
-              ═══ TERMINAL DETECTIVE SYSTEM · CASE: {caseData.case_id} · AGENT: {agentStrategy?.agent_id} ═══
+            <div className="td-turn-page-heading" style={/** @type {React.CSSProperties & {'--turn-accent': string}} */ ({ '--turn-accent': accentColor })}>
+              <div>
+                <small>{viewedTerminalTurn === 0 ? (lang === 'zh' ? '任务准备页' : 'MISSION BRIEFING') : `${lang === 'zh' ? '调查回合' : 'INVESTIGATION TURN'} ${viewedTerminalTurn}`}</small>
+                <strong>{viewedTerminalTurn === latestTerminalTurn ? (lang === 'zh' ? '● 当前' : '● LIVE') : (lang === 'zh' ? '历史记录' : 'ARCHIVED')}</strong>
+              </div>
+              <span>{caseData.case_id} · {agentStrategy?.agent_id || activeAgentStrategy?.primary_agent_id || 'AGENT TEAM'}</span>
             </div>
-            {terminalLines.map(line => (
+            {visibleTerminalLines.length === 0 && (
+              <div className="td-turn-page-empty" style={{ color: accentColor }}>
+                {viewedTerminalTurn === 0
+                  ? (lang === 'zh' ? '系统准备完成。点击下方“执行循环”开始第一回合。' : 'SYSTEM READY. USE EXECUTE CYCLE TO BEGIN TURN ONE.')
+                  : (lang === 'zh' ? '本回合正在建立记录…' : 'BUILDING THIS TURN RECORD…')}
+              </div>
+            )}
+            {visibleTerminalLines.map(line => (
               <TerminalLine key={line.id} line={line} accentColor={accentColor} />
             ))}
-            {thoughtText && (
+            {isViewingActiveTerminalTurn && thoughtText && (
               <div className="text-xs leading-relaxed" style={{ color: '#bf5fff', whiteSpace: 'pre-wrap' }}>
                 {thoughtText}
                 <span className="animate-pulse" style={{ color: '#bf5fff' }}>▊</span>
               </div>
             )}
-            {isProcessing && !thoughtText && (
+            {isViewingActiveTerminalTurn && isProcessing && !thoughtText && (
               <AIProcessingIndicator phase={reactState} stressLevel={stressLevel} />
             )}
           </div>
+
+          <nav className="td-turn-navigator" aria-label={lang === 'zh' ? '调查回合导航' : 'Investigation turn navigation'}>
+            <button
+              type="button"
+              disabled={viewedTerminalTurnIndex <= 0}
+              onClick={() => setViewedTerminalTurn(stepTerminalTurn(terminalTurns, viewedTerminalTurn, -1))}
+              aria-label={lang === 'zh' ? '上一回合' : 'Previous turn'}
+            >‹</button>
+            <label>
+              <span>{lang === 'zh' ? '查看回合' : 'VIEW TURN'}</span>
+              <select value={viewedTerminalTurn} onChange={event => setViewedTerminalTurn(Number(event.target.value))}>
+                {terminalTurns.map(turn => (
+                  <option key={turn} value={turn}>{turn === 0 ? (lang === 'zh' ? '准备阶段' : 'BRIEFING') : `${lang === 'zh' ? '回合' : 'TURN'} ${turn}`}</option>
+                ))}
+              </select>
+            </label>
+            <span>{viewedTerminalTurnIndex + 1} / {terminalTurns.length}</span>
+            <button
+              type="button"
+              disabled={viewedTerminalTurnIndex >= terminalTurns.length - 1}
+              onClick={() => setViewedTerminalTurn(stepTerminalTurn(terminalTurns, viewedTerminalTurn, 1))}
+              aria-label={lang === 'zh' ? '下一回合' : 'Next turn'}
+            >›</button>
+          </nav>
 
           {/* NPC Dialogue Box */}
           {selectedNPC && !reportMode && (

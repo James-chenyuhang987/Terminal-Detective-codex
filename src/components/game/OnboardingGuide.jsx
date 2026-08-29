@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLang } from '@/lib/lang.jsx';
 
 const STEPS = [
@@ -85,13 +86,19 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
         setTargetRect(null);
         return;
       }
+      const safeEdge = 4;
+      const spotlightPadding = 7;
+      const left = clamp(rect.left - spotlightPadding, safeEdge, window.innerWidth - safeEdge);
+      const top = clamp(rect.top - spotlightPadding, safeEdge, window.innerHeight - safeEdge);
+      const right = clamp(rect.right + spotlightPadding, safeEdge, window.innerWidth - safeEdge);
+      const bottom = clamp(rect.bottom + spotlightPadding, safeEdge, window.innerHeight - safeEdge);
       setTargetRect({
-        top: rect.top,
-        left: rect.left,
-        right: rect.right,
-        bottom: rect.bottom,
-        width: rect.width,
-        height: rect.height,
+        top,
+        left,
+        right,
+        bottom,
+        width: Math.max(1, right - left),
+        height: Math.max(1, bottom - top),
       });
     };
 
@@ -135,7 +142,7 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
     return { ...horizontal, top: clamp(targetRect.bottom + 16, gutter, window.innerHeight - estimatedCardHeight - gutter) };
   }, [targetRect]);
 
-  return (
+  const guide = (
     <div
       className={`td-onboarding-overlay ${targetRect ? 'has-target' : ''}`}
       style={/** @type {React.CSSProperties & {'--onboarding-accent': string}} */ ({ '--onboarding-accent': accentColor })}
@@ -145,10 +152,10 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
           className="td-onboarding-spotlight"
           aria-hidden="true"
           style={{
-            top: targetRect.top - 7,
-            left: targetRect.left - 7,
-            width: targetRect.width + 14,
-            height: targetRect.height + 14,
+            top: targetRect.top,
+            left: targetRect.left,
+            width: targetRect.width,
+            height: targetRect.height,
           }}
         />
       )}
@@ -202,4 +209,6 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
       </section>
     </div>
   );
+
+  return typeof document === 'undefined' ? guide : createPortal(guide, document.body);
 }

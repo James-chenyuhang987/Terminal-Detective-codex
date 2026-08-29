@@ -1,9 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function HomeDrawer({ title, subtitle, children, onClose, busy = false, width = 620 }) {
   const closeRef = useRef(null);
   const drawerRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const closeTimerRef = useRef(null);
+  const [closing, setClosing] = useState(false);
+
+  const requestClose = useCallback(() => {
+    if (busy || closing) return;
+    setClosing(true);
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(onClose, 190);
+  }, [busy, closing, onClose]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
@@ -11,6 +21,7 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
     document.body.style.overflow = 'hidden';
     closeRef.current?.focus();
     return () => {
+      window.clearTimeout(closeTimerRef.current);
       document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus?.();
     };
@@ -18,7 +29,7 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
 
   useEffect(() => {
     const onKey = (event) => {
-      if (event.key === 'Escape' && !busy) onClose();
+      if (event.key === 'Escape') requestClose();
       if (event.key !== 'Tab') return;
       const focusable = [...(drawerRef.current?.querySelectorAll(
         'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
@@ -36,47 +47,24 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onClose]);
+  }, [requestClose]);
 
-  return (
-    <>
-      <div className="td-drawer-backdrop" onClick={() => !busy && onClose()} style={{
-        position: 'fixed', inset: 0, zIndex: 180, background: 'rgba(0,3,8,0.72)', backdropFilter: 'blur(5px)',
-      }} />
-      <aside className="td-home-drawer" ref={drawerRef} role="dialog" aria-modal="true" aria-label={title} aria-busy={busy} style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 181,
-        width: `min(${width}px, 100vw)`, display: 'flex', flexDirection: 'column',
-        color: '#dff8ff', fontFamily: 'monospace',
-        background: 'linear-gradient(160deg, rgba(7,20,34,0.99), rgba(1,5,11,0.99))',
-        borderLeft: '1px solid rgba(0,229,255,0.4)',
-        boxShadow: '-22px 0 70px rgba(0,0,0,0.75), inset 1px 0 rgba(125,241,255,0.08)',
-        animation: 'home-drawer-in .28s cubic-bezier(.22,1,.36,1)',
-      }}>
-        <header className="td-home-drawer-header" style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
-          padding: '17px 20px', borderBottom: '1px solid rgba(0,229,255,0.18)',
-          background: 'rgba(0,229,255,0.035)',
-        }}>
+  const drawer = (
+    <div className={`td-home-drawer-layer ${closing ? 'is-closing' : ''}`}>
+      <div className="td-drawer-backdrop" onClick={requestClose} />
+      <aside className="td-home-drawer" ref={drawerRef} role="dialog" aria-modal="true" aria-label={title} aria-busy={busy} style={{ width: `min(${width}px, 100vw)` }}>
+        <header className="td-home-drawer-header">
           <div>
-            <div style={{ fontSize: '0.94rem', color: '#7df1ff', fontWeight: 900, letterSpacing: '0.13em' }}>{title}</div>
-            {subtitle && <div style={{ fontSize: '0.56rem', color: 'rgba(220,245,255,.4)', marginTop: 5 }}>{subtitle}</div>}
+            <div className="td-home-drawer-title">{title}</div>
+            {subtitle && <div className="td-home-drawer-subtitle">{subtitle}</div>}
           </div>
-          <button className="td-ui-button td-icon-button" ref={closeRef} onClick={onClose} disabled={busy} aria-label="Close" style={{
-            border: '1px solid rgba(0,229,255,.25)', borderRadius: 8, padding: '6px 10px',
-            background: 'rgba(0,229,255,.06)', color: '#7df1ff', cursor: busy ? 'wait' : 'pointer', fontFamily: 'monospace',
-          }}>{busy ? 'SYNC…' : '✕'}</button>
+          <button className="td-ui-button td-icon-button td-home-drawer-close" ref={closeRef} onClick={requestClose} disabled={busy} aria-label="Close">{busy ? 'SYNC…' : '✕'}</button>
         </header>
-        <div className="td-home-drawer-content" style={{
-          flex: 1, overflowY: 'auto', padding: '18px 20px 30px',
-          pointerEvents: busy ? 'none' : 'auto', opacity: busy ? .72 : 1, transition: 'opacity .2s',
-        }}>{children}</div>
-        {busy && <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,#00e5ff,transparent)', animation: 'home-sync 1s linear infinite' }} />}
+        <div className="td-home-drawer-content" style={{ pointerEvents: busy ? 'none' : 'auto', opacity: busy ? .72 : 1 }}>{children}</div>
+        {busy && <div className="td-home-drawer-sync" />}
       </aside>
-      <style>{`
-        @keyframes home-drawer-in{from{transform:translateX(103%);opacity:.4}to{transform:none;opacity:1}}
-        @keyframes home-sync{from{transform:translateX(-80%)}to{transform:translateX(80%)}}
-        @media(max-width:720px){aside[role="dialog"]{border-left:0!important}}
-      `}</style>
-    </>
+    </div>
   );
+
+  return typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
 }

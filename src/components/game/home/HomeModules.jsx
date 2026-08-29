@@ -11,8 +11,6 @@ import {
   sevenDayTaskDone, toggleEquipItem, tutorialTaskDone, unlockTech,
   weeklyChallenge, knownAchievementCount, KNOWN_CASE_IDS,
 } from '@/game/playerProfile';
-import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
-import HomeDrawer from './HomeDrawer';
 import {
   AGENT_MARKET_CATALOG, activateSupportAgent, getActiveSupportAgentId,
   getOwnedAgentIds, getOwnedAgents, purchaseAgent,
@@ -311,11 +309,9 @@ function EventModule({ profile, onApply, lang, tx, onNavigate }) {
   return <><Panel accent={DIFF_COLOR[caseData.difficulty]}><div style={{ textAlign: 'center', fontSize: 42 }}>{CASE_ICON[caseData.case_id]}</div><div style={{ textAlign: 'center', color: '#fff', fontWeight: 900 }}>{lang === 'en' ? caseData.en?.title : caseData.title}</div><div style={{ textAlign: 'center', color: 'rgba(255,255,255,.35)', fontSize: '.54rem', marginTop: 5 }}>{challenge.cycleId}</div><div style={{ textAlign: 'center', marginTop: 10 }}><ActionButton onClick={() => onNavigate(caseData.case_id)}>{tx.go}</ActionButton></div></Panel><div style={{ display: 'grid', gap: 8, marginTop: 12 }}>{tasks.map(([done, label]) => <Panel key={label} accent={done ? '#00ff88' : '#668899'}><span style={{ color: done ? '#00ff88' : 'rgba(255,255,255,.4)' }}>{done ? '✓' : '○'} {label}</span></Panel>)}</div><Panel style={{ marginTop: 12, textAlign: 'center' }}><div style={{ marginBottom: 10 }}>🪙 1000 · 💎 40</div><ActionButton disabled={claimed || tasks.some(([done]) => !done)} onClick={() => onApply(claimWeeklyReward(profile), lang === 'zh' ? '每周奖励已领取' : 'Weekly reward claimed')}>{claimed ? tx.claimed : tx.claim}</ActionButton></Panel></>;
 }
 
-export default function HomeModules({ moduleKey, profile, busy, onClose, onApply, onCheckin, onOpenModule, onNavigate, onPlanCase, hasSavedTeam, onEnterLobby }) {
+export default function HomeModules({ moduleKey, profile, busy, onApply, onCheckin, onOpenModule, onNavigate, onPlanCase, hasSavedTeam, onEnterLobby }) {
   const { lang } = useLang();
   const tx = TEXT[lang] || TEXT.zh;
-  if (moduleKey === 'settings') return <SettingsDrawer onClose={onClose} />;
-  const meta = tx[moduleKey] || tx.warehouse;
   const props = { profile, onApply, lang, tx, busy };
   let content = null;
   if (moduleKey === 'profile') content = <ProfileModule {...props} />;
@@ -334,5 +330,5 @@ export default function HomeModules({ moduleKey, profile, busy, onClose, onApply
   else if (moduleKey === 'events') content = <EventModule {...props} onNavigate={onNavigate} />;
   else if (moduleKey === 'tutorial') content = <TaskModule kind="tutorial" {...props} />;
   else if (moduleKey === 'goals') content = <TaskModule kind="seven" {...props} />;
-  return <HomeDrawer title={meta[0]} subtitle={meta[1]} onClose={onClose} busy={busy} width={moduleKey === 'agent_market' || moduleKey === 'agents' ? 820 : 620}>{content}</HomeDrawer>;
+  return content;
 }

@@ -12,11 +12,25 @@ import FooterShortcuts from '@/components/game/home/FooterShortcuts';
 import HomeBackdrop from '@/components/game/home/HomeBackdrop';
 import CheckinCelebration from '@/components/game/home/CheckinCelebration';
 import StatusToast from '@/components/game/StatusToast';
+import HomeDrawer from '@/components/game/home/HomeDrawer';
+import { getHomeModuleMeta } from '@/components/game/home/homeModuleMeta';
 import { transactionErrorMessage } from '@/game/transactionFeedback';
 
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
+const loadSettingsDrawer = () => import('@/components/game/settings/SettingsDrawer');
+const SettingsDrawer = lazy(loadSettingsDrawer);
 const BUILD_ID = String(import.meta.env.VITE_BUILD_SHA || 'local').slice(0, 7);
+
+function HomeModuleSkeleton({ lang }) {
+  return (
+    <div className="td-home-module-skeleton" role="status" aria-live="polite">
+      <div><i /><i /><i /></div>
+      <div><i /><i /></div>
+      <span>{lang === 'zh' ? '正在接入模块…' : 'CONNECTING MODULE…'}</span>
+    </div>
+  );
+}
 
 export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
   const { lang } = useLang();
@@ -33,7 +47,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
   useEffect(() => {
-    const preload = () => { void loadHomeModules(); };
+    const preload = () => {
+      void loadHomeModules();
+      void loadSettingsDrawer();
+    };
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(preload, { timeout: 650 });
       return () => window.cancelIdleCallback(id);
@@ -157,8 +174,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     enterLobby(caseId);
   };
 
+  const openModule = useCallback((moduleKey) => {
+    if (moduleKey === 'settings') void loadSettingsDrawer();
+    else void loadHomeModules();
+    setModule(moduleKey);
+  }, []);
+
   const quickStart = () => {
-    if (profile.saved_team_config) setModule('cases');
+    if (profile.saved_team_config) openModule('cases');
     else void enterLobby();
   };
 
@@ -205,12 +228,12 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         boxShadow: '0 6px 26px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
         flexWrap: 'wrap',
       }}>
-        <ProfileBadge profile={profile} onClick={() => setModule('profile')} />
+        <ProfileBadge profile={profile} onClick={() => openModule('profile')} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <ResourceBar profile={profile} onPick={setModule} />
+          <ResourceBar profile={profile} onPick={openModule} />
           <div style={{ display: 'flex', gap: 10, fontSize: 15 }}>
             {[['✉️', 'comms'], ['📅', 'checkin'], ['🔧', 'settings']].map(([ic, k]) => (
-              <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => setModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
+              <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => openModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
             ))}
             <span title={`${lang === 'zh'
               ? (syncStatus === 'online' ? 'Base44 已连接' : syncStatus === 'syncing' ? '同步中…' : syncStatus === 'readonly' ? '只读模式' : '同步失败')
@@ -229,11 +252,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         {/* Left column */}
         <div className="td-home-left" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <InfoCard icon="📰" title={lang === 'zh' ? '今日情报' : 'DAILY INTEL'} alert desc={lang === 'zh' ? '优先案件与今日额外奖励已更新' : 'Priority case and daily bonus updated'}
-            btnLabel={lang === 'zh' ? '查看详情' : 'VIEW INTEL'} onClick={() => setModule('intel')} />
+            btnLabel={lang === 'zh' ? '查看详情' : 'VIEW INTEL'} onClick={() => openModule('intel')} />
           <InfoCard icon="🗂" title={lang === 'zh' ? '未解案件' : 'OPEN CASES'} big={String(profile.unsolved_count).padStart(2, '0')}
-            unit={lang === 'zh' ? '个案件待调查' : 'cases pending'} btnLabel={lang === 'zh' ? '进入案件簿' : 'OPEN ARCHIVE'} onClick={() => setModule('cases')} />
+            unit={lang === 'zh' ? '个案件待调查' : 'cases pending'} btnLabel={lang === 'zh' ? '进入案件簿' : 'OPEN ARCHIVE'} onClick={() => openModule('cases')} />
           <InfoCard icon="🏅" title={lang === 'zh' ? '成就徽章' : 'ACHIEVEMENTS'} big={knownAchievementCount(profile)}
-            unit={`/ ${ACHIEVEMENT_TOTAL}`} btnLabel={lang === 'zh' ? '查看成就' : 'VIEW'} onClick={() => setModule('achievements')} />
+            unit={`/ ${ACHIEVEMENT_TOTAL}`} btnLabel={lang === 'zh' ? '查看成就' : 'VIEW'} onClick={() => openModule('achievements')} />
         </div>
 
         {/* Center */}
@@ -300,18 +323,18 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
                   border: '1px solid #c5a059', background: 'rgba(197,160,89,0.22)',
                   color: '#f0d9a5', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
                 }}>{lang === 'zh' ? '开始调查' : 'START INVESTIGATION'}</button>
-                <button className="td-ui-button td-button-ghost td-button-compact" onClick={() => setModule('profile')} style={{
+                <button className="td-ui-button td-button-ghost td-button-compact" onClick={() => openModule('profile')} style={{
                   marginTop: 8, background: 'transparent', border: 'none', cursor: 'pointer',
                   color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: '0.55rem',
                 }}>✎ {lang === 'zh' ? '修改档案' : 'EDIT PROFILE'}</button>
               </div>
             )}
-            <HomePortal onEnter={() => setModule('agent_market')} />
+            <HomePortal onEnter={() => openModule('agent_market')} />
           </div>
         </div>
 
         {/* Right column */}
-        <SideNavIcons items={sideItems} onPick={setModule} />
+        <SideNavIcons items={sideItems} onPick={openModule} />
       </div>
 
       {/* Footer */}
@@ -323,19 +346,33 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
             { key: 'tutorial', icon: '📖', label: lang === 'zh' ? '新手任务' : 'ROOKIE TASKS' },
             { key: 'goals', icon: '🎯', label: lang === 'zh' ? '七日目标' : '7-DAY GOALS' },
           ]}
-          onPick={setModule}
+          onPick={openModule}
         />
       </div>
 
-      {module && (
-        <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 180, background: 'rgba(0,3,8,.82)', color: '#7df1ff', display: 'grid', placeItems: 'center' }}>{lang === 'zh' ? '正在加载模块…' : 'LOADING MODULE…'}</div>}>
-          <HomeModules
-            moduleKey={module} profile={profile} busy={busy} onClose={() => setModule(null)}
-            onApply={applyResult} onCheckin={handleCheckin} onOpenModule={setModule} onNavigate={openCase}
-            onPlanCase={planCase} hasSavedTeam={hasSavedTeam} onEnterLobby={() => enterLobby()}
-          />
+      {module === 'settings' && (
+        <Suspense fallback={(
+          <HomeDrawer {...getHomeModuleMeta(module, lang)} onClose={() => setModule(null)}>
+            <HomeModuleSkeleton lang={lang} />
+          </HomeDrawer>
+        )}>
+          <SettingsDrawer onClose={() => setModule(null)} />
         </Suspense>
       )}
+      {module && module !== 'settings' && (() => {
+        const meta = getHomeModuleMeta(module, lang);
+        return (
+          <HomeDrawer {...meta} onClose={() => setModule(null)} busy={busy}>
+            <Suspense fallback={<HomeModuleSkeleton lang={lang} />}>
+              <HomeModules
+                moduleKey={module} profile={profile} busy={busy}
+                onApply={applyResult} onCheckin={handleCheckin} onOpenModule={openModule} onNavigate={openCase}
+                onPlanCase={planCase} hasSavedTeam={hasSavedTeam} onEnterLobby={() => enterLobby()}
+              />
+            </Suspense>
+          </HomeDrawer>
+        );
+      })()}
 
       <StatusToast
         toast={toast}
