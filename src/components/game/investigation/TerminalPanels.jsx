@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
-import InterrogationHints, { EmotionBadge } from '@/components/game/InterrogationHints';
+import { EmotionBadge } from '@/components/game/InterrogationHints';
 
 export function TerminalLine({ line, accentColor }) {
   const colors = {
@@ -15,20 +15,15 @@ export function TerminalLine({ line, accentColor }) {
   );
 }
 
-export function NPCDialogBox({ npc, dialogue, onSend, onClose, isProcessing, accentColor, emotion, hints }) {
-  const { t } = useLang();
-  const [msg, setMsg] = useState('');
+export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChange, onQuestion, onClose, isProcessing, accentColor, emotion, team = [], error = null }) {
+  const { t, lang } = useLang();
+  const zh = lang === 'zh';
   const ref = useRef(null);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [dialogue]);
 
-  const send = () => {
-    const value = msg.trim();
-    if (!value || isProcessing) return;
-    onSend(value);
-    setMsg('');
-  };
+  const activePack = packs?.[executorId];
 
   return (
     <div className="border-t p-3" style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.6)' }}>
@@ -49,24 +44,62 @@ export function NPCDialogBox({ npc, dialogue, onSend, onClose, isProcessing, acc
           </div>
         ))}
       </div>
-      <InterrogationHints hints={hints} onPick={setMsg} />
-      <div className="flex gap-2">
-        <input
-          className="flex-1 bg-transparent border rounded px-2 py-1 text-xs outline-none"
-          style={{ borderColor: `${accentColor}40`, color: accentColor }}
-          placeholder={`${t.interrogating}: ${npc.name}...`}
-          value={msg}
-          onChange={event => setMsg(event.target.value)}
-          onKeyDown={event => { if (event.key === 'Enter') send(); }}
-          disabled={isProcessing}
-        />
-        <button type="button" onClick={send} disabled={isProcessing || !msg.trim()}
-          className="px-3 text-xs rounded border disabled:opacity-30"
-          style={{ borderColor: `${accentColor}50`, color: accentColor }}>
-          {t.sendBtn}
-        </button>
+      <div className="td-interrogation-agent-tabs">
+        {team.slice(0, 3).map(agent => {
+          const pack = packs?.[agent.agent_id];
+          return <button type="button" key={agent.agent_id} disabled={isProcessing || !pack}
+            className={executorId === agent.agent_id ? 'is-active' : ''}
+            onClick={() => onExecutorChange(agent.agent_id)}>
+            <strong>{agent.agent_id}</strong>
+            <small>{pack ? `${pack.expertise}% · ${pack.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : pack.confidence === 'medium' ? (zh ? '中置信' : 'MED') : (zh ? '低置信' : 'LOW')}` : (zh ? '加载中' : 'LOADING')}</small>
+          </button>;
+        })}
+      </div>
+      {error && <div className="td-interrogation-error">{error}</div>}
+      <div className="td-interrogation-questions" data-onboarding-target="interrogation-questions">
+        {(activePack?.questions || []).map(question => (
+          <button type="button" key={question.questionId} disabled={isProcessing}
+            onClick={() => onQuestion(question)} className={question.repeated ? 'is-repeated' : ''}>
+            <header><span>{question.repeated ? '↻' : question.tone === 'evidence' ? '📎' : '◇'} {question.text}</span><strong>{question.estimatedAlignment}%</strong></header>
+            <div><i><b style={{ width: `${question.estimatedAlignment}%` }} /></i></div>
+            <footer><span>{zh ? '探员预估 · ' : 'AGENT ESTIMATE · '}{question.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : question.confidence === 'medium' ? (zh ? '中置信' : 'MEDIUM') : (zh ? '低置信' : 'LOW')}</span><code>{question.focusAttribute}</code></footer>
+          </button>
+        ))}
+        {!activePack && <div className="td-interrogation-loading">{zh ? '正在校验可用问题…' : 'VALIDATING AVAILABLE QUESTIONS…'}</div>}
       </div>
     </div>
+  );
+}
+
+export function StructuredReportPanel({ options, value, onChange, onSubmit, onCancel, isProcessing, judgeResult, error = null }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
+  const fields = useMemo(() => [
+    ['conclusionId', zh ? '核心结论' : 'CORE CONCLUSION', options?.conclusions || []],
+    ['methodId', zh ? '作案方式 / 事件性质' : 'METHOD / EVENT NATURE', options?.methods || []],
+    ['motiveId', zh ? '动机' : 'MOTIVE', options?.motives || []],
+    ['timelineId', zh ? '关键时间线' : 'KEY TIMELINE', options?.timelines || []],
+  ], [options, zh]);
+  const toggleEvidence = (id) => {
+    const current = value.evidenceIds || [];
+    if (current.includes(id)) onChange({ ...value, evidenceIds: current.filter(item => item !== id) });
+    else if (current.length < 4) onChange({ ...value, evidenceIds: [...current, id] });
+  };
+  const complete = fields.every(([key]) => value[key]) && (value.evidenceIds?.length || 0) >= 1;
+  return (
+    <section className="td-structured-report" data-onboarding-target="structured-report">
+      <header><div><small>{zh ? '结构化结案报告' : 'STRUCTURED CASE REPORT'}</small><h3>{zh ? '用已经发现的证据重建案件' : 'RECONSTRUCT THE CASE FROM DISCOVERED EVIDENCE'}</h3></div><button type="button" onClick={onCancel}>✕</button></header>
+      {error && <div className="td-report-error" role="alert">⚠ {error}</div>}
+      {!options ? <div className="td-report-loading">{zh ? '正在读取合法报告选项…' : 'LOADING LEGAL REPORT OPTIONS…'}</div> : <>
+        <div className="td-report-fields">
+          {fields.map(([key, label, choices]) => <label key={key}><span>{label}</span><select value={value[key] || ''} onChange={event => onChange({ ...value, [key]: event.target.value })} disabled={isProcessing}><option value="">{zh ? '请选择…' : 'SELECT…'}</option>{choices.map(choice => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label>)}
+        </div>
+        <div className="td-report-evidence"><header><span>{zh ? '支持证据（选择 2–4 条可获得更高评价）' : 'SUPPORTING EVIDENCE (SELECT 2–4 FOR A STRONGER GRADE)'}</span><b>{value.evidenceIds?.length || 0}/4</b></header><div>{(options.availableEvidence || []).map(item => <button type="button" key={item.id} className={value.evidenceIds?.includes(item.id) ? 'is-selected' : ''} onClick={() => toggleEvidence(item.id)} disabled={isProcessing || (!value.evidenceIds?.includes(item.id) && value.evidenceIds?.length >= 4)}>🔎 {item.label}</button>)}</div></div>
+        <p>{zh ? '事实贴近度只用于战术选择；最终评价由受保护的案件规则和你提交的证据共同决定。' : 'Alignment guides tactics; the final grade is determined by protected case rules and your submitted evidence.'}</p>
+        <footer><button type="button" onClick={onCancel} disabled={isProcessing}>{zh ? '取消' : 'CANCEL'}</button><button type="button" onClick={onSubmit} disabled={isProcessing || !complete}>{isProcessing ? (zh ? '校验中…' : 'VALIDATING…') : (zh ? '提交结案报告' : 'SUBMIT CASE REPORT')}</button></footer>
+      </>}
+      {judgeResult && <JudgeResult result={judgeResult} />}
+    </section>
   );
 }
 

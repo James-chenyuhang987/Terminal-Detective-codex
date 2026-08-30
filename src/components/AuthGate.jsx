@@ -6,7 +6,7 @@ const COPY = {
   zh: {
     eyebrow: 'SECURE NEURAL ACCESS',
     title: '身份验证终端',
-    subtitle: 'AI 调查功能由 Base44 安全后端提供，请先验证身份。',
+    subtitle: '案件进度与受保护规则由 Base44 安全后端提供，请先验证身份。',
     email: '邮箱地址',
     password: '密码',
     otp: '邮箱验证码',
@@ -25,7 +25,7 @@ const COPY = {
   en: {
     eyebrow: 'SECURE NEURAL ACCESS',
     title: 'Identity Terminal',
-    subtitle: 'AI investigations use the secured Base44 backend. Authenticate to continue.',
+    subtitle: 'Case progress and protected rules use the secured Base44 backend. Authenticate to continue.',
     email: 'Email address',
     password: 'Password',
     otp: 'Email verification code',

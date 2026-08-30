@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 
-// 推理连线板 — 拖拽两条已解锁线索进行连接，AI 判定推理有效性
+// 推理连线板 — 拖拽两条已解锁线索，由受保护的确定性规则判定有效性。
 const WEIGHT_COLORS = { CRITICAL: '#ff3860', HIGH: '#ffaa00', MEDIUM: '#00e5ff', LOW: '#8888aa' };
 
 export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isChecking, accentColor: _accentColor }) {
@@ -144,7 +144,7 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
           padding: '8px', textAlign: 'center', fontSize: '0.5rem', color: '#00ffff',
           borderTop: '1px solid rgba(0,255,255,0.2)', animation: 'lb-pulse 0.8s ease-in-out infinite',
         }}>
-          ⟳ {zh ? 'AI 正在验证推理链…' : 'AI IS VALIDATING THE DEDUCTION…'}
+          ⟳ {zh ? '规则正在验证推理链…' : 'RULES ARE VALIDATING THE DEDUCTION…'}
         </div>
       )}
       <style>{`@keyframes lb-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>

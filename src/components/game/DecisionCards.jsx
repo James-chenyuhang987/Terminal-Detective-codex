@@ -18,12 +18,11 @@ function CommandToggle({ active, disabled, icon, title, detail, onClick }) {
   </button>;
 }
 
-export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, team = [], commandState, onCommandError }) {
+export default function DecisionCards({ cards: legacyCards = [], packs = null, onChoose, timeLimit = 40, story, team = [], commandState, onCommandError }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [left, setLeft] = useState(timeLimit);
-  const [custom, setCustom] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(() => cards[1] ? 1 : 0);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [executorId, setExecutorId] = useState(commandState?.active_agent_id || team[0]?.agent_id || '');
   const [assistantId, setAssistantId] = useState('');
   const [preview, setPreview] = useState(false);
@@ -32,20 +31,27 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
   const overlayRef = useRef(null);
   const selectedCardRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const cards = useMemo(() => packs?.[executorId]?.cards || legacyCards || [], [executorId, legacyCards, packs]);
   const selectedCard = cards[selectedIndex] || cards[0];
   const points = Math.max(0, Number(commandState?.points) || 0);
   const reserved = Number(preview) + Number(joint);
 
-  const recommendedId = useMemo(
-    () => recommendExecutor(team, selectedCard?.action_tag || 'search_area'),
-    [selectedCard?.action_tag, team],
-  );
+  const recommendedId = useMemo(() => {
+    if (packs) {
+      return [...team].sort((a, b) => (packs[b.agent_id]?.expertise || 0) - (packs[a.agent_id]?.expertise || 0))[0]?.agent_id || '';
+    }
+    return recommendExecutor(team, selectedCard?.action_tag || 'search_area');
+  }, [packs, selectedCard?.action_tag, team]);
 
   useEffect(() => {
     const next = recommendedId || commandState?.active_agent_id || team[0]?.agent_id || '';
     setExecutorId(next);
     setAssistantId(team.find(agent => agent.agent_id !== next)?.agent_id || '');
   }, [recommendedId, commandState?.active_agent_id, team]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [executorId]);
 
   const chooseOnce = useCallback((choice) => {
     if (resolvedRef.current) return;
@@ -86,7 +92,7 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
   }, []);
 
   useEffect(() => {
-    const fallbackCard = cards[1] || cards[0];
+    const fallbackCard = cards[0];
     if (left === 0 && fallbackCard) {
       chooseOnce({ card: fallbackCard, executorAgentId: recommendExecutor(team, fallbackCard.action_tag) || executorId, assistAgentId: null, commandIds: [] });
     }
@@ -105,11 +111,6 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
   const confirm = () => {
     if (!selectedCard || reserved > points) return onCommandError?.('insufficient_command_points');
     chooseOnce(buildChoice({ card: selectedCard }));
-  };
-
-  const submitCustom = () => {
-    if (!custom.trim() || reserved > points) return;
-    chooseOnce(buildChoice({ freeform: custom.trim() }));
   };
 
   const dialog = (
@@ -132,6 +133,19 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
         <div><small>NOVA · {zh ? '决策提示' : 'DECISION TIP'}</small><strong>{zh ? '先阅读白色的「证据及发现」，再比较收益和风险。' : 'Read the white EVIDENCE & FINDINGS text before comparing benefit and risk.'}</strong></div>
       </div>
 
+      <div className="td-decision-agent-tabs" aria-label={zh ? '选择执行探员和选项包' : 'Choose agent option pack'}>
+        {team.slice(0, 3).map(agent => {
+          const pack = packs?.[agent.agent_id];
+          return <button type="button" key={agent.agent_id} className={executorId === agent.agent_id ? 'is-active' : ''}
+            onClick={() => setExecutorId(agent.agent_id)}>
+            <span>{AGENT_ICONS[agent.agent_id] || '◈'}</span>
+            <strong>{agent.agent_id}</strong>
+            {recommendedId === agent.agent_id && <small>{zh ? '推荐' : 'REC'}</small>}
+            {pack && <b>{pack.expertise}% · {pack.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : pack.confidence === 'medium' ? (zh ? '中置信' : 'MED') : (zh ? '低置信' : 'LOW')}</b>}
+          </button>;
+        })}
+      </div>
+
       <div className="td-decision-cards">
         {cards.map((card, index) => {
           const meta = STYLE_META[card.style] || STYLE_META.steady;
@@ -142,6 +156,11 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
             onClick={() => setSelectedIndex(index)} style={/** @type {React.CSSProperties & Record<string, string>} */ ({ '--decision-color': meta.color, '--risk-color': riskColor })}>
             <div className="td-decision-card-head"><span>{meta.icon}</span><strong>{zh ? meta.zh : meta.en}</strong><i>{isSelected ? 'SELECTED' : `0${index + 1}`}</i></div>
             <div className="td-decision-card-copy"><h3>{card.label}</h3><p className="is-benefit">＋ {card.benefit_desc}</p><p className="is-risk">⚠ {card.risk_desc}</p><code>[{String(card.action_tag).toUpperCase()}]</code></div>
+            <div className={`td-alignment-meter confidence-${card.confidence || 'offline'}`}>
+              <div><span>{zh ? '探员预估事实贴近度' : 'AGENT-ESTIMATED FACT ALIGNMENT'}</span><strong>{Number.isFinite(card.estimatedAlignment) ? `${card.estimatedAlignment}%` : (zh ? '离线' : 'OFFLINE')}</strong></div>
+              <i><b style={{ width: Number.isFinite(card.estimatedAlignment) ? `${card.estimatedAlignment}%` : '0%' }} /></i>
+              <small>{zh ? '评分置信度' : 'CONFIDENCE'} · {card.confidence === 'high' ? (zh ? '高' : 'HIGH') : card.confidence === 'medium' ? (zh ? '中' : 'MEDIUM') : card.confidence === 'low' ? (zh ? '低' : 'LOW') : (zh ? '不可用' : 'UNAVAILABLE')} · {card.focusAttribute || '—'}</small>
+            </div>
             {preview && <div className="td-decision-forecast"><span>AP {forecast.ap[0]}–{forecast.ap[1]}</span><span>{zh ? '混乱' : 'CONF'} {forecast.confusion[0]}–{forecast.confusion[1]}</span><span>{zh ? '陷阱' : 'TRAP'} {forecast.trap}%</span></div>}
             <i className="td-decision-risk-line" />
           </button>;
@@ -161,10 +180,8 @@ export default function DecisionCards({ cards, onChoose, timeLimit = 40, story, 
       </section>
 
       <div className="td-decision-order-row">
-        <input className="td-ui-input" value={custom} onChange={event => setCustom(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') submitCustom(); }} placeholder={zh ? '可选：输入自由指令覆盖所选卡片…' : 'OPTIONAL: TYPE A FREE ORDER TO OVERRIDE THE CARD…'} />
-        {custom.trim()
-          ? <button type="button" className="td-ui-button td-button-primary" onClick={submitCustom}>{zh ? '▶ 下达自由指令' : '▶ ISSUE FREE ORDER'}</button>
-          : <button type="button" className="td-ui-button td-button-primary" onClick={confirm}>{zh ? '▶ 确认战术' : '▶ CONFIRM TACTIC'}</button>}
+        <div><small>{zh ? '事实贴近度是探员预估，不是系统公布的正确答案。' : 'Alignment is the agent’s estimate, not a revealed correct answer.'}</small></div>
+        <button type="button" className="td-ui-button td-button-primary" onClick={confirm}>{zh ? '▶ 确认战术' : '▶ CONFIRM TACTIC'}</button>
       </div>
     </div>
   );

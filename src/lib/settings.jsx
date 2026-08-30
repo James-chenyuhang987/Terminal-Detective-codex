@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS = {
   scanlines: true,        // CRT 扫描线
   glitchLevel: 'high',    // off | low | high
   particles: true,        // 粒子动画
-  investigationTutorialEnabled: true, // 每次进入调查显示六步教程
+  investigationTutorialEnabled: true, // 每次进入调查显示七步教程
   cinematicsEnabled: true,// 调查行动 3D 过场
   cinematicQuality: 'auto', // 自动按设备能力选择质量
 };

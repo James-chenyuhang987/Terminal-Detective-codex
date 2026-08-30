@@ -21,8 +21,23 @@ const STEPS = [
     icon: '⚙️',
     target: '[data-onboarding-target="execute"]',
     label: 'EXECUTE',
-    zh: { t: '执行循环', d: '核心按钮。每次点击，AI 探员会完成一轮「观察 → 思考 → 行动」，并消耗 1 点行动力（AP）。每轮你都会收到 3 张策略卡，由你决定行动方向。' },
-    en: { t: 'EXECUTE CYCLE', d: 'The core button. Each click runs one Observe → Think → Act loop and costs 1 AP. Every round you pick from 3 strategy cards.' },
+    zh: { t: '执行循环', d: '核心按钮。每次点击都会完成一轮「观察 → 本地战术分析 → 决策 → 行动」，并消耗行动力（AP）。每轮你都会收到三张合法策略卡，由你决定行动方向。' },
+    en: { t: 'EXECUTE CYCLE', d: 'The core button. Each click runs one Observe → Local Tactical Analysis → Decision → Action loop and costs AP. Every round you choose from three legal strategy cards.' },
+  },
+  {
+    icon: '🎯',
+    label: 'ABILITY / ALIGNMENT',
+    abilityDemo: true,
+    zh: {
+      t: '探员能力与事实贴近度',
+      d: '探员的能力会决定每一次提问是否贴近事实哦。不同问题依赖不同能力；强探员更容易提出高价值问题，并能给出误差更小的预估。',
+      hint: '事实贴近度是探员预估，并不是系统公布的正确答案；置信度越高，评分误差通常越小。',
+    },
+    en: {
+      t: 'AGENT ABILITY & FACT ALIGNMENT',
+      d: 'An agent’s ability determines how closely each question aligns with the facts. Different questions rely on different attributes; stronger agents offer higher-value questions and more accurate estimates.',
+      hint: 'Fact alignment is an agent estimate, not a revealed correct answer. Higher confidence usually means a smaller scoring error.',
+    },
   },
   {
     icon: '🔗',
@@ -35,8 +50,8 @@ const STEPS = [
     icon: '🗣️',
     target: '[data-onboarding-target="interrogate"]',
     label: 'NPC',
-    zh: { t: '审讯嫌疑人', d: '底部行动栏的角色按钮可直接审讯。注意情绪徽章：激怒证人可能让其撤回证词。' },
-    en: { t: 'INTERROGATION', d: 'Use the character buttons in the action bar. Watch the emotion badge — enraged witnesses retract testimony.' },
+    zh: { t: '选项式审讯嫌疑人', d: '先从底部选择嫌疑人，再选择负责审讯的核心探员。比较三个问题的事实贴近度、置信度与风险；已发现证据会解锁证据对峙和矛盾追问。' },
+    en: { t: 'OPTION-BASED INTERROGATION', d: 'Choose a suspect, assign a core agent, then compare three questions by estimated alignment, confidence, and risk. Discovered evidence unlocks confrontations and contradiction checks.' },
   },
   {
     icon: '⚠️',
@@ -49,8 +64,8 @@ const STEPS = [
     icon: '📮',
     target: '[data-onboarding-target="report"]',
     label: 'REPORT',
-    zh: { t: '结案报告', d: '掌握关键线索后点击「报告」提交结论。评级 C 以上即可结案；错误结论会受到少量 AP、声望与混乱惩罚，但调查过程经验仍会保留。' },
-    en: { t: 'CASE REPORT', d: 'Submit your conclusion via REPORT after finding key evidence. Grade C or above closes the case. A wrong conclusion has a small AP, reputation, and confusion penalty, but process XP is retained.' },
+    zh: { t: '结构化结案报告', d: '掌握关键线索后，从选项中选择核心结论、方式、动机与时间线，并提交 2–4 条支持证据。评级 C 以上即可结案；失败报告只受到温和惩罚。' },
+    en: { t: 'STRUCTURED CASE REPORT', d: 'After securing key clues, select the core conclusion, method, motive, and timeline, then attach 2–4 supporting evidence items. Grade C or above closes the case; failed reports receive only a mild penalty.' },
   },
 ];
 
@@ -182,6 +197,13 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
 
         <p id="td-onboarding-description" className="td-onboarding-description">{c.d}</p>
         {c.hint && <p className="td-onboarding-hint"><span>◆</span>{c.hint}</p>}
+        {step.abilityDemo && (
+          <div className="td-onboarding-ability-demo" aria-label={zh ? '机制示例' : 'Mechanic example'}>
+            <small>{zh ? '机制示例 · 不读取当前案件数据' : 'MECHANIC EXAMPLE · NO CURRENT CASE DATA'}</small>
+            <div><span>{zh ? '普通探员' : 'STANDARD AGENT'}</span><i><b style={{ width: '58%' }} /></i><strong>58%</strong><em>{zh ? '低置信' : 'LOW'}</em></div>
+            <div><span>{zh ? '专业探员' : 'SPECIALIST AGENT'}</span><i><b style={{ width: '84%' }} /></i><strong>84%</strong><em>{zh ? '高置信' : 'HIGH'}</em></div>
+          </div>
+        )}
 
         <nav className="td-onboarding-progress" aria-label={zh ? '引导步骤' : 'Tutorial steps'}>
           {STEPS.map((item, idx) => (

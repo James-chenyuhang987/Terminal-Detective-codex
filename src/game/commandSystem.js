@@ -60,6 +60,9 @@ const ACTION_FOCUS = Object.freeze({
   interrogate_suspect: ['logic_power', 'confusion_resistance'],
   check_alibi: ['logic_power', 'confusion_resistance'],
   present_evidence: ['logic_power', 'confusion_resistance'],
+  talk_to_npc: ['logic_power', 'confusion_resistance'],
+  tail_suspect: ['observation_focus', 'confusion_resistance'],
+  bribe_informant: ['confusion_resistance', 'logic_power'],
 });
 
 const FORECAST_BY_ACTION = Object.freeze({
@@ -148,6 +151,18 @@ export function getActionFocus(actionTag) {
 function agentScore(agent, actionTag) {
   const keys = getActionFocus(actionTag);
   return keys.reduce((sum, key, index) => sum + finite(agent?.[key]) * (index === 0 ? 0.72 : 0.28), 0);
+}
+
+export function agentExpertise(agent, actionTag) {
+  const score = agentScore(agent, actionTag);
+  return Math.max(0, Math.min(100, Math.round((score / 40) * 100)));
+}
+
+export function confidenceFromExpertise(expertise) {
+  const value = Math.max(0, Math.min(100, finite(expertise)));
+  if (value >= 75) return 'high';
+  if (value >= 45) return 'medium';
+  return 'low';
 }
 
 export function recommendExecutor(team, actionTag) {

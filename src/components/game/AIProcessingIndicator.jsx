@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { useLang } from '@/lib/lang.jsx';
 
 const NEURAL_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノ∑∆∇∫≈≠∞';
 
 export default function AIProcessingIndicator({ phase = 'THINK', stressLevel = 0 }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
   const [rain, setRain] = useState([]);
 
   useEffect(() => {
@@ -89,12 +92,14 @@ export default function AIProcessingIndicator({ phase = 'THINK', stressLevel = 0
               filter: stressLevel > 70 ? `hue-rotate(${stressLevel * 3}deg)` : 'none',
             }}
           >
-            {phase === 'THINK' ? '◈ NEURAL PROCESSING' : '◈ ACTION SYNTHESIS'}
+            {phase === 'THINK'
+              ? (zh ? '◈ 本地战术分析' : '◈ LOCAL TACTICAL ANALYSIS')
+              : (zh ? '◈ 确定性规则校验' : '◈ DETERMINISTIC RULE VALIDATION')}
           </div>
           <div className="text-xs opacity-50" style={{ color, fontFamily: 'monospace' }}>
             {stressLevel > 50
-              ? `⚠ PROCESSING OVERLOAD ${stressLevel}%`
-              : `Analyzing case data...`
+              ? (zh ? `⚠ 战术负载 ${stressLevel}%` : `⚠ TACTICAL LOAD ${stressLevel}%`)
+              : (zh ? '正在校验公开案件数据…' : 'Validating public case data…')
             }
           </div>
         </div>

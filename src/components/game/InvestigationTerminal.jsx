@@ -4,11 +4,19 @@ import { useLang } from '@/lib/lang.jsx';
 import MiniMap from '@/components/game/MiniMap';
 import { createInitialGameState, generateObservation, applySettlementResult, pushCheckpoint, checkConflictClues } from '@/game/gameState';
 import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
-import { streamThinkSSE, getAction, settleAction, getNPCDialogue, judgeReport, branchCheck, parseActionTag, linkCheck, setLLMLang, generateDecisionCards, linkCinematic } from '@/game/llmClient';
+import { streamThinkSSE, settleAction, linkCheck, setLLMLang } from '@/game/llmClient';
+import {
+  getDecisionOptionPacks,
+  getInterrogationOptionPacks,
+  getStructuredReportOptions,
+  judgeStructuredReport,
+  resolveInterrogationOption,
+  setRulesLang,
+} from '@/game/detectiveRulesClient';
 import DecisionCards from '@/components/game/DecisionCards';
 import LinkCinematic from '@/components/game/LinkCinematic';
 import { EmotionBadge } from '@/components/game/InterrogationHints';
-import { buildHints, getEmotion, shiftEmotion } from '@/game/npcEmotion';
+import { getEmotion, shiftEmotion } from '@/game/npcEmotion';
 import { nextCrisisIn, rollCrisis, applyCrisisChoice } from '@/game/crisisEvents';
 import CrisisAlert from '@/components/game/CrisisAlert';
 import InsightFlashFX from '@/components/game/InsightFlashFX';
@@ -26,7 +34,7 @@ import OnboardingGuide from '@/components/game/OnboardingGuide';
 import ToolPanelTabs from '@/components/game/ToolPanelTabs';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import { useSettings, panelSkin } from '@/lib/settings.jsx';
-import { JudgeResult, NPCDialogBox, TerminalLine } from '@/components/game/investigation/TerminalPanels';
+import { NPCDialogBox, StructuredReportPanel, TerminalLine } from '@/components/game/investigation/TerminalPanels';
 import { useManagedTimers } from '@/components/game/investigation/useManagedTimers';
 import CommandConsole from '@/components/game/CommandConsole';
 import InvestigationAssistant from '@/components/game/InvestigationAssistant';
@@ -53,6 +61,7 @@ import {
   stepTerminalTurn,
 } from '@/game/turnArchive';
 import { getRejectedReportPenalty } from '@/game/caseEvaluation';
+import { stableNarrativeHash } from '@/game/narrativeEngine';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
@@ -78,8 +87,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     () => localizeCase(caseDataResolved, lang),
     [caseDataResolved, lang],
   );
-  // AI 叙事输出语言跟随界面语言
-  useEffect(() => { setLLMLang(lang); }, [lang]);
+  // 本地表达库与确定性规则的语言跟随界面语言。
+  useEffect(() => { setLLMLang(lang); setRulesLang(lang); }, [lang]);
 
   const [gameState, setGameState] = useState(() => createInitialGameState(
     caseDataResolved,
@@ -96,10 +105,16 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [newClueIds, setNewClueIds] = useState([]);
   const [showBSoD, setShowBSoD] = useState(false);
   const [reportMode, setReportMode] = useState(false);
-  const [reportText, setReportText] = useState('');
+  const [reportOptions, setReportOptions] = useState(null);
+  const [structuredReport, setStructuredReport] = useState({ conclusionId: '', methodId: '', motiveId: '', timelineId: '', evidenceIds: [] });
+  const [reportError, setReportError] = useState(null);
   const [judgeResult, setJudgeResult] = useState(null);
   const [selectedNPC, setSelectedNPC] = useState(null);
   const [npcDialogue, setNpcDialogue] = useState([]);
+  const [npcQuestionPacks, setNpcQuestionPacks] = useState(null);
+  const [npcQuestionError, setNpcQuestionError] = useState(null);
+  const [npcExecutorId, setNpcExecutorId] = useState(() => agentStrategy?.primary_agent_id || agentStrategy?.team?.[0]?.agent_id || '');
+  const [askedQuestionIds, setAskedQuestionIds] = useState({});
   const [toolTab, setToolTab] = useState('evidence');
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [showMiniMap, setShowMiniMap] = useState(true);
@@ -168,6 +183,29 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     clearTimeout(commandNoticeTimerRef.current);
     window.cancelAnimationFrame(terminalScrollFrameRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!reportMode) return undefined;
+    const ctrl = new AbortController();
+    let cancelled = false;
+    setReportOptions(null);
+    setReportError(null);
+    getStructuredReportOptions({ gameState: gameStateRef.current, caseData, signal: ctrl.signal })
+      .then(options => {
+        if (!cancelled) setReportOptions(options);
+      })
+      .catch(error => {
+        if (!cancelled && error?.name !== 'AbortError') {
+          setReportError(lang === 'zh'
+            ? '暂时无法读取合法报告选项，请关闭报告后重试。'
+            : 'REPORT OPTIONS ARE TEMPORARILY UNAVAILABLE. CLOSE AND RETRY.');
+        }
+      });
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+    };
+  }, [caseData, gameState.unlocked_clues, lang, reportMode]);
 
   // Apply the opening passive once; the state guard prevents language changes
   // or React development remounts from awarding the clue twice.
@@ -390,14 +428,21 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       addLine('\n' + t.neuralProcessing, 'phase');
       setThoughtText('');
 
+      // Deterministic option packs are prefetched while the local tactical
+      // summary is being rendered, so opening the decision desk adds no model wait.
+      const optionPacksPromise = getDecisionOptionPacks({
+        gameState: gs,
+        caseData,
+        team: activeAgentStrategy?.team || [],
+        signal: ctrl.signal,
+      });
+
       startStressTimer();
       let fullThought = '';
 
       await streamThinkSSE({
         gameState: gs,
         agentStrategy: activeAgentStrategy,
-        chatHistory: gs.chat_history.slice(-6),
-        banList: gs.action_ban_list,
         observation,
         signal: ctrl.signal,
         onChunk: (char) => {
@@ -417,25 +462,13 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       // ── Phase 3: ACT ──────────────────────────────────────────────────
       setReactState(ReAct_Enum.ACT);
       addLine('\n' + t.actionSynthesis, 'phase');
-      startStressTimer();
-
-      const actionText = await getAction({
-        thoughtProcess: fullThought,
-        gameState: gs,
-        agentStrategy: activeAgentStrategy,
-        signal: ctrl.signal,
-      });
-
-      stopStressTimer();
-      if (isCancelled()) return;
-
-      let actionTag = parseActionTag(actionText);
-      let playerOverride = null;
+      let actionTag = null;
       let cardStyle = null;
+      let cardRisk = 'low';
       let hiddenBranch = false;
       let executorAgentId = gameStateRef.current.command_state?.active_agent_id
         || activeAgentStrategy?.primary_agent_id
-        || recommendExecutor(activeAgentStrategy?.team, actionTag || 'search_area');
+        || recommendExecutor(activeAgentStrategy?.team, 'search_area');
       let assistAgentId = null;
       let commandIds = [];
 
@@ -443,19 +476,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       // 每一轮都交由架构师决策 —— 玩家始终掌握剧情走向
       const isKeyNode = true;
       if (isKeyNode) {
-        const fallbackTag = actionTag && Legal_Actions_List.includes(actionTag) ? actionTag : 'search_area';
+        const fallbackTag = 'search_area';
         addLine(`\n${t.keyDecisionNode}`, 'warning');
-        const cards = await generateDecisionCards({
-          gameState: gs,
-          caseData,
-          thoughtProcess: fullThought,
-          signal: ctrl.signal,
-        })
-          || [
-            { style: 'steady', label: fallbackTag, risk_level: 'low', benefit_desc: t.riskSteadyDesc, risk_desc: '—', action_tag: fallbackTag },
-            { style: 'aggressive', label: 'present_evidence', risk_level: 'high', benefit_desc: t.riskAggressiveDesc, risk_desc: '—', action_tag: 'present_evidence' },
-            { style: 'deceptive', label: 'bribe_informant', risk_level: 'medium', benefit_desc: t.riskHighDesc, risk_desc: '—', action_tag: 'bribe_informant' },
-          ];
+        const optionResult = await optionPacksPromise;
+        if (isCancelled()) return;
+        const packs = optionResult?.packs || {};
         const zoneId = gs.current_zone || 'zone_datacenter';
         const zoneList = Array.isArray(caseData.zone_layout)
           ? caseData.zone_layout
@@ -473,7 +498,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         if (settings.cinematicsEnabled !== false) {
           void preloadActionCinematic();
         }
-        setDecisionCards(cards);
+        setDecisionCards(packs);
         const choice = await new Promise(resolve => { decisionResolveRef.current = resolve; });
         setDecisionCards(null);
         setDecisionStory(null);
@@ -484,32 +509,16 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         assistAgentId = choice.assistAgentId || null;
         commandIds = Array.isArray(choice.commandIds) ? choice.commandIds : [];
 
-        if (choice.freeform) {
-          addLine(`\n${lang === 'zh' ? '🎙 架构师自由指令：' : '🎙 ARCHITECT FREE ORDER: '}"${choice.freeform}"`, 'action');
-          const overrideStrategy = buildExecutingStrategy(
-            activeAgentStrategy,
-            fallbackTag,
-            executorAgentId,
-            assistAgentId,
-            commandIds.includes('joint_action'),
-          );
-          const overrideText = await getAction({
-            thoughtProcess: `${fullThought}\n\n[ARCHITECT OVERRIDE ORDER — player_override=true] ${choice.freeform}`,
-            gameState: gs,
-            agentStrategy: overrideStrategy,
-            signal: ctrl.signal,
-          });
-          if (isCancelled()) return;
-          actionTag = parseActionTag(overrideText) || fallbackTag;
-          playerOverride = choice.freeform;
-        } else {
-          const card = choice.card;
-          actionTag = card.action_tag;
-          cardStyle = card.style;
-          // 高风险卡：概率触发隐藏分支线索
-          if (card.risk_level === 'high' && Math.random() < 0.35) hiddenBranch = true;
-          addLine(`\n${t.architectConfirm}[${String(actionTag).toUpperCase()}] · ${card.label}`, 'action');
+        const card = choice.card;
+        actionTag = card.action_tag;
+        cardStyle = card.style;
+        cardRisk = card.risk_level || 'low';
+        // High-risk branches use a stable roll so retries cannot redraw the outcome.
+        if (cardRisk === 'high') {
+          const branchSeed = `${gs.run_id}:${gs.turn_count + 1}:${executorAgentId}:${actionTag}:hidden-branch`;
+          hiddenBranch = (stableNarrativeHash(branchSeed) % 100) < 35;
         }
+        addLine(`\n${t.architectConfirm}[${String(actionTag).toUpperCase()}] · ${card.label}`, 'action');
       }
 
       const isLegal = actionTag && Legal_Actions_List.includes(actionTag);
@@ -533,15 +542,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       // ── Settlement ────────────────────────────────────────────────────
       addLine(t.resolvingAction, 'system');
       const settlement = await settleAction({
-        actionName: playerOverride
-          ? `${actionTag || 'search_area'} — architect custom order: "${playerOverride}"`
-          : cardStyle
+        actionName: cardStyle
           ? `${actionTag} (${cardStyle} approach)`
           : actionTag || 'search_area',
         gameState: gs,
         caseData,
         agentStrategy: executingStrategy,
         actionTag: actionTag || 'search_area',
+        riskLevel: cardRisk,
         isIllegal: !isLegal,
         signal: ctrl.signal,
       });
@@ -580,7 +588,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           .map(c => c.clue_id)
           .filter(id => !newState.unlocked_clues.includes(id));
         if (locked.length) {
-          const bonus = locked[Math.floor(Math.random() * locked.length)];
+          const bonusSeed = `${newState.run_id}:${newState.turn_count}:${actionTag}:hidden-clue`;
+          const bonus = locked[stableNarrativeHash(bonusSeed) % locked.length];
           newState.unlocked_clues = [...newState.unlocked_clues, bonus];
           newState.unlocked_clues_set = new Set(newState.unlocked_clues);
           newClues.push(bonus);
@@ -607,8 +616,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
       newState.chat_history = [
         ...gs.chat_history,
-        { role: 'assistant', content: `[THINK] ${fullThought}\n[ACTION] ${actionTag}` },
-        { role: 'user', content: `[RESULT] ${settlement.action_narration}` }
+        { role: 'assistant', actionTag, content: `[THINK] ${fullThought}\n[ACTION] ${actionTag}` },
+        { role: 'user', actionTag, content: `[RESULT] ${settlement.action_narration}` }
       ].slice(-12);
 
       // ── 证据危机延期结算：行动有 50% 概率顺带保全，超时永久丢失 ──────
@@ -616,7 +625,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         const ec = newState.evidence_crisis;
         if (newState.unlocked_clues.includes(ec.clue_id) === false) {
           newState.evidence_crisis = null;
-        } else if (Math.random() < 0.5) {
+        } else if ((stableNarrativeHash(`${newState.run_id}:${newState.turn_count}:${ec.clue_id}:secure`) % 100) < 50) {
           deferredOutcomeLines.push([lang === 'zh'
             ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${ec.keyword}」！威胁解除。`
             : `\n🛡️ This action also encrypted and secured “${ec.keyword}”. Threat cleared.`, 'success']);
@@ -772,42 +781,73 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const handleNPCTalk = async (npc) => {
     setSelectedNPC(npc);
     setNpcDialogue([{ role: 'system', text: `— ${npc.name} ${t.npcEnters} —\n"${npc.initial_statement}"` }]);
-  };
-
-  const handleNPCSend = async (msg) => {
-    if (!selectedNPC || !msg.trim() || isProcessing || abortCtrlRef.current) return;
-    const npc = selectedNPC;
+    setNpcQuestionPacks(null);
+    setNpcQuestionError(null);
+    const executor = activeAgentStrategy?.primary_agent_id || activeAgentStrategy?.team?.[0]?.agent_id || '';
+    setNpcExecutorId(executor);
+    if (abortCtrlRef.current) return;
     const state = gameStateRef.current;
     const { ctrl, operationId } = beginAbortableOperation();
-    setNpcDialogue(prev => [...prev, { role: 'agent', text: msg }]);
+    setIsProcessing(true);
+    try {
+      const result = await getInterrogationOptionPacks({
+        gameState: state,
+        caseData,
+        npcId: npc.npc_id,
+        team: activeAgentStrategy?.team || [],
+        emotionLevel: getEmotion(npcEmotionState, npc.npc_id).level,
+        askedQuestionIds: askedQuestionIds[npc.npc_id] || [],
+        signal: ctrl.signal,
+      });
+      if (!isOperationCurrent(ctrl, operationId)) return;
+      setNpcQuestionPacks(result.packs || {});
+    } catch (error) {
+      if (error?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
+        setNpcQuestionError(lang === 'zh' ? '审讯规则暂时不可用，请稍后重试。' : 'INTERROGATION RULES ARE TEMPORARILY UNAVAILABLE.');
+      }
+    } finally {
+      if (activeRunRef.current === operationId) {
+        abortCtrlRef.current = null;
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const handleNPCQuestion = async (question) => {
+    if (!selectedNPC || !question?.questionId || isProcessing || abortCtrlRef.current) return;
+    const npc = selectedNPC;
+    const state = gameStateRef.current;
+    const previousAsked = askedQuestionIds[npc.npc_id] || [];
+    const { ctrl, operationId } = beginAbortableOperation();
+    setNpcDialogue(prev => [...prev, { role: 'agent', text: question.text }]);
     setIsProcessing(true);
     const emo = getEmotion(npcEmotionState, npc.npc_id);
     try {
-      const result = await getNPCDialogue({
+      const result = await resolveInterrogationOption({
+        questionId: question.questionId,
+        executorAgentId: npcExecutorId,
         npcId: npc.npc_id,
-        agentStatement: msg,
         gameState: state,
         caseData,
-        agentStrategy: activeAgentStrategy,
+        team: activeAgentStrategy?.team || [],
         emotionLevel: emo.level,
-        refusesTopic: emo.refuses_topic,
+        askedQuestionIds: previousAsked,
         signal: ctrl.signal,
       });
       if (!isOperationCurrent(ctrl, operationId)) return;
       setNpcDialogue(prev => [...prev, { role: 'npc', text: result.response, name: result.npc_name }]);
-
-      // ── 情绪状态演进 ──
-      const shift = result.emotion_shift || 0;
-      const nextLevel = shiftEmotion(emo.level, shift);
-      const hostileStreak = shift > 0 ? (emo.hostile_streak || 0) + 1 : 0;
+      const shift = Number(result.emotionShift ?? result.emotion_shift) || 0;
+      const nextLevel = result.nextEmotion || shiftEmotion(emo.level, shift);
       setNpcEmotionState(prev => ({
         ...prev,
         [npc.npc_id]: {
           ...emo, level: nextLevel,
           history_count: (emo.history_count || 0) + 1,
-          hostile_streak: hostileStreak,
+          cooperation: (emo.cooperation || 0) + (Number(result.cooperationChange) || 0),
         },
       }));
+      const nextAsked = [...new Set([...previousAsked, question.questionId])];
+      setAskedQuestionIds(prev => ({ ...prev, [npc.npc_id]: nextAsked }));
       if (nextLevel !== emo.level) {
         setNpcDialogue(prev => [...prev, {
           role: 'system',
@@ -816,57 +856,43 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             : `◈ ${npc.name}'s emotional state shifts: ${nextLevel.toUpperCase()}`,
         }]);
       }
-      if (nextLevel === 'broken') {
-        const reduction = Math.min(0.8, agentStrategy?.skill_effects?.npc_confusion_reduce || 0);
-        const confusionIncrease = Math.round(6 * (1 - reduction));
+      const confusionIncrease = Number(result.consequence?.confusionIncrease) || 0;
+      if (confusionIncrease > 0) {
         setGameState(prev => ({
           ...prev,
           confusion_score: Math.min(100, prev.confusion_score + confusionIncrease),
         }));
+        addLine(`\n${lang === 'zh' ? `⚠ 无效施压使混乱增加 ${confusionIncrease}` : `⚠ INEFFECTIVE PRESSURE RAISED CONFUSION BY ${confusionIncrease}`}`, 'warning');
       }
-      // 激怒未安抚 → 证人撤回证词，移除一条线索
-      if (nextLevel === 'broken' && hostileStreak >= 3) {
-        const owned = gameStateRef.current.unlocked_clues;
-        if (owned.length) {
-          const lost = owned[Math.floor(Math.random() * owned.length)];
-          const lostClue = caseData.clue_dictionary.find(c => c.clue_id === lost);
+      for (const clueId of result.revealedClueIds || []) {
+        if (!gameStateRef.current.unlocked_clues.includes(clueId)) {
+          const clue = caseData.clue_dictionary.find(c => c.clue_id === clueId);
+          if (!clue) continue;
           setGameState(prev => {
-            const clues = prev.unlocked_clues.filter(id => id !== lost);
+            const clues = [...prev.unlocked_clues, clueId];
             return { ...prev, unlocked_clues: clues, unlocked_clues_set: new Set(clues) };
           });
-          setLinkedPairs(prev => prev.filter(p => p.a !== lost && p.b !== lost));
-          setNpcEmotionState(prev => ({
-            ...prev,
-            [npc.npc_id]: { ...prev[npc.npc_id], refuses_topic: lostClue?.keyword || 'the case' },
-          }));
-          addLine(`\n${lang === 'zh'
-            ? `💀 证人撤回证词：${npc.name} 被彻底激怒，拒绝再配合。证据「${lostClue?.keyword || lost}」失效。`
-            : `💀 WITNESS RETRACTS TESTIMONY: ${npc.name} is done cooperating. Evidence "${lostClue?.keyword || lost}" is void.`}`, 'error');
-        }
-      }
-      // 破防审讯技能：自动追问 + 概率揭示新线索
-      if (result.followup) {
-        setNpcDialogue(prev => [...prev,
-          { role: 'system', text: lang === 'zh' ? '💥 技能「破防审讯」发动 — 探员抓住破绽步步紧逼…' : '💥 BREAKTHROUGH INTERROGATION activated — the agent presses the opening…' },
-          { role: 'npc', text: result.followup, name: result.npc_name },
-        ]);
-        if (result.bonus_clue && !gameStateRef.current.unlocked_clues.includes(result.bonus_clue)) {
-          const clue = caseData.clue_dictionary.find(c => c.clue_id === result.bonus_clue);
-          setGameState(prev => {
-            const clues = [...prev.unlocked_clues, result.bonus_clue];
-            return { ...prev, unlocked_clues: clues, unlocked_clues_set: new Set(clues) };
-          });
-          setNewClueIds(prev => [...prev, result.bonus_clue]);
-          schedule(() => setNewClueIds(prev => prev.filter(id => id !== result.bonus_clue)), 3000);
+          setNewClueIds(prev => [...prev, clueId]);
+          schedule(() => setNewClueIds(prev => prev.filter(id => id !== clueId)), 3000);
           addLine(lang === 'zh'
-            ? `\n🔍 破防审讯揭示新线索：${clue?.visual_icon || '🔍'} ${clue?.keyword || result.bonus_clue}`
-            : `\n🔍 BREAKTHROUGH INTERROGATION revealed a new clue: ${clue?.visual_icon || '🔍'} ${clue?.keyword || result.bonus_clue}`, 'success');
-          if (clue) triggerSynergy('clue_converge', clue);
+            ? `\n🔍 审讯揭示新线索：${clue.visual_icon || '🔍'} ${clue.keyword}`
+            : `\n🔍 INTERROGATION REVEALED: ${clue.visual_icon || '🔍'} ${clue.keyword}`, 'success');
+          triggerSynergy('clue_converge', clue);
         }
       }
+      const refreshed = await getInterrogationOptionPacks({
+        gameState: gameStateRef.current,
+        caseData,
+        npcId: npc.npc_id,
+        team: activeAgentStrategy?.team || [],
+        emotionLevel: nextLevel,
+        askedQuestionIds: nextAsked,
+        signal: ctrl.signal,
+      });
+      if (isOperationCurrent(ctrl, operationId)) setNpcQuestionPacks(refreshed.packs || {});
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
-        addLine(`\n${t.systemError}${err.message}`, 'error');
+        setNpcQuestionError(lang === 'zh' ? '问题选项已过期或规则服务不可用，请关闭后重试。' : 'QUESTION OPTIONS EXPIRED OR RULE SERVICE UNAVAILABLE.');
       }
     } finally {
       if (activeRunRef.current === operationId) {
@@ -970,7 +996,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     }
   };
 
-  // ── 推理连线：AI 判定推理有效性 ───────────────────────────────────────────
+  // ── 推理连线：受保护的确定性规则判定 ─────────────────────────────────────
   const handleLink = async (aId, bId) => {
     const clueA = caseData.clue_dictionary.find(c => c.clue_id === aId);
     const clueB = caseData.clue_dictionary.find(c => c.clue_id === bId);
@@ -994,18 +1020,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             notifyCommand(message);
           }
         }
-        // ── 推理重演过场：暂停主流程，全屏播放 ──
-        const cine = await linkCinematic({
-          clueA,
-          clueB,
-          caseData,
-          fragmentsFound: truthFragments,
-          signal: ctrl.signal,
-        });
-        if (!isOperationCurrent(ctrl, operationId)) return;
-        const data = cine || {
-          narrative: result.reveal, is_core_link: false,
-          hidden_ending_progress: truthFragments + 1,
+        // 规则响应已经包含安全的双语过场，不再发起第二次重复请求。
+        const data = {
+          ...(result.cinematic || {}),
+          narrative: result.cinematic?.narrative || result.reveal,
+          is_core_link: result.is_core_link === true || result.isCoreLink === true,
+          hidden_ending_progress: result.hidden_ending_progress
+            ?? result.hiddenEndingProgress
+            ?? (truthFragments + 1),
         };
         setCinematic({
           ...data,
@@ -1033,31 +1055,24 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleSubmitReport = async () => {
-    if (!reportText.trim() || isProcessing || abortCtrlRef.current) return;
-    const report = reportText.trim();
+    const evidenceCount = structuredReport.evidenceIds?.length || 0;
+    const isComplete = structuredReport.conclusionId
+      && structuredReport.methodId
+      && structuredReport.motiveId
+      && structuredReport.timelineId
+      && evidenceCount >= 1;
+    if (!isComplete || isProcessing || abortCtrlRef.current) return;
     const { ctrl, operationId } = beginAbortableOperation();
     setIsProcessing(true);
+    setReportError(null);
     setReactState(ReAct_Enum.REPORTING);
     try {
-      // First: check for absurd branch (wrong accusation)
-      const branch = await branchCheck({ playerReport: report, caseData, signal: ctrl.signal });
-      if (!isOperationCurrent(ctrl, operationId)) return;
-      if (branch?.is_absurd && branch?.branch_id) {
-        const branchData = branch;
-        if (branchData) {
-          addLine(`\n${t.narrativeCollapse}${branchData.narrative}`, 'trap');
-          addLine(`\n${t.apPenalty}-${branchData.impact?.ap_loss || 30}`, 'error');
-          setGameState(prev => ({
-            ...prev,
-            action_points_left: Math.max(0, prev.action_points_left - (branchData.impact?.ap_loss || 30)),
-            reputation: Math.max(0, prev.reputation - 25),
-          }));
-          return;
-        }
-      }
-
-      // Standard judge evaluation
-      const result = await judgeReport({ playerReport: report, caseData, signal: ctrl.signal });
+      const result = await judgeStructuredReport({
+        gameState: gameStateRef.current,
+        caseData,
+        report: structuredReport,
+        signal: ctrl.signal,
+      });
       if (!isOperationCurrent(ctrl, operationId)) return;
       setJudgeResult(result);
       if (result.is_passed) {
@@ -1066,6 +1081,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         setFinalJudgeResult(result);
         schedule(() => setShowGameOver(true), 1800);
       } else {
+        if (result.branch?.narrative) {
+          addLine(`\n${t.narrativeCollapse}${result.branch.narrative}`, 'trap');
+        }
         const penalty = getRejectedReportPenalty(gameStateRef.current);
         setGameState(prev => ({
           ...prev,
@@ -1078,6 +1096,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
+        setReportError(lang === 'zh'
+          ? '结案规则暂时无法校验，请检查连接后重试；本次没有扣除资源。'
+          : 'REPORT VALIDATION IS TEMPORARILY UNAVAILABLE. NO RESOURCES WERE SPENT.');
         addLine(`\n${t.systemError}${err.message}`, 'error');
       }
     } finally {
@@ -1085,7 +1106,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         abortCtrlRef.current = null;
         setIsProcessing(false);
         setReactState(ReAct_Enum.IDLE);
-        setReportMode(false);
       }
     }
   };
@@ -1184,7 +1204,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       {/* 关键决策 · 行动策略卡 */}
       {decisionCards && (
         <DecisionCards
-          cards={decisionCards}
+          packs={decisionCards}
           story={decisionStory}
           team={activeAgentStrategy.team}
           commandState={gameState.command_state}
@@ -1291,7 +1311,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             ?
           </button>
           <button onClick={() => setShowMiniMap(value => !value)} className="td-ui-button td-icon-button td-mobile-only text-xs px-3 py-1 rounded border" style={{ borderColor: `${accentColor}50`, color: accentColor }}>🗺</button>
-          <button data-onboarding-target="report" onClick={() => setReportMode(r => !r)}
+          <button data-onboarding-target="report" onClick={() => {
+            setSelectedNPC(null);
+            setNpcDialogue([]);
+            setNpcQuestionPacks(null);
+            setNpcQuestionError(null);
+            setJudgeResult(null);
+            setReportMode(value => !value);
+          }}
             className="td-ui-button td-button-secondary text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
             {t.btnReport}
@@ -1382,54 +1409,44 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             <NPCDialogBox
               npc={selectedNPC}
               dialogue={npcDialogue}
-              onSend={handleNPCSend}
-              onClose={() => { handleAbort(); setSelectedNPC(null); setNpcDialogue([]); }}
+              packs={npcQuestionPacks}
+              executorId={npcExecutorId}
+              onExecutorChange={agentId => {
+                setNpcExecutorId(agentId);
+                setNpcQuestionError(null);
+              }}
+              onQuestion={handleNPCQuestion}
+              onClose={() => {
+                handleAbort();
+                setSelectedNPC(null);
+                setNpcDialogue([]);
+                setNpcQuestionPacks(null);
+                setNpcQuestionError(null);
+              }}
               isProcessing={isProcessing}
               accentColor={accentColor}
               emotion={getEmotion(npcEmotionState, selectedNPC.npc_id)}
-              hints={buildHints({
-                npc: selectedNPC,
-                clues: caseData.clue_dictionary,
-                unlockedIds: gameState.unlocked_clues,
-                emotionLevel: getEmotion(npcEmotionState, selectedNPC.npc_id).level,
-                lang,
-              })}
+              team={activeAgentStrategy.team}
+              error={npcQuestionError}
             />
           )}
 
           {/* Report Mode */}
           {reportMode && (
-            <div className="p-4 border-t" style={{
-              borderColor: '#00ff8830',
-              backgroundColor: settings.panelLight ? skin.bg : 'transparent',
-            }}>
-              <div className="text-xs mb-2" style={{ color: settings.panelLight ? skin.text : '#00ff88' }}>{t.reportTitle}</div>
-              <textarea
-                className="td-ui-input w-full bg-transparent border rounded p-3 text-xs outline-none resize-none"
-                style={{
-                  borderColor: settings.panelLight ? skin.border : '#00ff8850',
-                  color: settings.panelLight ? skin.text : '#00ff88',
-                  height: 100,
-                }}
-                placeholder={t.reportPlaceholder}
-                value={reportText}
-                onChange={e => setReportText(e.target.value)}
-                disabled={isProcessing}
-              />
-              <div className="flex gap-2 mt-2">
-                <button onClick={handleSubmitReport} disabled={isProcessing}
-                  className="td-ui-button td-button-success flex-1 py-2 text-xs rounded border transition-all"
-                  style={{ borderColor: '#00ff88', color: '#00ff88', backgroundColor: '#00ff8815' }}>
-                  {t.reportSubmit}
-                </button>
-                <button onClick={() => setReportMode(false)}
-                  className="td-ui-button td-button-ghost px-4 py-2 text-xs rounded border opacity-60 hover:opacity-100"
-                  style={{ borderColor: '#ffffff30', color: '#fff' }}>
-                  {t.reportCancel}
-                </button>
-              </div>
-              {judgeResult && <JudgeResult result={judgeResult} />}
-            </div>
+            <StructuredReportPanel
+              options={reportOptions}
+              value={structuredReport}
+              onChange={value => {
+                setStructuredReport(value);
+                setJudgeResult(null);
+                setReportError(null);
+              }}
+              onSubmit={handleSubmitReport}
+              onCancel={() => setReportMode(false)}
+              isProcessing={isProcessing}
+              judgeResult={judgeResult}
+              error={reportError}
+            />
           )}
 
           {/* Action Bar */}
