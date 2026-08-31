@@ -73,6 +73,60 @@ Cloudflare D1
 | 确定性规则引擎 | 处理决策选项、审讯、线索连线和结构化报告评分。 |
 | Wrangler | D1 迁移、本地 Worker 调试、秘密管理和正式部署。 |
 
+## 内容库的存储与部署
+
+项目将可公开内容、服务端秘密和玩家数据分开保存。它们虽然位于同一仓库中，但不会被部署到同一个运行位置。
+
+| 内容库 | 仓库中的来源 | 生产环境中的存储位置 | 更新方式 |
+| --- | --- | --- | --- |
+| 双语表达库 | `src/game/narrativeEngine.js` | 经 Vite 编译为带内容哈希的浏览器 JS，存放在 Worker Static Assets 中 | 修改语料并通过测试后执行 `npm run cloudflare:deploy` |
+| 公开案件资料库 | `src/game/caseData.js`、`caseDataExtra.js`、`caseDataExpansion.js` | 编译到前端静态资源；只包含可向玩家公开的场景、人物、区域和线索描述 | 新增或修改案件后重新构建并部署 Worker |
+| 服务端案件秘密库 | `server/detectiveRules/caseSecrets.js` | 由 Wrangler 打包进 Cloudflare Worker 代码，不进入 `dist`，浏览器无法直接下载 | 修改后执行安全测试和 `npm run cloudflare:deploy` |
+| 确定性裁定规则库 | `server/detectiveRules/rules.js` | 与 Worker API 一起部署，在服务端处理决策、审讯、连线和报告评分 | 修改规则后重新部署 Worker，不需要重建 D1 表结构 |
+| 玩家档案与会话 | `cloudflare/migrations/` 定义表结构 | Cloudflare D1 数据库 `terminal-detective-prod` | 仅在表结构变化时执行 D1 migration；普通代码部署不会清空玩家数据 |
+| 图片与 3D 道具库 | `public/assets/` | 构建后进入 `dist/assets/`，由 Worker Static Assets/CDN 分发 | 添加素材、登记许可并重新部署；运行时不依赖外部素材 CDN |
+| 第三方程序库 | `package.json`、`package-lock.json` | 前端依赖进入按需 JS 分块；Worker 依赖进入 Worker bundle | 使用 `npm ci` 锁定版本，升级依赖后重新测试和部署 |
+
+### 部署边界
+
+```text
+src/game/caseData*.js ──────┐
+src/game/narrativeEngine.js ├─ Vite build ─ dist/ ─ Worker Static Assets
+public/assets/ ─────────────┘
+
+server/detectiveRules/ ─ Wrangler bundle ─ Cloudflare Worker API
+
+cloudflare/migrations/ ─ 显式执行 migration ─ Cloudflare D1
+```
+
+- 表达库在浏览器本地运行，负责呈现气氛、探员思考和行动叙述，因此其中只能使用玩家已经可以知道的信息。
+- 案件答案、真实事实贴近度、正确报告选项和 NPC 深层秘密只能放在 `server/detectiveRules/`，禁止从 `src/` 或 `public/` 导入。
+- D1 保存会变化的账号、进度、货币和档案；这些数据不会写进静态文件，也不会因为发布新版前端或规则库而被覆盖。
+- OAuth Client Secret 等凭据不属于内容库，只能通过 `wrangler secret put` 保存到 Cloudflare Secret，不能写进仓库。
+
+### 内容更新流程
+
+只修改语料、公开案件内容、规则或素材时：
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run cloudflare:check
+npm run cloudflare:deploy
+```
+
+Vite 会为更新后的静态文件生成新的哈希文件名，Cloudflare 会分发新版本；未变化的资源仍可继续使用缓存。
+
+只有新增字段、数据表或索引时，才需要先应用 D1 migration：
+
+```bash
+npm run cloudflare:d1:remote
+npm run cloudflare:deploy
+```
+
+部署 Worker 不会自动执行数据库迁移；执行数据库迁移也不会自动发布前端和规则代码。开发者需要根据本次改动分别执行，避免误改生产数据。
+
 ## 本地开发
 
 需要 Node.js 22 或更高版本。

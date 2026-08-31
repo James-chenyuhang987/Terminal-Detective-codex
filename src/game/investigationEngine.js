@@ -27,8 +27,8 @@ function abortError() {
   return error;
 }
 
-export async function streamThink({ gameState, agentStrategy, observation, onChunk, onDone, signal }) {
-  const text = buildLocalThought({ gameState, caseData: gameState?.caseData, agentStrategy, observation, lang: currentLang });
+export async function streamThink({ gameState, caseData, agentStrategy, observation, onChunk, onDone, signal }) {
+  const text = buildLocalThought({ gameState, caseData, agentStrategy, observation, lang: currentLang });
   let index = 0;
   const speedBoost = Math.max(0, Math.min(0.8, agentStrategy?.skill_effects?.think_speed_boost || 0));
   const intervalMs = Math.max(8, Math.round(20 * (1 - speedBoost)));
@@ -105,7 +105,7 @@ export async function settleAction({ actionName, actionTag = null, riskLevel = '
     runId: gameState.run_id,
     caseId: caseData.case_id,
     zoneId: nextZone,
-    zoneName: nextZone,
+    zoneName: caseData.scene?.zones?.[nextZone]?.label || caseData.zone_layout?.[nextZone]?.label,
     turn: gameState.turn_count + 1,
     actionTag: effectiveAction,
     outcome,

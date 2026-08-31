@@ -61,7 +61,7 @@ import {
   stepTerminalTurn,
 } from '@/game/turnArchive';
 import { getRejectedReportPenalty } from '@/game/caseEvaluation';
-import { stableNarrativeHash } from '@/game/narrativeEngine';
+import { buildPublicCaseContext, stableNarrativeHash } from '@/game/narrativeEngine';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
@@ -442,6 +442,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
       await streamInvestigationThought({
         gameState: gs,
+        caseData,
         agentStrategy: activeAgentStrategy,
         observation,
         signal: ctrl.signal,
@@ -481,18 +482,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         const optionResult = await optionPacksPromise;
         if (isCancelled()) return;
         const packs = optionResult?.packs || {};
-        const zoneId = gs.current_zone || 'zone_datacenter';
-        const zoneList = Array.isArray(caseData.zone_layout)
-          ? caseData.zone_layout
-          : Object.values(caseData.zone_layout || {});
-        const zoneName = zoneList.find(z => z?.zone_id === zoneId)?.name || zoneId;
+        const publicStory = buildPublicCaseContext({ gameState: gs, caseData, lang });
         setDecisionStory({
-          zone: zoneId,
+          ...publicStory,
+          zone: publicStory.zoneId,
           actionTag: fallbackTag,
-          locationName: zoneName,
-          contacts: (caseData.npcs || []).length,
-          evidence: `${gs.unlocked_clues.length}/${caseData.clue_dictionary.length}`,
-          turn: gs.turn_count + 1,
+          locationName: publicStory.zoneName,
+          contacts: publicStory.npcs.length,
+          evidence: `${publicStory.clueCount}/${publicStory.clueTotal}`,
           thought: fullThought,
         });
         if (settings.cinematicsEnabled !== false) {

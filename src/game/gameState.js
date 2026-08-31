@@ -7,6 +7,7 @@ import { DEFAULT_AGENT_CONFIG } from './caseData.js';
 import { getInitialZone, getZoneClueIds, isValidZoneTransition } from './caseRuntime.js';
 import { normalizeSettlementResult } from './settlementResult.js';
 import { createCommandState } from './commandSystem.js';
+import { buildPublicCaseContext } from './narrativeEngine.js';
 
 // ── Initial State Factory ─────────────────────────────────────────────────
 export function createInitialGameState(caseData, runtimeEffects = {}, commandPlan = {}, primaryAgentId = 'AURORA-09') {
@@ -230,6 +231,7 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
 export function generateObservation(gameState, caseData, lang = 'en') {
   const zh = lang === 'zh';
   const zone = caseData.scene.zones[gameState.current_zone];
+  const story = buildPublicCaseContext({ gameState, caseData, lang });
   const clueCount = gameState.unlocked_clues.length;
   const clueTotal = caseData.clue_dictionary.length;
 
@@ -252,8 +254,21 @@ export function generateObservation(gameState, caseData, lang = 'en') {
       : `⚠️ WARNING: Logic matrix destabilizing at ${gameState.confusion_score}% — agent coherence at risk!`)
     : '';
 
-  return `╔══ ${zh ? '系统扫描 · 回合' : 'SYSTEM SCAN · TURN'} ${gameState.turn_count + 1} ══╗
-📍 ${zh ? '地点' : 'Location'} : ${zone?.label || gameState.current_zone}
+  const storyBlock = story.isOpening
+    ? `╭── ${zh ? '案件开场' : 'CASE OPENING'} · ${story.caseTitle} ──╮
+${story.narrative}
+${zh ? '相关人员' : 'PEOPLE OF INTEREST'}：${story.npcs.map(npc => `${npc.avatar} ${npc.name}〔${npc.role}〕`).join(zh ? '；' : '; ')}
+${zh ? '首要任务' : 'FIRST OBJECTIVE'}：${story.objective}
+╰────────────────────╯`
+    : `╭── ${zh ? '前情推进' : 'CASE PROGRESS'} · ${story.caseTitle} ──╮
+${story.narrative}
+${zh ? '本轮目标' : 'TURN OBJECTIVE'}：${story.objective}
+╰────────────────────╯`;
+
+  return `${storyBlock}
+
+╔══ ${zh ? '系统扫描 · 回合' : 'SYSTEM SCAN · TURN'} ${gameState.turn_count + 1} ══╗
+📍 ${zh ? '地点' : 'Location'} : ${zone?.label || story.zoneName}
 👥 ${zh ? '接触人' : 'Contacts'} : ${npcList}
 🔍 ${zh ? '证据' : 'Evidence'} : ${clueCount}/${clueTotal} ${zh ? '已保全' : 'secured'}
 💢 ${zh ? '混乱' : 'Confusion'}: ${gameState.confusion_score}%  ❤️ HP: ${gameState.current_hp}%  ⚡ AP: ${gameState.action_points_left}/20

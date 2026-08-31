@@ -2,10 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildLocalThought,
+  buildPublicCaseContext,
   NARRATIVE_ACTIONS,
   NARRATIVE_OUTCOMES,
   renderNarrative,
+  resolvePublicZoneName,
 } from '../src/game/narrativeEngine.js';
+import { Case_Data_Lvl_01, localizeCase } from '../src/game/caseData.js';
+import { createInitialGameState, generateObservation } from '../src/game/gameState.js';
 
 test('local narrative library covers every action and outcome with at least six bilingual variants', () => {
   for (const actionTag of NARRATIVE_ACTIONS) {
@@ -52,3 +57,34 @@ test('narrative engine only interpolates explicit safe public fields', () => {
   assert.doesNotMatch(text, /SHOULD_NEVER_RENDER|HIDDEN_TRUTH_SHOULD_NEVER_RENDER/);
 });
 
+test('first turn creates a coherent public case opening without leaking internal zone ids', () => {
+  const caseData = localizeCase(Case_Data_Lvl_01, 'zh');
+  const state = createInitialGameState(caseData);
+  const context = buildPublicCaseContext({ gameState: state, caseData, lang: 'zh' });
+  const observation = generateObservation(state, caseData, 'zh');
+  const thought = buildLocalThought({
+    gameState: state,
+    caseData,
+    agentStrategy: { primary_agent_id: 'AURORA-09', team: [{ agent_id: 'AURORA-09' }] },
+    observation,
+    lang: 'zh',
+  });
+
+  assert.equal(context.isOpening, true);
+  assert.equal(context.zoneName, '数据中心 · 案发现场');
+  assert.match(observation, /案件开场.*霓虹血迹/s);
+  assert.match(observation, /Victor Zhao/);
+  assert.match(observation, /相关人员.*Mei Lin/s);
+  assert.match(observation, /首要任务/);
+  assert.match(thought, /第一条判断必须从现场/);
+  assert.doesNotMatch(`${observation}\n${thought}`, /zone_datacenter/);
+});
+
+test('public zone resolver and narrative output replace raw internal ids with readable fallbacks', () => {
+  assert.equal(resolvePublicZoneName(Case_Data_Lvl_01, 'zone_datacenter', 'en'), 'Data Center · Crime Scene');
+  const text = renderNarrative({
+    actionTag: 'search_area', outcome: 'progress', lang: 'zh',
+    zoneId: 'zone_datacenter', clueIds: ['c_01'], seed: 'raw-id-guard',
+  }).text;
+  assert.doesNotMatch(text, /zone_datacenter|c_01/);
+});

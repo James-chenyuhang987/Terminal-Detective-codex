@@ -163,6 +163,9 @@ const THOUGHT_FRAMES = Object.freeze({
 
 const SAFE_TEXT = /[^\p{L}\p{N}\p{P}\p{Zs}_-]/gu;
 
+const INTERNAL_ZONE_ID = /^(?:zone|area)_[a-z0-9_:-]+$/i;
+const INTERNAL_CLUE_ID = /^(?:[a-z]+_)?(?:c|d|e|f|g|h|i|j|clue)(?:_secret)?_[a-z0-9_:-]+$/i;
+
 export function stableNarrativeHash(value) {
   let hash = 2166136261;
   const input = String(value ?? '');
@@ -176,6 +179,106 @@ export function stableNarrativeHash(value) {
 function safeText(value, fallback, max = 120) {
   const text = String(value ?? '').replace(SAFE_TEXT, '').trim().slice(0, max);
   return text || fallback;
+}
+
+function publicLabel(value, fallback, kind = 'generic', max = 120) {
+  const text = safeText(value, '', max);
+  if (!text) return fallback;
+  if (kind === 'zone' && INTERNAL_ZONE_ID.test(text)) return fallback;
+  if (kind === 'clue' && INTERNAL_CLUE_ID.test(text)) return fallback;
+  return text;
+}
+
+function localizedCase(caseData, lang) {
+  if (lang === 'en' && caseData?.en) return { ...caseData, ...caseData.en };
+  return caseData || {};
+}
+
+function joinSentence(...parts) {
+  return parts.map(part => String(part || '').trim()).filter(Boolean).join(' ');
+}
+
+export function resolvePublicZoneName(caseData, zoneId, lang = 'zh') {
+  const language = lang === 'en' ? 'en' : 'zh';
+  const source = localizedCase(caseData, language);
+  const sceneZone = source.scene?.zones?.[zoneId];
+  const mapZone = source.zone_layout?.[zoneId];
+  const mapLabel = mapZone?.label && mapZone?.sublabel
+    ? `${mapZone.label} · ${mapZone.sublabel}`
+    : mapZone?.label;
+  return publicLabel(
+    sceneZone?.label || mapLabel,
+    language === 'zh' ? '当前案发区域' : 'the active scene',
+    'zone',
+    90,
+  );
+}
+
+export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = 'zh' } = {}) {
+  const language = lang === 'en' ? 'en' : 'zh';
+  const zh = language === 'zh';
+  const source = localizedCase(caseData, language);
+  const turn = Math.max(1, (Number(gameState.turn_count) || 0) + 1);
+  const clueIds = Array.isArray(gameState.unlocked_clues) ? gameState.unlocked_clues : [];
+  const clues = clueIds
+    .map(id => source.clue_dictionary?.find(item => item.clue_id === id))
+    .filter(Boolean);
+  const recentClues = clues.slice(-3).map(clue => publicLabel(
+    clue.keyword,
+    zh ? '已保全证据' : 'secured evidence',
+    'clue',
+    60,
+  ));
+  const npcs = (source.npcs || []).slice(0, 4).map(npc => ({
+    name: publicLabel(npc.name, zh ? '相关人员' : 'person of interest', 'generic', 48),
+    role: publicLabel(npc.role, zh ? '身份待核' : 'role unverified', 'generic', 72),
+    avatar: String(npc.avatar || '◈').slice(0, 4),
+  }));
+  const caseTitle = publicLabel(source.title || gameState.case_title, zh ? '未命名案件' : 'Untitled Case', 'generic', 80);
+  const zoneName = resolvePublicZoneName(source, gameState.current_zone, language);
+  const totalClues = Math.max(clues.length, source.clue_dictionary?.length || 0);
+  const castNames = npcs.map(npc => npc.name).join(zh ? '、' : ', ');
+
+  const openingNarrative = joinSentence(
+    publicLabel(source.setting, zh ? '城市警戒线已经封锁现场。' : 'The city cordon has sealed the scene.', 'generic', 220),
+    publicLabel(source.scene?.description, zh ? '第一批现场资料刚刚送达指挥席。' : 'The first scene report has just reached the command desk.', 'generic', 520),
+  );
+  const progressNarrative = recentClues.length
+    ? (zh
+      ? `调查已推进至${zoneName}。目前保全 ${clues.length}/${totalClues} 条证据，最近取得「${recentClues.join('」「')}」，但它们仍需通过时间、权限或物理因果互相印证。`
+      : `The investigation has reached ${zoneName}. ${clues.length}/${totalClues} clues are secured, most recently “${recentClues.join('”, “')}”; they still need a shared timeline, access path, or physical cause.`)
+    : (zh
+      ? `调查仍停留在${zoneName}的第一层现场判断；目前没有证据可以支撑结论。`
+      : `The investigation remains at the first reading of ${zoneName}; no conclusion is yet supported by evidence.`);
+  const objective = clues.length === 0
+    ? (zh
+      ? `先固定${zoneName}的异常痕迹，再核对${castNames || '相关人员'}的公开说法，建立第一条可复查的证据链。`
+      : `Secure the anomalies in ${zoneName}, then test the public accounts of ${castNames || 'the people of interest'} and establish the first reviewable evidence chain.`)
+    : gameState.confusion_score >= 60
+      ? (zh
+        ? '当前判断稳定度偏低；优先复核已有证据，暂缓高风险推断。'
+        : 'Judgment stability is low; recheck secured evidence before attempting a high-risk inference.')
+      : (zh
+        ? `围绕「${recentClues.at(-1) || '现有证据'}」寻找第二个独立验证点，排除重复且低价值的调查路线。`
+        : `Find an independent verification point for “${recentClues.at(-1) || 'the current evidence'}” and avoid repeated low-value routes.`);
+
+  return {
+    isOpening: turn === 1,
+    turn,
+    caseTitle,
+    caseSubtitle: publicLabel(source.subtitle, '', 'generic', 80),
+    setting: publicLabel(source.setting, '', 'generic', 220),
+    sceneDescription: publicLabel(source.scene?.description, '', 'generic', 520),
+    zoneId: gameState.current_zone,
+    zoneName,
+    npcs,
+    castNames,
+    clueCount: clues.length,
+    clueTotal: totalClues,
+    recentClues,
+    narrative: turn === 1 ? openingNarrative : progressNarrative,
+    objective,
+  };
 }
 
 function selectIndex(seed, length, recentTemplateIds = []) {
@@ -205,8 +308,8 @@ export function renderNarrative(event = {}, recentTemplateIds = []) {
   const verb = verbs[stableNarrativeHash(`${seed}:verb`) % verbs.length];
   const variables = {
     agent: safeText(event.agentName || event.agentId, lang === 'zh' ? '执行探员' : 'the executing agent', 48),
-    zone: safeText(event.zoneName || event.zoneId, lang === 'zh' ? '当前区域' : 'the current zone', 80),
-    clue: safeText(event.clueName || event.clueIds?.[0], lang === 'zh' ? '新证据' : 'new evidence', 80),
+    zone: publicLabel(event.zoneName || event.zoneId, lang === 'zh' ? '当前区域' : 'the current zone', 'zone', 80),
+    clue: publicLabel(event.clueName || event.clueIds?.[0], lang === 'zh' ? '新证据' : 'new evidence', 'clue', 80),
     verb,
   };
   return {
@@ -219,16 +322,23 @@ export function renderNarrative(event = {}, recentTemplateIds = []) {
 
 export function buildLocalThought({ gameState, caseData, agentStrategy, observation, lang = 'zh' }) {
   const language = lang === 'en' ? 'en' : 'zh';
+  const context = buildPublicCaseContext({ gameState, caseData, lang: language });
   const agent = (agentStrategy?.team || []).find(item => item.agent_id === agentStrategy?.primary_agent_id)
     || agentStrategy?.team?.[0]
     || agentStrategy
     || {};
+  const agentName = safeText(agent.agent_id, language === 'zh' ? '主探员' : 'the primary agent', 48);
+  if (context.isOpening) {
+    return language === 'zh'
+      ? `${context.caseTitle}的第一条判断必须从现场而不是猜测开始。${agentName}将先复核${context.zoneName}的异常痕迹，再把${context.castNames || '相关人员'}的公开说法放入同一条时间轴；本轮目标是取得一条能被独立证据再次验证的调查起点。`
+      : `The first judgment in ${context.caseTitle} must begin with the scene, not a guess. ${agentName} will verify the anomalies in ${context.zoneName}, place the public accounts of ${context.castNames || 'the people of interest'} on one timeline, and secure a lead that independent evidence can test.`;
+  }
   const seed = [gameState?.run_id, caseData?.case_id, gameState?.turn_count, agent.agent_id, language, observation].join(':');
   const frames = THOUGHT_FRAMES[language];
   const frame = frames[stableNarrativeHash(seed) % frames.length];
   return fill(frame, {
-    agent: safeText(agent.agent_id, language === 'zh' ? '主探员' : 'the primary agent', 48),
-    zone: safeText(gameState?.current_zone, language === 'zh' ? '当前区域' : 'the current zone', 80),
+    agent: agentName,
+    zone: context.zoneName,
     count: Math.max(0, gameState?.unlocked_clues?.length || 0),
     confusion: Math.max(0, Number(gameState?.confusion_score) || 0),
   });
