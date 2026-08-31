@@ -4,7 +4,7 @@ import { useLang } from '@/lib/lang.jsx';
 import MiniMap from '@/components/game/MiniMap';
 import { createInitialGameState, generateObservation, applySettlementResult, pushCheckpoint, checkConflictClues } from '@/game/gameState';
 import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
-import { streamThinkSSE, settleAction, linkCheck, setLLMLang } from '@/game/llmClient';
+import { streamInvestigationThought, settleAction, linkCheck, setInvestigationLang } from '@/game/investigationEngine';
 import {
   getDecisionOptionPacks,
   getInterrogationOptionPacks,
@@ -88,7 +88,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     [caseDataResolved, lang],
   );
   // 本地表达库与确定性规则的语言跟随界面语言。
-  useEffect(() => { setLLMLang(lang); setRulesLang(lang); }, [lang]);
+  useEffect(() => { setInvestigationLang(lang); setRulesLang(lang); }, [lang]);
 
   const [gameState, setGameState] = useState(() => createInitialGameState(
     caseDataResolved,
@@ -440,7 +440,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       startStressTimer();
       let fullThought = '';
 
-      await streamThinkSSE({
+      await streamInvestigationThought({
         gameState: gs,
         agentStrategy: activeAgentStrategy,
         observation,

@@ -242,8 +242,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
               <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => openModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
             ))}
             <span title={`${lang === 'zh'
-              ? (syncStatus === 'online' ? 'Base44 已连接' : syncStatus === 'syncing' ? '同步中…' : syncStatus === 'readonly' ? '只读模式' : '同步失败')
-              : (syncStatus === 'online' ? 'Base44 connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed')} · BUILD ${BUILD_ID}`} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
+              ? (syncStatus === 'online' ? 'Cloudflare 已连接' : syncStatus === 'syncing' ? '同步中…' : syncStatus === 'readonly' ? '只读模式' : '同步失败')
+              : (syncStatus === 'online' ? 'Cloudflare connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed')} · BUILD ${BUILD_ID}`} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
           </div>
         </div>
       </div>

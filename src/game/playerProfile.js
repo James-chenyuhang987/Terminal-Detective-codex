@@ -203,69 +203,23 @@ function profileRequestError(code, message, status, payload = {}) {
   return error;
 }
 
-async function invokeDirectProfile(action, payload, headers, signal) {
-  const url = `${appParams.serverUrl}/api/apps/${appParams.appId}/entities/User/me`;
-  const isPatch = action === 'patch';
-  const patch = isPatch ? sanitizeProfilePatch(payload.patch) : null;
-  if (isPatch && !patch) throw profileRequestError('INVALID_PATCH', 'Profile patch contains unsupported fields.', 400);
-  const request = async (bodyPatch = null) => {
-    const response = await fetch(url, {
-      method: isPatch ? 'PUT' : 'GET',
-      headers,
-      signal,
-      ...(isPatch ? { body: JSON.stringify(bodyPatch) } : {}),
-    });
-    return { response, body: await response.json().catch(() => ({})) };
-  };
-  let { response, body } = await request(patch);
-  let unsupportedFields = [];
-  if (isPatch && !response.ok && [400, 422].includes(response.status)) {
-    const legacyFields = ['detective_name', 'avatar', 'signature'];
-    const legacyPatch = Object.fromEntries(legacyFields
-      .filter(key => Object.prototype.hasOwnProperty.call(patch, key))
-      .map(key => [key, patch[key]]));
-    unsupportedFields = Object.keys(patch).filter(key => !legacyFields.includes(key));
-    if (Object.keys(legacyPatch).length && unsupportedFields.length) {
-      ({ response, body } = await request(legacyPatch));
-    }
-  }
-  const current = body?.data ?? body;
-  if (!response.ok || !current || typeof current !== 'object' || Array.isArray(current) || !current.id) {
-    const code = body?.error || (response.status === 401 || response.status === 403 ? 'UNAUTHENTICATED' : 'PROFILE_UNAVAILABLE');
-    throw profileRequestError(code, body?.message || body?.detail || `Profile request failed (${response.status}).`, response.status, body);
-  }
-  return {
-    profile: current,
-    account: { id: current.id, email: current.email, full_name: current.full_name },
-    compatibility_mode: true,
-    unsupported_fields: unsupportedFields,
-  };
-}
-
 export async function invokePlayerProfile(action, payload = {}) {
   const headers = /** @type {Record<string, string>} */ ({
     'Content-Type': 'application/json',
     Accept: 'application/json',
     'X-App-Id': String(appParams.appId),
   });
-  if (appParams.token) headers.Authorization = `Bearer ${appParams.token}`;
-  if (appParams.functionsVersion) headers['Base44-Functions-Version'] = appParams.functionsVersion;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const response = await fetch(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/playerProfile`, {
-      method: 'POST', headers, body: JSON.stringify({ action, ...payload }), signal: controller.signal,
+      method: 'POST', headers, credentials: 'include', body: JSON.stringify({ action, ...payload }), signal: controller.signal,
     });
     const body = await response.json().catch(() => ({}));
     if (response.ok) {
       const result = unwrapFunctionResponse(body);
       if (result?.profile && typeof result.profile === 'object') return result;
-      // An undeployed or incompatible function can return an empty successful
-      // envelope. It must never be treated as a successful profile write.
-      return invokeDirectProfile(action, payload, headers, controller.signal);
-    }
-    if (response.status === 404 || response.status === 405 || (response.status >= 500 && body?.error === 'PROFILE_UNAVAILABLE')) {
-      return invokeDirectProfile(action, payload, headers, controller.signal);
+      throw profileRequestError('PROFILE_UNAVAILABLE', 'Cloud profile returned an invalid response.', 502, body);
     }
     const result = unwrapFunctionResponse(body);
     throw profileRequestError(

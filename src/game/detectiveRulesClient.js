@@ -1,4 +1,4 @@
-import { base44 } from '@/api/base44Client';
+import { cloudflareApi } from '@/api/cloudflareClient';
 import { buildOfflineDecisionPacks } from '@/game/narrativeEngine';
 
 const RULE_TIMEOUT_MS = 12_000;
@@ -40,7 +40,7 @@ function withAbortAndTimeout(promise, signal) {
 
 async function invokeRule(task, payload, signal) {
   const response = await withAbortAndTimeout(
-    base44.functions.invoke('detectiveRules', { task, payload: { ...payload, lang: currentLang } }),
+    cloudflareApi.functions.invoke('detectiveRules', { task, payload: { ...payload, lang: currentLang } }),
     signal,
   );
   if (response.data?.error) {

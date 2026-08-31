@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getCaseSecret } from '../base44/functions/detectiveLLM/caseSecrets.ts';
+import { getCaseSecret } from '../server/detectiveRules/caseSecrets.js';
 import {
   buildDecisionPacks,
   buildInterrogationPacks,
@@ -10,7 +10,7 @@ import {
   inspectDecisionCandidates,
   judgeReport,
   resolveInterrogation,
-} from '../base44/functions/detectiveRules/rules.js';
+} from '../server/detectiveRules/rules.js';
 
 const lowAgent = {
   agentId: 'LOW-01', logicPower: 0, observationFocus: 0, hackLevel: 0, confusionResistance: 0,

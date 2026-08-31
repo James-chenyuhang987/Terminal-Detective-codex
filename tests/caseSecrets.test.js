@@ -7,7 +7,7 @@ import {
   getNpcHiddenMotive,
   getNpcSecret,
   isKnownValidEdge,
-} from '../base44/functions/detectiveLLM/caseSecrets.ts';
+} from '../server/detectiveRules/caseSecrets.js';
 import { ALL_CASES } from '../src/game/caseData.js';
 
 test('all public cases have a matching server secret and clue-label registry', () => {

@@ -449,7 +449,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           color: settlementStatus === 'saved' ? '#00ff88' : settlementStatus === 'error' ? '#ff6b84' : '#ffaa00',
         }}>
           {settlementStatus === 'saved'
-            ? (zh ? '✓ 调查档案已同步至 Base44' : '✓ INVESTIGATION SYNCED TO BASE44')
+            ? (zh ? '✓ 调查档案已同步至 Cloudflare' : '✓ INVESTIGATION SYNCED TO CLOUDFLARE')
             : settlementStatus === 'error'
               ? (zh ? '⚠ 云端结算失败，奖励尚未写入' : '⚠ CLOUD SETTLEMENT FAILED. REWARDS NOT SAVED.')
               : (zh ? '⟳ 正在同步调查结算…' : '⟳ SYNCING CASE SETTLEMENT…')}

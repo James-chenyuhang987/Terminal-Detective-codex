@@ -1,6 +1,6 @@
 import React from 'react';
 
-const BG = 'https://media.base44.com/images/public/6a841dff26d5042e4adf890e/5ff1397bd_generated_image.png';
+const BG = `${import.meta.env.BASE_URL}assets/home/detective-office.jpg`;
 
 // 侦探办公室实景底图 + 影调分层 + 光斑粒子
 export default function HomeBackdrop() {

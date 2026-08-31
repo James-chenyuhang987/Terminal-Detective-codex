@@ -1,11 +1,17 @@
 {
-  "name": "base44-app",
+  "name": "terminal-detective",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:cloudflare": "VITE_API_SERVER_URL=same-origin VITE_BASE_PATH=/ vite build && node scripts/prepare-cloudflare-build.mjs",
+    "cloudflare:check": "npm run build:cloudflare && wrangler deploy --dry-run",
+    "cloudflare:dev": "npm run build:cloudflare && wrangler dev",
+    "cloudflare:deploy": "npm run build:cloudflare && wrangler deploy",
+    "cloudflare:d1:local": "wrangler d1 migrations apply terminal-detective-prod --local",
+    "cloudflare:d1:remote": "wrangler d1 migrations apply terminal-detective-prod --remote",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
@@ -35,6 +41,7 @@
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2",
-    "vite": "^6.1.0"
+    "vite": "^6.1.0",
+    "wrangler": "^4.127.1"
   }
 }

@@ -1,17 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { base44 } from '../src/api/base44Client.js';
+import { cloudflareApi } from '../src/api/cloudflareClient.js';
 import { appParams } from '../src/lib/app-params.js';
 
-test('lightweight Base44 adapter preserves the function invocation contract', async () => {
+test('Cloudflare client invokes a named Worker function with cookie credentials', async () => {
   const originalFetch = globalThis.fetch;
-  const originalToken = appParams.token;
-  const originalFunctionsVersion = appParams.functionsVersion;
   let request;
-
-  appParams.token = 'test-token';
-  appParams.functionsVersion = 'test-version';
   globalThis.fetch = async (url, options) => {
     request = { url: String(url), options };
     return new Response(JSON.stringify({ result: 'ok' }), {
@@ -21,28 +16,25 @@ test('lightweight Base44 adapter preserves the function invocation contract', as
   };
 
   try {
-    const response = await base44.functions.invoke('detectiveLLM', {
-      task: 'think',
+    const response = await cloudflareApi.functions.invoke('detectiveRules', {
+      task: 'decision_options',
       payload: { lang: 'en' },
     });
-
     assert.deepEqual(response, { data: { result: 'ok' } });
-    assert.equal(request.url, `${appParams.serverUrl}/api/apps/${appParams.appId}/functions/detectiveLLM`);
+    assert.equal(request.url, `${appParams.serverUrl}/api/apps/${appParams.appId}/functions/detectiveRules`);
     assert.equal(request.options.method, 'POST');
-    assert.equal(request.options.headers.Authorization, 'Bearer test-token');
-    assert.equal(request.options.headers['Base44-Functions-Version'], 'test-version');
+    assert.equal(request.options.credentials, 'include');
+    assert.equal('Authorization' in request.options.headers, false);
     assert.deepEqual(JSON.parse(request.options.body), {
-      task: 'think',
+      task: 'decision_options',
       payload: { lang: 'en' },
     });
   } finally {
     globalThis.fetch = originalFetch;
-    appParams.token = originalToken;
-    appParams.functionsVersion = originalFunctionsVersion;
   }
 });
 
-test('lightweight Base44 adapter exposes stable HTTP error details', async () => {
+test('Cloudflare client exposes stable HTTP error details', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
     code: 'SESSION_TAKEN',
@@ -54,8 +46,8 @@ test('lightweight Base44 adapter exposes stable HTTP error details', async () =>
 
   try {
     await assert.rejects(
-      () => base44.functions.invoke('playerProfile', { action: 'patch' }),
-      (error) => {
+      () => cloudflareApi.functions.invoke('playerProfile', { action: 'patch' }),
+      error => {
         assert.equal(error.message, 'Session is read only.');
         assert.equal(error.status, 409);
         assert.equal(error.code, 'SESSION_TAKEN');

@@ -4,7 +4,7 @@ import {
   getClueLabel,
   getNpcSecret,
   isKnownValidEdge,
-} from '../detectiveLLM/caseSecrets.ts';
+} from './caseSecrets.js';
 
 const LEGAL_ACTIONS = Object.freeze([
   'talk_to_npc', 'search_area', 'examine_clue', 'check_alibi',

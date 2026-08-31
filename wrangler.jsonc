@@ -1,0 +1,31 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "terminal-detective-codex",
+	"main": "cloudflare/worker/index.js",
+	"compatibility_date": "2026-08-31",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"workers_dev": true,
+	"preview_urls": false,
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"vars": {
+		"APP_ID": "terminal-detective",
+		"GITHUB_OAUTH_CLIENT_ID": "Ov23litQv11tInjYmLZH"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "terminal-detective-prod",
+			"database_id": "4afe18c5-2a7b-49a9-9c8c-6fcdbfb86d23",
+			"migrations_dir": "cloudflare/migrations"
+		}
+	]
+}

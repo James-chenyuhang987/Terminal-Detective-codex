@@ -6,8 +6,6 @@ function headers() {
     'Content-Type': 'application/json',
     'X-App-Id': String(appParams.appId),
   });
-  if (appParams.token) value.Authorization = `Bearer ${appParams.token}`;
-  if (appParams.functionsVersion) value['Base44-Functions-Version'] = appParams.functionsVersion;
   if (typeof window !== 'undefined' && window.location?.href) value['X-Origin-URL'] = window.location.href;
   return value;
 }
@@ -23,13 +21,14 @@ function requestError(response, body, functionName) {
 }
 
 async function invoke(functionName, data = {}) {
-  if (!functionName || typeof functionName !== 'string') throw new Error('A Base44 function name is required.');
+  if (!functionName || typeof functionName !== 'string') throw new Error('A Cloudflare function name is required.');
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error(`Function ${functionName} must receive an object with named parameters.`);
   }
   const response = await fetch(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/${encodeURIComponent(functionName)}`, {
     method: 'POST',
     headers: headers(),
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   const text = await response.text();
@@ -42,7 +41,6 @@ async function invoke(functionName, data = {}) {
   return { data: body };
 }
 
-// The game only needs custom function invocation in the browser. Keeping this
-// adapter narrow avoids shipping the SDK's realtime/socket modules on the
-// first screen while preserving the existing `base44.functions.invoke` API.
-export const base44 = Object.freeze({ functions: Object.freeze({ invoke }) });
+// A narrow client keeps authentication in Cloudflare's HttpOnly session cookie
+// and avoids shipping any vendor SDK in the browser bundle.
+export const cloudflareApi = Object.freeze({ functions: Object.freeze({ invoke }) });

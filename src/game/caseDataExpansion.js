@@ -1,5 +1,5 @@
 // Public expansion cases. Final answers, hidden motives and valid evidence
-// edges live exclusively in the server-side detectiveLLM secret registry.
+// edges live exclusively in the server-side Cloudflare rules registry.
 
 export const Case_Data_Lvl_06 = {
   case_id: 'Lvl_06',

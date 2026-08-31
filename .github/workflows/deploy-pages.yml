@@ -21,8 +21,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     env:
-      VITE_BASE44_APP_ID: 6a841dff26d5042e4adf890e
-      VITE_BASE44_SERVER_URL: https://base44.app
+      VITE_APP_ID: terminal-detective
+      VITE_API_SERVER_URL: https://terminal-detective-codex.terminal-detective.workers.dev
       VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
       VITE_BUILD_SHA: ${{ github.sha }}
     steps:

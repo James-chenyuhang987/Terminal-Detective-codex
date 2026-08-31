@@ -4,73 +4,42 @@ import { appParams } from '@/lib/app-params';
 const AuthContext = createContext(null);
 const AUTH_TIMEOUT_MS = 25_000;
 
-function clearStoredAuth() {
-  appParams.token = null;
-  try {
-    localStorage.removeItem('base44_access_token');
-    localStorage.removeItem('token');
-  } catch {
-    // Storage may be unavailable in privacy-restricted browsers.
-  }
-}
-
-function storeAuthToken(token) {
-  appParams.token = token;
-  try {
-    localStorage.setItem('base44_access_token', token);
-    localStorage.setItem('token', token);
-  } catch {
-    // The in-memory token still works for the current page session.
-  }
-}
-
 async function readJson(response) {
   const text = await response.text();
   if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(text); } catch { return {}; }
 }
 
 function responseMessage(payload, fallback) {
   return payload?.detail || payload?.message || payload?.error || fallback;
 }
 
-/**
- * @param {string} path
- * @param {{ method?: string, body?: unknown, token?: string | null }} [options]
- */
-async function authRequest(path, { method = 'GET', body, token = appParams.token } = {}) {
-  /** @type {Record<string, string>} */
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
+async function cloudflareRequest(path, { method = 'GET' } = {}) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
-  let response;
   try {
-    response = await fetch(`${appParams.serverUrl}/api/apps/${appParams.appId}${path}`, {
+    const response = await fetch(`${appParams.serverUrl}${path}`, {
       method,
-      headers,
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
       signal: controller.signal,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
+    const payload = await readJson(response);
+    if (!response.ok) {
+      const error = /** @type {Error & { status?: number, code?: string }} */ (
+        new Error(responseMessage(payload, `Authentication request failed (${response.status}).`))
+      );
+      error.status = response.status;
+      error.code = payload?.code || payload?.error;
+      throw error;
+    }
+    return payload;
   } catch (error) {
     if (error?.name === 'AbortError') throw new Error('Authentication request timed out. Please retry.');
     throw error;
   } finally {
     window.clearTimeout(timeout);
   }
-  const payload = await readJson(response);
-  if (!response.ok) {
-    const error = /** @type {Error & { status?: number }} */ (
-      new Error(responseMessage(payload, `Authentication request failed (${response.status}).`))
-    );
-    error.status = response.status;
-    throw error;
-  }
-  return payload;
 }
 
 export function AuthProvider({ children }) {
@@ -82,12 +51,12 @@ export function AuthProvider({ children }) {
   const checkUserAuth = useCallback(async () => {
     setIsLoadingAuth(true);
     try {
-      const currentUser = await authRequest('/entities/User/me');
-      setUser(currentUser);
-      setIsAuthenticated(true);
-      return currentUser;
-    } catch (cause) {
-      if (cause?.status === 401 || cause?.status === 403) clearStoredAuth();
+      const session = await cloudflareRequest('/api/auth/session');
+      const authenticated = Boolean(session?.authenticated && session?.user);
+      setUser(authenticated ? session.user : null);
+      setIsAuthenticated(authenticated);
+      return authenticated ? session.user : null;
+    } catch {
       setUser(null);
       setIsAuthenticated(false);
       return null;
@@ -97,53 +66,25 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!appParams.token) {
-      setAuthChecked(true);
-      setIsLoadingAuth(false);
-      return;
-    }
-    void checkUserAuth();
-  }, [checkUserAuth]);
+  useEffect(() => { void checkUserAuth(); }, [checkUserAuth]);
 
-  const loginWithPassword = async (email, password) => {
-    const payload = await authRequest('/auth/login', {
-      method: 'POST',
-      body: { email, password },
-    });
-    if (!payload.access_token) {
-      throw new Error('Unable to sign in. Check your email and password.');
-    }
+  const loginWithGitHub = useCallback(() => {
+    const serverOrigin = new URL(appParams.serverUrl).origin;
+    const returnTo = serverOrigin === window.location.origin
+      ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+      : '/';
+    const target = new URL('/api/auth/github/start', appParams.serverUrl);
+    target.searchParams.set('return_to', returnTo);
+    window.location.assign(target.toString());
+  }, []);
 
-    storeAuthToken(payload.access_token);
-    setUser(payload.user || null);
-    setIsAuthenticated(true);
-    setAuthChecked(true);
-    return payload.user;
-  };
-
-  const registerAccount = async (email, password) => {
-    return authRequest('/auth/register', { method: 'POST', body: { email, password } });
-  };
-
-  const verifyRegistration = async (email, otpCode) => {
-    return authRequest('/auth/verify-otp', {
-      method: 'POST',
-      body: { email, otp_code: otpCode },
-    });
-  };
-
-  const resendVerification = async (email) => {
-    return authRequest('/auth/resend-otp', { method: 'POST', body: { email } });
-  };
-
-  const logout = () => {
-    clearStoredAuth();
+  const logout = useCallback(async () => {
+    try { await cloudflareRequest('/api/auth/logout', { method: 'POST' }); } catch { /* clear UI session regardless */ }
     setUser(null);
     setIsAuthenticated(false);
     setAuthChecked(true);
     window.location.assign(import.meta.env.BASE_URL);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{
@@ -151,10 +92,8 @@ export function AuthProvider({ children }) {
       isAuthenticated,
       isLoadingAuth,
       authChecked,
-      loginWithPassword,
-      registerAccount,
-      verifyRegistration,
-      resendVerification,
+      authBackend: isAuthenticated ? 'cloudflare' : null,
+      loginWithGitHub,
       logout,
       checkUserAuth,
     }}>
@@ -165,8 +104,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }

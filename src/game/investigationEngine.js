@@ -16,7 +16,7 @@ const LEGAL_ACTIONS = new Set([
 ]);
 
 let currentLang = 'zh';
-export function setLLMLang(lang) {
+export function setInvestigationLang(lang) {
   currentLang = lang === 'en' ? 'en' : 'zh';
   setRulesLang(currentLang);
 }
@@ -54,7 +54,7 @@ export async function streamThink({ gameState, agentStrategy, observation, onChu
   });
 }
 
-export const streamThinkSSE = streamThink;
+export const streamInvestigationThought = streamThink;
 
 export async function getAction({ agentStrategy = null, signal = null }) {
   if (signal?.aborted) throw abortError();

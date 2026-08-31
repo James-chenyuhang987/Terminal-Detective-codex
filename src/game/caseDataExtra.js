@@ -1,5 +1,5 @@
 // Additional public case files. Culprits, final truth and valid evidence edges
-// remain in the server-only detectiveLLM registry.
+// remain in the server-only Cloudflare rules registry.
 
 export const Case_Data_Lvl_04 = {
   case_id: 'Lvl_04',
