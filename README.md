@@ -302,3 +302,75 @@ tests/                      规则、档案、界面行为和安全测试
 - [Firebase Authentication](https://firebase.google.com/docs/auth/web/start)
 - [GitHub OAuth Apps](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app)
 - [Vite](https://vite.dev/)
+
+## 生产服务器、登录风险与存档保障
+
+### 本项目实际使用的服务器
+
+本项目没有传统 VPS，也不依赖腾讯云、Base44 或 Supabase。生产环境采用 Cloudflare 无服务器架构：
+
+```text
+玩家浏览器
+  ├─ 页面、CSS、图片和 3D 资源 ── Cloudflare Static Assets / CDN
+  ├─ 邮箱密码与 GitHub 登录 ───── Firebase Authentication
+  └─ /api/* + Firebase ID Token ─ Cloudflare Worker
+                                  ├─ 验证身份和输入
+                                  ├─ 执行确定性案件规则
+                                  └─ 通过 DB binding 读写 Cloudflare D1
+```
+
+- Cloudflare Static Assets 负责分发 Vite 构建后的 React 前端。
+- Cloudflare Worker 是游戏后端，处理 `/api/*`、身份校验和规则结算。
+- Cloudflare D1 是玩家数据数据库，保存档案、货币、探员和案件进度。
+- Firebase Authentication 只负责身份认证，不保存游戏进度。
+- GitHub 只作为 Firebase 的一种登录凭据，不直接读写 D1。
+
+### 免费额度与并发判断
+
+10 名玩家同时登录或游玩通常不会形成性能压力。需要关注的是每天累计请求和邮件数量，而不是十人的瞬时并发。
+
+- Cloudflare Workers Free 当前提供每天 100,000 次 Worker 请求；普通静态资源请求不计入该额度。
+- `/api/*` 会执行 Worker，因此登录初始化、读取档案和保存进度都会计入 Worker 请求。
+- Worker 免费请求耗尽时，API 可能返回 `429` 或 Cloudflare `1027`；这不是 `404limited`。
+- Firebase Spark 方案启用 Identity Platform 后当前约支持每天 3,000 名活跃用户。
+- Firebase 免费方案当前约提供每天 1,000 封邮箱验证邮件和 150 封密码重置邮件；官方可能调整额度。
+- 同一 IP 大量注册、反复发送邮件或异常访问仍可能触发 Firebase 的滥用保护和临时限流。
+
+正式运营前应以官方最新页面为准：
+
+- [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+- [Cloudflare Static Assets billing and limitations](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
+- [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/)
+- [Firebase Authentication limits](https://firebase.google.com/docs/auth/limits)
+- [Firebase pricing](https://firebase.google.com/pricing)
+
+### 登录问题的实际边界
+
+项目已尽量把认证故障转换为可以恢复的用户流程，但任何外部认证和网络服务都无法承诺永远不出错。
+
+| 场景 | 当前保护 | 仍可能发生的情况 |
+| --- | --- | --- |
+| 邮件繁忙或限流 | 验证邮件和密码重置具有 60 秒本地冷却；界面显示友好提示，不暴露原始 Firebase 错误 | 达到 Firebase 日额度、同 IP 请求过多或触发滥用保护时，邮件仍可能延迟或被限制 |
+| OAuth 回调 404 | GitHub 优先使用 Firebase 弹窗；降级回调使用 Firebase 官方 handler，不把认证错误交给页面 hash 路由 | Firebase Authorized Domains、GitHub Callback URL 或生产域名配置错误时仍会登录失败 |
+| 原始 `error` 或空白页 | 常见 Firebase 错误统一映射为中英文提示；配置缺失、网络中断和超时均有恢复入口 | 未知代码缺陷、浏览器扩展拦截或 Firebase/Cloudflare 故障仍可能产生异常 |
+| 登录失败 | 包含 25 秒认证超时、弹窗受阻后的 redirect 降级、Token 自动刷新和 401 单次重试 | 密码错误、邮箱未验证、授权取消、网络中断、Provider 不匹配或生产配置缺失时会拒绝登录 |
+| 玩家数据未保存 | 所有档案操作按已验证 Firebase UID 写入 D1；写入带档案版本校验，案件奖励有本地待同步队列 | 网络中断、D1 配额耗尽、DB binding/迁移错误、设备会话被接管或同步完成前关闭页面时，保存可能暂时失败 |
+
+`404limited` 不是 Firebase 或 Cloudflare 的标准错误名称。认证回调地址错误可能产生 404，限流通常产生 Firebase 限流错误、HTTP `429` 或 Cloudflare `1027`，排查时应分别处理。
+
+### 当前配置状态与上线前检查
+
+仓库默认保留安全占位符，不包含真实 Firebase 配置。若 `wrangler.jsonc` 中的 `FIREBASE_PROJECT_ID` 仍是 `REPLACE_WITH_FIREBASE_PROJECT_ID`，或生产构建没有注入四个 `VITE_FIREBASE_*` 变量，Firebase 登录将无法工作。这属于尚未配置，不是并发或服务器性能问题。
+
+正式开放前必须逐项确认：
+
+1. 生产构建已注入真实的 `VITE_FIREBASE_API_KEY`、`VITE_FIREBASE_AUTH_DOMAIN`、`VITE_FIREBASE_PROJECT_ID` 和 `VITE_FIREBASE_APP_ID`。
+2. Worker 的 `FIREBASE_PROJECT_ID` 与前端 Firebase 项目完全一致。
+3. Firebase Authorized Domains 包含当前 Worker 生产域名。
+4. Terminal Detective 专用 GitHub OAuth App 的 callback 指向 Firebase 官方 handler，Client Secret 只保存在 Firebase 控制台。
+5. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用。
+6. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态。
+7. 实际完成一次完整冒烟测试：注册 → 验证邮箱 → 登录 → 开始案件 → 产生进度 → 刷新 → 退出 → 重新登录，并确认货币、探员和案件进度均仍存在。
+8. 分别测试 GitHub 登录、错误密码、未验证邮箱、密码重置、网络中断和多设备接管。
+
+只有真实生产域名上的完整登录和存档闭环通过后，才能确认线上配置正确。代码中的错误保护可以减少白屏、无限重试和静默丢档，但不能替代 Firebase、GitHub、Worker 和 D1 的生产配置与上线验证。
