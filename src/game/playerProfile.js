@@ -1,4 +1,5 @@
 import { appParams } from '../lib/app-params.js';
+import { fetchWithAuth } from '../lib/authToken.js';
 import { SKILL_TREES, getLevelFromXP } from './agentProgression.js';
 import { AGENT_DEFS, normalizeSavedTeamConfig } from './teamConfig.js';
 import {
@@ -212,8 +213,8 @@ export async function invokePlayerProfile(action, payload = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/playerProfile`, {
-      method: 'POST', headers, credentials: 'include', body: JSON.stringify({ action, ...payload }), signal: controller.signal,
+    const response = await fetchWithAuth(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/playerProfile`, {
+      method: 'POST', headers, body: JSON.stringify({ action, ...payload }), signal: controller.signal,
     });
     const body = await response.json().catch(() => ({}));
     if (response.ok) {

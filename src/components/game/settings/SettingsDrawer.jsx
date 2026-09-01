@@ -10,7 +10,7 @@ import StatusToast from '@/components/game/StatusToast';
 const TX = {
   zh: {
     title: '设置中心', close: '关闭',
-    general: '通用 · GENERAL', language: '界面语言', languageDesc: '切换全部界面文字与 AI 叙事语言',
+    general: '通用 · GENERAL', language: '界面语言', languageDesc: '切换全部界面文字与本地叙事语言',
     panelLight: '面板浅色模式', panelLightDesc: '文字密集面板（设置/报告/日志/证物板）使用浅色底，主场景保持深色',
     tutorial: '调查新手教程', tutorialDesc: '每次进入调查终端时显示完整七步教程',
     av: '音效与视觉 · AUDIO & FX',
@@ -26,7 +26,10 @@ const TX = {
     clearL: '清除本地偏好', clearDesc: '仅清除设置、现场缓存与新手引导，不影响云端进度', clearBtn: '清除',
     cloudReset: '重置云端进度', cloudResetDesc: '清空经济、任务、案件、编队与探员成长；需要输入侦探代号确认', cloudResetBtn: '重置云端',
     version: '版本信息',
-    account: '账户 · ACCOUNT', email: '登录邮箱', sync: '云端同步', syncOk: '已连接 Cloudflare', logout: '退出登录', logoutDesc: '结束当前安全会话并返回登录页', logoutBtn: '退出',
+    account: '账户 · ACCOUNT', email: '已验证邮箱', providers: '登录方式', passwordProvider: '邮箱密码', githubProvider: 'GitHub', linked: '已绑定', notLinked: '未绑定',
+    linkGithub: '绑定 GitHub', unlinkGithub: '解绑 GitHub', passwordSetup: '设置邮箱密码', passwordChange: '修改密码', passwordPlaceholder: '8–64 位，包含字母和数字', passwordSave: '保存密码',
+    sync: '云端同步', syncOk: 'Firebase 身份已连接 Cloudflare D1', logout: '退出登录', logoutDesc: '结束当前 Firebase 会话并返回登录页', logoutBtn: '退出',
+    authOk: '账户登录方式已更新', authFailed: '账户操作未完成，请稍后重试', authWeak: '密码需为 8–64 位并包含字母和数字', authRecent: '请先退出并重新登录，再修改敏感账户设置', authLast: '至少需要保留一种登录方式', authConflict: '这个 GitHub 已绑定其他账号',
     confirmClear: '确认清除本机偏好和现场缓存？云端档案不会变化。',
     confirmReset: '确认将设置恢复为默认值？',
     okClear: '本地存档已清除', okReset: '设置已恢复默认', okExport: '配置已导出',
@@ -38,7 +41,7 @@ const TX = {
   },
   en: {
     title: 'SETTINGS', close: 'CLOSE',
-    general: 'GENERAL', language: 'Language', languageDesc: 'Switch all UI text and AI narration language',
+    general: 'GENERAL', language: 'Language', languageDesc: 'Switch all UI text and local narrative language',
     panelLight: 'Light Panel Mode', panelLightDesc: 'Text-heavy panels (settings/report/log/board) go light; main scene stays dark',
     tutorial: 'Investigation Tutorial', tutorialDesc: 'Show the complete seven-step guide whenever the investigation terminal opens',
     av: 'AUDIO & FX',
@@ -54,7 +57,10 @@ const TX = {
     clearL: 'Clear Local Preferences', clearDesc: 'Clear settings, run cache and onboarding only; cloud progress is preserved', clearBtn: 'CLEAR',
     cloudReset: 'Reset Cloud Progress', cloudResetDesc: 'Clear economy, tasks, cases, squad and agent growth; codename confirmation required', cloudResetBtn: 'RESET CLOUD',
     version: 'Version',
-    account: 'ACCOUNT', email: 'Signed-in email', sync: 'Cloud sync', syncOk: 'Connected to Cloudflare', logout: 'Sign out', logoutDesc: 'End the secure session and return to sign in', logoutBtn: 'SIGN OUT',
+    account: 'ACCOUNT', email: 'Verified email', providers: 'Sign-in methods', passwordProvider: 'Email password', githubProvider: 'GitHub', linked: 'Linked', notLinked: 'Not linked',
+    linkGithub: 'LINK GITHUB', unlinkGithub: 'UNLINK GITHUB', passwordSetup: 'Add email password', passwordChange: 'Change password', passwordPlaceholder: '8–64 chars with a letter and number', passwordSave: 'SAVE PASSWORD',
+    sync: 'Cloud sync', syncOk: 'Firebase identity connected to Cloudflare D1', logout: 'Sign out', logoutDesc: 'End the Firebase session and return to sign in', logoutBtn: 'SIGN OUT',
+    authOk: 'Sign-in methods updated', authFailed: 'Account operation did not complete. Please retry.', authWeak: 'Password needs 8–64 characters, a letter and a number.', authRecent: 'Sign out and sign in again before changing sensitive account settings.', authLast: 'At least one sign-in method must remain.', authConflict: 'This GitHub account is already linked elsewhere.',
     confirmClear: 'Clear local preferences and run cache? Cloud progress is preserved.',
     confirmReset: 'Restore settings to defaults?',
     okClear: 'Local saves cleared', okReset: 'Settings restored', okExport: 'Config exported',
@@ -68,7 +74,7 @@ const TX = {
 
 export default function SettingsDrawer({ onClose }) {
   const { lang, setLang } = useLang();
-  const { user, logout } = useAuth();
+  const { user, providers, linkGitHub, unlinkGitHub, addPassword, changePassword, logout } = useAuth();
   const { settings, setSetting, resetSettings } = useSettings();
   const { profile, account, syncStatus, mutate } = useProfile();
   const skin = panelSkin(settings.panelLight);
@@ -76,6 +82,7 @@ export default function SettingsDrawer({ onClose }) {
   const [toast, setToast] = useState(null);
   const [confirm, setConfirm] = useState(null); // { text, run }
   const [resetCode, setResetCode] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
   const closeRef = useRef(null);
@@ -129,6 +136,26 @@ export default function SettingsDrawer({ onClose }) {
   };
 
   const change = (key, value) => { setSetting(key, value); playSfx(settings.sfxEnabled, 'click'); };
+
+  const runAccountAction = async (action) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await action();
+      setAccountPassword('');
+      notify(tx.authOk, 'success');
+    } catch (error) {
+      const messages = {
+        weak_password: tx.authWeak,
+        recent_login_required: tx.authRecent,
+        last_provider: tx.authLast,
+        account_exists: tx.authConflict,
+      };
+      notify(messages[error?.feedbackCode] || tx.authFailed, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleExport = () => {
     const payload = {
@@ -293,6 +320,23 @@ export default function SettingsDrawer({ onClose }) {
             <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.email}</div>
               <div style={{ fontSize: '0.55rem', color: skin.subText, marginTop: 4 }}>{account?.email || user?.email || '—'}</div>
+            </div>
+            <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
+              <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.providers}</div>
+              <div style={{ display: 'grid', gap: 8, marginTop: 9 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ color: skin.subText, fontSize: '.56rem' }}>✉ {tx.passwordProvider} · {providers.includes('password') ? tx.linked : tx.notLinked}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ color: skin.subText, fontSize: '.56rem' }}>GH {tx.githubProvider} · {providers.includes('github.com') ? tx.linked : tx.notLinked}</span>
+                  <button type="button" onClick={() => void runAccountAction(providers.includes('github.com') ? unlinkGitHub : linkGitHub)} style={{ padding: '6px 8px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${providers.includes('github.com') ? '#ff6b8460' : `${skin.accent}65`}`, background: 'transparent', color: providers.includes('github.com') ? '#ff7890' : skin.accent, fontFamily: 'monospace', fontSize: '.5rem' }}>{providers.includes('github.com') ? tx.unlinkGithub : tx.linkGithub}</button>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
+              <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{providers.includes('password') ? tx.passwordChange : tx.passwordSetup}</div>
+              <input type="password" autoComplete="new-password" minLength={8} maxLength={64} value={accountPassword} onChange={event => setAccountPassword(event.target.value)} placeholder={tx.passwordPlaceholder} style={{ width: '100%', marginTop: 8, padding: 8, borderRadius: 7, border: `1px solid ${skin.border}`, background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace', fontSize: '.55rem' }} />
+              <button type="button" disabled={!accountPassword || saving} onClick={() => void runAccountAction(() => providers.includes('password') ? changePassword(accountPassword) : addPassword(accountPassword))} style={{ width: '100%', marginTop: 7, padding: 8, borderRadius: 7, cursor: accountPassword && !saving ? 'pointer' : 'not-allowed', opacity: accountPassword && !saving ? 1 : .4, border: `1px solid ${skin.accent}65`, background: `${skin.accent}13`, color: skin.accent, fontFamily: 'monospace', fontSize: '.55rem' }}>{tx.passwordSave}</button>
             </div>
             <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.sync}</div>

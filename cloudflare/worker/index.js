@@ -1,15 +1,14 @@
 import { runDetectiveRule } from '../../server/detectiveRules/rules.js';
 import {
   authConfig,
-  beginGithubOAuth,
-  completeGithubOAuth,
-  logoutCloudflare,
-  readCloudflareSession,
+  logoutFirebase,
+  readFirebaseSession,
 } from './auth.js';
 import {
   handleCurrentUser,
   handleProfileFunction,
 } from './profile.js';
+import { validateRuleEnvelope } from './requestSecurity.js';
 
 const RULE_BODY_LIMIT = 96 * 1024;
 
@@ -50,10 +49,13 @@ async function handleRules(request) {
     return errorResponse('INVALID_JSON', 400);
   }
 
-  const task = String(body.task || '').trim();
-  const payload = body.payload && typeof body.payload === 'object' ? body.payload : {};
+  const envelope = validateRuleEnvelope(body);
+  if (envelope.error) return errorResponse(envelope.error, 400);
   try {
-    return json({ data: runDetectiveRule(task, payload), source: 'cloudflare-rules' });
+    return json({
+      data: runDetectiveRule(envelope.task, envelope.payload),
+      source: 'cloudflare-rules',
+    });
   } catch (error) {
     const code = String(error?.code || error?.message || 'RULE_FAILED');
     const status = code.startsWith('INVALID_') || code.startsWith('UNKNOWN_') ? 400 : 422;
@@ -63,14 +65,12 @@ async function handleRules(request) {
 
 async function handleNativeAuth(request, env, url) {
   if (url.pathname === '/api/auth/config') return json(authConfig(env));
-  if (url.pathname === '/api/auth/github/start') return beginGithubOAuth(request, env);
-  if (url.pathname === '/api/auth/github/callback') return completeGithubOAuth(request, env);
-  if (url.pathname === '/api/auth/logout') return logoutCloudflare(request, env);
+  if (url.pathname === '/api/auth/logout') return logoutFirebase();
   if (url.pathname === '/api/auth/session') {
-    const session = await readCloudflareSession(request, env);
+    const session = await readFirebaseSession(request, env);
     return session
-      ? json({ authenticated: true, backend: 'cloudflare', user: session.user })
-      : json({ authenticated: false, backend: null }, 401);
+      ? json({ authenticated: true, backend: 'firebase-cloudflare', user: session.user })
+      : errorResponse('UNAUTHENTICATED', 401);
   }
   return null;
 }
@@ -83,7 +83,7 @@ export async function handleRequest(request, env) {
     return json({
       ok: true,
       service: 'terminal-detective-cloudflare',
-      mode: 'cloudflare_only',
+      mode: 'firebase_cloudflare',
       rules: 'cloudflare',
       profile: 'cloudflare',
     });
@@ -91,19 +91,25 @@ export async function handleRequest(request, env) {
 
   const rulesPath = `/api/apps/${encodeURIComponent(env.APP_ID)}/functions/detectiveRules`;
   if (url.pathname === rulesPath) {
-    const session = await readCloudflareSession(request, env);
+    const session = await readFirebaseSession(request, env);
     return session ? handleRules(request) : errorResponse('UNAUTHENTICATED', 401);
   }
   if (url.pathname.startsWith('/api/')) {
-    const session = await readCloudflareSession(request, env);
+    const session = await readFirebaseSession(request, env);
     const appPrefix = `/api/apps/${encodeURIComponent(env.APP_ID)}`;
-    if (session && url.pathname === `${appPrefix}/entities/User/me`) {
-      return handleCurrentUser(request, env, session);
+    const currentUserPath = `${appPrefix}/entities/User/me`;
+    const profilePath = `${appPrefix}/functions/playerProfile`;
+    if (url.pathname === currentUserPath) {
+      return session
+        ? handleCurrentUser(request, env, session)
+        : errorResponse('UNAUTHENTICATED', 401);
     }
-    if (session && url.pathname === `${appPrefix}/functions/playerProfile`) {
-      return handleProfileFunction(request, env, session);
+    if (url.pathname === profilePath) {
+      return session
+        ? handleProfileFunction(request, env, session)
+        : errorResponse('UNAUTHENTICATED', 401);
     }
-    if (url.pathname === `${appPrefix}/auth/logout`) return logoutCloudflare(request, env);
+    if (url.pathname === `${appPrefix}/auth/logout`) return logoutFirebase();
     return errorResponse('ROUTE_NOT_FOUND', 404);
   }
   return env.ASSETS.fetch(request);
@@ -115,7 +121,8 @@ export default {
       return await handleRequest(request, env);
     } catch (error) {
       const status = Number(error?.status) || 500;
-      return errorResponse(status === 413 ? 'PAYLOAD_TOO_LARGE' : 'GATEWAY_FAILED', status);
+      const code = String(error?.code || (status === 413 ? 'PAYLOAD_TOO_LARGE' : 'GATEWAY_FAILED'));
+      return errorResponse(code, status);
     }
   },
 };

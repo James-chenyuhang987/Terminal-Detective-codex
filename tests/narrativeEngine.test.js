@@ -9,7 +9,12 @@ import {
   renderNarrative,
   resolvePublicZoneName,
 } from '../src/game/narrativeEngine.js';
-import { Case_Data_Lvl_01, localizeCase } from '../src/game/caseData.js';
+import {
+  CASE_NARRATIVE_IDS,
+  CASE_NARRATIVE_LIBRARY,
+  getCaseNarrativeProfile,
+} from '../src/game/caseNarrativeLibrary.js';
+import { ALL_CASES, Case_Data_Lvl_01, localizeCase } from '../src/game/caseData.js';
 import { createInitialGameState, generateObservation } from '../src/game/gameState.js';
 
 test('local narrative library covers every action and outcome with at least six bilingual variants', () => {
@@ -72,7 +77,9 @@ test('first turn creates a coherent public case opening without leaking internal
 
   assert.equal(context.isOpening, true);
   assert.equal(context.zoneName, '数据中心 · 案发现场');
-  assert.match(observation, /案件开场.*霓虹血迹/s);
+  assert.match(observation, /第一幕.*封锁现场.*霓虹血迹/s);
+  assert.match(observation, /现场初勘/);
+  assert.match(observation, /核心谜题/);
   assert.match(observation, /Victor Zhao/);
   assert.match(observation, /相关人员.*Mei Lin/s);
   assert.match(observation, /首要任务/);
@@ -87,4 +94,63 @@ test('public zone resolver and narrative output replace raw internal ids with re
     zoneId: 'zone_datacenter', clueIds: ['c_01'], seed: 'raw-id-guard',
   }).text;
   assert.doesNotMatch(text, /zone_datacenter|c_01/);
+});
+
+test('all eight cases provide complete bilingual dramatic profiles for every public zone', () => {
+  assert.equal(CASE_NARRATIVE_IDS.length, ALL_CASES.length);
+  assert.deepEqual(new Set(CASE_NARRATIVE_IDS), new Set(ALL_CASES.map(item => item.case_id)));
+
+  for (const caseData of ALL_CASES) {
+    for (const lang of ['zh', 'en']) {
+      const localized = localizeCase(caseData, lang);
+      const profile = getCaseNarrativeProfile(caseData.case_id, lang);
+      assert.ok(profile.prologue.length > (lang === 'zh' ? 45 : 80), `${caseData.case_id}/${lang} prologue is too short`);
+      assert.ok(profile.question.length >= (lang === 'zh' ? 30 : 80), `${caseData.case_id}/${lang} question is too short`);
+      for (const stage of ['opening', 'pursuit', 'convergence']) {
+        assert.ok(profile.stages[stage].length > (lang === 'zh' ? 30 : 80), `${caseData.case_id}/${lang}/${stage} stage missing`);
+        assert.ok(profile.objectives[stage].length > (lang === 'zh' ? 25 : 80), `${caseData.case_id}/${lang}/${stage} objective missing`);
+      }
+      assert.ok(profile.motifs.length >= 4, `${caseData.case_id}/${lang} motifs incomplete`);
+      assert.deepEqual(
+        new Set(Object.keys(profile.zones)),
+        new Set(Object.keys(localized.scene.zones)),
+        `${caseData.case_id}/${lang} zone atmosphere coverage differs from public case zones`,
+      );
+    }
+  }
+});
+
+test('each case opening uses its own prologue and central mystery in both languages', () => {
+  for (const caseData of ALL_CASES) {
+    for (const lang of ['zh', 'en']) {
+      const localized = localizeCase(caseData, lang);
+      const state = createInitialGameState(localized);
+      const context = buildPublicCaseContext({ gameState: state, caseData: localized, lang });
+      const profile = getCaseNarrativeProfile(caseData.case_id, lang);
+      assert.equal(context.stage, 'opening');
+      assert.equal(context.question, profile.question);
+      assert.match(context.narrative, new RegExp(profile.prologue.slice(0, 24).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.match(context.narrative, new RegExp(profile.question.slice(0, 18).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.ok(context.zoneAtmosphere.length > 20);
+      assert.doesNotMatch(context.narrative, /\bzone_[a-z0-9_:-]+\b/i);
+    }
+  }
+});
+
+test('action results echo the active case premise without changing deterministic selection', () => {
+  const shared = {
+    actionTag: 'analyze_forensics',
+    outcome: 'clue',
+    lang: 'zh',
+    agentName: 'AURORA-09',
+    zoneName: '公开现场',
+    clueName: '公开证物',
+    seed: 'same-public-action',
+  };
+  const neon = renderNarrative({ ...shared, caseId: 'Lvl_01' });
+  const abyss = renderNarrative({ ...shared, caseId: 'Lvl_07' });
+  assert.equal(renderNarrative({ ...shared, caseId: 'Lvl_01' }).text, neon.text);
+  assert.notEqual(neon.text, abyss.text);
+  assert.ok(CASE_NARRATIVE_LIBRARY.Lvl_01.zh.motifs.some(motif => neon.text.includes(motif)));
+  assert.ok(CASE_NARRATIVE_LIBRARY.Lvl_07.zh.motifs.some(motif => abyss.text.includes(motif)));
 });

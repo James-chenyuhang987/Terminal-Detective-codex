@@ -1,4 +1,5 @@
 import { agentExpertise, confidenceFromExpertise, getActionFocus } from './commandSystem.js';
+import { getCaseNarrativeProfile } from './caseNarrativeLibrary.js';
 
 export const NARRATIVE_ACTIONS = Object.freeze([
   'talk_to_npc', 'search_area', 'examine_clue', 'check_alibi',
@@ -161,6 +162,67 @@ const THOUGHT_FRAMES = Object.freeze({
   ],
 });
 
+// These short codas bind a generic action result back to the public dramatic
+// premise of the active case. They never reveal which interpretation is true.
+const CASE_OUTCOME_ECHOES = Object.freeze({
+  clue: {
+    zh: [
+      '证物封存的一刻，{motif}第一次有了可以复查的重量。',
+      '一道新的因果线穿过现场，朝着{motif}延伸。',
+      '这项发现没有回答谜题，却让{motif}不再只是背景。',
+      '新的证据迫使调查重新审视{motif}，也让一份旧说法显得不再完整。',
+    ],
+    en: [
+      'As the exhibit is sealed, {motif} gains verifiable weight for the first time.',
+      'A new line of cause crosses the scene and reaches toward {motif}.',
+      'The discovery does not answer the mystery, but {motif} is no longer mere atmosphere.',
+      'The new evidence forces a second look at {motif}, leaving one earlier account incomplete.',
+    ],
+  },
+  progress: {
+    zh: [
+      '调查没有得到答案，但{motif}已经比上一轮更接近可验证的事实。',
+      '这一步像在黑暗中校准焦距，{motif}与其他记录之间的距离正在变得清楚。',
+      '一个错误方向被排除后，{motif}留下的问题反而更难回避。',
+      '现场仍保持沉默，但{motif}对应的时间线已经比上一回合完整。',
+    ],
+    en: [
+      'The action yields no answer, but the shadow around {motif} grows smaller.',
+      'Like focusing a lens in darkness, it clarifies the distance between {motif} and the other records.',
+      'With one false direction removed, the question surrounding {motif} becomes harder to avoid.',
+      'The scene remains silent, but the timeline around {motif} is more complete than it was one turn ago.',
+    ],
+  },
+  no_yield: {
+    zh: [
+      '空白本身也是边界：至少这一轮没有让{motif}被新的猜测污染。',
+      '这条路没有靠近{motif}，却替下一次调查保住了一个更诚实的起点。',
+      '现场拒绝回应，{motif}仍悬在证据链之外，等待另一种验证方式。',
+      '没有收获并不等于没有意义；这次失败让{motif}对应的搜索范围更窄。',
+    ],
+    en: [
+      'A blank result still marks a boundary: this turn has not contaminated {motif} with another guess.',
+      'The route does not approach {motif}, but it preserves a more honest starting point for the next search.',
+      'The scene refuses to answer; {motif} remains outside the chain, waiting for another form of verification.',
+      'No yield is not no meaning; the failed route narrows the search around {motif}.',
+    ],
+  },
+  trap: {
+    zh: [
+      '反制出现得如此准确，说明有人曾预料调查会沿着{motif}靠近。',
+      '陷阱试图把视线从{motif}上移开，这种急切本身值得记录。',
+      '红色警报短暂淹没现场，但{motif}依然是反制无法抹去的问题。',
+      '有人给{motif}周围布置了错误答案；越是精密，越说明这里并非无关紧要。',
+    ],
+    en: [
+      'The countermeasure arrives with such precision that someone expected the investigation to approach {motif}.',
+      'The trap tries to pull attention away from {motif}; that urgency is worth recording.',
+      'Red alerts briefly drown the scene, but {motif} remains the question the defense cannot erase.',
+      'Someone planted a false answer around {motif}; its precision makes the area harder to dismiss.',
+    ],
+  },
+});
+
 const SAFE_TEXT = /[^\p{L}\p{N}\p{P}\p{Zs}_-]/gu;
 
 const INTERNAL_ZONE_ID = /^(?:zone|area)_[a-z0-9_:-]+$/i;
@@ -198,6 +260,19 @@ function joinSentence(...parts) {
   return parts.map(part => String(part || '').trim()).filter(Boolean).join(' ');
 }
 
+function narrativeStage({ turn, clueCount, clueTotal }) {
+  if (turn <= 1 || clueCount <= 0) return 'opening';
+  const progress = clueTotal > 0 ? clueCount / clueTotal : 0;
+  return progress >= 0.55 ? 'convergence' : 'pursuit';
+}
+
+function chapterLabel(stage, lang) {
+  const labels = lang === 'en'
+    ? { opening: 'ACT I · THE SEALED SCENE', pursuit: 'ACT II · FRACTURED ACCOUNTS', convergence: 'ACT III · CAUSAL CONVERGENCE' }
+    : { opening: '第一幕 · 封锁现场', pursuit: '第二幕 · 证词裂缝', convergence: '第三幕 · 因果收束' };
+  return labels[stage] || labels.opening;
+}
+
 export function resolvePublicZoneName(caseData, zoneId, lang = 'zh') {
   const language = lang === 'en' ? 'en' : 'zh';
   const source = localizedCase(caseData, language);
@@ -214,6 +289,9 @@ export function resolvePublicZoneName(caseData, zoneId, lang = 'zh') {
   );
 }
 
+/**
+ * @param {{ gameState?: Record<string, any>, caseData?: Record<string, any>, lang?: string }} options
+ */
 export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = 'zh' } = {}) {
   const language = lang === 'en' ? 'en' : 'zh';
   const zh = language === 'zh';
@@ -238,29 +316,45 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
   const zoneName = resolvePublicZoneName(source, gameState.current_zone, language);
   const totalClues = Math.max(clues.length, source.clue_dictionary?.length || 0);
   const castNames = npcs.map(npc => npc.name).join(zh ? '、' : ', ');
+  const profile = getCaseNarrativeProfile(source.case_id || gameState.case_id, language);
+  const stage = narrativeStage({ turn, clueCount: clues.length, clueTotal: totalClues });
+  const zoneAtmosphere = safeText(profile.zones?.[gameState.current_zone], '', 260);
 
-  const openingNarrative = joinSentence(
-    publicLabel(source.setting, zh ? '城市警戒线已经封锁现场。' : 'The city cordon has sealed the scene.', 'generic', 220),
-    publicLabel(source.scene?.description, zh ? '第一批现场资料刚刚送达指挥席。' : 'The first scene report has just reached the command desk.', 'generic', 520),
+  const sceneReport = publicLabel(
+    source.scene?.description,
+    zh ? '第一批现场资料刚刚送达指挥席。' : 'The first scene report has just reached the command desk.',
+    'generic',
+    520,
   );
-  const progressNarrative = recentClues.length
+  const openingNarrative = [
+    profile.prologue,
+    zh ? `现场初勘：${sceneReport}` : `INITIAL SCENE REPORT: ${sceneReport}`,
+    zh ? `核心谜题：${profile.question}` : `CENTRAL MYSTERY: ${profile.question}`,
+  ].join('\n\n');
+  const evidenceProgress = recentClues.length
     ? (zh
-      ? `调查已推进至${zoneName}。目前保全 ${clues.length}/${totalClues} 条证据，最近取得「${recentClues.join('」「')}」，但它们仍需通过时间、权限或物理因果互相印证。`
-      : `The investigation has reached ${zoneName}. ${clues.length}/${totalClues} clues are secured, most recently “${recentClues.join('”, “')}”; they still need a shared timeline, access path, or physical cause.`)
+      ? `目前已保全 ${clues.length}/${totalClues} 条证据，最近取得「${recentClues.join('」「')}」；它们仍需通过时间、权限或物理因果互相印证。`
+      : `${clues.length}/${totalClues} clues are secured, most recently “${recentClues.join('”, “')}”; they still need a shared timeline, access path, or physical cause.`)
     : (zh
-      ? `调查仍停留在${zoneName}的第一层现场判断；目前没有证据可以支撑结论。`
-      : `The investigation remains at the first reading of ${zoneName}; no conclusion is yet supported by evidence.`);
-  const objective = clues.length === 0
+      ? '目前没有证据足以支撑结论，第一份可复查的记录仍在等待调查。'
+      : 'No evidence yet supports a conclusion; the first reviewable record is still waiting to be secured.');
+  const progressNarrative = [
+    profile.stages?.[stage],
+    zoneAtmosphere ? `${zoneName}：${zoneAtmosphere}` : '',
+    evidenceProgress,
+  ].filter(Boolean).join('\n\n');
+  const objective = gameState.confusion_score >= 60
     ? (zh
-      ? `先固定${zoneName}的异常痕迹，再核对${castNames || '相关人员'}的公开说法，建立第一条可复查的证据链。`
-      : `Secure the anomalies in ${zoneName}, then test the public accounts of ${castNames || 'the people of interest'} and establish the first reviewable evidence chain.`)
-    : gameState.confusion_score >= 60
-      ? (zh
-        ? '当前判断稳定度偏低；优先复核已有证据，暂缓高风险推断。'
-        : 'Judgment stability is low; recheck secured evidence before attempting a high-risk inference.')
-      : (zh
-        ? `围绕「${recentClues.at(-1) || '现有证据'}」寻找第二个独立验证点，排除重复且低价值的调查路线。`
-        : `Find an independent verification point for “${recentClues.at(-1) || 'the current evidence'}” and avoid repeated low-value routes.`);
+      ? `当前判断稳定度偏低；先复核已有证据，再继续执行本案目标：${profile.objectives?.[stage]}`
+      : `Judgment stability is low. Recheck secured evidence before continuing the case objective: ${profile.objectives?.[stage]}`)
+    : joinSentence(
+      profile.objectives?.[stage],
+      clues.length > 0
+        ? (zh
+          ? `以「${recentClues.at(-1) || '现有证据'}」为锚点，寻找第二个独立验证来源。`
+          : `Use “${recentClues.at(-1) || 'the current evidence'}” as an anchor and find a second independent source.`)
+        : '',
+    );
 
   return {
     isOpening: turn === 1,
@@ -276,6 +370,10 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
     clueCount: clues.length,
     clueTotal: totalClues,
     recentClues,
+    stage,
+    chapterLabel: chapterLabel(stage, language),
+    question: profile.question,
+    zoneAtmosphere,
     narrative: turn === 1 ? openingNarrative : progressNarrative,
     objective,
   };
@@ -312,11 +410,23 @@ export function renderNarrative(event = {}, recentTemplateIds = []) {
     clue: publicLabel(event.clueName || event.clueIds?.[0], lang === 'zh' ? '新证据' : 'new evidence', 'clue', 80),
     verb,
   };
+  const baseText = fill(frames[frameIndex], variables);
+  let caseEcho = '';
+  if (event.caseId && outcome !== 'illegal') {
+    const profile = getCaseNarrativeProfile(event.caseId, lang);
+    const motifs = Array.isArray(profile.motifs) ? profile.motifs.filter(Boolean) : [];
+    const echoes = CASE_OUTCOME_ECHOES[outcome]?.[lang] || [];
+    if (motifs.length && echoes.length) {
+      const motif = motifs[stableNarrativeHash(`${seed}:motif`) % motifs.length];
+      const echo = echoes[stableNarrativeHash(`${seed}:echo`) % echoes.length];
+      caseEcho = fill(echo, { motif, question: profile.question });
+    }
+  }
   return {
-    messageKey: `${actionTag}.${outcome}.${frameIndex}`,
+    messageKey: `${event.caseId || 'generic'}.${actionTag}.${outcome}.${frameIndex}`,
     templateId: `${outcome}:${frameIndex}`,
     tone: OUTCOME_FRAMES[outcome]?.tone || 'info',
-    text: fill(frames[frameIndex], variables),
+    text: joinSentence(baseText, caseEcho),
   };
 }
 
@@ -328,20 +438,29 @@ export function buildLocalThought({ gameState, caseData, agentStrategy, observat
     || agentStrategy
     || {};
   const agentName = safeText(agent.agent_id, language === 'zh' ? '主探员' : 'the primary agent', 48);
+  const profile = getCaseNarrativeProfile(caseData?.case_id, language);
   if (context.isOpening) {
     return language === 'zh'
-      ? `${context.caseTitle}的第一条判断必须从现场而不是猜测开始。${agentName}将先复核${context.zoneName}的异常痕迹，再把${context.castNames || '相关人员'}的公开说法放入同一条时间轴；本轮目标是取得一条能被独立证据再次验证的调查起点。`
-      : `The first judgment in ${context.caseTitle} must begin with the scene, not a guess. ${agentName} will verify the anomalies in ${context.zoneName}, place the public accounts of ${context.castNames || 'the people of interest'} on one timeline, and secure a lead that independent evidence can test.`;
+      ? `${context.caseTitle}的第一条判断必须从现场而不是猜测开始。真正的问题是：${profile.question}${agentName}将先复核${context.zoneName}的异常痕迹，再把${context.castNames || '相关人员'}的公开说法放入同一条时间轴；本轮只争取一条能够被独立证据再次验证的调查起点。`
+      : `The first judgment in ${context.caseTitle} must begin with the scene, not a guess. The real question is this: ${profile.question} ${agentName} will verify the anomalies in ${context.zoneName}, place the public accounts of ${context.castNames || 'the people of interest'} on one timeline, and secure one lead that independent evidence can test.`;
   }
   const seed = [gameState?.run_id, caseData?.case_id, gameState?.turn_count, agent.agent_id, language, observation].join(':');
   const frames = THOUGHT_FRAMES[language];
   const frame = frames[stableNarrativeHash(seed) % frames.length];
-  return fill(frame, {
+  const thought = fill(frame, {
     agent: agentName,
     zone: context.zoneName,
     count: Math.max(0, gameState?.unlocked_clues?.length || 0),
     confusion: Math.max(0, Number(gameState?.confusion_score) || 0),
   });
+  const motifs = Array.isArray(profile.motifs) ? profile.motifs.filter(Boolean) : [];
+  const motif = motifs.length ? motifs[stableNarrativeHash(`${seed}:motif`) % motifs.length] : '';
+  const reflection = motif
+    ? (language === 'zh'
+      ? `本案的叙事仍围绕${motif}展开；它可能是因果的一部分，也可能只是精心安排的视线诱饵。`
+      : `The case still turns around ${motif}; it may belong to the cause, or it may be a carefully placed distraction.`)
+    : '';
+  return joinSentence(thought, reflection);
 }
 
 const FALLBACK_ACTIONS = Object.freeze(['search_area', 'examine_clue', 'check_cctv']);

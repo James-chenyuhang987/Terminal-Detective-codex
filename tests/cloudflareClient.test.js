@@ -3,8 +3,9 @@ import test from 'node:test';
 
 import { cloudflareApi } from '../src/api/cloudflareClient.js';
 import { appParams } from '../src/lib/app-params.js';
+import { setAuthTokenProvider } from '../src/lib/authToken.js';
 
-test('Cloudflare client invokes a named Worker function with cookie credentials', async () => {
+test('Cloudflare client invokes a named Worker function with a Firebase bearer token', async () => {
   const originalFetch = globalThis.fetch;
   let request;
   globalThis.fetch = async (url, options) => {
@@ -14,6 +15,7 @@ test('Cloudflare client invokes a named Worker function with cookie credentials'
       headers: { 'Content-Type': 'application/json' },
     });
   };
+  setAuthTokenProvider(async () => 'firebase-id-token');
 
   try {
     const response = await cloudflareApi.functions.invoke('detectiveRules', {
@@ -23,13 +25,14 @@ test('Cloudflare client invokes a named Worker function with cookie credentials'
     assert.deepEqual(response, { data: { result: 'ok' } });
     assert.equal(request.url, `${appParams.serverUrl}/api/apps/${appParams.appId}/functions/detectiveRules`);
     assert.equal(request.options.method, 'POST');
-    assert.equal(request.options.credentials, 'include');
-    assert.equal('Authorization' in request.options.headers, false);
+    assert.equal(request.options.credentials, undefined);
+    assert.equal(new Headers(request.options.headers).get('Authorization'), 'Bearer firebase-id-token');
     assert.deepEqual(JSON.parse(request.options.body), {
       task: 'decision_options',
       payload: { lang: 'en' },
     });
   } finally {
+    setAuthTokenProvider(null);
     globalThis.fetch = originalFetch;
   }
 });

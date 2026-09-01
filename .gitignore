@@ -2,6 +2,18 @@
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+
+# Project-local agent/MCP execution configuration is denied by default.
+# Review any exception before adding it to source control.
+.mcp.json
+mcp.json
+.claude/
+.cursor/
+.codex/
 
 # Logs
 /logs

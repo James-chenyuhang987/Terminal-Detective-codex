@@ -11,31 +11,37 @@ const env = {
   },
 };
 
-test('Cloudflare gateway reports Cloudflare-only mode without exposing credentials', async () => {
+test('Cloudflare gateway reports Firebase + Cloudflare mode without exposing credentials', async () => {
   const response = await handleRequest(new Request('https://game.example/api/cloudflare/status'), env);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     ok: true,
     service: 'terminal-detective-cloudflare',
-    mode: 'cloudflare_only',
+    mode: 'firebase_cloudflare',
     rules: 'cloudflare',
     profile: 'cloudflare',
   });
   assert.equal(response.headers.get('cache-control'), 'no-store');
 });
 
-test('auth configuration advertises GitHub only when both credentials exist', async () => {
+test('auth configuration requires a real Firebase project id', async () => {
   const unavailable = await handleRequest(new Request('https://game.example/api/auth/config'), env);
   assert.deepEqual(await unavailable.json(), {
-    primary: 'github', github: false,
+    primary: 'firebase', firebase: false, email_password: false, github: false,
   });
 
   const available = await handleRequest(new Request('https://game.example/api/auth/config'), {
-    ...env, GITHUB_OAUTH_CLIENT_ID: 'client', GITHUB_OAUTH_CLIENT_SECRET: 'secret',
+    ...env, FIREBASE_PROJECT_ID: 'terminal-detective-test',
   });
   assert.deepEqual(await available.json(), {
-    primary: 'github', github: true,
+    primary: 'firebase', firebase: true, email_password: true, github: true,
   });
+});
+
+test('Firebase session endpoint requires a bearer token', async () => {
+  const response = await handleRequest(new Request('https://game.example/api/auth/session'), env);
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, 'UNAUTHENTICATED');
 });
 
 test('deterministic detective rules require a Cloudflare session', async () => {
@@ -56,6 +62,18 @@ test('deterministic detective rules require a Cloudflare session', async () => {
   const payload = await response.json();
   assert.equal(response.status, 401);
   assert.equal(payload.code, 'UNAUTHENTICATED');
+});
+
+test('profile read and write routes fail closed without an authenticated owner', async () => {
+  for (const [path, method] of [
+    [`/api/apps/${APP_ID}/entities/User/me`, 'GET'],
+    [`/api/apps/${APP_ID}/functions/playerProfile`, 'POST'],
+    [`/api/apps/${APP_ID}/functions/playerProfile`, 'DELETE'],
+  ]) {
+    const response = await handleRequest(new Request(`https://game.example${path}`, { method }), env);
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).code, 'UNAUTHENTICATED');
+  }
 });
 
 test('gateway rejects unknown API routes instead of proxying to another backend', async () => {

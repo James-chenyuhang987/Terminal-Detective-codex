@@ -1,4 +1,5 @@
 import { appParams } from '../lib/app-params.js';
+import { fetchWithAuth } from '../lib/authToken.js';
 
 function headers() {
   const value = /** @type {Record<string, string>} */ ({
@@ -25,10 +26,9 @@ async function invoke(functionName, data = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error(`Function ${functionName} must receive an object with named parameters.`);
   }
-  const response = await fetch(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/${encodeURIComponent(functionName)}`, {
+  const response = await fetchWithAuth(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/${encodeURIComponent(functionName)}`, {
     method: 'POST',
     headers: headers(),
-    credentials: 'include',
     body: JSON.stringify(data),
   });
   const text = await response.text();
@@ -41,6 +41,6 @@ async function invoke(functionName, data = {}) {
   return { data: body };
 }
 
-// A narrow client keeps authentication in Cloudflare's HttpOnly session cookie
-// and avoids shipping any vendor SDK in the browser bundle.
+// Authentication is injected centrally as a short-lived Firebase ID token. A
+// single 401 refresh is handled by fetchWithAuth for every game function.
 export const cloudflareApi = Object.freeze({ functions: Object.freeze({ invoke }) });

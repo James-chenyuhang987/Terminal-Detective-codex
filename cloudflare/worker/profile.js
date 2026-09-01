@@ -1,4 +1,15 @@
 const MAX_BODY_BYTES = 512 * 1024;
+const PROFILE_VALUE_LIMITS = Object.freeze({
+  depth: 12,
+  arrayLength: 4096,
+  objectKeys: 512,
+  stringLength: 8192,
+});
+const DANGEROUS_OBJECT_KEYS = new Set([
+  '__proto__', 'prototype', 'constructor',
+  'userId', 'user_id', 'ownerId', 'owner_id', 'accountId', 'account_id',
+  'firebaseUid', 'firebase_uid', 'isAdmin', 'is_admin',
+]);
 const PROFILE_FIELDS = new Set([
   'detective_name', 'avatar', 'signature', 'identity_badge', 'detective_tags',
   'level', 'xp', 'rank_title', 'energy', 'energy_updated_at', 'diamonds', 'gold',
@@ -22,10 +33,33 @@ function validSessionId(value) {
     && /^[A-Za-z0-9._:-]+$/.test(value);
 }
 
-function cleanPatch(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function safeProfileValue(value, depth = 0) {
+  if (depth > PROFILE_VALUE_LIMITS.depth) return false;
+  if (value === null || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return value.length <= PROFILE_VALUE_LIMITS.stringLength;
+  if (Array.isArray(value)) {
+    return value.length <= PROFILE_VALUE_LIMITS.arrayLength
+      && value.every(item => safeProfileValue(item, depth + 1));
+  }
+  if (!isPlainObject(value)) return false;
   const keys = Object.keys(value);
-  if (keys.some(key => !PROFILE_FIELDS.has(key))) return null;
+  return keys.length <= PROFILE_VALUE_LIMITS.objectKeys
+    && keys.every(key => key.length <= 80
+      && !DANGEROUS_OBJECT_KEYS.has(key)
+      && safeProfileValue(value[key], depth + 1));
+}
+
+function cleanPatch(value) {
+  if (!isPlainObject(value)) return null;
+  const keys = Object.keys(value);
+  if (keys.some(key => !PROFILE_FIELDS.has(key) || !safeProfileValue(value[key]))) return null;
   return Object.fromEntries(keys.map(key => [key, value[key]]));
 }
 
@@ -123,4 +157,10 @@ export async function handleCurrentUser(request, env, session) {
   return error('METHOD_NOT_ALLOWED', 'GET is required.', 405);
 }
 
-export const profileInternals = Object.freeze({ cleanPatch, validSessionId, parseProfile });
+export const profileInternals = Object.freeze({
+  cleanPatch,
+  validSessionId,
+  parseProfile,
+  safeProfileValue,
+  PROFILE_VALUE_LIMITS,
+});

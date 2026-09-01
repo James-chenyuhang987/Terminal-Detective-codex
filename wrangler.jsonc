@@ -18,7 +18,7 @@
 	},
 	"vars": {
 		"APP_ID": "terminal-detective",
-		"GITHUB_OAUTH_CLIENT_ID": "Ov23litQv11tInjYmLZH"
+		"FIREBASE_PROJECT_ID": "REPLACE_WITH_FIREBASE_PROJECT_ID"
 	},
 	"d1_databases": [
 		{

@@ -255,12 +255,12 @@ export function generateObservation(gameState, caseData, lang = 'en') {
     : '';
 
   const storyBlock = story.isOpening
-    ? `╭── ${zh ? '案件开场' : 'CASE OPENING'} · ${story.caseTitle} ──╮
+    ? `╭── ${story.chapterLabel} · ${story.caseTitle} ──╮
 ${story.narrative}
 ${zh ? '相关人员' : 'PEOPLE OF INTEREST'}：${story.npcs.map(npc => `${npc.avatar} ${npc.name}〔${npc.role}〕`).join(zh ? '；' : '; ')}
 ${zh ? '首要任务' : 'FIRST OBJECTIVE'}：${story.objective}
 ╰────────────────────╯`
-    : `╭── ${zh ? '前情推进' : 'CASE PROGRESS'} · ${story.caseTitle} ──╮
+    : `╭── ${story.chapterLabel} · ${story.caseTitle} ──╮
 ${story.narrative}
 ${zh ? '本轮目标' : 'TURN OBJECTIVE'}：${story.objective}
 ╰────────────────────╯`;

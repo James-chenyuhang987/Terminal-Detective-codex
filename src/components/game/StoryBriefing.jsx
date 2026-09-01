@@ -33,9 +33,9 @@ export default function StoryBriefing({ story }) {
             <div style={{
               fontSize: '0.53rem', letterSpacing: '0.26em', color: '#00e5ff99', marginBottom: 6,
             }}>
-              {story.isOpening
+              {story.chapterLabel || (story.isOpening
                 ? (zh ? '案 件 开 场 · CASE OPENING' : 'CASE OPENING · INCIDENT BRIEF')
-                : (zh ? '前 情 推 进 · CASE PROGRESS' : 'CASE PROGRESS · THIS TURN')}
+                : (zh ? '前 情 推 进 · CASE PROGRESS' : 'CASE PROGRESS · THIS TURN'))}
             </div>
             <h2 style={{ margin: 0, color: '#e9fbff', fontSize: '1.05rem', letterSpacing: '0.08em' }}>
               {story.caseTitle || (zh ? '当前案件' : 'ACTIVE CASE')}
