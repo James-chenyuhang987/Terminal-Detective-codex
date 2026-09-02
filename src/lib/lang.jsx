@@ -1,5 +1,6 @@
 // Global language context + translations
 import React, { createContext, useContext, useState } from 'react';
+import { AUTH_EMAIL_LANGUAGE_KEY } from '@/lib/authEmail';
 
 export const LANG = {
   zh: {
@@ -174,18 +175,16 @@ export const LANG = {
 
 const LangContext = createContext({ lang: 'zh', t: LANG.zh, setLang: (_value) => {} });
 
-const LANG_KEY = 'td_lang_v1';
-
 export function LangProvider({ children }) {
   const [lang, setLangState] = useState(() => {
     try {
-      const saved = localStorage.getItem(LANG_KEY);
+      const saved = localStorage.getItem(AUTH_EMAIL_LANGUAGE_KEY);
       return saved === 'en' || saved === 'zh' ? saved : 'zh';
     } catch { return 'zh'; }
   });
   const setLang = (next) => {
     const value = typeof next === 'function' ? next(lang) : next;
-    try { localStorage.setItem(LANG_KEY, value); } catch { /* ignore */ }
+    try { localStorage.setItem(AUTH_EMAIL_LANGUAGE_KEY, value); } catch { /* ignore */ }
     setLangState(value);
   };
   const t = LANG[lang];

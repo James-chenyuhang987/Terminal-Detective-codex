@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
+  ACTION_CINEMATIC_ANIMATIONS,
+  CINEMATIC_ANIMATION_IDS,
   CINEMATIC_ACTION_TAGS,
+  CINEMATIC_OUTCOME_EFFECTS,
   buildCinematicEvent,
   detectCinematicPlayback,
   getPublicRevealedClues,
+  resolveCinematicAnimation,
   resolveCinematicTemplate,
   shouldPlayActionCinematic,
 } from '../src/game/actionCinematic.js';
@@ -36,6 +41,18 @@ test('all twelve legal actions map to one of the six cinematic templates', () =>
   assert.equal(resolveCinematicTemplate('hack_terminal'), 'digital');
   assert.equal(resolveCinematicTemplate('present_evidence'), 'confrontation');
   assert.equal(resolveCinematicTemplate('tail_suspect'), 'pursuit');
+});
+
+test('all twelve legal actions have distinct deterministic animation profiles', () => {
+  assert.deepEqual(new Set(Object.keys(ACTION_CINEMATIC_ANIMATIONS)), new Set(CINEMATIC_ACTION_TAGS));
+  assert.equal(CINEMATIC_ANIMATION_IDS.length, 12);
+  assert.equal(new Set(CINEMATIC_ANIMATION_IDS).size, 12);
+  const profiles = CINEMATIC_ACTION_TAGS.map(actionTag => resolveCinematicAnimation(actionTag, 'event-7'));
+  assert.equal(new Set(profiles.map(profile => profile.animationSeed)).size, 12);
+  assert.deepEqual(
+    resolveCinematicAnimation('analyze_forensics', 'event-7'),
+    resolveCinematicAnimation('analyze_forensics', 'event-7'),
+  );
 });
 
 test('even successful turns trigger while an ordinary odd turn does not', () => {
@@ -92,11 +109,15 @@ test('one cinematic event applies trap, clue, progress and no-yield priority saf
   assert.equal(trapped.narration, '反制启动');
   assert.equal(trapped.template, 'digital');
   assert.equal(trapped.eventId, 'Lvl_Test:2:hack_terminal');
+  assert.equal(trapped.animationId, 'firewall-breach');
+  assert.equal(trapped.outcomeEffect, CINEMATIC_OUTCOME_EFFECTS.trap);
+  assert.equal(typeof trapped.animationSeed, 'number');
   assert.equal(Object.hasOwn(trapped, 'hidden_clues'), false);
   assert.equal(Object.hasOwn(trapped, 'solution'), false);
 
   const clue = buildCinematicEvent({ ...common, settlement: { action_narration: '发现公开痕迹' } });
   assert.equal(clue.outcome, 'clue');
+  assert.equal(clue.outcomeEffect, CINEMATIC_OUTCOME_EFFECTS.clue);
   assert.deepEqual(clue.revealedClues.map(item => item.clueId), ['critical']);
 
   const progress = buildCinematicEvent({
@@ -105,6 +126,7 @@ test('one cinematic event applies trap, clue, progress and no-yield priority saf
     settlement: { action_narration: '进入相邻区域' },
   });
   assert.equal(progress.outcome, 'progress');
+  assert.equal(progress.outcomeEffect, CINEMATIC_OUTCOME_EFFECTS.progress);
 
   const noYield = buildCinematicEvent({
     ...common,
@@ -112,9 +134,10 @@ test('one cinematic event applies trap, clue, progress and no-yield priority saf
     settlement: { action_narration: '没有发现' },
   });
   assert.equal(noYield.outcome, 'no_yield');
+  assert.equal(noYield.outcomeEffect, CINEMATIC_OUTCOME_EFFECTS.no_yield);
 });
 
-test('playback capability chooses disabled, reduced-motion, WebGL and low-quality modes', () => {
+test('playback capability honors accessibility, data saver and explicit quality safely', () => {
   const makeWindow = ({ reduced = false, mobile = false, webgl = true } = {}) => ({
     matchMedia: query => ({ matches: query.includes('reduced') ? reduced : mobile }),
     document: {
@@ -136,7 +159,35 @@ test('playback capability chooses disabled, reduced-motion, WebGL and low-qualit
     'low',
   );
   assert.equal(
-    detectCinematicPlayback({ windowObject: makeWindow(), navigatorObject: { connection: { saveData: true } } }).reason,
-    'save_data',
+    detectCinematicPlayback({ windowObject: makeWindow(), navigatorObject: { connection: { saveData: true } } }).mode,
+    '2d',
   );
+  assert.deepEqual(
+    detectCinematicPlayback({ quality: 'low', windowObject: makeWindow(), navigatorObject: { deviceMemory: 8 } }),
+    { mode: '3d', quality: 'low', reason: 'user_low' },
+  );
+  assert.deepEqual(
+    detectCinematicPlayback({ quality: 'high', windowObject: makeWindow({ mobile: true }), navigatorObject: { deviceMemory: 2 } }),
+    { mode: '3d', quality: 'high', reason: 'user_high' },
+  );
+  assert.equal(
+    detectCinematicPlayback({ quality: 'high', windowObject: makeWindow({ reduced: true }) }).mode,
+    '2d',
+  );
+  assert.equal(
+    detectCinematicPlayback({ quality: 'high', windowObject: makeWindow({ webgl: false }) }).mode,
+    '2d',
+  );
+});
+
+test('cinematic renderer keeps deterministic effects, no eager model preloads and a completing 2D fallback', async () => {
+  const [renderer, fallback] = await Promise.all([
+    readFile(new URL('../src/components/game/cinematics/ActionCinematic.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/game/cinematics/ActionCinematicFallback.jsx', import.meta.url), 'utf8'),
+  ]);
+  assert.doesNotMatch(renderer, /Math\.random|useGLTF\.preload/);
+  assert.match(renderer, /aria-hidden="true"/);
+  assert.match(renderer, /completeRef\.current\?\.\('renderer_lost'\)/);
+  assert.match(fallback, /completeRef\.current\?\.\('completed'\)/);
+  assert.doesNotMatch(fallback, /completeRef\.current\?\.\('fallback'\)/);
 });

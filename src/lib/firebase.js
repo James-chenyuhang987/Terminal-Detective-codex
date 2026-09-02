@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth';
+import { resolveAuthEmailSender } from '@/lib/authEmail';
 
 const firebaseConfig = Object.freeze({
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -25,6 +26,10 @@ export function validateFirebasePublicConfig(config = {}) {
 
 export const firebaseConfigValidation = validateFirebasePublicConfig(firebaseConfig);
 export const isFirebaseConfigured = firebaseConfigValidation.valid;
+export const firebaseAuthEmailSender = resolveAuthEmailSender(
+  import.meta.env.VITE_FIREBASE_EMAIL_SENDER,
+  firebaseConfig.projectId,
+);
 
 let authInstance = null;
 let persistencePromise = null;

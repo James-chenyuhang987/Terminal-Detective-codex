@@ -20,6 +20,7 @@ const TX = {
     glitch: '故障特效强度', glitchDesc: '混乱值升高时的画面撕裂程度',
     particles: '粒子动画', particlesDesc: '大厅神经网络粒子与浮动光点',
     cinematics: '行动 3D 演示', cinematicsDesc: '每两回合及重大事件播放全屏现场重演；关闭后使用快速 2D 结果镜头',
+    cinematicQuality: '3D 演示画质', cinematicQualityDesc: '自动模式依据设备性能和节省流量设置选择 3D 或 2D 安全模式',
     data: '游戏数据 · DATA',
     exportL: '导出档案', exportDesc: '导出版本化本地设置与合法云端进度字段', exportBtn: '导出',
     importL: '导入档案', importDesc: '校验并预览 JSON 后恢复设置与云端进度', importBtn: '导入',
@@ -40,7 +41,7 @@ const TX = {
     okImport: '档案导入成功', errImport: '导入失败：文件格式或版本无效', importPreview: '确认导入：本地设置与云端进度将被覆盖。',
     resetCode: '请输入当前侦探代号以确认', resetMismatch: '代号不匹配', okCloudReset: '云端进度已重置', syncFailed: '云端同步失败，请重试',
     successStatus: '操作已完成', errorStatus: '操作未完成',
-    off: '关闭', low: '低', high: '高',
+    off: '关闭', auto: '自动', low: '低', high: '高',
     yes: '确认', no: '取消',
   },
   en: {
@@ -54,6 +55,7 @@ const TX = {
     glitch: 'Glitch Intensity', glitchDesc: 'Screen tearing as confusion rises',
     particles: 'Particle FX', particlesDesc: 'Lobby neural particles and floating motes',
     cinematics: '3D Action Replays', cinematicsDesc: 'Play full-screen reenactments every two turns and on major events; disabled mode uses a quick 2D result shot',
+    cinematicQuality: '3D Replay Quality', cinematicQualityDesc: 'Auto chooses 3D or the safe 2D mode from device capability and data-saver preferences',
     data: 'DATA',
     exportL: 'Export Profile', exportDesc: 'Export versioned local preferences and valid cloud progress fields', exportBtn: 'EXPORT',
     importL: 'Import Profile', importDesc: 'Validate and preview JSON before restoring local and cloud data', importBtn: 'IMPORT',
@@ -74,7 +76,7 @@ const TX = {
     okImport: 'Profile imported', errImport: 'Import failed: invalid format or version', importPreview: 'Import local settings and overwrite cloud progress?',
     resetCode: 'Enter the current detective codename to confirm', resetMismatch: 'Codename does not match', okCloudReset: 'Cloud progress reset', syncFailed: 'Cloud sync failed. Please retry.',
     successStatus: 'OPERATION COMPLETE', errorStatus: 'OPERATION FAILED',
-    off: 'OFF', low: 'LOW', high: 'HIGH',
+    off: 'OFF', auto: 'AUTO', low: 'LOW', high: 'HIGH',
     yes: 'CONFIRM', no: 'CANCEL',
   },
 };
@@ -293,6 +295,10 @@ export default function SettingsDrawer({ onClose }) {
               value={settings.particles} onChange={(v) => change('particles', v)} />
             <ToggleRow skin={skin} label={tx.cinematics} desc={tx.cinematicsDesc}
               value={settings.cinematicsEnabled} onChange={(v) => change('cinematicsEnabled', v)} />
+            <SegmentRow skin={skin} label={tx.cinematicQuality} desc={tx.cinematicQualityDesc}
+              value={settings.cinematicQuality}
+              options={[{ value: 'auto', label: tx.auto }, { value: 'low', label: tx.low }, { value: 'high', label: tx.high }]}
+              onChange={(v) => change('cinematicQuality', v)} />
           </div>
 
           <SectionTitle skin={skin}>{tx.data}</SectionTitle>

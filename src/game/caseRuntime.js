@@ -69,7 +69,15 @@ export function getZoneClueIds(caseData, zoneId) {
   return (caseData?.clue_dictionary || []).map(clue => clue.clue_id);
 }
 
-export function getAvailableClueIds(caseData, zoneId, unlockedClues = []) {
+export function getAvailableClueIds(caseData, zoneId, unlockedClues = [], turn = 0) {
   const known = new Set(unlockedClues);
-  return getZoneClueIds(caseData, zoneId).filter(id => !known.has(id));
+  const protectedUntil = new Map(
+    (caseData?.hidden_clues || []).map(clue => [
+      clue?.clue_id,
+      Math.max(1, Number(clue?.unlock_turn) || 1),
+    ]),
+  );
+  return getZoneClueIds(caseData, zoneId).filter(id =>
+    !known.has(id) && (!protectedUntil.has(id) || turn >= protectedUntil.get(id))
+  );
 }
