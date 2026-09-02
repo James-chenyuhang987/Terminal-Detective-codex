@@ -108,8 +108,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     busyRef.current = true;
     setBusy(true);
     try {
-      await mutate(current => ({ profile: { ...current, ...changes } }));
-      if (message) notify(message);
+      const result = await mutate(current => ({ profile: { ...current, ...changes } }));
+      if (message) notify(result?.queued
+        ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
+        : message);
       return true;
     } catch {
       notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
@@ -153,7 +155,9 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       try {
         const evaluated = await mutate(current => result(current));
         if (!evaluated?.profile || evaluated.error) return rejectResult(evaluated);
-        if (message) notify(message);
+        if (message) notify(evaluated?.queued
+          ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
+          : message);
         return true;
       } catch {
         notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');

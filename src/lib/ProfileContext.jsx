@@ -3,10 +3,14 @@ import { useAuth } from '@/lib/AuthContext';
 import { useLang } from '@/lib/lang.jsx';
 import {
   applySettlementToProfile,
+  clearPendingProfileWrite,
   diffProfileWrite,
+  enqueuePendingProfileWrite,
   enqueuePendingSettlement,
   invokePlayerProfile,
+  isRetryableProfileError,
   migrateProfileV2,
+  readPendingProfileWrite,
   readPendingSettlements,
   removePendingSettlement,
 } from '@/game/playerProfile';
@@ -80,6 +84,7 @@ export function ProfileProvider({ children }) {
   const [syncStatus, setSyncStatus] = useState('loading');
   const [pendingCount, setPendingCount] = useState(0);
   const [error, setError] = useState(null);
+  const [hasPendingWrite, setHasPendingWrite] = useState(false);
 
   const isCurrentOwner = useCallback((ownerUid, generation) => (
     mountedRef.current

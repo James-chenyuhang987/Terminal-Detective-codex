@@ -78,11 +78,20 @@ function requireThrottle(action) {
 function consumeAuthReturn() {
   const url = new URL(window.location.href);
   const action = url.searchParams.get('auth') || '';
-  if (action) {
-    url.searchParams.delete('auth');
+  const redirectParams = paramsObject(url.searchParams);
+  let feedback = authRedirectFeedback(redirectParams);
+  const hashValue = url.hash.replace(/^#\??/, '');
+  if (hashValue && /(?:^|&)error(?:_code|_description)?=/.test(hashValue)) {
+    feedback ||= authRedirectFeedback(paramsObject(new URLSearchParams(hashValue)));
+    url.hash = '';
+  }
+  const sensitiveKeys = ['auth', 'error', 'error_code', 'error_description'];
+  const changed = sensitiveKeys.some(key => url.searchParams.has(key)) || Boolean(feedback && window.location.hash);
+  sensitiveKeys.forEach(key => url.searchParams.delete(key));
+  if (changed) {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }
-  return action;
+  return { action, feedback };
 }
 
 function rememberRedirectAction(action) {
@@ -261,7 +270,7 @@ export function AuthProvider({ children }) {
       if (throwOnFailure) throw feedbackError(code, error);
       return null;
     }
-  }, []);
+  }, [checkAuthBackend]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -311,6 +320,7 @@ export function AuthProvider({ children }) {
           setAuthNotice({ kind: 'error', code });
         }
       }
+      if (authReturn.feedback && mountedRef.current) setAuthServiceError(authReturn.feedback);
       unsubscribe = onIdTokenChanged(auth, async nextUser => {
         if (cancelled) return;
         const shouldBlock = !authCheckedRef.current
@@ -628,6 +638,14 @@ export function AuthProvider({ children }) {
     return applyFirebaseUser(instance.currentUser, { forceRefresh: true });
   }, [applyFirebaseUser]);
 
+  const retryAuthService = useCallback(async () => {
+    const ready = await checkAuthBackend();
+    if (!ready) return false;
+    const instance = await firebaseAuthReady();
+    if (instance?.currentUser) await applyFirebaseUser(instance.currentUser, { forceRefresh: true });
+    return true;
+  }, [applyFirebaseUser, checkAuthBackend]);
+
   const getIdToken = useCallback(async (forceRefresh = false) => {
     const instance = await firebaseAuthReady();
     return instance?.currentUser?.getIdToken(Boolean(forceRefresh)) || '';
@@ -669,12 +687,13 @@ export function AuthProvider({ children }) {
     logout,
     clearAuthNotice,
     checkUserAuth,
+    retryAuthService,
     getIdToken,
     cooldownRemaining: getCooldownRemaining,
   }), [
     addPassword, authBackendReady, authChecked, authNotice, authServiceError, changePassword, checkUserAuth, clearAuthNotice, firebaseUser, getCooldownRemaining, getIdToken,
     isAuthenticated, isLoadingAuth, linkGitHub, loginWithGitHub, logout, refreshEmailVerification,
-    sendPasswordReset, sendVerificationAgain, signInWithEmail, signUpWithEmail, unlinkGitHub, user, verificationEmail,
+    retryAuthService, sendPasswordReset, sendVerificationAgain, signInWithEmail, signUpWithEmail, unlinkGitHub, user, verificationEmail,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

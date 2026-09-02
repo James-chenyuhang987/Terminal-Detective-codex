@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   AUTH_FEEDBACK_CODES,
+  authRedirectFeedback,
   hasGitHubProvider,
   hasPasswordProvider,
   mapFirebaseAuthError,
@@ -29,6 +30,26 @@ test('Firebase errors map to stable player-facing categories', () => {
   assert.equal(mapFirebaseAuthError({ code: 'auth/unauthorized-domain' }), AUTH_FEEDBACK_CODES.CONFIG_MISSING);
   assert.equal(mapFirebaseAuthError({ code: 'auth/user-mismatch' }), AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL);
   assert.equal(mapFirebaseAuthError({ name: 'AbortError' }), AUTH_FEEDBACK_CODES.NETWORK);
+  assert.equal(mapFirebaseAuthError({ code: 'auth/unauthorized-domain' }), AUTH_FEEDBACK_CODES.DOMAIN_UNAUTHORIZED);
+  assert.equal(mapFirebaseAuthError({ code: 'auth/operation-not-allowed' }), AUTH_FEEDBACK_CODES.PROVIDER_DISABLED);
+  assert.equal(mapFirebaseAuthError({ code: 'auth/web-storage-unsupported' }), AUTH_FEEDBACK_CODES.BROWSER_UNSUPPORTED);
+});
+
+test('redirect errors are reduced to safe feedback categories', () => {
+  assert.equal(authRedirectFeedback({ error: 'access_denied' }), AUTH_FEEDBACK_CODES.GITHUB_CANCELLED);
+  assert.equal(authRedirectFeedback({ error_code: 'too_many_attempts' }), AUTH_FEEDBACK_CODES.RATE_LIMITED);
+  assert.equal(authRedirectFeedback({ error_description: 'unauthorized redirect domain' }), AUTH_FEEDBACK_CODES.DOMAIN_UNAUTHORIZED);
+  assert.equal(authRedirectFeedback({}), '');
+});
+
+test('email cooldown persists and backs off after real rate limits', () => {
+  const storage = memoryStorage();
+  startAuthCooldown('verify', { storage, now: 1_000 });
+  assert.equal(cooldownRemaining('verify', storage, 1_000), 60);
+  startAuthCooldown('verify', { storage, now: 61_000, rateLimited: true });
+  assert.equal(cooldownRemaining('verify', storage, 61_000), 120);
+  startAuthCooldown('verify', { storage, now: 181_000, rateLimited: true });
+  assert.equal(cooldownRemaining('verify', storage, 181_000), 240);
 });
 
 test('recent authentication accepts only a bounded, non-future timestamp', () => {

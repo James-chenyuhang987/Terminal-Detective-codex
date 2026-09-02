@@ -74,6 +74,20 @@ test('auth configuration requires a real Firebase project id', async () => {
     ready: true,
     checks: { database: true, schema: true },
   });
+
+  const incomplete = await handleRequest(new Request('https://game.example/api/auth/config'), {
+    ...env,
+    FIREBASE_PROJECT_ID: 'terminal-detective-test',
+    DB: {
+      prepare: () => ({
+        all: async () => ({ results: [
+          { name: 'users', sql: 'CREATE TABLE users (id TEXT, email TEXT)' },
+          { name: 'profiles', sql: 'CREATE TABLE profiles (user_id TEXT, profile_json TEXT)' },
+        ] }),
+      }),
+    },
+  });
+  assert.equal((await incomplete.json()).ready, false);
 });
 
 test('auth readiness distinguishes a reachable D1 database from an incomplete schema', async () => {

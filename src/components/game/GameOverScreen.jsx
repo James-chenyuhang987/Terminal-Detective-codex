@@ -285,7 +285,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         level: result.profile.level,
         xp: result.profile.xp,
       } : null);
-      setSettlementStatus('saved');
+      setSettlementStatus(result?.queued ? 'queued' : 'saved');
     } catch {
       settlementSentRef.current = false;
       setSettlementStatus('error');
@@ -314,6 +314,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
   const isPassed = isPassingCaseScore(score);
   const scoreTitle = zh ? (SCORE_TITLES[score] || '见习侦探') : (SCORE_TITLES_EN[score] || 'DETECTIVE TRAINEE');
   const mainColor = isPassed ? '#00ff88' : '#ff3860';
+  const settlementCanLeave = ['saved', 'queued'].includes(settlementStatus);
 
   const BONUS_ROWS = [
     { label: zh ? `案件评分 · ${score} 级` : `CASE RANK · ${score}`, sublabel: scoreTitle, val: xpGain.base, color: { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' }[score] || '#888', icon: { S: '🏆', A: '⭐', B: '🔰', C: '📋', D: '📝' }[score] || '📋' },
@@ -450,6 +451,8 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         }}>
           {settlementStatus === 'saved'
             ? (zh ? '✓ 调查档案已同步至 Cloudflare' : '✓ INVESTIGATION SYNCED TO CLOUDFLARE')
+            : settlementStatus === 'queued'
+              ? (zh ? '◌ 奖励已安全保存在本机，网络恢复后自动同步' : '◌ REWARDS SAVED LOCALLY AND QUEUED FOR CLOUD SYNC')
             : settlementStatus === 'error'
               ? (zh ? '⚠ 云端结算失败，奖励尚未写入' : '⚠ CLOUD SETTLEMENT FAILED. REWARDS NOT SAVED.')
               : (zh ? '⟳ 正在同步调查结算…' : '⟳ SYNCING CASE SETTLEMENT…')}
@@ -458,12 +461,12 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', animation: 'go-in 0.6s 0.6s cubic-bezier(.22,1,.36,1) both' }}>
-          <button className="td-ui-button td-button-primary" onClick={onReturnToLobby} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
+          <button className="td-ui-button td-button-primary" onClick={onReturnToLobby} disabled={!settlementCanLeave} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: settlementCanLeave ? 'pointer' : 'wait', opacity: settlementCanLeave ? 1 : .45, boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
             ↺ {zh ? '重新配置编队' : 'RECONFIGURE SQUAD'}
           </button>
-          <button className="td-ui-button td-button-ghost" onClick={onReturnToLanding} disabled={settlementStatus !== 'saved'} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.6)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, cursor: settlementStatus === 'saved' ? 'pointer' : 'wait', opacity: settlementStatus === 'saved' ? 1 : .45, transition: 'all 0.2s' }}
+          <button className="td-ui-button td-button-ghost" onClick={onReturnToLanding} disabled={!settlementCanLeave} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.6)', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, cursor: settlementCanLeave ? 'pointer' : 'wait', opacity: settlementCanLeave ? 1 : .45, transition: 'all 0.2s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}>
             ← {zh ? '返回主页' : 'RETURN HOME'}
