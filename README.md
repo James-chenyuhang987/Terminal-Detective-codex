@@ -72,7 +72,100 @@ Cloudflare D1
 | Firebase Authentication | 统一处理邮箱密码、邮箱验证、密码重置和 GitHub 登录。 |
 | Firebase ID Token | 浏览器向 Worker 发送短期 Bearer Token；Firebase SDK 自动刷新。 |
 | 确定性规则引擎 | 处理决策选项、审讯、线索连线和结构化报告评分。 |
-| Wrangler | D1 迁移、本地 Worker 调试、秘密管理和正式部署。 |
+| `jose` | 在 Worker 中导入 Google X.509 公钥并验证 Firebase RS256 ID Token。 |
+| Wrangler | 构建 Worker、应用 D1 migration、本地调试和正式部署。 |
+
+### 当前版本基线
+
+| 运行层 | 当前版本或基线 |
+| --- | --- |
+| Node.js | 22+（GitHub Actions 使用 22） |
+| React / React DOM | 18.3.1 |
+| Firebase Web SDK | 12.18.0 |
+| Vite | 8.2.2 |
+| TypeScript | 5.9.3（通过 `jsconfig.json` 检查 JavaScript/JSX） |
+| Three.js / React Three Fiber / Drei | 0.168.0 / 8.18.0 / 9.122.0 |
+| `jose` | 6.2.10 |
+| Wrangler | 4.128.0 |
+| Workers compatibility date | `2026-08-31`，启用 `nodejs_compat` |
+
+依赖使用精确版本并由 `package-lock.json` 锁定。升级认证、构建或 Worker 依赖时必须重新执行测试、类型检查、生产构建、Worker dry-run 和安全扫描，不能只确认本地开发服务器可以启动。
+
+### 认证与会话状态机
+
+1. 邮箱注册要求 8–64 个字符、至少一个字母和一个数字；注册后必须完成 Firebase 邮箱验证，未验证用户不会初始化 D1 档案。
+2. 验证邮件和密码重置使用 Firebase 官方处理页，返回地址是当前应用首页，不使用 Magic Link，也不把认证参数写入游戏 hash 路由。
+3. GitHub 登录和绑定优先使用 popup；浏览器阻止弹窗或不兼容时才切换 Firebase redirect。应用启动时只清除旧 OAuth 遗留的错误 query/hash，不破坏游戏路由。
+4. Firebase 使用“一邮箱一账号”。同邮箱凭据冲突时先使用已有方式登录，再在设置中绑定 GitHub 或密码；禁止解绑最后一种可用凭据。
+5. 绑定、解绑、添加密码和修改密码要求最近 5 分钟内完成过登录；过期时通过当前密码或 GitHub 重新认证。
+6. 邮件、注册、邮箱登录和 GitHub 操作分别记录冷却。成功发送后冷却 60 秒；真实限流按 2、4、8、15 分钟退避并持久化到 `localStorage`。
+7. 登录完成后，前端在一个 10 秒总 deadline 内获取 ID Token 并初始化 Worker 会话。网络、`408/429/502/503/504` 最多额外重试两次；`401` 只强制刷新 Token 并重试一次。
+
+Worker 不接受客户端提交的 UID。它从 ID Token 读取用户身份，并验证 RS256 签名、Google 公钥 `kid`、`aud`、`iss`、`exp`、`iat`、`auth_time`、非空 UID、邮箱和 `email_verified`。Google 公钥按响应 `Cache-Control` 缓存；并发刷新会合并，未知 `kid` 与下载失败有独立短退避，避免外部故障放大。
+
+认证 Context 的主要接口位于 `src/lib/AuthContext.jsx`：
+
+```js
+{
+  user,
+  isAuthenticated,
+  isLoadingAuth,
+  authChecked,
+  authBackend,
+  signInWithEmail,
+  signUpWithEmail,
+  sendVerificationAgain,
+  refreshEmailVerification,
+  sendPasswordReset,
+  loginWithGitHub,
+  linkGitHub,
+  unlinkGitHub,
+  addPassword,
+  changePassword,
+  logout,
+  getIdToken
+}
+```
+
+### 档案一致性与离线恢复
+
+档案保存不是简单的“最后一次整份覆盖”，而是浏览器 WAL、D1 revision CAS 和服务端幂等账本三层协作：
+
+| 层 | 机制 |
+| --- | --- |
+| 浏览器 WAL v2 | 每个 Firebase UID、operation ID 保存一个独立 `localStorage` 记录；包含 lineage、patch、base revision、时间、尝试次数和 checksum。 |
+| 顺序重放 | 同一 lineage 按持久化顺序提交；只有前一项明确提交为 `base + 1` 时才推进后一项 revision。重放期间阻止新的档案 mutation 插入固定快照。 |
+| 标签页隔离 | 新标签页可以重放旧 lineage，但旧 lineage 排空前不能创建新 mutation；检测到多个 lineage 分叉时停止自动写入，避免静默覆盖。 |
+| D1 CAS | `profiles.profile_revision` 与 `active_session_id` 同时参与条件更新；保存过程中被另一设备接管会返回 `SESSION_TAKEN`。 |
+| 幂等账本 | `profile_operations` 以 `(user_id, operation_id)` 为主键并记录 patch SHA-256、base/result revision；重试不会重复结算。 |
+| 输入边界 | `expected_revision` 必须是非负安全整数，patch 不能为空；单次 patch 和合并后的完整档案均不得超过 512 KiB。 |
+| 案件结算 outbox | 结算意图按 UID 与 `run_id` 独立保存，只有对应 WAL 真正提交后才删除，便于版本冲突后重新应用。 |
+
+真正的跨设备 `STALE_PROFILE` 不会自动把绝对值 patch 重基到新档案，因为这可能覆盖另一设备的货币、购买或奖励。此类冲突会进入显式恢复；断网、超时、`429` 和临时 `5xx` 则保留乐观状态，并在登录、恢复联网和每 20 秒轮询时自动重放。
+
+| 同步状态 | 行为 |
+| --- | --- |
+| `online` | 云端已同步，可正常修改。 |
+| `syncing` | 正在按顺序重放，暂时阻止新 mutation。 |
+| `pending` | 临时故障，WAL 保留并等待自动重试。 |
+| `readonly` | 账号已被另一设备接管；当前设备保留未同步操作但停止写云端。 |
+| `storage_unavailable` | 浏览器本地持久化不可用，为防止丢档停止修改。 |
+| `recovery` | WAL 损坏、lineage 分叉或真实版本冲突，停止自动写入；可恢复的结算意图会保留，其余待同步 patch 需要玩家确认后舍弃。 |
+
+`localStorage` WAL 只能防御暂时断网、刷新和短期服务故障。玩家主动清除站点数据、浏览器禁用存储、磁盘故障或 D1 长期不可用时，仍不能承诺本地待同步操作永久存在。
+
+### Worker API 契约
+
+| 路径 | 认证 | 用途 |
+| --- | --- | --- |
+| `GET /api/auth/config` | 无 | 返回 Firebase、D1 binding 和必要 schema 的 readiness。 |
+| `GET /api/cloudflare/status` | 无 | 聚合服务状态；未就绪时返回 `503`。 |
+| `GET /api/auth/session` | Firebase ID Token | 返回统一的 `firebase-cloudflare` 账户结构。 |
+| `GET /api/apps/:appId/entities/User/me` | Firebase ID Token | 读取当前 Token UID 对应的账户和档案。 |
+| `POST /api/apps/:appId/functions/playerProfile` | ID Token + `X-Profile-Owner` | `claim_session`、`status` 和幂等 `patch`。owner header 必须与 Token UID 一致。 |
+| `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID Token | 执行白名单内的确定性案件规则。 |
+
+所有 `/api/*` 未知路径直接返回 JSON 404，不会回退到 SPA。未知服务端故障只向玩家返回匿名 `TD-XXXXXXXXXX` 故障编号；原始异常只写入 Worker 日志。
 
 ## 部署框架：前端和后端如何组合
 
@@ -124,7 +217,7 @@ Firebase 在这套架构中只负责身份认证，不保存游戏档案；Cloud
 | `cloudflare/migrations/` | D1 表结构变更脚本 | 只有显式执行 migration 才会进入 D1 |
 | Firebase 控制台配置 | 登录方式和 OAuth Provider | Firebase Authentication |
 
-`npm run cloudflare:deploy` 会先构建前端，再打包 Worker，最后发布二者。它不会自动执行 D1 migration，也不会自动修改 Firebase 或 GitHub OAuth 设置。
+`npm run cloudflare:deploy` 会先运行 `release:check`，确认前端四个 Firebase Web 值、Worker Firebase Project ID、D1 database ID、APP ID 与 CORS origins 完整且相互一致，再构建前端、打包 Worker 并发布二者。它不会自动执行 D1 migration，也不会自动修改 Firebase 或 GitHub OAuth 设置。
 
 ### 请求与数据流
 
@@ -258,24 +351,29 @@ Callback URL: https://<FIREBASE_PROJECT_ID>.firebaseapp.com/__/auth/handler
 
 4. 将 GitHub Client ID 与 Client Secret 只填写到 Firebase Authentication 的 GitHub Provider，不写入仓库或 Cloudflare 前端变量。
 5. 在 Firebase Authorized domains 添加 Worker 域名、`localhost` 和 `127.0.0.1`；将验证邮件与重置邮件的继续地址设为 Worker 首页。
-6. 将 Firebase Project ID 写入 `wrangler.jsonc` 的 `FIREBASE_PROJECT_ID`，它必须与前端项目一致。
-7. 审核 D1 目标后再执行迁移。`0002_reset_for_firebase.sql` 会按已确认的方案清空旧用户、旧 OAuth 会话和旧档案：
+6. 将公开的 Firebase Project ID 写入 `wrangler.jsonc` 的 `FIREBASE_PROJECT_ID`，它必须与前端项目一致；运行 `npm run release:check` 确认发布配置。
+7. 安排维护窗口并审核 D1 目标后再执行迁移。`0002_reset_for_firebase.sql` 会按已确认的方案清空旧用户、旧 OAuth 会话和旧档案；`0003_profile_operations.sql` 创建档案幂等操作账本：
 
 ```bash
 npm run cloudflare:d1:remote
 ```
 
-8. 运行 `npm run cloudflare:deploy`，再访问 `/api/cloudflare/status` 和 `/api/auth/config` 检查服务。
+8. 迁移成功后立即运行 `npm run cloudflare:deploy`，再访问 `/api/cloudflare/status` 和 `/api/auth/config` 检查服务。当前生产 D1 已应用 `0001`–`0003`，包含 `profile_operations` 幂等账本；不要在迁移完成而新 Worker 尚未发布时重新开放游戏。
 
 新数据库从空档案开始，不会自动导入旧平台或旧 Cloudflare 账号中的玩家。
+
+如果启用 GitHub Pages 备用前端，还需在仓库 Actions variables 中配置 `VITE_FIREBASE_API_KEY`、`VITE_FIREBASE_AUTH_DOMAIN`、`VITE_FIREBASE_PROJECT_ID`、`VITE_FIREBASE_APP_ID` 和 `VITE_BASE_PATH`，将 Pages 主机名加入 Firebase Authorized Domains，并把 Pages 精确来源加入 Worker 的 `CORS_ALLOWED_ORIGINS`。这些 Firebase Web App 值是公开标识，不得把 GitHub Client Secret 或 Firebase 私钥放入 Actions variables。
 
 ## 安全设计
 
 - GitHub Client Secret 只保存在 Firebase Provider 配置中；Firebase 服务账号私钥不进入前端、Cloudflare Worker 或仓库。
 - Worker 验证 Firebase RS256 ID Token 的签名、`kid`、`aud`、`iss`、有效期、UID 与邮箱验证状态，并缓存 Google 公钥。
+- Token 的 `iat` 与 `auth_time` 必须是合理的正整数时间，`exp` 必须晚于当前时间和 `iat`；时钟偏差容忍上限为 5 分钟。
 - 案件真相、真实事实贴近度和正确报告答案不进入浏览器构建产物。
 - 玩家档案使用字段白名单、嵌套结构限制、档案版本和活跃设备会话校验；读写目标只能来自已验证 Token 的 Firebase UID。
+- 每次档案修改先写入按完整 Firebase UID、operation ID 和 lineage 隔离的 WAL v2 记录，再通过 D1 操作账本和档案版本 CAS 更新；跨标签页分叉会失败关闭，重复请求不会重复结算。
 - GitHub 优先使用 Firebase 弹窗授权，受限浏览器自动降级到 Firebase redirect；游戏页面不再承担 OAuth callback。
+- 登录前会核对前后端 Firebase Project ID、D1 binding 和必要表字段；`/api/cloudflare/status` 未就绪时返回 `503`，不会伪报成功。
 - 规则与档案接口均要求有效 Firebase Bearer Token；规则接口拒绝客户端身份字段、原型污染键和异常深层数据；401 只强制刷新并重试一次，未知 API 路由不会代理到旧后端。
 - 项目默认忽略 `.mcp.json`、`.claude/`、`.cursor/`、私钥和本地环境文件；需要引入项目级自动执行配置时必须先人工审核。
 - 依赖版本使用精确锁定，`.npmrc` 固定官方 npm registry；`npm run security:check` 会检查隐藏执行配置、常见密钥痕迹和锁文件下载域名。
@@ -289,6 +387,10 @@ cloudflare/migrations/      D1 数据库迁移
 server/detectiveRules/      服务端案件秘密与确定性规则
 src/components/game/        首页、大厅、调查终端、结算和功能模块
 src/game/                   游戏状态、经济、探员、案件与表达引擎
+src/game/profileWal.js      按 UID/operation/lineage 隔离的浏览器 WAL v2
+src/lib/AuthContext.jsx     Firebase 登录、验证、绑定、重认证和 Token 提供器
+src/lib/ProfileContext.jsx  档案 claim、乐观状态、顺序重放与冲突恢复
+src/lib/authSession.js      10 秒会话 deadline、有限重试和 401 单次刷新
 src/api/cloudflareClient.js 浏览器端同源 API 客户端
 public/assets/              首页、3D 道具与其他本地资源
 tests/                      规则、档案、界面行为和安全测试
@@ -325,18 +427,17 @@ tests/                      规则、档案、界面行为和安全测试
 - Firebase Authentication 只负责身份认证，不保存游戏进度。
 - GitHub 只作为 Firebase 的一种登录凭据，不直接读写 D1。
 
-### 免费额度与并发判断
+### 容量、额度与并发边界
 
-10 名玩家同时登录或游玩通常不会形成性能压力。需要关注的是每天累计请求和邮件数量，而不是十人的瞬时并发。
+静态资源、Worker API、D1 查询和 Firebase 邮件分别计费或限流，不能用一个“同时在线人数”数字推导整体容量：
 
-- Cloudflare Workers Free 当前提供每天 100,000 次 Worker 请求；普通静态资源请求不计入该额度。
-- `/api/*` 会执行 Worker，因此登录初始化、读取档案和保存进度都会计入 Worker 请求。
-- Worker 免费请求耗尽时，API 可能返回 `429` 或 Cloudflare `1027`；这不是 `404limited`。
-- Firebase Spark 方案启用 Identity Platform 后当前约支持每天 3,000 名活跃用户。
-- Firebase 免费方案当前约提供每天 1,000 封邮箱验证邮件和 150 封密码重置邮件；官方可能调整额度。
-- 同一 IP 大量注册、反复发送邮件或异常访问仍可能触发 Firebase 的滥用保护和临时限流。
+- `/api/*` 会执行 Worker，并进一步产生 D1 查询；静态资源是否计入请求额度取决于 Cloudflare 当前套餐规则。
+- D1 需要同时关注每日读写行数、单次查询和数据库大小，不能只看 Worker 请求数。
+- Firebase 邮箱验证、密码重置、活跃用户和滥用保护的额度会随方案、地区和官方政策变化。
+- 同一 IP 高频注册、重复发送邮件或异常 OAuth 请求，即使未达到日额度也可能被临时限制。
+- 额度耗尽或滥用保护通常表现为 Firebase 限流错误、HTTP `429` 或 Cloudflare 平台错误；`404limited` 不是标准错误名称。
 
-正式运营前应以官方最新页面为准：
+因此 README 不硬编码可能过期的免费额度。容量评估和正式运营前检查必须以控制台用量及官方最新页面为准：
 
 - [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Cloudflare Static Assets billing and limitations](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
@@ -350,27 +451,28 @@ tests/                      规则、档案、界面行为和安全测试
 
 | 场景 | 当前保护 | 仍可能发生的情况 |
 | --- | --- | --- |
-| 邮件繁忙或限流 | 验证邮件和密码重置具有 60 秒本地冷却；界面显示友好提示，不暴露原始 Firebase 错误 | 达到 Firebase 日额度、同 IP 请求过多或触发滥用保护时，邮件仍可能延迟或被限制 |
-| OAuth 回调 404 | GitHub 优先使用 Firebase 弹窗；降级回调使用 Firebase 官方 handler，不把认证错误交给页面 hash 路由 | Firebase Authorized Domains、GitHub Callback URL 或生产域名配置错误时仍会登录失败 |
-| 原始 `error` 或空白页 | 常见 Firebase 错误统一映射为中英文提示；配置缺失、网络中断和超时均有恢复入口 | 未知代码缺陷、浏览器扩展拦截或 Firebase/Cloudflare 故障仍可能产生异常 |
-| 登录失败 | 包含 25 秒认证超时、弹窗受阻后的 redirect 降级、Token 自动刷新和 401 单次重试 | 密码错误、邮箱未验证、授权取消、网络中断、Provider 不匹配或生产配置缺失时会拒绝登录 |
-| 玩家数据未保存 | 所有档案操作按已验证 Firebase UID 写入 D1；写入带档案版本校验，案件奖励有本地待同步队列 | 网络中断、D1 配额耗尽、DB binding/迁移错误、设备会话被接管或同步完成前关闭页面时，保存可能暂时失败 |
+| 邮件繁忙或限流 | 正常发送后冷却 60 秒；真正命中限流后按 2、4、8 分钟逐级退避，最高 15 分钟；各认证操作独立计时，验证等待页仍可改用 GitHub | 达到 Firebase 日额度、同 IP 请求过多或触发滥用保护时，邮件仍可能延迟或被限制 |
+| OAuth 回调 404 | GitHub 优先使用 Firebase 弹窗；降级回调使用 Firebase 官方 handler；应用启动时只清除遗留认证错误 query/hash | Firebase Authorized Domains、GitHub Callback URL 或生产域名配置错误时仍会拒绝授权，但界面会提供恢复提示 |
+| 原始 `error` 或空白页 | 已知 Firebase、Worker 和 D1 错误统一映射为中英文提示；未知顶层故障只展示匿名故障编号 | 未知代码缺陷、浏览器扩展拦截或第三方服务整体故障仍可能中断当前操作 |
+| 登录失败 | 登录前检查前后端 Firebase 项目、D1 binding 和必要表字段；会话初始化总计最多等待 10 秒，网络及 `429/502/503/504` 最多重试两次，`401` 只刷新 Token 一次 | 密码错误、邮箱未验证、授权取消、网络中断、Provider 未开启或真实生产配置缺失时仍会拒绝登录 |
+| 玩家数据未保存 | 所有档案写入先进入按 Firebase UID、operation ID 与 lineage 隔离的 WAL v2，再以 D1 幂等账本和 revision CAS 写入；断网及临时服务故障会保留乐观结果，并在登录、联网和定时轮询时顺序重放 | 浏览器禁用或清除本地存储、D1 长期不可用、免费额度耗尽、真实版本冲突或另一设备接管时不能保证立即写入云端；界面会明确显示“待同步”“只读”或“需要恢复” |
 
 `404limited` 不是 Firebase 或 Cloudflare 的标准错误名称。认证回调地址错误可能产生 404，限流通常产生 Firebase 限流错误、HTTP `429` 或 Cloudflare `1027`，排查时应分别处理。
 
 ### 当前配置状态与上线前检查
 
-仓库默认保留安全占位符，不包含真实 Firebase 配置。若 `wrangler.jsonc` 中的 `FIREBASE_PROJECT_ID` 仍是 `REPLACE_WITH_FIREBASE_PROJECT_ID`，或生产构建没有注入四个 `VITE_FIREBASE_*` 变量，Firebase 登录将无法工作。这属于尚未配置，不是并发或服务器性能问题。
+`wrangler.jsonc` 保存当前生产 Firebase Project ID；它是公开标识，不是密钥。仓库不保存 Firebase API key、GitHub Client Secret 或 Firebase 私钥，生产构建必须从受控构建环境注入四个公开的 `VITE_FIREBASE_*` 值。`npm run release:check` 会在构建和部署前拒绝占位符、缺失值、前后端项目错配、无效 D1 ID 与不安全 CORS origin，避免发布无法登录的静态资源。
 
 正式开放前必须逐项确认：
 
 1. 生产构建已注入真实的 `VITE_FIREBASE_API_KEY`、`VITE_FIREBASE_AUTH_DOMAIN`、`VITE_FIREBASE_PROJECT_ID` 和 `VITE_FIREBASE_APP_ID`。
 2. Worker 的 `FIREBASE_PROJECT_ID` 与前端 Firebase 项目完全一致。
 3. Firebase Authorized Domains 包含当前 Worker 生产域名。
-4. Terminal Detective 专用 GitHub OAuth App 的 callback 指向 Firebase 官方 handler，Client Secret 只保存在 Firebase 控制台。
-5. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用。
-6. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态。
-7. 实际完成一次完整冒烟测试：注册 → 验证邮箱 → 登录 → 开始案件 → 产生进度 → 刷新 → 退出 → 重新登录，并确认货币、探员和案件进度均仍存在。
-8. 分别测试 GitHub 登录、错误密码、未验证邮箱、密码重置、网络中断和多设备接管。
+4. 若启用 GitHub Pages，Actions variables 已提供四个 `VITE_FIREBASE_*` 值，Pages 主机名已加入 Firebase Authorized Domains，Pages 来源已加入 Worker 的 `CORS_ALLOWED_ORIGINS`。
+5. Terminal Detective 专用 GitHub OAuth App 的 callback 指向 Firebase 官方 handler，Client Secret 只保存在 Firebase 控制台。
+6. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用。
+7. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态。
+8. 实际完成一次完整冒烟测试：注册 → 验证邮箱 → 登录 → 开始案件 → 产生进度 → 刷新 → 退出 → 重新登录，并确认货币、探员和案件进度均仍存在。
+9. 分别测试 GitHub 登录、错误密码、未验证邮箱、密码重置、网络中断和多设备接管。
 
 只有真实生产域名上的完整登录和存档闭环通过后，才能确认线上配置正确。代码中的错误保护可以减少白屏、无限重试和静默丢档，但不能替代 Firebase、GitHub、Worker 和 D1 的生产配置与上线验证。

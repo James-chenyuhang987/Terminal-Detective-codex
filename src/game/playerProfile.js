@@ -53,6 +53,14 @@ function pendingKey(ownerId) {
   return suffix ? `${PENDING_SETTLEMENTS_KEY}:${suffix}` : PENDING_SETTLEMENTS_KEY;
 }
 
+function pendingItemPrefix(ownerId) {
+  return `${PENDING_SETTLEMENTS_KEY}:item:${encodeURIComponent(ownerId || '')}:`;
+}
+
+function pendingItemKey(ownerId, runId) {
+  return `${pendingItemPrefix(ownerId)}${encodeURIComponent(runId)}`;
+}
+
 export function sanitizeProfileWrite(profile) {
   const normalized = normalizeProfile(profile || {});
   return Object.fromEntries(PROFILE_PATCH_FIELDS.map(key => [key, normalized[key]]));
@@ -150,26 +158,41 @@ export function migrateProfileV2(raw = {}, storage) {
 export function enqueuePendingSettlement(summary, storage, ownerId = '') {
   if (!summary?.run_id) return [];
   const target = storageOrNull(storage);
-  const key = pendingKey(ownerId);
-  const current = safeParse(target?.getItem(key), []);
-  const next = [...(Array.isArray(current) ? current.filter(item => item?.run_id !== summary.run_id) : []), summary];
-  target?.setItem(key, JSON.stringify(next));
-  return next;
+  target?.setItem(pendingItemKey(ownerId, summary.run_id), JSON.stringify(summary));
+  return readPendingSettlements(target, ownerId);
 }
 
 export function readPendingSettlements(storage, ownerId = '') {
   const target = storageOrNull(storage);
-  const current = safeParse(target?.getItem(pendingKey(ownerId)), []);
-  return Array.isArray(current) ? current.filter(item => item?.run_id) : [];
+  if (!target) return [];
+  const legacy = safeParse(target.getItem(pendingKey(ownerId)), []);
+  const pending = new Map(
+    (Array.isArray(legacy) ? legacy : [])
+      .filter(item => item?.run_id)
+      .map(item => [item.run_id, item]),
+  );
+  const prefix = pendingItemPrefix(ownerId);
+  for (let index = 0; index < target.length; index += 1) {
+    const key = target.key(index);
+    if (!key?.startsWith(prefix)) continue;
+    const item = safeParse(target.getItem(key), null);
+    if (item?.run_id && key === pendingItemKey(ownerId, item.run_id)) {
+      pending.set(item.run_id, item);
+    }
+  }
+  return [...pending.values()];
 }
 
 export function removePendingSettlement(runId, storage, ownerId = '') {
   const target = storageOrNull(storage);
-  const key = pendingKey(ownerId);
-  const next = readPendingSettlements(target, ownerId).filter(item => item.run_id !== runId);
-  if (next.length) target?.setItem(key, JSON.stringify(next));
-  else target?.removeItem(key);
-  return next;
+  if (!target) return [];
+  target.removeItem(pendingItemKey(ownerId, runId));
+  const legacyKey = pendingKey(ownerId);
+  const legacy = safeParse(target.getItem(legacyKey), []);
+  const remainingLegacy = (Array.isArray(legacy) ? legacy : []).filter(item => item?.run_id !== runId);
+  if (remainingLegacy.length) target.setItem(legacyKey, JSON.stringify(remainingLegacy));
+  else target.removeItem(legacyKey);
+  return readPendingSettlements(target, ownerId);
 }
 
 export function applySettlementToProfile(profile, summary) {
@@ -204,13 +227,39 @@ function profileRequestError(code, message, status, payload = {}) {
   return error;
 }
 
-export async function invokePlayerProfile(action, payload = {}) {
+function safeProfileErrorMessage(code, status = 0) {
+  const messages = {
+    SESSION_TAKEN: 'This account is active on another device.',
+    STALE_PROFILE: 'The cloud profile changed and must be refreshed.',
+    PROFILE_OWNER_MISMATCH: 'The authenticated profile owner changed.',
+    INVALID_OPERATION_ID: 'The profile operation could not be validated.',
+    OPERATION_ID_REUSED: 'The profile operation could not be safely repeated.',
+    PROFILE_DATA_CORRUPT: 'The cloud profile needs administrator recovery.',
+    DATABASE_UNAVAILABLE: 'Cloud profile storage is temporarily unavailable.',
+  };
+  return messages[code]
+    || (status >= 500
+      ? 'Cloud profile storage is temporarily unavailable.'
+      : 'The profile request could not be completed.');
+}
+
+/**
+ * @param {string} action
+ * @param {Record<string, any>} [payload]
+ * @param {{ ownerId?: string, signal?: AbortSignal }} [options]
+ */
+export async function invokePlayerProfile(action, payload = {}, options = {}) {
+  const { ownerId = '', signal: externalSignal } = options;
   const headers = /** @type {Record<string, string>} */ ({
     'Content-Type': 'application/json',
     Accept: 'application/json',
     'X-App-Id': String(appParams.appId),
   });
+  if (ownerId) headers['X-Profile-Owner'] = ownerId;
   const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const response = await fetchWithAuth(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/playerProfile`, {
@@ -222,17 +271,20 @@ export async function invokePlayerProfile(action, payload = {}) {
       if (result?.profile && typeof result.profile === 'object') return result;
       throw profileRequestError('PROFILE_UNAVAILABLE', 'Cloud profile returned an invalid response.', 502, body);
     }
-    const result = unwrapFunctionResponse(body);
     throw profileRequestError(
       body?.error || 'PROFILE_UNAVAILABLE',
-      body?.message || body?.detail || `Profile request failed (${response.status}).`,
+      safeProfileErrorMessage(body?.error || 'PROFILE_UNAVAILABLE', response.status),
       response.status,
-      result,
+      body,
     );
   } catch (cause) {
     if (cause?.name === 'AbortError') {
-      const error = /** @type {Error & { code?: string }} */ (new Error('Profile request timed out.'));
-      error.code = 'PROFILE_TIMEOUT';
+      const cancelled = externalSignal?.aborted;
+      const error = /** @type {Error & { code?: string, status?: number }} */ (
+        new Error(cancelled ? 'Profile request was cancelled.' : 'Profile request timed out.')
+      );
+      error.code = cancelled ? 'PROFILE_REQUEST_CANCELLED' : 'PROFILE_TIMEOUT';
+      error.status = cancelled ? 0 : 408;
       throw error;
     }
     const data = cause?.response?.data || cause?.data || cause?.body;
@@ -242,8 +294,14 @@ export async function invokePlayerProfile(action, payload = {}) {
       error.payload = data;
       throw error;
     }
-    throw cause;
+    if (cause?.code) throw cause;
+    throw profileRequestError(
+      'PROFILE_NETWORK',
+      'The profile service could not be reached.',
+      0,
+    );
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }

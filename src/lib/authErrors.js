@@ -12,7 +12,18 @@ export const AUTH_FEEDBACK_CODES = Object.freeze({
   RECENT_LOGIN_REQUIRED: 'recent_login_required',
   LAST_PROVIDER: 'last_provider',
   INVALID_EMAIL: 'invalid_email',
+  ACTION_EXPIRED: 'action_expired',
+  PROFILE_CONFLICT: 'profile_conflict',
+  ACCOUNT_DISABLED: 'account_disabled',
+  BACKEND_NOT_READY: 'backend_not_ready',
   UNKNOWN: 'unknown',
+});
+
+export const AUTH_NOTICE_CODES = Object.freeze({
+  PASSWORD_RESET_COMPLETE: 'password_reset_complete',
+  VERIFICATION_INCOMPLETE: 'verification_incomplete',
+  GITHUB_LINKED: 'github_linked',
+  REAUTHENTICATED: 'reauthenticated',
 });
 
 export function validatePassword(password) {
@@ -27,8 +38,9 @@ export function validatePassword(password) {
 
 export function mapFirebaseAuthError(error) {
   const code = String(error?.code || '').toLowerCase();
-  if (code.includes('configuration-not-found') || code.includes('invalid-api-key')) return AUTH_FEEDBACK_CODES.CONFIG_MISSING;
-  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL;
+  if (code.includes('configuration-not-found') || code.includes('invalid-api-key') || code.includes('operation-not-allowed') || code.includes('unauthorized-domain')) return AUTH_FEEDBACK_CODES.CONFIG_MISSING;
+  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found') || code.includes('user-mismatch') || code.includes('user-token-expired')) return AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL;
+  if (code.includes('user-disabled')) return AUTH_FEEDBACK_CODES.ACCOUNT_DISABLED;
   if (code.includes('email-already-in-use')) return AUTH_FEEDBACK_CODES.EMAIL_IN_USE;
   if (code.includes('weak-password') || code.includes('password-does-not-meet-requirements')) return AUTH_FEEDBACK_CODES.WEAK_PASSWORD;
   if (code.includes('too-many-requests') || code.includes('quota-exceeded')) return AUTH_FEEDBACK_CODES.RATE_LIMITED;
@@ -38,6 +50,7 @@ export function mapFirebaseAuthError(error) {
   if (code.includes('network-request-failed') || error?.name === 'AbortError') return AUTH_FEEDBACK_CODES.NETWORK;
   if (code.includes('requires-recent-login')) return AUTH_FEEDBACK_CODES.RECENT_LOGIN_REQUIRED;
   if (code.includes('invalid-email') || code.includes('missing-email')) return AUTH_FEEDBACK_CODES.INVALID_EMAIL;
+  if (code.includes('expired-action-code') || code.includes('invalid-action-code')) return AUTH_FEEDBACK_CODES.ACTION_EXPIRED;
   return AUTH_FEEDBACK_CODES.UNKNOWN;
 }
 

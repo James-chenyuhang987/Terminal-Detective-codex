@@ -34,7 +34,15 @@ function HomeModuleSkeleton({ lang }) {
 
 export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
   const { lang } = useLang();
-  const { profile, mutate, refresh, syncStatus, isReadOnly } = useProfile();
+  const {
+    profile,
+    mutate,
+    pendingCount,
+    refresh,
+    syncStatus,
+    takeOver,
+    isReadOnly,
+  } = useProfile();
   const [busy, setBusy] = useState(false);
   const [module, setModule] = useState(null);
   const [toast, setToast] = useState(null);
@@ -42,7 +50,19 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const toastTimerRef = useRef(null);
   const busyRef = useRef(false);
   const hasSavedTeam = !!profile?.saved_team_config;
-  const loadError = syncStatus === 'error';
+  const loadError = ['error', 'recovery', 'storage_unavailable'].includes(syncStatus);
+  const syncLabel = {
+    online: lang === 'zh' ? 'Cloudflare 已连接' : 'Cloudflare connected',
+    syncing: lang === 'zh' ? '同步中…' : 'Syncing…',
+    pending: lang === 'zh' ? `${pendingCount} 项待同步` : `${pendingCount} pending`,
+    readonly: lang === 'zh' ? '只读模式' : 'Read only',
+    storage_unavailable: lang === 'zh' ? '本地存储不可用' : 'Local storage unavailable',
+    recovery: lang === 'zh' ? '档案需要恢复' : 'Profile recovery required',
+    error: lang === 'zh' ? '同步失败' : 'Sync failed',
+  }[syncStatus] || (lang === 'zh' ? '连接中…' : 'Connecting…');
+  const syncColor = syncStatus === 'online'
+    ? '#00ff88'
+    : ['syncing', 'pending', 'loading'].includes(syncStatus) ? '#ffaa00' : '#ff3860';
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
@@ -62,7 +82,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const closeCheckinCelebration = useCallback(() => setCheckinCelebration(null), []);
 
   const retryLoad = () => {
-    void refresh().catch(() => {});
+    void (profile ? refresh() : takeOver()).catch(() => {});
   };
 
   const notify = (message, type = 'success') => {
@@ -241,9 +261,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
             {[['✉️', 'comms'], ['📅', 'checkin'], ['🔧', 'settings']].map(([ic, k]) => (
               <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => openModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
             ))}
-            <span title={`${lang === 'zh'
-              ? (syncStatus === 'online' ? 'Cloudflare 已连接' : syncStatus === 'syncing' ? '同步中…' : syncStatus === 'readonly' ? '只读模式' : '同步失败')
-              : (syncStatus === 'online' ? 'Cloudflare connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed')} · BUILD ${BUILD_ID}`} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
+            <span title={`${syncLabel} · BUILD ${BUILD_ID}`} style={{ color: syncColor, fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
           </div>
         </div>
       </div>

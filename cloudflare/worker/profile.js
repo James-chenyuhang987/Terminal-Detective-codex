@@ -1,4 +1,5 @@
 const MAX_BODY_BYTES = 512 * 1024;
+const MAX_PROFILE_BYTES = 512 * 1024;
 const PROFILE_VALUE_LIMITS = Object.freeze({
   depth: 12,
   arrayLength: 4096,
@@ -33,6 +34,15 @@ function validSessionId(value) {
     && /^[A-Za-z0-9._:-]+$/.test(value);
 }
 
+function validOperationId(value) {
+  return typeof value === 'string' && value.length >= 16 && value.length <= 128
+    && /^[A-Za-z0-9._:-]+$/.test(value);
+}
+
+function validRevision(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -59,17 +69,22 @@ function safeProfileValue(value, depth = 0) {
 function cleanPatch(value) {
   if (!isPlainObject(value)) return null;
   const keys = Object.keys(value);
-  if (keys.some(key => !PROFILE_FIELDS.has(key) || !safeProfileValue(value[key]))) return null;
+  if (!keys.length || keys.some(key => !PROFILE_FIELDS.has(key) || !safeProfileValue(value[key]))) return null;
   return Object.fromEntries(keys.map(key => [key, value[key]]));
 }
 
 function parseProfile(value) {
   try {
     const parsed = JSON.parse(value || '{}');
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    if (isPlainObject(parsed)) return parsed;
   } catch {
-    return {};
+    // The stable error below prevents a malformed D1 value from being
+    // normalized into an empty profile and written back over player data.
   }
+  throw Object.assign(new Error('PROFILE_DATA_CORRUPT'), {
+    code: 'PROFILE_DATA_CORRUPT',
+    status: 500,
+  });
 }
 
 function accountFromSession(session) {
@@ -95,8 +110,33 @@ function profilePayload(row) {
   };
 }
 
+async function patchHash(patch) {
+  const bytes = new TextEncoder().encode(JSON.stringify(patch));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+async function readProfileOperation(env, userId, operationId) {
+  return env.DB.prepare(`
+    SELECT base_revision, result_revision, patch_hash
+    FROM profile_operations WHERE user_id = ? AND operation_id = ?
+  `).bind(userId, operationId).first();
+}
+
+function successPayload(row, session, operationId = '', replayed = false) {
+  return {
+    profile: profilePayload(row),
+    account: accountFromSession(session),
+    backend: 'cloudflare',
+    ...(operationId ? { operation_id: operationId, replayed } : {}),
+  };
+}
+
 export async function handleProfileFunction(request, env, session) {
   if (request.method !== 'POST') return error('METHOD_NOT_ALLOWED', 'POST is required.', 405);
+  if (request.headers.get('x-profile-owner') !== session.user_id) {
+    return error('PROFILE_OWNER_MISMATCH', 'The profile owner does not match the authenticated account.', 409);
+  }
   const length = Number(request.headers.get('content-length') || 0);
   if (length > MAX_BODY_BYTES) return error('INVALID_PATCH', 'Request body is too large.', 413);
   const raw = await request.text();
@@ -111,42 +151,101 @@ export async function handleProfileFunction(request, env, session) {
   const revision = Math.max(0, Number(row?.profile_revision) || 0);
   if (body.action === 'claim_session') {
     await env.DB.prepare(`
-      UPDATE profiles SET active_session_id = ?, profile_revision = profile_revision + 1,
-        updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+      UPDATE profiles SET active_session_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ?
     `).bind(body.session_id, session.user_id).run();
     const updated = await readProfileRow(env, session.user_id);
-    return json({ profile: profilePayload(updated), account: accountFromSession(session), backend: 'cloudflare' });
+    return json(successPayload(updated, session));
   }
 
   if (row?.active_session_id !== body.session_id) {
     return error('SESSION_TAKEN', 'This account is active on another device.', 409, { profile_revision: revision });
   }
   if (body.action === 'status') {
-    return json({ profile: profilePayload(row), account: accountFromSession(session), backend: 'cloudflare' });
+    return json(successPayload(row, session));
   }
   if (body.action !== 'patch') return error('INVALID_PATCH', 'Unknown action.');
-  const expected = Math.max(0, Math.floor(Number(body.expected_revision) || 0));
+  if (!validOperationId(body.operation_id)) return error('INVALID_OPERATION_ID', 'Invalid operation id.');
+  if (!validRevision(body.expected_revision)) return error('INVALID_PATCH', 'Invalid expected revision.');
+  const expected = body.expected_revision;
+  const patch = cleanPatch(body.patch);
+  if (!patch) return error('INVALID_PATCH', 'Patch contains unsupported fields.');
+  const hash = await patchHash(patch);
+  const prior = await readProfileOperation(env, session.user_id, body.operation_id);
+  if (prior) {
+    if (prior.patch_hash !== hash) {
+      return error('OPERATION_ID_REUSED', 'Operation id was already used for a different patch.', 409);
+    }
+    const replayRow = await readProfileRow(env, session.user_id);
+    if ((Number(replayRow?.profile_revision) || 0) < (Number(prior.result_revision) || 0)) {
+      return error('DATABASE_UNAVAILABLE', 'The profile operation is still being committed.', 503);
+    }
+    return json(successPayload(replayRow, session, body.operation_id, true));
+  }
   if (expected !== revision) {
     return error('STALE_PROFILE', 'Profile revision is stale.', 409, {
       profile: profilePayload(row), profile_revision: revision,
     });
   }
-  const patch = cleanPatch(body.patch);
-  if (!patch) return error('INVALID_PATCH', 'Patch contains unsupported fields.');
   const merged = { ...parseProfile(row.profile_json), ...patch };
-  const result = await env.DB.prepare(`
-    UPDATE profiles SET profile_json = ?, profile_revision = profile_revision + 1,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE user_id = ? AND profile_revision = ? AND active_session_id = ?
-  `).bind(JSON.stringify(merged), session.user_id, revision, body.session_id).run();
-  if (!result?.meta?.changes) {
+  const serialized = JSON.stringify(merged);
+  if (new TextEncoder().encode(serialized).byteLength > MAX_PROFILE_BYTES) {
+    return error('PROFILE_TOO_LARGE', 'The merged profile exceeds the storage limit.', 413);
+  }
+  const results = await env.DB.batch([
+    env.DB.prepare(`
+      INSERT OR IGNORE INTO profile_operations (
+        user_id, operation_id, base_revision, result_revision, patch_hash
+      )
+      SELECT ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM profiles
+        WHERE user_id = ? AND profile_revision = ? AND active_session_id = ?
+      )
+    `).bind(
+      session.user_id, body.operation_id, revision, revision + 1, hash,
+      session.user_id, revision, body.session_id,
+    ),
+    env.DB.prepare(`
+      UPDATE profiles SET profile_json = ?, profile_revision = profile_revision + 1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ? AND profile_revision = ? AND active_session_id = ?
+        AND EXISTS (
+          SELECT 1 FROM profile_operations
+          WHERE user_id = ? AND operation_id = ? AND base_revision = ? AND result_revision = ?
+           AND patch_hash = ?
+        )
+    `).bind(
+      serialized, session.user_id, revision, body.session_id,
+      session.user_id, body.operation_id, revision, revision + 1, hash,
+    ),
+  ]);
+  if (!results?.[1]?.meta?.changes) {
+    const duplicate = await readProfileOperation(env, session.user_id, body.operation_id);
     const current = await readProfileRow(env, session.user_id);
+    if (duplicate) {
+      if (duplicate.patch_hash !== hash) {
+        return error('OPERATION_ID_REUSED', 'Operation id was already used for a different patch.', 409);
+      }
+      if ((Number(current?.profile_revision) || 0) < (Number(duplicate.result_revision) || 0)) {
+        return error('DATABASE_UNAVAILABLE', 'The profile operation is still being committed.', 503);
+      }
+      return json(successPayload(current, session, body.operation_id, true));
+    }
+    if (current?.active_session_id !== body.session_id) {
+      return error('SESSION_TAKEN', 'This account is active on another device.', 409, {
+        profile_revision: Number(current?.profile_revision) || 0,
+      });
+    }
     return error('STALE_PROFILE', 'Profile revision changed during save.', 409, {
       profile: profilePayload(current), profile_revision: Number(current?.profile_revision) || 0,
     });
   }
   const updated = await readProfileRow(env, session.user_id);
-  return json({ profile: profilePayload(updated), account: accountFromSession(session), backend: 'cloudflare' });
+  if ((Number(updated?.profile_revision) || 0) < revision + 1) {
+    return error('DATABASE_UNAVAILABLE', 'The profile operation is still being committed.', 503);
+  }
+  return json(successPayload(updated, session, body.operation_id));
 }
 
 export async function handleCurrentUser(request, env, session) {
@@ -159,8 +258,12 @@ export async function handleCurrentUser(request, env, session) {
 
 export const profileInternals = Object.freeze({
   cleanPatch,
+  validOperationId,
+  validRevision,
   validSessionId,
   parseProfile,
+  patchHash,
   safeProfileValue,
   PROFILE_VALUE_LIMITS,
+  MAX_PROFILE_BYTES,
 });
