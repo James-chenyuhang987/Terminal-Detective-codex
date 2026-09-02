@@ -70,11 +70,44 @@ export function firebaseAuthConfigured(env) {
 }
 
 export function authConfig(env) {
+  const configured = firebaseAuthConfigured(env);
   return {
     primary: 'firebase',
-    firebase: firebaseAuthConfigured(env),
-    email_password: firebaseAuthConfigured(env),
-    github: firebaseAuthConfigured(env),
+    firebase: configured,
+    email_password: configured,
+    github: configured,
+    project_id: configured ? String(env.FIREBASE_PROJECT_ID).trim() : '',
+  };
+}
+
+export async function authReadiness(env) {
+  const config = authConfig(env);
+  const database = Boolean(env?.DB?.prepare);
+  let schema = false;
+  if (database) {
+    try {
+      const result = await env.DB.prepare(`
+        SELECT name, sql FROM sqlite_master
+        WHERE type = 'table' AND name IN ('users', 'profiles')
+      `).all();
+      const definitions = new Map((result?.results || []).map(row => [row?.name, String(row?.sql || '').toLowerCase()]));
+      const requiredColumns = {
+        users: ['id', 'email', 'email_verified', 'display_name', 'avatar_url'],
+        profiles: ['user_id', 'profile_json', 'profile_revision', 'active_session_id'],
+      };
+      schema = Object.entries(requiredColumns).every(([table, columns]) => {
+        const sql = definitions.get(table) || '';
+        return columns.every(column => new RegExp(`\\b${column}\\b`, 'i').test(sql));
+      });
+    } catch {
+      schema = false;
+    }
+  }
+  return {
+    ...config,
+    database,
+    schema,
+    ready: config.firebase && database && schema,
   };
 }
 
@@ -138,6 +171,12 @@ async function upsertFirebaseUser(env, claims) {
       env.DB.prepare(`
         INSERT INTO users (id, email, email_verified, display_name, avatar_url)
         VALUES (?, ?, 1, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          email = excluded.email,
+          email_verified = 1,
+          display_name = excluded.display_name,
+          avatar_url = excluded.avatar_url,
+          updated_at = CURRENT_TIMESTAMP
       `).bind(user.id, user.email, user.full_name, user.avatar_url),
       env.DB.prepare(`
         INSERT INTO profiles (user_id, profile_json) VALUES (?, '{}')
@@ -145,8 +184,10 @@ async function upsertFirebaseUser(env, claims) {
       `).bind(user.id),
     ]);
   } catch (error) {
-    console.error('Firebase user bootstrap failed:', String(error?.message || error));
-    throw authError('FIREBASE_PROFILE_CONFLICT', 409);
+    const detail = String(error?.message || error);
+    console.error('Firebase user bootstrap failed:', detail);
+    if (/unique|constraint/i.test(detail)) throw authError('FIREBASE_PROFILE_CONFLICT', 409);
+    throw authError('DATABASE_UNAVAILABLE', 503);
   }
   return user;
 }

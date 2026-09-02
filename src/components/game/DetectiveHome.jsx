@@ -88,8 +88,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     busyRef.current = true;
     setBusy(true);
     try {
-      await mutate(current => ({ profile: { ...current, ...changes } }));
-      if (message) notify(message);
+      const result = await mutate(current => ({ profile: { ...current, ...changes } }));
+      if (message) notify(result?.queued
+        ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
+        : message);
       return true;
     } catch {
       notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
@@ -133,7 +135,9 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       try {
         const evaluated = await mutate(current => result(current));
         if (!evaluated?.profile || evaluated.error) return rejectResult(evaluated);
-        if (message) notify(message);
+        if (message) notify(evaluated?.queued
+          ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
+          : message);
         return true;
       } catch {
         notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
@@ -242,8 +246,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
               <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => openModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
             ))}
             <span title={`${lang === 'zh'
-              ? (syncStatus === 'online' ? 'Cloudflare 已连接' : syncStatus === 'syncing' ? '同步中…' : syncStatus === 'readonly' ? '只读模式' : '同步失败')
-              : (syncStatus === 'online' ? 'Cloudflare connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed')} · BUILD ${BUILD_ID}`} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : syncStatus === 'syncing' ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
+              ? (syncStatus === 'online' ? 'Cloudflare 已连接' : syncStatus === 'syncing' ? '同步中…' : syncStatus === 'pending' ? '已本地保存，等待同步' : syncStatus === 'readonly' ? '只读模式' : '同步失败')
+              : (syncStatus === 'online' ? 'Cloudflare connected' : syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'pending' ? 'Saved locally; sync pending' : syncStatus === 'readonly' ? 'Read only' : 'Sync failed')} · BUILD ${BUILD_ID}`} style={{ color: syncStatus === 'error' || syncStatus === 'readonly' ? '#ff3860' : ['syncing', 'pending'].includes(syncStatus) ? '#ffaa00' : '#00ff88', fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
           </div>
         </div>
       </div>

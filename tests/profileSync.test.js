@@ -3,14 +3,18 @@ import assert from 'node:assert/strict';
 
 import {
   applySettlementToProfile,
+  clearPendingProfileWrite,
   diffProfileWrite,
+  enqueuePendingProfileWrite,
   enqueuePendingSettlement,
   knownAchievementCount,
   invokePlayerProfile,
+  isRetryableProfileError,
   migrateProfileV2,
   normalizeAgentProgression,
   normalizeSkillLoadout,
   readPendingSettlements,
+  readPendingProfileWrite,
   removePendingSettlement,
   sanitizeProfileWrite,
   sanitizeProfilePatch,
@@ -104,6 +108,31 @@ test('settlement outbox persists and removes individual runs', () => {
   enqueuePendingSettlement({ run_id: 'account-b-run' }, storage, 'account-b');
   assert.deepEqual(readPendingSettlements(storage, 'account-a').map(item => item.run_id), ['account-a-run']);
   assert.deepEqual(readPendingSettlements(storage, 'account-b').map(item => item.run_id), ['account-b-run']);
+});
+
+test('profile write journal compacts absolute fields and is owner scoped', () => {
+  const storage = memoryStorage();
+  const first = enqueuePendingProfileWrite({ gold: 120, inventory: { energy_cell: 1 } }, storage, 'user-a', 100);
+  assert.equal(first.stored, true);
+  enqueuePendingProfileWrite({ gold: 90, diamonds: 20 }, storage, 'user-a', 200);
+  enqueuePendingProfileWrite({ gold: 500 }, storage, 'user-b', 300);
+  assert.deepEqual(readPendingProfileWrite(storage, 'user-a').patch, {
+    gold: 90,
+    inventory: { energy_cell: 1, ap_booster: 0, firewall_shield: 0, clue_scanner: 0 },
+    diamonds: 20,
+  });
+  assert.deepEqual(readPendingProfileWrite(storage, 'user-b').patch, { gold: 500 });
+  assert.equal(clearPendingProfileWrite(storage, 'user-a'), true);
+  assert.equal(readPendingProfileWrite(storage, 'user-a'), null);
+  assert.deepEqual(readPendingProfileWrite(storage, 'user-b').patch, { gold: 500 });
+});
+
+test('only transient profile failures enter the durable retry path', () => {
+  assert.equal(isRetryableProfileError(Object.assign(new Error('offline'), { name: 'AbortError' })), true);
+  assert.equal(isRetryableProfileError(Object.assign(new Error('quota'), { status: 429 })), true);
+  assert.equal(isRetryableProfileError(Object.assign(new Error('d1'), { code: 'DATABASE_UNAVAILABLE', status: 503 })), true);
+  assert.equal(isRetryableProfileError(Object.assign(new Error('bad patch'), { code: 'INVALID_PATCH', status: 400 })), false);
+  assert.equal(isRetryableProfileError(Object.assign(new Error('other device'), { code: 'SESSION_TAKEN', status: 409 })), false);
 });
 
 test('unbounded rewarded run ids keep economy and agent XP idempotent after 150 runs', () => {

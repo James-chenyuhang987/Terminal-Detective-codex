@@ -28,14 +28,45 @@ test('auth configuration requires a real Firebase project id', async () => {
   const unavailable = await handleRequest(new Request('https://game.example/api/auth/config'), env);
   assert.deepEqual(await unavailable.json(), {
     primary: 'firebase', firebase: false, email_password: false, github: false,
+    project_id: '', database: false, schema: false, ready: false,
   });
 
   const available = await handleRequest(new Request('https://game.example/api/auth/config'), {
-    ...env, FIREBASE_PROJECT_ID: 'terminal-detective-test',
+    ...env,
+    FIREBASE_PROJECT_ID: 'terminal-detective-test',
+    DB: {
+      prepare: () => ({
+        all: async () => ({ results: [
+          {
+            name: 'users',
+            sql: 'CREATE TABLE users (id TEXT, email TEXT, email_verified INTEGER, display_name TEXT, avatar_url TEXT)',
+          },
+          {
+            name: 'profiles',
+            sql: 'CREATE TABLE profiles (user_id TEXT, profile_json TEXT, profile_revision INTEGER, active_session_id TEXT)',
+          },
+        ] }),
+      }),
+    },
   });
   assert.deepEqual(await available.json(), {
     primary: 'firebase', firebase: true, email_password: true, github: true,
+    project_id: 'terminal-detective-test', database: true, schema: true, ready: true,
   });
+
+  const incomplete = await handleRequest(new Request('https://game.example/api/auth/config'), {
+    ...env,
+    FIREBASE_PROJECT_ID: 'terminal-detective-test',
+    DB: {
+      prepare: () => ({
+        all: async () => ({ results: [
+          { name: 'users', sql: 'CREATE TABLE users (id TEXT, email TEXT)' },
+          { name: 'profiles', sql: 'CREATE TABLE profiles (user_id TEXT, profile_json TEXT)' },
+        ] }),
+      }),
+    },
+  });
+  assert.equal((await incomplete.json()).ready, false);
 });
 
 test('Firebase session endpoint requires a bearer token', async () => {

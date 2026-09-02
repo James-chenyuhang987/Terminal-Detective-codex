@@ -30,6 +30,7 @@ export const PROFILE_PATCH_FIELDS = Object.freeze(PROFILE_SYNC_FIELDS.filter(
   key => !['profile_revision', 'active_session_id'].includes(key),
 ));
 export const PENDING_SETTLEMENTS_KEY = 'pending_settlements_v1';
+export const PENDING_PROFILE_WRITE_KEY = 'pending_profile_write_v1';
 const LOCAL_MIGRATION_KEYS = Object.freeze({
   progression: 'agent_progression_v1', rewarded: 'agent_rewarded_runs_v1',
   skills: 'skill_equipped_v1', team: 'save_team_config',
@@ -51,6 +52,11 @@ function storageOrNull(storage) {
 function pendingKey(ownerId) {
   const suffix = typeof ownerId === 'string' && ownerId ? ownerId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 96) : '';
   return suffix ? `${PENDING_SETTLEMENTS_KEY}:${suffix}` : PENDING_SETTLEMENTS_KEY;
+}
+
+function pendingProfileKey(ownerId) {
+  const suffix = typeof ownerId === 'string' && ownerId ? ownerId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 96) : '';
+  return suffix ? `${PENDING_PROFILE_WRITE_KEY}:${suffix}` : PENDING_PROFILE_WRITE_KEY;
 }
 
 export function sanitizeProfileWrite(profile) {
@@ -153,7 +159,7 @@ export function enqueuePendingSettlement(summary, storage, ownerId = '') {
   const key = pendingKey(ownerId);
   const current = safeParse(target?.getItem(key), []);
   const next = [...(Array.isArray(current) ? current.filter(item => item?.run_id !== summary.run_id) : []), summary];
-  target?.setItem(key, JSON.stringify(next));
+  try { target?.setItem(key, JSON.stringify(next)); } catch { /* settlement remains visible in the current tab */ }
   return next;
 }
 
@@ -167,9 +173,67 @@ export function removePendingSettlement(runId, storage, ownerId = '') {
   const target = storageOrNull(storage);
   const key = pendingKey(ownerId);
   const next = readPendingSettlements(target, ownerId).filter(item => item.run_id !== runId);
-  if (next.length) target?.setItem(key, JSON.stringify(next));
-  else target?.removeItem(key);
+  try {
+    if (next.length) target?.setItem(key, JSON.stringify(next));
+    else target?.removeItem(key);
+  } catch { /* replay can be attempted again in the current tab */ }
   return next;
+}
+
+export function readPendingProfileWrite(storage, ownerId = '') {
+  const target = storageOrNull(storage);
+  let current = null;
+  try { current = safeParse(target?.getItem(pendingProfileKey(ownerId)), null); } catch { current = null; }
+  const patch = sanitizeProfilePatch(current?.patch);
+  if (!patch || !Object.keys(patch).length) return null;
+  return {
+    version: 1,
+    patch,
+    created_at: Math.max(0, Number(current?.created_at) || 0),
+    updated_at: Math.max(0, Number(current?.updated_at) || 0),
+  };
+}
+
+/**
+ * Write-ahead profile journal. Later absolute field values replace older ones,
+ * so repeated replay is idempotent even when the server committed a request but
+ * the browser lost its response.
+ */
+export function enqueuePendingProfileWrite(patch, storage, ownerId = '', now = Date.now()) {
+  const clean = sanitizeProfilePatch(patch);
+  const current = readPendingProfileWrite(storage, ownerId);
+  if (!clean || !Object.keys(clean).length) return { ...(current || {}), stored: Boolean(current) };
+  const next = {
+    version: 1,
+    patch: { ...(current?.patch || {}), ...clean },
+    created_at: current?.created_at || now,
+    updated_at: now,
+  };
+  let stored = false;
+  try {
+    const target = storageOrNull(storage);
+    target?.setItem(pendingProfileKey(ownerId), JSON.stringify(next));
+    stored = Boolean(target);
+  } catch { stored = false; }
+  return { ...next, stored };
+}
+
+export function clearPendingProfileWrite(storage, ownerId = '') {
+  try { storageOrNull(storage)?.removeItem(pendingProfileKey(ownerId)); return true; }
+  catch { return false; }
+}
+
+export function isRetryableProfileError(error) {
+  const status = Number(error?.status) || 0;
+  const code = String(error?.code || '').toUpperCase();
+  if (['SESSION_TAKEN', 'STALE_PROFILE', 'INVALID_PATCH', 'UNAUTHENTICATED', 'EMAIL_UNVERIFIED'].includes(code)) return false;
+  return error?.name === 'AbortError'
+    || error instanceof TypeError
+    || status === 0
+    || status === 408
+    || status === 429
+    || status >= 500
+    || ['PROFILE_TIMEOUT', 'PROFILE_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'FIREBASE_KEYS_UNAVAILABLE', 'GATEWAY_FAILED', 'NETWORK'].includes(code);
 }
 
 export function applySettlementToProfile(profile, summary) {

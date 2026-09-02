@@ -18,7 +18,7 @@
 	},
 	"vars": {
 		"APP_ID": "terminal-detective",
-		"FIREBASE_PROJECT_ID": "REPLACE_WITH_FIREBASE_PROJECT_ID"
+		"FIREBASE_PROJECT_ID": "terminal-detective-e1714"
 	},
 	"d1_databases": [
 		{

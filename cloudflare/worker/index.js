@@ -1,6 +1,6 @@
 import { runDetectiveRule } from '../../server/detectiveRules/rules.js';
 import {
-  authConfig,
+  authReadiness,
   logoutFirebase,
   readFirebaseSession,
 } from './auth.js';
@@ -64,7 +64,7 @@ async function handleRules(request) {
 }
 
 async function handleNativeAuth(request, env, url) {
-  if (url.pathname === '/api/auth/config') return json(authConfig(env));
+  if (url.pathname === '/api/auth/config') return json(await authReadiness(env));
   if (url.pathname === '/api/auth/logout') return logoutFirebase();
   if (url.pathname === '/api/auth/session') {
     const session = await readFirebaseSession(request, env);

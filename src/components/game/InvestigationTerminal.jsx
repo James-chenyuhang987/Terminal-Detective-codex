@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { ReAct_Enum, Legal_Actions_List, Phase_Color_Map, Case_Data_Lvl_01, localizeCase } from '@/game/caseData';
 import { useLang } from '@/lib/lang.jsx';
+import { publicErrorMessage } from '@/lib/publicError';
 import MiniMap from '@/components/game/MiniMap';
 import { createInitialGameState, generateObservation, applySettlementResult, pushCheckpoint, checkConflictClues } from '@/game/gameState';
 import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
@@ -745,7 +746,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     } catch (err) {
       stopStressTimer();
       if (err?.name !== 'AbortError' && !isCancelled()) {
-        addLine(`\n${t.systemError}${err.message}`, 'error');
+        addLine(`\n${t.systemError}${publicErrorMessage(err, lang)}`, 'error');
       }
       if (activeRunRef.current === runId) setReactState(ReAct_Enum.IDLE);
     } finally {
@@ -1040,7 +1041,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
-        addLine(`\n${t.linkFailed}${err.message}`, 'error');
+        addLine(`\n${t.linkFailed}${publicErrorMessage(err, lang)}`, 'error');
       }
     } finally {
       if (activeRunRef.current === operationId) {
@@ -1096,7 +1097,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         setReportError(lang === 'zh'
           ? '结案规则暂时无法校验，请检查连接后重试；本次没有扣除资源。'
           : 'REPORT VALIDATION IS TEMPORARILY UNAVAILABLE. NO RESOURCES WERE SPENT.');
-        addLine(`\n${t.systemError}${err.message}`, 'error');
+        addLine(`\n${t.systemError}${publicErrorMessage(err, lang)}`, 'error');
       }
     } finally {
       if (activeRunRef.current === operationId) {

@@ -28,7 +28,7 @@ const TX = {
     version: '版本信息',
     account: '账户 · ACCOUNT', email: '已验证邮箱', providers: '登录方式', passwordProvider: '邮箱密码', githubProvider: 'GitHub', linked: '已绑定', notLinked: '未绑定',
     linkGithub: '绑定 GitHub', unlinkGithub: '解绑 GitHub', passwordSetup: '设置邮箱密码', passwordChange: '修改密码', passwordPlaceholder: '8–64 位，包含字母和数字', passwordSave: '保存密码',
-    sync: '云端同步', syncOk: 'Firebase 身份已连接 Cloudflare D1', logout: '退出登录', logoutDesc: '结束当前 Firebase 会话并返回登录页', logoutBtn: '退出',
+    sync: '云端同步', syncOk: 'Firebase 身份已连接 Cloudflare D1', syncPending: '进度已保存在本机，网络恢复后自动同步', logout: '退出登录', logoutDesc: '结束当前 Firebase 会话并返回登录页', logoutBtn: '退出',
     authOk: '账户登录方式已更新', authFailed: '账户操作未完成，请稍后重试', authWeak: '密码需为 8–64 位并包含字母和数字', authRecent: '请先退出并重新登录，再修改敏感账户设置', authLast: '至少需要保留一种登录方式', authConflict: '这个 GitHub 已绑定其他账号',
     confirmClear: '确认清除本机偏好和现场缓存？云端档案不会变化。',
     confirmReset: '确认将设置恢复为默认值？',
@@ -59,7 +59,7 @@ const TX = {
     version: 'Version',
     account: 'ACCOUNT', email: 'Verified email', providers: 'Sign-in methods', passwordProvider: 'Email password', githubProvider: 'GitHub', linked: 'Linked', notLinked: 'Not linked',
     linkGithub: 'LINK GITHUB', unlinkGithub: 'UNLINK GITHUB', passwordSetup: 'Add email password', passwordChange: 'Change password', passwordPlaceholder: '8–64 chars with a letter and number', passwordSave: 'SAVE PASSWORD',
-    sync: 'Cloud sync', syncOk: 'Firebase identity connected to Cloudflare D1', logout: 'Sign out', logoutDesc: 'End the Firebase session and return to sign in', logoutBtn: 'SIGN OUT',
+    sync: 'Cloud sync', syncOk: 'Firebase identity connected to Cloudflare D1', syncPending: 'Progress is saved locally and will sync automatically', logout: 'Sign out', logoutDesc: 'End the Firebase session and return to sign in', logoutBtn: 'SIGN OUT',
     authOk: 'Sign-in methods updated', authFailed: 'Account operation did not complete. Please retry.', authWeak: 'Password needs 8–64 characters, a letter and a number.', authRecent: 'Sign out and sign in again before changing sensitive account settings.', authLast: 'At least one sign-in method must remain.', authConflict: 'This GitHub account is already linked elsewhere.',
     confirmClear: 'Clear local preferences and run cache? Cloud progress is preserved.',
     confirmReset: 'Restore settings to defaults?',
@@ -340,7 +340,7 @@ export default function SettingsDrawer({ onClose }) {
             </div>
             <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.sync}</div>
-              <div style={{ fontSize: '0.55rem', color: syncStatus === 'online' ? '#00b878' : syncStatus === 'syncing' ? '#ffaa00' : '#ff6b84', marginTop: 4 }}>● {syncStatus === 'online' ? tx.syncOk : syncStatus.toUpperCase()}</div>
+              <div style={{ fontSize: '0.55rem', color: syncStatus === 'online' ? '#00b878' : ['syncing', 'pending'].includes(syncStatus) ? '#ffaa00' : '#ff6b84', marginTop: 4 }}>● {syncStatus === 'online' ? tx.syncOk : syncStatus === 'pending' ? tx.syncPending : syncStatus.toUpperCase()}</div>
             </div>
             <ActionRow skin={skin} danger label={tx.logout} desc={tx.logoutDesc} btnLabel={tx.logoutBtn} onClick={logout} />
           </div>

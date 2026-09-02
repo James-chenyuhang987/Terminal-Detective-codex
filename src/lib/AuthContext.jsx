@@ -18,13 +18,14 @@ import {
   updatePassword,
 } from 'firebase/auth';
 import { appParams } from '@/lib/app-params';
-import { AUTH_FEEDBACK_CODES, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
-import { firebaseAuthReady, isFirebaseConfigured } from '@/lib/firebase';
+import { AUTH_FEEDBACK_CODES, authRedirectFeedback, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
+import { cooldownRemaining, startAuthCooldown } from '@/lib/authCooldown';
+import { firebaseAuthReady, firebasePublicConfig, isFirebaseConfigured } from '@/lib/firebase';
 import { setAuthTokenProvider } from '@/lib/authToken';
 
 const AuthContext = createContext(null);
-const AUTH_TIMEOUT_MS = 25_000;
-const COOLDOWN_MS = 60_000;
+const AUTH_TIMEOUT_MS = 10_000;
+const AUTH_RETRY_LIMIT = 2;
 const VERIFY_COOLDOWN_KEY = 'td_firebase_verify_cooldown';
 const RESET_COOLDOWN_KEY = 'td_firebase_reset_cooldown';
 
@@ -45,26 +46,29 @@ function actionUrl(kind = 'verified') {
   return url.toString();
 }
 
-function cooldownRemaining(key) {
-  try {
-    return Math.max(0, Math.ceil((Number(localStorage.getItem(key)) - Date.now()) / 1000));
-  } catch {
-    return 0;
-  }
-}
-
-function startCooldown(key) {
-  try { localStorage.setItem(key, String(Date.now() + COOLDOWN_MS)); } catch { /* storage can be unavailable */ }
+function paramsObject(params) {
+  const result = /** @type {Record<string, string>} */ ({});
+  params.forEach((value, key) => { result[key] = value; });
+  return result;
 }
 
 function consumeAuthReturn() {
   const url = new URL(window.location.href);
   const action = url.searchParams.get('auth') || '';
-  if (action) {
-    url.searchParams.delete('auth');
+  const redirectParams = paramsObject(url.searchParams);
+  let feedback = authRedirectFeedback(redirectParams);
+  const hashValue = url.hash.replace(/^#\??/, '');
+  if (hashValue && /(?:^|&)error(?:_code|_description)?=/.test(hashValue)) {
+    feedback ||= authRedirectFeedback(paramsObject(new URLSearchParams(hashValue)));
+    url.hash = '';
+  }
+  const sensitiveKeys = ['auth', 'error', 'error_code', 'error_description'];
+  const changed = sensitiveKeys.some(key => url.searchParams.has(key)) || Boolean(feedback && window.location.hash);
+  sensitiveKeys.forEach(key => url.searchParams.delete(key));
+  if (changed) {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }
-  return action;
+  return { action, feedback };
 }
 
 async function readJson(response) {
@@ -73,7 +77,41 @@ async function readJson(response) {
   try { return JSON.parse(text); } catch { return {}; }
 }
 
-async function bootstrapCloudflare(firebaseUser, forceRefresh = false) {
+function wait(ms) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function retryAfterMs(response, attempt) {
+  const header = Number(response?.headers?.get('retry-after'));
+  if (Number.isFinite(header) && header > 0) return Math.min(5_000, header * 1000);
+  return 500 * (2 ** attempt);
+}
+
+async function probeCloudflareAuth() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(`${appParams.serverUrl}/api/auth/config`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    const payload = await readJson(response);
+    if (!response.ok) return { ready: false, feedbackCode: AUTH_FEEDBACK_CODES.NETWORK, payload };
+    if (payload?.project_id && payload.project_id !== firebasePublicConfig.projectId) {
+      return { ready: false, feedbackCode: AUTH_FEEDBACK_CODES.BACKEND_MISMATCH, payload };
+    }
+    if (!payload?.ready || !payload?.firebase || !payload?.database || !payload?.schema) {
+      return { ready: false, feedbackCode: AUTH_FEEDBACK_CODES.CONFIG_MISSING, payload };
+    }
+    return { ready: true, feedbackCode: '', payload };
+  } catch (error) {
+    return { ready: false, feedbackCode: mapFirebaseAuthError(error) === AUTH_FEEDBACK_CODES.UNKNOWN ? AUTH_FEEDBACK_CODES.NETWORK : mapFirebaseAuthError(error), error };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function bootstrapCloudflare(firebaseUser, forceRefresh = false, attempt = 0) {
   const token = await firebaseUser.getIdToken(forceRefresh);
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
@@ -83,7 +121,11 @@ async function bootstrapCloudflare(firebaseUser, forceRefresh = false) {
       signal: controller.signal,
     });
     if (response.status === 401 && !forceRefresh) {
-      return bootstrapCloudflare(firebaseUser, true);
+      return bootstrapCloudflare(firebaseUser, true, attempt);
+    }
+    if ([429, 502, 503, 504].includes(response.status) && attempt < AUTH_RETRY_LIMIT) {
+      await wait(retryAfterMs(response, attempt));
+      return bootstrapCloudflare(firebaseUser, forceRefresh, attempt + 1);
     }
     const payload = await readJson(response);
     if (!response.ok || !payload?.authenticated || !payload?.user) {
@@ -93,6 +135,12 @@ async function bootstrapCloudflare(firebaseUser, forceRefresh = false) {
       throw feedbackError(AUTH_FEEDBACK_CODES.NETWORK, payload);
     }
     return payload;
+  } catch (error) {
+    if (attempt < AUTH_RETRY_LIMIT && (error?.name === 'AbortError' || error instanceof TypeError)) {
+      await wait(500 * (2 ** attempt));
+      return bootstrapCloudflare(firebaseUser, forceRefresh, attempt + 1);
+    }
+    throw error;
   } finally {
     window.clearTimeout(timeout);
   }
@@ -111,8 +159,26 @@ export function AuthProvider({ children }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [authServiceError, setAuthServiceError] = useState('');
+  const [authBackendStatus, setAuthBackendStatus] = useState(isFirebaseConfigured ? 'checking' : 'config');
   const mountedRef = useRef(true);
   const bootSequenceRef = useRef(0);
+  const backendReadyRef = useRef(false);
+
+  const checkAuthBackend = useCallback(async () => {
+    if (!isFirebaseConfigured) {
+      backendReadyRef.current = false;
+      setAuthBackendStatus('config');
+      setAuthServiceError(AUTH_FEEDBACK_CODES.CONFIG_MISSING);
+      return false;
+    }
+    setAuthBackendStatus('checking');
+    const result = await probeCloudflareAuth();
+    if (!mountedRef.current) return false;
+    backendReadyRef.current = result.ready;
+    setAuthBackendStatus(result.ready ? 'ready' : result.feedbackCode === AUTH_FEEDBACK_CODES.CONFIG_MISSING || result.feedbackCode === AUTH_FEEDBACK_CODES.BACKEND_MISMATCH ? 'config' : 'error');
+    setAuthServiceError(result.feedbackCode);
+    return result.ready;
+  }, []);
 
   const applyFirebaseUser = useCallback(async (nextUser, { forceRefresh = false } = {}) => {
     const sequence = ++bootSequenceRef.current;
@@ -120,13 +186,14 @@ export function AuthProvider({ children }) {
     setVerificationEmail(nextUser?.email || '');
     setUser(null);
     setIsAuthenticated(false);
-    setAuthServiceError('');
     if (!nextUser) return null;
+    setAuthServiceError('');
     if (!nextUser.emailVerified) {
       setAuthServiceError(AUTH_FEEDBACK_CODES.EMAIL_UNVERIFIED);
       return null;
     }
     try {
+      if (!backendReadyRef.current && !await checkAuthBackend()) return null;
       const session = await bootstrapCloudflare(nextUser, forceRefresh);
       if (!mountedRef.current || sequence !== bootSequenceRef.current) return null;
       setUser(session.user);
@@ -137,7 +204,7 @@ export function AuthProvider({ children }) {
       setAuthServiceError(error?.feedbackCode || AUTH_FEEDBACK_CODES.NETWORK);
       return null;
     }
-  }, []);
+  }, [checkAuthBackend]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -153,12 +220,14 @@ export function AuthProvider({ children }) {
     void firebaseAuthReady().then(async auth => {
       if (!auth || !mountedRef.current) return;
       setAuthTokenProvider(force => auth.currentUser?.getIdToken(Boolean(force)) || '');
+      await checkAuthBackend();
       try { await getRedirectResult(auth); } catch (error) {
         if (mountedRef.current) setAuthServiceError(mapFirebaseAuthError(error));
       }
+      if (authReturn.feedback && mountedRef.current) setAuthServiceError(authReturn.feedback);
       unsubscribe = onIdTokenChanged(auth, async nextUser => {
         setIsLoadingAuth(true);
-        if (authReturn === 'verified' && nextUser && !nextUser.emailVerified) {
+        if (authReturn.action === 'verified' && nextUser && !nextUser.emailVerified) {
           try {
             await reload(nextUser);
             if (nextUser.emailVerified) await nextUser.getIdToken(true);
@@ -166,7 +235,7 @@ export function AuthProvider({ children }) {
             // The verification panel remains available as a safe manual retry.
           }
         }
-        authReturn = '';
+        authReturn = { action: '', feedback: '' };
         await applyFirebaseUser(nextUser);
         if (mountedRef.current) {
           setAuthChecked(true);
@@ -186,7 +255,7 @@ export function AuthProvider({ children }) {
       unsubscribe();
       setAuthTokenProvider(null);
     };
-  }, [applyFirebaseUser]);
+  }, [applyFirebaseUser, checkAuthBackend]);
 
   const auth = useCallback(async () => requireConfigured(await firebaseAuthReady()), []);
 
@@ -216,12 +285,12 @@ export function AuthProvider({ children }) {
       setVerificationEmail(credential.user.email || normalizeEmail(email));
       setAuthServiceError(AUTH_FEEDBACK_CODES.EMAIL_UNVERIFIED);
       await sendEmailVerification(credential.user, { url: actionUrl('verified'), handleCodeInApp: false });
-      startCooldown(VERIFY_COOLDOWN_KEY);
+      startAuthCooldown(VERIFY_COOLDOWN_KEY);
       return credential.user;
     } catch (error) {
       if (error?.feedbackCode) throw error;
       const code = mapFirebaseAuthError(error);
-      if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) startCooldown(VERIFY_COOLDOWN_KEY);
+      if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) startAuthCooldown(VERIFY_COOLDOWN_KEY, { rateLimited: true });
       throw feedbackError(code, error);
     }
   }, [auth]);
@@ -234,11 +303,11 @@ export function AuthProvider({ children }) {
     if (!current) throw feedbackError(AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL);
     try {
       await sendEmailVerification(current, { url: actionUrl('verified'), handleCodeInApp: false });
-      startCooldown(VERIFY_COOLDOWN_KEY);
+      startAuthCooldown(VERIFY_COOLDOWN_KEY);
       return true;
     } catch (error) {
       const code = mapFirebaseAuthError(error);
-      if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) startCooldown(VERIFY_COOLDOWN_KEY);
+      if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) startAuthCooldown(VERIFY_COOLDOWN_KEY, { rateLimited: true });
       throw feedbackError(code, error);
     }
   }, [auth]);
@@ -263,13 +332,13 @@ export function AuthProvider({ children }) {
       const code = mapFirebaseAuthError(error);
       if (code === AUTH_FEEDBACK_CODES.INVALID_EMAIL) throw feedbackError(code, error);
       if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) {
-        startCooldown(RESET_COOLDOWN_KEY);
+        startAuthCooldown(RESET_COOLDOWN_KEY, { rateLimited: true });
         throw feedbackError(code, error);
       }
       if (code !== AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL) throw feedbackError(code, error);
       // Account enumeration protection: unknown and known accounts receive the same UI response.
     }
-    startCooldown(RESET_COOLDOWN_KEY);
+    startAuthCooldown(RESET_COOLDOWN_KEY);
     return true;
   }, [auth]);
 
@@ -370,6 +439,14 @@ export function AuthProvider({ children }) {
     return applyFirebaseUser(instance.currentUser, { forceRefresh: true });
   }, [applyFirebaseUser]);
 
+  const retryAuthService = useCallback(async () => {
+    const ready = await checkAuthBackend();
+    if (!ready) return false;
+    const instance = await firebaseAuthReady();
+    if (instance?.currentUser) await applyFirebaseUser(instance.currentUser, { forceRefresh: true });
+    return true;
+  }, [applyFirebaseUser, checkAuthBackend]);
+
   const getIdToken = useCallback(async (forceRefresh = false) => {
     const instance = await firebaseAuthReady();
     return instance?.currentUser?.getIdToken(Boolean(forceRefresh)) || '';
@@ -383,6 +460,7 @@ export function AuthProvider({ children }) {
     authChecked,
     authBackend: isAuthenticated ? 'firebase-cloudflare' : null,
     authServiceError,
+    authBackendStatus,
     firebaseConfigured: isFirebaseConfigured,
     verificationEmail,
     verificationPending: Boolean(firebaseUser && !firebaseUser.emailVerified),
@@ -399,12 +477,13 @@ export function AuthProvider({ children }) {
     changePassword,
     logout,
     checkUserAuth,
+    retryAuthService,
     getIdToken,
     cooldownRemaining: () => ({ verification: cooldownRemaining(VERIFY_COOLDOWN_KEY), reset: cooldownRemaining(RESET_COOLDOWN_KEY) }),
   }), [
-    addPassword, authChecked, authServiceError, changePassword, checkUserAuth, firebaseUser, getIdToken,
+    addPassword, authBackendStatus, authChecked, authServiceError, changePassword, checkUserAuth, firebaseUser, getIdToken,
     isAuthenticated, isLoadingAuth, linkGitHub, loginWithGitHub, logout, refreshEmailVerification,
-    sendPasswordReset, sendVerificationAgain, signInWithEmail, signUpWithEmail, unlinkGitHub, user, verificationEmail,
+    retryAuthService, sendPasswordReset, sendVerificationAgain, signInWithEmail, signUpWithEmail, unlinkGitHub, user, verificationEmail,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
