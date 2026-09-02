@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { LangProvider } from '@/lib/lang.jsx';
 import { SettingsProvider } from '@/lib/settings.jsx';
 import AuthGate from '@/components/AuthGate';
+import AuthNotice from '@/components/AuthNotice';
 import AppErrorBoundary from '@/components/AppErrorBoundary.jsx';
 import GlobalClickEffects from '@/components/game/GlobalClickEffects.jsx';
 
@@ -34,18 +35,19 @@ const AuthenticatedApp = () => {
 function App() {
 
   return (
-    <LangProvider>
-      <SettingsProvider>
-        <GlobalClickEffects />
-        <AuthProvider>
-          <AppErrorBoundary>
+    <AppErrorBoundary>
+      <LangProvider>
+        <SettingsProvider>
+          <GlobalClickEffects />
+          <AuthProvider>
+            <AuthNotice />
             <Suspense fallback={<AppLoading />}>
               <AuthenticatedApp />
             </Suspense>
-          </AppErrorBoundary>
-        </AuthProvider>
-      </SettingsProvider>
-    </LangProvider>
+          </AuthProvider>
+        </SettingsProvider>
+      </LangProvider>
+    </AppErrorBoundary>
   )
 }
 

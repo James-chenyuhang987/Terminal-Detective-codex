@@ -30,7 +30,6 @@ export const PROFILE_PATCH_FIELDS = Object.freeze(PROFILE_SYNC_FIELDS.filter(
   key => !['profile_revision', 'active_session_id'].includes(key),
 ));
 export const PENDING_SETTLEMENTS_KEY = 'pending_settlements_v1';
-export const PENDING_PROFILE_WRITE_KEY = 'pending_profile_write_v1';
 const LOCAL_MIGRATION_KEYS = Object.freeze({
   progression: 'agent_progression_v1', rewarded: 'agent_rewarded_runs_v1',
   skills: 'skill_equipped_v1', team: 'save_team_config',
@@ -54,9 +53,12 @@ function pendingKey(ownerId) {
   return suffix ? `${PENDING_SETTLEMENTS_KEY}:${suffix}` : PENDING_SETTLEMENTS_KEY;
 }
 
-function pendingProfileKey(ownerId) {
-  const suffix = typeof ownerId === 'string' && ownerId ? ownerId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 96) : '';
-  return suffix ? `${PENDING_PROFILE_WRITE_KEY}:${suffix}` : PENDING_PROFILE_WRITE_KEY;
+function pendingItemPrefix(ownerId) {
+  return `${PENDING_SETTLEMENTS_KEY}:item:${encodeURIComponent(ownerId || '')}:`;
+}
+
+function pendingItemKey(ownerId, runId) {
+  return `${pendingItemPrefix(ownerId)}${encodeURIComponent(runId)}`;
 }
 
 export function sanitizeProfileWrite(profile) {
@@ -156,84 +158,41 @@ export function migrateProfileV2(raw = {}, storage) {
 export function enqueuePendingSettlement(summary, storage, ownerId = '') {
   if (!summary?.run_id) return [];
   const target = storageOrNull(storage);
-  const key = pendingKey(ownerId);
-  const current = safeParse(target?.getItem(key), []);
-  const next = [...(Array.isArray(current) ? current.filter(item => item?.run_id !== summary.run_id) : []), summary];
-  try { target?.setItem(key, JSON.stringify(next)); } catch { /* settlement remains visible in the current tab */ }
-  return next;
+  target?.setItem(pendingItemKey(ownerId, summary.run_id), JSON.stringify(summary));
+  return readPendingSettlements(target, ownerId);
 }
 
 export function readPendingSettlements(storage, ownerId = '') {
   const target = storageOrNull(storage);
-  const current = safeParse(target?.getItem(pendingKey(ownerId)), []);
-  return Array.isArray(current) ? current.filter(item => item?.run_id) : [];
+  if (!target) return [];
+  const legacy = safeParse(target.getItem(pendingKey(ownerId)), []);
+  const pending = new Map(
+    (Array.isArray(legacy) ? legacy : [])
+      .filter(item => item?.run_id)
+      .map(item => [item.run_id, item]),
+  );
+  const prefix = pendingItemPrefix(ownerId);
+  for (let index = 0; index < target.length; index += 1) {
+    const key = target.key(index);
+    if (!key?.startsWith(prefix)) continue;
+    const item = safeParse(target.getItem(key), null);
+    if (item?.run_id && key === pendingItemKey(ownerId, item.run_id)) {
+      pending.set(item.run_id, item);
+    }
+  }
+  return [...pending.values()];
 }
 
 export function removePendingSettlement(runId, storage, ownerId = '') {
   const target = storageOrNull(storage);
-  const key = pendingKey(ownerId);
-  const next = readPendingSettlements(target, ownerId).filter(item => item.run_id !== runId);
-  try {
-    if (next.length) target?.setItem(key, JSON.stringify(next));
-    else target?.removeItem(key);
-  } catch { /* replay can be attempted again in the current tab */ }
-  return next;
-}
-
-export function readPendingProfileWrite(storage, ownerId = '') {
-  const target = storageOrNull(storage);
-  let current = null;
-  try { current = safeParse(target?.getItem(pendingProfileKey(ownerId)), null); } catch { current = null; }
-  const patch = sanitizeProfilePatch(current?.patch);
-  if (!patch || !Object.keys(patch).length) return null;
-  return {
-    version: 1,
-    patch,
-    created_at: Math.max(0, Number(current?.created_at) || 0),
-    updated_at: Math.max(0, Number(current?.updated_at) || 0),
-  };
-}
-
-/**
- * Write-ahead profile journal. Later absolute field values replace older ones,
- * so repeated replay is idempotent even when the server committed a request but
- * the browser lost its response.
- */
-export function enqueuePendingProfileWrite(patch, storage, ownerId = '', now = Date.now()) {
-  const clean = sanitizeProfilePatch(patch);
-  const current = readPendingProfileWrite(storage, ownerId);
-  if (!clean || !Object.keys(clean).length) return { ...(current || {}), stored: Boolean(current) };
-  const next = {
-    version: 1,
-    patch: { ...(current?.patch || {}), ...clean },
-    created_at: current?.created_at || now,
-    updated_at: now,
-  };
-  let stored = false;
-  try {
-    const target = storageOrNull(storage);
-    target?.setItem(pendingProfileKey(ownerId), JSON.stringify(next));
-    stored = Boolean(target);
-  } catch { stored = false; }
-  return { ...next, stored };
-}
-
-export function clearPendingProfileWrite(storage, ownerId = '') {
-  try { storageOrNull(storage)?.removeItem(pendingProfileKey(ownerId)); return true; }
-  catch { return false; }
-}
-
-export function isRetryableProfileError(error) {
-  const status = Number(error?.status) || 0;
-  const code = String(error?.code || '').toUpperCase();
-  if (['SESSION_TAKEN', 'STALE_PROFILE', 'INVALID_PATCH', 'UNAUTHENTICATED', 'EMAIL_UNVERIFIED'].includes(code)) return false;
-  return error?.name === 'AbortError'
-    || error instanceof TypeError
-    || status === 0
-    || status === 408
-    || status === 429
-    || status >= 500
-    || ['PROFILE_TIMEOUT', 'PROFILE_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'FIREBASE_KEYS_UNAVAILABLE', 'GATEWAY_FAILED', 'NETWORK'].includes(code);
+  if (!target) return [];
+  target.removeItem(pendingItemKey(ownerId, runId));
+  const legacyKey = pendingKey(ownerId);
+  const legacy = safeParse(target.getItem(legacyKey), []);
+  const remainingLegacy = (Array.isArray(legacy) ? legacy : []).filter(item => item?.run_id !== runId);
+  if (remainingLegacy.length) target.setItem(legacyKey, JSON.stringify(remainingLegacy));
+  else target.removeItem(legacyKey);
+  return readPendingSettlements(target, ownerId);
 }
 
 export function applySettlementToProfile(profile, summary) {
@@ -268,13 +227,39 @@ function profileRequestError(code, message, status, payload = {}) {
   return error;
 }
 
-export async function invokePlayerProfile(action, payload = {}) {
+function safeProfileErrorMessage(code, status = 0) {
+  const messages = {
+    SESSION_TAKEN: 'This account is active on another device.',
+    STALE_PROFILE: 'The cloud profile changed and must be refreshed.',
+    PROFILE_OWNER_MISMATCH: 'The authenticated profile owner changed.',
+    INVALID_OPERATION_ID: 'The profile operation could not be validated.',
+    OPERATION_ID_REUSED: 'The profile operation could not be safely repeated.',
+    PROFILE_DATA_CORRUPT: 'The cloud profile needs administrator recovery.',
+    DATABASE_UNAVAILABLE: 'Cloud profile storage is temporarily unavailable.',
+  };
+  return messages[code]
+    || (status >= 500
+      ? 'Cloud profile storage is temporarily unavailable.'
+      : 'The profile request could not be completed.');
+}
+
+/**
+ * @param {string} action
+ * @param {Record<string, any>} [payload]
+ * @param {{ ownerId?: string, signal?: AbortSignal }} [options]
+ */
+export async function invokePlayerProfile(action, payload = {}, options = {}) {
+  const { ownerId = '', signal: externalSignal } = options;
   const headers = /** @type {Record<string, string>} */ ({
     'Content-Type': 'application/json',
     Accept: 'application/json',
     'X-App-Id': String(appParams.appId),
   });
+  if (ownerId) headers['X-Profile-Owner'] = ownerId;
   const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const response = await fetchWithAuth(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/playerProfile`, {
@@ -286,17 +271,20 @@ export async function invokePlayerProfile(action, payload = {}) {
       if (result?.profile && typeof result.profile === 'object') return result;
       throw profileRequestError('PROFILE_UNAVAILABLE', 'Cloud profile returned an invalid response.', 502, body);
     }
-    const result = unwrapFunctionResponse(body);
     throw profileRequestError(
       body?.error || 'PROFILE_UNAVAILABLE',
-      body?.message || body?.detail || `Profile request failed (${response.status}).`,
+      safeProfileErrorMessage(body?.error || 'PROFILE_UNAVAILABLE', response.status),
       response.status,
-      result,
+      body,
     );
   } catch (cause) {
     if (cause?.name === 'AbortError') {
-      const error = /** @type {Error & { code?: string }} */ (new Error('Profile request timed out.'));
-      error.code = 'PROFILE_TIMEOUT';
+      const cancelled = externalSignal?.aborted;
+      const error = /** @type {Error & { code?: string, status?: number }} */ (
+        new Error(cancelled ? 'Profile request was cancelled.' : 'Profile request timed out.')
+      );
+      error.code = cancelled ? 'PROFILE_REQUEST_CANCELLED' : 'PROFILE_TIMEOUT';
+      error.status = cancelled ? 0 : 408;
       throw error;
     }
     const data = cause?.response?.data || cause?.data || cause?.body;
@@ -306,8 +294,14 @@ export async function invokePlayerProfile(action, payload = {}) {
       error.payload = data;
       throw error;
     }
-    throw cause;
+    if (cause?.code) throw cause;
+    throw profileRequestError(
+      'PROFILE_NETWORK',
+      'The profile service could not be reached.',
+      0,
+    );
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }

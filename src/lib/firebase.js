@@ -34,7 +34,7 @@ export function getFirebaseAuth() {
   if (!authInstance) {
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     authInstance = getAuth(app);
-    persistencePromise = setPersistence(authInstance, browserLocalPersistence).catch(() => undefined);
+    persistencePromise = setPersistence(authInstance, browserLocalPersistence);
   }
   return authInstance;
 }

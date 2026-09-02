@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { useAuth } from '@/lib/AuthContext';
+import { validatePassword } from '@/lib/authErrors';
 import { useSettings, panelSkin, playSfx, APP_VERSION, SAVE_KEYS } from '@/lib/settings.jsx';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { migrateProfileV2, normalizeProfile, sanitizeProfileWrite } from '@/game/playerProfile';
@@ -28,8 +29,11 @@ const TX = {
     version: '版本信息',
     account: '账户 · ACCOUNT', email: '已验证邮箱', providers: '登录方式', passwordProvider: '邮箱密码', githubProvider: 'GitHub', linked: '已绑定', notLinked: '未绑定',
     linkGithub: '绑定 GitHub', unlinkGithub: '解绑 GitHub', passwordSetup: '设置邮箱密码', passwordChange: '修改密码', passwordPlaceholder: '8–64 位，包含字母和数字', passwordSave: '保存密码',
-    sync: '云端同步', syncOk: 'Firebase 身份已连接 Cloudflare D1', syncPending: '进度已保存在本机，网络恢复后自动同步', logout: '退出登录', logoutDesc: '结束当前 Firebase 会话并返回登录页', logoutBtn: '退出',
-    authOk: '账户登录方式已更新', authFailed: '账户操作未完成，请稍后重试', authWeak: '密码需为 8–64 位并包含字母和数字', authRecent: '请先退出并重新登录，再修改敏感账户设置', authLast: '至少需要保留一种登录方式', authConflict: '这个 GitHub 已绑定其他账号',
+    currentPassword: '当前密码', currentPasswordPlaceholder: '近期已登录可留空；否则用于重新验证身份',
+    passwordRuleLength: '8–64 位', passwordRuleLetter: '含字母', passwordRuleNumber: '含数字',
+    sync: '云端同步', syncOk: 'Firebase 身份已连接 Cloudflare D1', syncWorking: '正在同步', syncPending: '项改动等待同步', syncReadonly: '另一设备已接管，当前为只读', syncStorage: '本地存储不可用，修改已暂停', syncRecovery: '档案需要恢复，修改已暂停', syncError: '云端同步失败', logout: '退出登录', logoutDesc: '结束当前 Firebase 会话并返回登录页', logoutBtn: '退出',
+    authOk: '账户登录方式已更新', authFailed: '账户操作未完成，请稍后重试', authWeak: '密码需为 8–64 位并包含字母和数字', authRecent: '请输入当前密码重新验证身份；GitHub 账号将弹窗确认', authLast: '至少需要保留一种登录方式', authConflict: '这个 GitHub 已绑定其他账号',
+    authRate: '操作过于频繁，请稍后再试', authCredential: '当前密码不正确或登录凭据已失效', authProfileConflict: '该邮箱已关联其他身份档案', authNetwork: '认证服务暂时不可用，请重试',
     confirmClear: '确认清除本机偏好和现场缓存？云端档案不会变化。',
     confirmReset: '确认将设置恢复为默认值？',
     okClear: '本地存档已清除', okReset: '设置已恢复默认', okExport: '配置已导出',
@@ -59,8 +63,11 @@ const TX = {
     version: 'Version',
     account: 'ACCOUNT', email: 'Verified email', providers: 'Sign-in methods', passwordProvider: 'Email password', githubProvider: 'GitHub', linked: 'Linked', notLinked: 'Not linked',
     linkGithub: 'LINK GITHUB', unlinkGithub: 'UNLINK GITHUB', passwordSetup: 'Add email password', passwordChange: 'Change password', passwordPlaceholder: '8–64 chars with a letter and number', passwordSave: 'SAVE PASSWORD',
-    sync: 'Cloud sync', syncOk: 'Firebase identity connected to Cloudflare D1', syncPending: 'Progress is saved locally and will sync automatically', logout: 'Sign out', logoutDesc: 'End the Firebase session and return to sign in', logoutBtn: 'SIGN OUT',
-    authOk: 'Sign-in methods updated', authFailed: 'Account operation did not complete. Please retry.', authWeak: 'Password needs 8–64 characters, a letter and a number.', authRecent: 'Sign out and sign in again before changing sensitive account settings.', authLast: 'At least one sign-in method must remain.', authConflict: 'This GitHub account is already linked elsewhere.',
+    currentPassword: 'Current password', currentPasswordPlaceholder: 'Leave blank after a recent sign-in; otherwise used to verify your identity',
+    passwordRuleLength: '8–64 chars', passwordRuleLetter: 'Has a letter', passwordRuleNumber: 'Has a number',
+    sync: 'Cloud sync', syncOk: 'Firebase identity connected to Cloudflare D1', syncWorking: 'Syncing', syncPending: 'changes waiting to sync', syncReadonly: 'Another device took over; this device is read-only', syncStorage: 'Local storage is unavailable; changes are paused', syncRecovery: 'Profile recovery is required; changes are paused', syncError: 'Cloud sync failed', logout: 'Sign out', logoutDesc: 'End the Firebase session and return to sign in', logoutBtn: 'SIGN OUT',
+    authOk: 'Sign-in methods updated', authFailed: 'Account operation did not complete. Please retry.', authWeak: 'Password needs 8–64 characters, a letter and a number.', authRecent: 'Enter your current password to verify your identity; GitHub accounts use a popup.', authLast: 'At least one sign-in method must remain.', authConflict: 'This GitHub account is already linked elsewhere.',
+    authRate: 'Too many attempts. Wait and try again.', authCredential: 'The current password is incorrect or the credential expired.', authProfileConflict: 'This email is linked to another identity profile.', authNetwork: 'Authentication is temporarily unavailable. Try again.',
     confirmClear: 'Clear local preferences and run cache? Cloud progress is preserved.',
     confirmReset: 'Restore settings to defaults?',
     okClear: 'Local saves cleared', okReset: 'Settings restored', okExport: 'Config exported',
@@ -76,18 +83,32 @@ export default function SettingsDrawer({ onClose }) {
   const { lang, setLang } = useLang();
   const { user, providers, linkGitHub, unlinkGitHub, addPassword, changePassword, logout } = useAuth();
   const { settings, setSetting, resetSettings } = useSettings();
-  const { profile, account, syncStatus, mutate } = useProfile();
+  const { profile, account, pendingCount, syncStatus, mutate } = useProfile();
   const skin = panelSkin(settings.panelLight);
   const tx = TX[lang] || TX.zh;
   const [toast, setToast] = useState(null);
   const [confirm, setConfirm] = useState(null); // { text, run }
   const [resetCode, setResetCode] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
   const closeRef = useRef(null);
   const previousFocusRef = useRef(null);
   const toastTimerRef = useRef(null);
+  const accountPasswordState = validatePassword(accountPassword);
+  const syncLabel = {
+    online: tx.syncOk,
+    syncing: tx.syncWorking,
+    pending: `${pendingCount} ${tx.syncPending}`,
+    readonly: tx.syncReadonly,
+    storage_unavailable: tx.syncStorage,
+    recovery: tx.syncRecovery,
+    error: tx.syncError,
+  }[syncStatus] || tx.syncWorking;
+  const syncColor = syncStatus === 'online'
+    ? '#00b878'
+    : ['syncing', 'pending', 'loading'].includes(syncStatus) ? '#ffaa00' : '#ff6b84';
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
@@ -141,8 +162,10 @@ export default function SettingsDrawer({ onClose }) {
     if (saving) return;
     setSaving(true);
     try {
-      await action();
+      const result = await action();
+      if (result === null || result === false) return;
       setAccountPassword('');
+      setCurrentPassword('');
       notify(tx.authOk, 'success');
     } catch (error) {
       const messages = {
@@ -150,6 +173,10 @@ export default function SettingsDrawer({ onClose }) {
         recent_login_required: tx.authRecent,
         last_provider: tx.authLast,
         account_exists: tx.authConflict,
+        rate_limited: tx.authRate,
+        invalid_credential: tx.authCredential,
+        profile_conflict: tx.authProfileConflict,
+        network: tx.authNetwork,
       };
       notify(messages[error?.feedbackCode] || tx.authFailed, 'error');
     } finally {
@@ -220,7 +247,7 @@ export default function SettingsDrawer({ onClose }) {
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 16px', borderBottom: `1px solid ${skin.border}`,
+          padding: 'max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 14px 16px', borderBottom: `1px solid ${skin.border}`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <span style={{ fontSize: 15 }}>⚙️</span>
@@ -237,7 +264,7 @@ export default function SettingsDrawer({ onClose }) {
         </div>
 
         {/* Body */}
-        <div aria-busy={saving} style={{ flex: 1, overflowY: 'auto', padding: '4px 16px 20px', pointerEvents: saving ? 'none' : 'auto', opacity: saving ? .68 : 1 }}>
+        <div aria-busy={saving} style={{ flex: 1, overflowY: 'auto', padding: '4px max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) 16px', pointerEvents: saving ? 'none' : 'auto', opacity: saving ? .68 : 1 }}>
           <SectionTitle skin={skin}>{tx.general}</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <SegmentRow skin={skin} label={tx.language} desc={tx.languageDesc}
@@ -329,20 +356,33 @@ export default function SettingsDrawer({ onClose }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ color: skin.subText, fontSize: '.56rem' }}>GH {tx.githubProvider} · {providers.includes('github.com') ? tx.linked : tx.notLinked}</span>
-                  <button type="button" onClick={() => void runAccountAction(providers.includes('github.com') ? unlinkGitHub : linkGitHub)} style={{ padding: '6px 8px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${providers.includes('github.com') ? '#ff6b8460' : `${skin.accent}65`}`, background: 'transparent', color: providers.includes('github.com') ? '#ff7890' : skin.accent, fontFamily: 'monospace', fontSize: '.5rem' }}>{providers.includes('github.com') ? tx.unlinkGithub : tx.linkGithub}</button>
+                  <button type="button" onClick={() => void runAccountAction(() => providers.includes('github.com') ? unlinkGitHub(currentPassword) : linkGitHub(currentPassword))} style={{ padding: '6px 8px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${providers.includes('github.com') ? '#ff6b8460' : `${skin.accent}65`}`, background: 'transparent', color: providers.includes('github.com') ? '#ff7890' : skin.accent, fontFamily: 'monospace', fontSize: '.5rem' }}>{providers.includes('github.com') ? tx.unlinkGithub : tx.linkGithub}</button>
                 </div>
               </div>
             </div>
             <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{providers.includes('password') ? tx.passwordChange : tx.passwordSetup}</div>
+              {providers.includes('password') && (
+                <>
+                  <div style={{ color: skin.subText, fontSize: '.5rem', marginTop: 8 }}>{tx.currentPassword}</div>
+                  <input type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} placeholder={tx.currentPasswordPlaceholder} style={{ width: '100%', marginTop: 5, padding: 8, borderRadius: 7, border: `1px solid ${skin.border}`, background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace', fontSize: '.55rem' }} />
+                </>
+              )}
               <input type="password" autoComplete="new-password" minLength={8} maxLength={64} value={accountPassword} onChange={event => setAccountPassword(event.target.value)} placeholder={tx.passwordPlaceholder} style={{ width: '100%', marginTop: 8, padding: 8, borderRadius: 7, border: `1px solid ${skin.border}`, background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace', fontSize: '.55rem' }} />
-              <button type="button" disabled={!accountPassword || saving} onClick={() => void runAccountAction(() => providers.includes('password') ? changePassword(accountPassword) : addPassword(accountPassword))} style={{ width: '100%', marginTop: 7, padding: 8, borderRadius: 7, cursor: accountPassword && !saving ? 'pointer' : 'not-allowed', opacity: accountPassword && !saving ? 1 : .4, border: `1px solid ${skin.accent}65`, background: `${skin.accent}13`, color: skin.accent, fontFamily: 'monospace', fontSize: '.55rem' }}>{tx.passwordSave}</button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
+                {[
+                  [accountPasswordState.length, tx.passwordRuleLength],
+                  [accountPasswordState.letter, tx.passwordRuleLetter],
+                  [accountPasswordState.number, tx.passwordRuleNumber],
+                ].map(([valid, label]) => <span key={label} style={{ color: accountPassword && valid ? '#00b878' : skin.subText, fontSize: '.48rem' }}>{accountPassword && valid ? '✓' : '○'} {label}</span>)}
+              </div>
+              <button type="button" disabled={!accountPasswordState.valid || saving} onClick={() => void runAccountAction(() => providers.includes('password') ? changePassword(accountPassword, currentPassword) : addPassword(accountPassword))} style={{ width: '100%', marginTop: 7, padding: 8, borderRadius: 7, cursor: accountPasswordState.valid && !saving ? 'pointer' : 'not-allowed', opacity: accountPasswordState.valid && !saving ? 1 : .4, border: `1px solid ${skin.accent}65`, background: `${skin.accent}13`, color: skin.accent, fontFamily: 'monospace', fontSize: '.55rem' }}>{tx.passwordSave}</button>
             </div>
             <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.sync}</div>
-              <div style={{ fontSize: '0.55rem', color: syncStatus === 'online' ? '#00b878' : ['syncing', 'pending'].includes(syncStatus) ? '#ffaa00' : '#ff6b84', marginTop: 4 }}>● {syncStatus === 'online' ? tx.syncOk : syncStatus === 'pending' ? tx.syncPending : syncStatus.toUpperCase()}</div>
+              <div style={{ fontSize: '0.55rem', color: syncColor, marginTop: 4 }}>● {syncLabel}</div>
             </div>
-            <ActionRow skin={skin} danger label={tx.logout} desc={tx.logoutDesc} btnLabel={tx.logoutBtn} onClick={logout} />
+            <ActionRow skin={skin} danger label={tx.logout} desc={tx.logoutDesc} btnLabel={tx.logoutBtn} onClick={() => void runAccountAction(logout)} />
           </div>
         </div>
       </div>

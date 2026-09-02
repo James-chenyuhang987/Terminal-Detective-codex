@@ -18,7 +18,8 @@
 	},
 	"vars": {
 		"APP_ID": "terminal-detective",
-		"FIREBASE_PROJECT_ID": "terminal-detective-e1714"
+		"FIREBASE_PROJECT_ID": "terminal-detective-e1714",
+		"CORS_ALLOWED_ORIGINS": "https://james-chenyuhang987.github.io"
 	},
 	"d1_databases": [
 		{

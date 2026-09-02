@@ -285,7 +285,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         level: result.profile.level,
         xp: result.profile.xp,
       } : null);
-      setSettlementStatus(result?.queued ? 'queued' : 'saved');
+      setSettlementStatus(result?.pending ? 'queued' : 'saved');
     } catch {
       settlementSentRef.current = false;
       setSettlementStatus('error');
