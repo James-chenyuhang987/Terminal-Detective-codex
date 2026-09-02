@@ -13,13 +13,19 @@ const OUTCOME_TEXT = {
 export default function ActionCinematicFallback({ event, onComplete, loading = false }) {
   const { lang } = useLang();
   const completeRef = useRef(onComplete);
+  const skipRef = useRef(null);
+  const previousFocusRef = useRef(null);
   completeRef.current = onComplete;
   const zh = lang === 'zh';
 
   useEffect(() => {
-    if (loading) return undefined;
-    const id = window.setTimeout(() => completeRef.current?.('fallback'), 1000);
-    return () => window.clearTimeout(id);
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    skipRef.current?.focus();
+    const id = loading ? null : window.setTimeout(() => completeRef.current?.('completed'), 1000);
+    return () => {
+      if (id !== null) window.clearTimeout(id);
+      previousFocusRef.current?.focus();
+    };
   }, [event?.eventId, loading]);
 
   useEffect(() => {
@@ -45,7 +51,7 @@ export default function ActionCinematicFallback({ event, onComplete, loading = f
         <h2>{getCinematicActionLabel(event?.actionTag, lang)}</h2>
         {!loading && <strong>{(OUTCOME_TEXT[event?.outcome] || OUTCOME_TEXT.progress)[lang] || OUTCOME_TEXT.progress.zh}</strong>}
       </div>
-      <button type="button" className="td-cinematic-skip" onClick={() => completeRef.current?.('skipped')}>
+      <button ref={skipRef} type="button" className="td-cinematic-skip" onClick={() => completeRef.current?.('skipped')}>
         {zh ? '跳过演示' : 'SKIP REPLAY'} ▶▶
       </button>
     </div>

@@ -350,7 +350,7 @@ Callback URL: https://<FIREBASE_PROJECT_ID>.firebaseapp.com/__/auth/handler
 ```
 
 4. 将 GitHub Client ID 与 Client Secret 只填写到 Firebase Authentication 的 GitHub Provider，不写入仓库或 Cloudflare 前端变量。
-5. 在 Firebase Authorized domains 添加 Worker 域名、`localhost` 和 `127.0.0.1`；将验证邮件与重置邮件的继续地址设为 Worker 首页。
+5. 在 Firebase Authorized domains 添加 Worker 域名、`localhost` 和 `127.0.0.1`；将验证邮件与重置邮件的继续地址设为 Worker 首页，并按下方“认证邮件投递”清单配置邮件模板。
 6. 将公开的 Firebase Project ID 写入 `wrangler.jsonc` 的 `FIREBASE_PROJECT_ID`，它必须与前端项目一致；运行 `npm run release:check` 确认发布配置。
 7. 安排维护窗口并审核 D1 目标后再执行迁移。`0002_reset_for_firebase.sql` 会按已确认的方案清空旧用户、旧 OAuth 会话和旧档案；`0003_profile_operations.sql` 创建档案幂等操作账本：
 
@@ -363,6 +363,19 @@ npm run cloudflare:d1:remote
 新数据库从空档案开始，不会自动导入旧平台或旧 Cloudflare 账号中的玩家。
 
 如果启用 GitHub Pages 备用前端，还需在仓库 Actions variables 中配置 `VITE_FIREBASE_API_KEY`、`VITE_FIREBASE_AUTH_DOMAIN`、`VITE_FIREBASE_PROJECT_ID`、`VITE_FIREBASE_APP_ID` 和 `VITE_BASE_PATH`，将 Pages 主机名加入 Firebase Authorized Domains，并把 Pages 精确来源加入 Worker 的 `CORS_ALLOWED_ORIGINS`。这些 Firebase Web App 值是公开标识，不得把 GitHub Client Secret 或 Firebase 私钥放入 Actions variables。
+
+### 认证邮件投递
+
+前端会按玩家当前语言请求中文或英文 Firebase 模板，并在验证等待页和密码重置成功提示中显示垃圾邮件恢复步骤。可选的公开变量 `VITE_FIREBASE_EMAIL_SENDER` 只用于向玩家显示可搜索、可加入允许列表的发件地址；它必须与 Firebase Authentication 邮件模板实际配置一致，不会改变真正的发件人。
+
+正式开放前在 Firebase Console 的 Authentication 邮件模板中逐项确认：
+
+1. 验证邮箱和重置密码模板都使用可识别的 `Terminal Detective` 发件人名称、明确的中英文标题与简短正文，说明玩家为何收到邮件。
+2. 为中文和英文分别保存模板，检查链接文字、继续地址、支持邮箱和回复地址，避免默认项目名、占位符或测试域名出现在生产邮件中。
+3. 使用 Gmail、Outlook/Hotmail、QQ 邮箱和 163 邮箱的真实收件箱各发送一次验证与重置邮件，记录收件、垃圾箱和延迟结果；找到误判邮件后标记“不是垃圾邮件”。
+4. 不通过反复点击重发来测试投递。重发仍受客户端冷却、Firebase 配额、同 IP 限流和滥用保护约束。
+
+Firebase 默认认证邮件的共享发件基础设施、发送信誉和收件服务商判定不受本仓库代码控制，因此 UI 提示不能保证邮件永远进入主收件箱。如果持续出现高比例垃圾箱投递，应单独设计服务端邮件链路：由受信任后端生成一次性 Firebase action link，再通过已验证自有域名的事务邮件服务发送，并为该域名正确配置 SPF、DKIM 和 DMARC。该方案需要新的邮件服务商、Worker secrets、滥用防护和投递监控，当前实现不会在未经审核时静默引入它。
 
 ## 安全设计
 
@@ -451,7 +464,7 @@ tests/                      规则、档案、界面行为和安全测试
 
 | 场景 | 当前保护 | 仍可能发生的情况 |
 | --- | --- | --- |
-| 邮件繁忙或限流 | 正常发送后冷却 60 秒；真正命中限流后按 2、4、8 分钟逐级退避，最高 15 分钟；各认证操作独立计时，验证等待页仍可改用 GitHub | 达到 Firebase 日额度、同 IP 请求过多或触发滥用保护时，邮件仍可能延迟或被限制 |
+| 邮件进入垃圾箱、繁忙或限流 | 按界面语言请求对应模板；页面显示常用发件地址、垃圾箱/广告分类检查和允许列表步骤；正常发送后冷却 60 秒，真正命中限流后按 2、4、8 分钟逐级退避，最高 15 分钟；验证等待页仍可改用 GitHub | Firebase 默认发送信誉、收件服务商规则、日额度、同 IP 频率和滥用保护不受前端控制，邮件仍可能延迟、误判或被限制 |
 | OAuth 回调 404 | GitHub 优先使用 Firebase 弹窗；降级回调使用 Firebase 官方 handler；应用启动时只清除遗留认证错误 query/hash | Firebase Authorized Domains、GitHub Callback URL 或生产域名配置错误时仍会拒绝授权，但界面会提供恢复提示 |
 | 原始 `error` 或空白页 | 已知 Firebase、Worker 和 D1 错误统一映射为中英文提示；未知顶层故障只展示匿名故障编号 | 未知代码缺陷、浏览器扩展拦截或第三方服务整体故障仍可能中断当前操作 |
 | 登录失败 | 登录前检查前后端 Firebase 项目、D1 binding 和必要表字段；会话初始化总计最多等待 10 秒，网络及 `429/502/503/504` 最多重试两次，`401` 只刷新 Token 一次 | 密码错误、邮箱未验证、授权取消、网络中断、Provider 未开启或真实生产配置缺失时仍会拒绝登录 |
@@ -468,11 +481,13 @@ tests/                      规则、档案、界面行为和安全测试
 1. 生产构建已注入真实的 `VITE_FIREBASE_API_KEY`、`VITE_FIREBASE_AUTH_DOMAIN`、`VITE_FIREBASE_PROJECT_ID` 和 `VITE_FIREBASE_APP_ID`。
 2. Worker 的 `FIREBASE_PROJECT_ID` 与前端 Firebase 项目完全一致。
 3. Firebase Authorized Domains 包含当前 Worker 生产域名。
-4. 若启用 GitHub Pages，Actions variables 已提供四个 `VITE_FIREBASE_*` 值，Pages 主机名已加入 Firebase Authorized Domains，Pages 来源已加入 Worker 的 `CORS_ALLOWED_ORIGINS`。
-5. Terminal Detective 专用 GitHub OAuth App 的 callback 指向 Firebase 官方 handler，Client Secret 只保存在 Firebase 控制台。
-6. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用。
-7. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态。
-8. 实际完成一次完整冒烟测试：注册 → 验证邮箱 → 登录 → 开始案件 → 产生进度 → 刷新 → 退出 → 重新登录，并确认货币、探员和案件进度均仍存在。
-9. 分别测试 GitHub 登录、错误密码、未验证邮箱、密码重置、网络中断和多设备接管。
+4. Firebase 验证与重置模板已配置中英文版本、可识别发件人和正确继续地址；若设置 `VITE_FIREBASE_EMAIL_SENDER`，它与实际发件地址一致。
+5. 已使用至少 Gmail、Outlook/Hotmail、QQ 邮箱和 163 邮箱完成验证与重置邮件的投递抽查。
+6. 若启用 GitHub Pages，Actions variables 已提供四个必需的 `VITE_FIREBASE_*` 值，Pages 主机名已加入 Firebase Authorized Domains，Pages 来源已加入 Worker 的 `CORS_ALLOWED_ORIGINS`。
+7. Terminal Detective 专用 GitHub OAuth App 的 callback 指向 Firebase 官方 handler，Client Secret 只保存在 Firebase 控制台。
+8. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用。
+9. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态。
+10. 实际完成一次完整冒烟测试：注册 → 验证邮箱 → 登录 → 开始案件 → 产生进度 → 刷新 → 退出 → 重新登录，并确认货币、探员和案件进度均仍存在。
+11. 分别测试 GitHub 登录、错误密码、未验证邮箱、密码重置、网络中断和多设备接管。
 
 只有真实生产域名上的完整登录和存档闭环通过后，才能确认线上配置正确。代码中的错误保护可以减少白屏、无限重试和静默丢档，但不能替代 Firebase、GitHub、Worker 和 D1 的生产配置与上线验证。

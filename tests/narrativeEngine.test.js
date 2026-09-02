@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildLocalThought,
   buildPublicCaseContext,
+  NARRATIVE_ACTION_BEATS,
   NARRATIVE_ACTIONS,
   NARRATIVE_OUTCOMES,
   renderNarrative,
@@ -41,6 +42,34 @@ test('local narrative library covers every action and outcome with at least six 
   }
 });
 
+test('every action has a distinct paired bilingual detective-fiction scene corpus', () => {
+  assert.deepEqual(new Set(Object.keys(NARRATIVE_ACTION_BEATS)), new Set(NARRATIVE_ACTIONS));
+  for (const actionTag of NARRATIVE_ACTIONS) {
+    assert.ok(NARRATIVE_ACTION_BEATS[actionTag].length >= 3, `${actionTag} needs at least three scene beats`);
+    for (const beat of NARRATIVE_ACTION_BEATS[actionTag]) {
+      assert.ok(beat.zh.length >= 45, `${actionTag} Chinese scene beat is too short`);
+      assert.ok(beat.en.length >= 100, `${actionTag} English scene beat is too short`);
+    }
+  }
+});
+
+test('Chinese and English select the same semantic scene and outcome templates', () => {
+  for (const actionTag of NARRATIVE_ACTIONS) {
+    const event = {
+      actionTag,
+      outcome: 'progress',
+      agentName: 'AURORA-09',
+      zoneName: 'PUBLIC ZONE',
+      clueName: 'PUBLIC CLUE',
+      seed: `semantic-parity:${actionTag}`,
+    };
+    const zh = renderNarrative({ ...event, lang: 'zh' });
+    const en = renderNarrative({ ...event, lang: 'en' });
+    assert.equal(zh.templateId, en.templateId);
+    assert.doesNotMatch(`${zh.text}\n${en.text}`, /\{\w+\}/);
+  }
+});
+
 test('narrative output is stable and recent template ids prevent immediate repetition', () => {
   const event = {
     actionTag: 'analyze_forensics', outcome: 'clue', lang: 'zh',
@@ -48,8 +77,26 @@ test('narrative output is stable and recent template ids prevent immediate repet
   };
   const first = renderNarrative(event);
   assert.deepEqual(renderNarrative(event), first);
-  const next = renderNarrative(event, [first.templateId]);
+  const next = renderNarrative(event, [first.templateId, 'older:progress:0:0', 'oldest:progress:0:1']);
   assert.notEqual(next.templateId, first.templateId);
+});
+
+test('public case context excludes protected clue records from narrative progress', () => {
+  const hiddenClue = Case_Data_Lvl_01.hidden_clues?.[0];
+  assert.ok(hiddenClue?.clue_id);
+  const caseData = Case_Data_Lvl_01;
+  const hiddenRecord = caseData.clue_dictionary.find(clue => clue.clue_id === hiddenClue.clue_id);
+  const context = buildPublicCaseContext({
+    gameState: {
+      turn_count: 3,
+      current_zone: Object.keys(caseData.scene.zones)[0],
+      unlocked_clues: [hiddenClue.clue_id],
+    },
+    caseData,
+    lang: 'zh',
+  });
+  assert.equal(context.clueCount, 0);
+  if (hiddenRecord?.keyword) assert.doesNotMatch(context.narrative, new RegExp(hiddenRecord.keyword));
 });
 
 test('narrative engine only interpolates explicit safe public fields', () => {

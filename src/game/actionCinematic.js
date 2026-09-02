@@ -13,11 +13,37 @@ const TEMPLATE_BY_ACTION = Object.freeze({
   bribe_informant: 'covert',
 });
 
+export const ACTION_CINEMATIC_ANIMATIONS = Object.freeze({
+  search_area: Object.freeze({ animationId: 'scan-sweep', cameraProfile: 'survey', motionProfile: 'sweep' }),
+  examine_clue: Object.freeze({ animationId: 'evidence-orbit', cameraProfile: 'macro', motionProfile: 'orbit' }),
+  analyze_forensics: Object.freeze({ animationId: 'spectral-rebuild', cameraProfile: 'laboratory', motionProfile: 'assemble' }),
+  access_database: Object.freeze({ animationId: 'data-tunnel', cameraProfile: 'tunnel', motionProfile: 'stream' }),
+  hack_terminal: Object.freeze({ animationId: 'firewall-breach', cameraProfile: 'breach', motionProfile: 'impact' }),
+  check_cctv: Object.freeze({ animationId: 'camera-matrix', cameraProfile: 'wall', motionProfile: 'scan' }),
+  talk_to_npc: Object.freeze({ animationId: 'dialogue-pulse', cameraProfile: 'portrait', motionProfile: 'pulse' }),
+  interrogate_suspect: Object.freeze({ animationId: 'pressure-focus', cameraProfile: 'close', motionProfile: 'pressure' }),
+  check_alibi: Object.freeze({ animationId: 'timeline-split', cameraProfile: 'timeline', motionProfile: 'split' }),
+  present_evidence: Object.freeze({ animationId: 'evidence-impact', cameraProfile: 'table', motionProfile: 'reveal' }),
+  tail_suspect: Object.freeze({ animationId: 'lane-chase', cameraProfile: 'pursuit', motionProfile: 'chase' }),
+  bribe_informant: Object.freeze({ animationId: 'dead-drop', cameraProfile: 'covert', motionProfile: 'exchange' }),
+});
+
+export const CINEMATIC_ANIMATION_IDS = Object.freeze(
+  Object.values(ACTION_CINEMATIC_ANIMATIONS).map(profile => profile.animationId),
+);
+
 const OUTCOME_ACCENTS = Object.freeze({
   trap: '#ff3860',
   clue: '#45ffc0',
   progress: '#00e5ff',
   no_yield: '#f2b84b',
+});
+
+export const CINEMATIC_OUTCOME_EFFECTS = Object.freeze({
+  trap: 'hazard-collapse',
+  clue: 'evidence-lock',
+  progress: 'signal-advance',
+  no_yield: 'trace-dissolve',
 });
 
 const ACTION_LABELS = Object.freeze({
@@ -67,6 +93,24 @@ export function resolveCinematicTemplate(actionTag) {
   return TEMPLATE_BY_ACTION[actionTag] || 'investigation';
 }
 
+export function stableCinematicHash(value) {
+  let hash = 2166136261;
+  const text = String(value ?? '');
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function resolveCinematicAnimation(actionTag, eventId = '') {
+  const profile = ACTION_CINEMATIC_ANIMATIONS[actionTag] || ACTION_CINEMATIC_ANIMATIONS.search_area;
+  return {
+    ...profile,
+    animationSeed: stableCinematicHash(`${eventId}:${profile.animationId}`),
+  };
+}
+
 export function getCinematicActionLabel(actionTag, lang = 'zh') {
   const labels = ACTION_LABELS[actionTag] || {
     zh: String(actionTag || '调查行动').replaceAll('_', ' '),
@@ -111,9 +155,11 @@ export function buildCinematicEvent({
   const caseId = asText(caseData?.case_id || 'unknown-case', 80);
   const turn = Math.max(0, Number(nextState?.turn_count) || 0);
   const safeActionTag = asText(actionTag || settlement?.action_name || 'search_area', 80);
+  const eventId = `${caseId}:${turn}:${safeActionTag}`;
+  const animation = resolveCinematicAnimation(safeActionTag, eventId);
 
   return Object.freeze({
-    eventId: `${caseId}:${turn}:${safeActionTag}`,
+    eventId,
     turn,
     caseId,
     zoneId: asText(nextState?.current_zone || previousState?.current_zone || '', 80),
@@ -122,6 +168,7 @@ export function buildCinematicEvent({
     executorAgentId: asText(executorAgentId || '', 80),
     assistAgentId: assistAgentId ? asText(assistAgentId, 80) : null,
     outcome,
+    outcomeEffect: CINEMATIC_OUTCOME_EFFECTS[outcome],
     revealedClues,
     narration: asText(
       trap
@@ -129,17 +176,24 @@ export function buildCinematicEvent({
         : settlement?.action_narration,
     ),
     accentColor: OUTCOME_ACCENTS[outcome],
+    ...animation,
   });
 }
 
 /**
  * @param {{
  *   enabled?: boolean,
+ *   quality?: string,
  *   windowObject?: Window | Record<string, any> | null,
  *   navigatorObject?: Navigator | Record<string, any> | null,
  * }} options
  */
-export function detectCinematicPlayback({ enabled = true, windowObject, navigatorObject } = {}) {
+export function detectCinematicPlayback({
+  enabled = true,
+  quality = 'auto',
+  windowObject,
+  navigatorObject,
+} = {}) {
   const win = windowObject || (typeof window !== 'undefined' ? window : null);
   const nav = navigatorObject || (typeof navigator !== 'undefined' ? navigator : null);
   if (!enabled || !win) return { mode: '2d', quality: 'low', reason: enabled ? 'no_window' : 'disabled' };
@@ -162,10 +216,20 @@ export function detectCinematicPlayback({ enabled = true, windowObject, navigato
   const lowMemory = deviceMemory > 0 && deviceMemory <= 4;
   const mobile = win.matchMedia?.('(max-width: 820px)').matches === true;
   const saveData = /** @type {any} */ (nav)?.connection?.saveData === true;
+  const normalizedQuality = ['auto', 'low', 'high'].includes(quality) ? quality : 'auto';
+  if (normalizedQuality === 'auto' && saveData) {
+    return { mode: '2d', quality: 'low', reason: 'save_data' };
+  }
+  if (normalizedQuality === 'low') {
+    return { mode: '3d', quality: 'low', reason: 'user_low' };
+  }
+  if (normalizedQuality === 'high') {
+    return { mode: '3d', quality: 'high', reason: 'user_high' };
+  }
   return {
     mode: '3d',
-    quality: lowMemory || mobile || saveData ? 'low' : 'high',
-    reason: saveData ? 'save_data' : lowMemory ? 'low_memory' : mobile ? 'mobile' : 'capable',
+    quality: lowMemory || mobile ? 'low' : 'high',
+    reason: lowMemory ? 'low_memory' : mobile ? 'mobile' : 'capable',
   };
 }
 

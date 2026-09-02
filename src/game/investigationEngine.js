@@ -72,7 +72,12 @@ export async function settleAction({ actionName, actionTag = null, riskLevel = '
     visitedZones: gameState.visited_zones,
     canBypassRequirements: agentStrategy?.skill_effects?.zone_unlock_bonus === true,
   });
-  const availableClues = getAvailableClueIds(caseData, nextZone, gameState.unlocked_clues);
+  const availableClues = getAvailableClueIds(
+    caseData,
+    nextZone,
+    gameState.unlocked_clues,
+    gameState.turn_count + 1,
+  );
   const executor = (agentStrategy?.team || []).find(agent => agent.agent_id === agentStrategy?.executing_agent_id)
     || agentStrategy?.team?.[0]
     || {};
@@ -114,10 +119,11 @@ export async function settleAction({ actionName, actionTag = null, riskLevel = '
     clueName: clue?.keyword,
     lang: currentLang,
     seed,
-  });
+  }, gameState.narrative_template_history || []);
   return normalizeSettlementResult({
     action_narration: narrative.text,
     action_name: effectiveAction,
+    narrative_template_id: narrative.templateId,
     new_clues_unlocked: clueId ? [clueId] : [],
     confusion_increase: confusionIncrease,
     time_cost: isIllegal ? 2 : 1,

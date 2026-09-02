@@ -87,3 +87,18 @@ test('zone clue lookup never leaks clues assigned to another zone', () => {
   assert.deepEqual(available, ['e_07']);
   assert.equal(isValidZoneTransition(Case_Data_Lvl_03, 'zone_bar', 'zone_backroom'), false);
 });
+
+test('protected clues remain unavailable until their configured unlock turn', () => {
+  const hidden = Case_Data_Lvl_01.hidden_clues[0];
+  const zone = Object.entries(Case_Data_Lvl_01.zone_clue_map)
+    .find(([, clueIds]) => clueIds.includes(hidden.clue_id))?.[0];
+  assert.ok(zone);
+  assert.equal(
+    getAvailableClueIds(Case_Data_Lvl_01, zone, [], hidden.unlock_turn - 1).includes(hidden.clue_id),
+    false,
+  );
+  assert.equal(
+    getAvailableClueIds(Case_Data_Lvl_01, zone, [], hidden.unlock_turn).includes(hidden.clue_id),
+    true,
+  );
+});

@@ -23,6 +23,7 @@ import {
   updatePassword,
 } from 'firebase/auth';
 import { appParams } from '@/lib/app-params';
+import { prepareAuthEmail } from '@/lib/authEmail';
 import { AUTH_FEEDBACK_CODES, AUTH_NOTICE_CODES, authRedirectFeedback, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
 import { firebaseAuthReady, firebasePublicConfig, isFirebaseConfigured } from '@/lib/firebase';
 import { createSessionBootstrap, isRecentAuthTime } from '@/lib/authSession';
@@ -475,6 +476,7 @@ export function AuthProvider({ children }) {
       setFirebaseUser(credential.user);
       setVerificationEmail(credential.user.email || normalizeEmail(email));
       setAuthServiceError(AUTH_FEEDBACK_CODES.EMAIL_UNVERIFIED);
+      prepareAuthEmail(instance);
       await sendEmailVerification(credential.user, { url: actionUrl('verified'), handleCodeInApp: false });
       clearAuthThrottle(registerAction);
       recordAuthSuccess(verifyAction);
@@ -494,6 +496,7 @@ export function AuthProvider({ children }) {
     const current = instance.currentUser;
     if (!current) throw feedbackError(AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL);
     try {
+      prepareAuthEmail(instance);
       await sendEmailVerification(current, { url: actionUrl('verified'), handleCodeInApp: false });
       recordAuthSuccess(throttleAction);
       return true;
@@ -519,6 +522,7 @@ export function AuthProvider({ children }) {
     requireThrottle(throttleAction);
     try {
       const instance = await configuredAuth();
+      prepareAuthEmail(instance);
       await sendPasswordResetEmail(instance, normalizeEmail(email), { url: actionUrl('password-reset'), handleCodeInApp: false });
     } catch (error) {
       const code = feedbackCodeFor(error);

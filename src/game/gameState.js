@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { DEFAULT_AGENT_CONFIG } from './caseData.js';
-import { getInitialZone, getZoneClueIds, isValidZoneTransition } from './caseRuntime.js';
+import { getAvailableClueIds, getInitialZone, getZoneClueIds, isValidZoneTransition } from './caseRuntime.js';
 import { normalizeSettlementResult } from './settlementResult.js';
 import { createCommandState } from './commandSystem.js';
 import { buildPublicCaseContext } from './narrativeEngine.js';
@@ -32,6 +32,7 @@ export function createInitialGameState(caseData, runtimeEffects = {}, commandPla
     action_ban_list: [],
     chat_history: [],
     thought_log: [],
+    narrative_template_history: [],
     last_observation: '',
     last_action: null,
     is_crashed: false,
@@ -152,9 +153,12 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
   const isForensic = forensicActions.includes(state.last_action) || forensicActions.includes(settlement.action_name);
   const allIds = caseData?.clue_dictionary?.map(c => c.clue_id) || [];
   const zoneIds = new Set(getZoneClueIds(caseData, nextZone));
-  const lockedIds = allIds.filter(id =>
-    zoneIds.has(id) && !state.unlocked_clues.includes(id) && !incomingClues.includes(id)
-  );
+  const lockedIds = getAvailableClueIds(
+    caseData,
+    nextZone,
+    state.unlocked_clues,
+    state.turn_count + 1,
+  ).filter(id => !incomingClues.includes(id));
   if (synergySkills.includes('digital_forensics') && isForensic && lockedIds.length > 0 && Math.random() < 0.20) {
     incomingClues = [...incomingClues, lockedIds[Math.floor(Math.random() * lockedIds.length)]];
   }
@@ -164,10 +168,13 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
     if (!incomingClues.includes(pick)) incomingClues = [...incomingClues, pick];
   }
   // 神经接口：被动扫描优先发现当前区域的隐藏线索。
-  if (fx.passive_scan_chance && lockedIds.length > 0 && Math.random() < fx.passive_scan_chance) {
+  const passiveScanIds = allIds.filter(id =>
+    zoneIds.has(id) && !state.unlocked_clues.includes(id) && !incomingClues.includes(id)
+  );
+  if (fx.passive_scan_chance && passiveScanIds.length > 0 && Math.random() < fx.passive_scan_chance) {
     const hiddenIds = new Set((caseData?.hidden_clues || []).map(clue => clue.clue_id));
-    const hiddenPool = lockedIds.filter(id => hiddenIds.has(id) && !incomingClues.includes(id));
-    const fallbackPool = lockedIds.filter(id => !incomingClues.includes(id));
+    const hiddenPool = passiveScanIds.filter(id => hiddenIds.has(id));
+    const fallbackPool = passiveScanIds;
     const pool = hiddenPool.length ? hiddenPool : fallbackPool;
     if (pool.length) incomingClues = [...incomingClues, pool[Math.floor(Math.random() * pool.length)]];
   }
@@ -220,6 +227,13 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
   // Reputation update
   if (settlement.is_trap) {
     newState.reputation = Math.max(0, newState.reputation - 5);
+  }
+
+  if (settlement.narrative_template_id) {
+    newState.narrative_template_history = [
+      settlement.narrative_template_id,
+      ...(state.narrative_template_history || []),
+    ].slice(0, 6);
   }
 
   newState.turn_count = newState.turn_count + 1;

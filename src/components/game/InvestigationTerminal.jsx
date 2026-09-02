@@ -282,7 +282,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }, []);
 
   const handleActionCinematicComplete = useCallback((reason = 'completed') => {
-    if (reason === 'fallback') {
+    if (reason === 'renderer_lost') {
       setActionCinematic(current => current?.mode === '3d'
         ? { ...current, mode: '2d', fallbackReason: 'renderer_lost' }
         : current);
@@ -296,7 +296,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       return Promise.resolve('duplicate');
     }
     playedActionCinematicsRef.current.add(event.eventId);
-    const playback = detectCinematicPlayback({ enabled: settings.cinematicsEnabled !== false });
+    const playback = detectCinematicPlayback({
+      enabled: settings.cinematicsEnabled !== false,
+      quality: settings.cinematicQuality,
+    });
 
     return new Promise(resolve => {
       if (actionCinematicResolveRef.current) finishActionCinematic('replaced');
@@ -306,7 +309,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         finishActionCinematic('timeout');
       }, 8000);
     });
-  }, [finishActionCinematic, settings.cinematicsEnabled]);
+  }, [finishActionCinematic, settings.cinematicQuality, settings.cinematicsEnabled]);
 
   useEffect(() => {
     const result = applyCommandContingency(gameState);
@@ -494,7 +497,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           thought: fullThought,
         });
         if (settings.cinematicsEnabled !== false) {
-          void preloadActionCinematic();
+          const playback = detectCinematicPlayback({
+            enabled: true,
+            quality: settings.cinematicQuality,
+          });
+          if (playback.mode === '3d') void preloadActionCinematic();
         }
         setDecisionCards(packs);
         const choice = await new Promise(resolve => { decisionResolveRef.current = resolve; });

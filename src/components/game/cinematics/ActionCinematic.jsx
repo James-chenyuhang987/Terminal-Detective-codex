@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unknown-property -- React Three Fiber uses Three.js JSX attributes. */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, Sparkles, useGLTF } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useLang } from '@/lib/lang.jsx';
 import { getCinematicActionLabel } from '@/game/actionCinematic';
@@ -110,8 +110,226 @@ function DataColumns({ accent, count }) {
   });
 }
 
-/** @param {{ event: Record<string, any>, phase: string }} props */
-function ActionSetPiece({ event, phase }) {
+function seededCoordinates(seed, count) {
+  let value = (Number(seed) || 1) >>> 0;
+  const positions = new Float32Array(count * 3);
+  for (let index = 0; index < positions.length; index += 1) {
+    value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+    positions[index] = ((value / 4294967296) - 0.5) * (index % 3 === 1 ? 5 : 11);
+  }
+  return positions;
+}
+
+/** @param {{ event: Record<string, any>, quality: string }} props */
+function SeededParticles({ event, quality }) {
+  const ref = useRef(/** @type {THREE.Points | null} */ (null));
+  const count = quality === 'high' ? 72 : 24;
+  const positions = useMemo(
+    () => seededCoordinates(event.animationSeed, count),
+    [count, event.animationSeed],
+  );
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = clock.elapsedTime * 0.025;
+    ref.current.position.y = Math.sin(clock.elapsedTime * 0.55) * 0.08;
+  });
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial color={event.accentColor} size={quality === 'high' ? 0.05 : 0.065} transparent opacity={0.56} sizeAttenuation />
+    </points>
+  );
+}
+
+/** @param {{ event: Record<string, any>, phase: string, quality: string }} props */
+function ActionGlyph({ event, phase, quality }) {
+  const ref = useRef(/** @type {THREE.Group | null} */ (null));
+  const accent = event.accentColor;
+  const animationId = event.animationId;
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const elapsed = clock.elapsedTime;
+    const offset = ((Number(event.animationSeed) || 0) % 360) * (Math.PI / 180);
+    const speed = {
+      sweep: 0.42, orbit: 0.72, assemble: 0.24, stream: 0.16,
+      impact: 0.12, scan: 0.3, pulse: 0.2, pressure: -0.14,
+      split: 0.1, reveal: 0.24, chase: 0.08, exchange: -0.22,
+    }[event.motionProfile] || 0.2;
+    ref.current.rotation.y = offset + elapsed * speed;
+    ref.current.rotation.z = Math.sin(elapsed * (animationId === 'pressure-focus' ? 1.8 : 0.75) + offset) * 0.045;
+    ref.current.position.y = 0.55 + Math.sin(elapsed * (animationId === 'lane-chase' ? 1.4 : 0.65) + offset) * 0.12;
+    const pulse = 1 + Math.sin(elapsed * (animationId === 'dialogue-pulse' ? 2.2 : 1.1) + offset) * (phase === 'action' ? 0.045 : 0.02);
+    ref.current.scale.setScalar(pulse);
+  });
+
+  let glyph;
+  switch (animationId) {
+    case 'scan-sweep':
+      glyph = (
+        <>
+          {[0.72, 1.25, 1.8].map((radius, index) => (
+            <mesh key={radius} rotation={[Math.PI / 2 + index * 0.18, 0, index * 0.55]}>
+              <torusGeometry args={[radius, 0.025 + index * 0.008, 8, 48]} />
+              <meshBasicMaterial color={accent} transparent opacity={0.85 - index * 0.18} />
+            </mesh>
+          ))}
+          <mesh rotation={[0, 0, -0.38]} position={[0.55, 0, 0]}><boxGeometry args={[2.8, 0.025, 0.035]} /><meshBasicMaterial color={accent} /></mesh>
+        </>
+      );
+      break;
+    case 'evidence-orbit':
+      glyph = (
+        <>
+          <mesh><octahedronGeometry args={[0.76, 0]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.38} wireframe /></mesh>
+          {[0, 1, 2].map(index => (
+            <mesh key={index} position={[Math.cos(index * 2.094) * 1.45, Math.sin(index * 2.094) * 0.72, Math.sin(index * 2.094) * 1.05]}>
+              <sphereGeometry args={[0.13, 10, 10]} /><meshBasicMaterial color={accent} />
+            </mesh>
+          ))}
+          <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[1.48, 0.018, 6, 64]} /><meshBasicMaterial color={accent} transparent opacity={0.55} /></mesh>
+        </>
+      );
+      break;
+    case 'spectral-rebuild':
+      glyph = (
+        <>
+          {Array.from({ length: quality === 'high' ? 9 : 5 }, (_, index) => {
+            const middle = quality === 'high' ? 4 : 2;
+            return (
+              <mesh key={index} position={[(index - middle) * 0.34, Math.sin(index * 1.4) * 0.24, 0]} rotation={[0, index * 0.16, 0]}>
+                <boxGeometry args={[0.22, 1.25 + (index % 3) * 0.3, 0.08]} />
+                <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.3} transparent opacity={0.62} />
+              </mesh>
+            );
+          })}
+          <mesh rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[1.55, 1.62, 48]} /><meshBasicMaterial color={accent} side={THREE.DoubleSide} /></mesh>
+        </>
+      );
+      break;
+    case 'data-tunnel':
+      glyph = Array.from({ length: quality === 'high' ? 10 : 6 }, (_, index) => (
+        <mesh key={index} position={[Math.sin(index * 1.7) * 0.65, Math.cos(index * 1.3) * 0.45, -index * 0.52]} rotation={[0.5, index * 0.45, 0]}>
+          <octahedronGeometry args={[0.3 + (index % 3) * 0.04, 0]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.5} wireframe />
+        </mesh>
+      ));
+      break;
+    case 'firewall-breach':
+      glyph = (
+        <>
+          {[-0.95, 0.95].map((x, side) => (
+            <group key={x} position={[x, 0, 0]} rotation={[0, 0, side ? -0.16 : 0.16]}>
+              {[-0.7, 0, 0.7].map(y => (
+                <mesh key={y} position={[0, y, 0]}><boxGeometry args={[0.75, 0.48, 0.16]} /><meshStandardMaterial color="#ff3860" emissive="#ff3860" emissiveIntensity={0.28} wireframe /></mesh>
+              ))}
+            </group>
+          ))}
+          <mesh rotation={[0.2, 0.5, 0.1]}><icosahedronGeometry args={[0.55, 0]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.8} /></mesh>
+        </>
+      );
+      break;
+    case 'camera-matrix':
+      glyph = Array.from({ length: 6 }, (_, index) => (
+        <mesh key={index} position={[(index % 3 - 1) * 1.05, (Math.floor(index / 3) - 0.5) * 0.85, 0]} rotation={[0, (index % 3 - 1) * -0.16, 0]}>
+          <boxGeometry args={[0.82, 0.56, 0.08]} />
+          <meshStandardMaterial color={index === 4 ? '#ff3860' : accent} emissive={accent} emissiveIntensity={0.22} wireframe />
+        </mesh>
+      ));
+      break;
+    case 'dialogue-pulse':
+      glyph = [-0.82, 0.82].map((x, index) => (
+        <group key={x} position={[x, 0, 0]}>
+          <mesh><sphereGeometry args={[0.42, 16, 12]} /><meshStandardMaterial color={accent} wireframe emissive={accent} emissiveIntensity={0.32} /></mesh>
+          {[0.62, 0.88].map(radius => <mesh key={radius} rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[radius, 0.02, 6, 36]} /><meshBasicMaterial color={accent} transparent opacity={index ? 0.42 : 0.7} /></mesh>)}
+        </group>
+      ));
+      break;
+    case 'pressure-focus':
+      glyph = (
+        <>
+          {[-1.35, -0.78, 0.78, 1.35].map(x => <mesh key={x} position={[x, 0, 0]}><boxGeometry args={[0.08, 2.4, 0.08]} /><meshBasicMaterial color="#ff3860" transparent opacity={0.7} /></mesh>)}
+          <mesh rotation={[0, 0, Math.PI]}><coneGeometry args={[0.62, 1.5, 4]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.42} wireframe /></mesh>
+        </>
+      );
+      break;
+    case 'timeline-split':
+      glyph = [-0.72, 0, 0.72].map((y, index) => (
+        <group key={y} position={[0, y, 0]} rotation={[0, 0, (index - 1) * 0.08]}>
+          <mesh><boxGeometry args={[3.2, 0.045, 0.045]} /><meshBasicMaterial color={index === 1 ? '#ff3860' : accent} /></mesh>
+          {[-1.25, -0.3, 0.65, 1.35].map(x => <mesh key={x} position={[x, 0, 0]}><sphereGeometry args={[0.1, 8, 8]} /><meshBasicMaterial color={accent} /></mesh>)}
+        </group>
+      ));
+      break;
+    case 'evidence-impact':
+      glyph = (
+        <>
+          <mesh rotation={[0.2, 0.45, 0]}><octahedronGeometry args={[0.9, 0]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} wireframe /></mesh>
+          <mesh position={[0, 1.15, 0]}><cylinderGeometry args={[0.035, 0.11, 2.3, 8]} /><meshBasicMaterial color={accent} transparent opacity={0.8} /></mesh>
+          {[1.05, 1.6].map(radius => <mesh key={radius} rotation={[Math.PI / 2, 0, 0]} position={[0, -0.56, 0]}><torusGeometry args={[radius, 0.025, 6, 48]} /><meshBasicMaterial color={accent} transparent opacity={0.62} /></mesh>)}
+        </>
+      );
+      break;
+    case 'lane-chase':
+      glyph = (
+        <group rotation={[-0.18, 0, 0]}>
+          {[-0.9, 0, 0.9].map(x => <mesh key={x} position={[x, -0.45, 0]}><boxGeometry args={[0.035, 0.02, 6]} /><meshBasicMaterial color={accent} transparent opacity={0.5} /></mesh>)}
+          <mesh position={[-0.45, -0.2, 0.4]}><boxGeometry args={[0.52, 0.28, 1.05]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.35} /></mesh>
+          <mesh position={[0.45, 0.1, -1.1]}><boxGeometry args={[0.52, 0.28, 1.05]} /><meshStandardMaterial color="#ff3860" emissive="#ff3860" emissiveIntensity={0.28} /></mesh>
+        </group>
+      );
+      break;
+    default:
+      glyph = (
+        <>
+          {[0.95, 1.45].map(radius => <mesh key={radius} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[radius, 0.03, 8, 48]} /><meshBasicMaterial color={accent} transparent opacity={0.65} /></mesh>)}
+          <mesh rotation={[0.25, 0.3, -0.18]}><boxGeometry args={[1.3, 0.72, 0.8]} /><meshStandardMaterial color="#f2b84b" emissive="#f2b84b" emissiveIntensity={0.3} wireframe /></mesh>
+        </>
+      );
+  }
+  return <group ref={ref}>{glyph}</group>;
+}
+
+/** @param {{ event: Record<string, any> }} props */
+function OutcomeEffect({ event }) {
+  const ref = useRef(/** @type {THREE.Group | null} */ (null));
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = clock.elapsedTime * (event.outcome === 'trap' ? -1.2 : 0.65);
+    ref.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 2.4) * 0.055);
+  });
+  if (event.outcomeEffect === 'hazard-collapse') {
+    return (
+      <group ref={ref} position={[0, 1.05, 0]}>
+        {[0.7, 1.2, 1.7].map((radius, index) => <mesh key={radius} rotation={[index * 0.65, index * 0.5, 0]}><torusGeometry args={[radius, 0.055, 8, 40]} /><meshBasicMaterial color="#ff3860" transparent opacity={0.82} /></mesh>)}
+      </group>
+    );
+  }
+  if (event.outcomeEffect === 'evidence-lock') {
+    return (
+      <group ref={ref} position={[0, 1.05, 0]}>
+        <mesh><icosahedronGeometry args={[0.72, 1]} /><meshStandardMaterial color={event.accentColor} emissive={event.accentColor} emissiveIntensity={0.65} wireframe /></mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[1.25, 0.045, 8, 48]} /><meshBasicMaterial color={event.accentColor} /></mesh>
+      </group>
+    );
+  }
+  if (event.outcomeEffect === 'signal-advance') {
+    return (
+      <group ref={ref} position={[0, 1.05, 0]}>
+        {[-0.75, 0, 0.75].map(x => <mesh key={x} position={[x, 0, 0]} rotation={[0, 0, -Math.PI / 4]}><boxGeometry args={[0.65, 0.08, 0.08]} /><meshBasicMaterial color={event.accentColor} /></mesh>)}
+      </group>
+    );
+  }
+  return (
+    <group ref={ref} position={[0, 1.05, 0]}>
+      {[0.75, 1.2, 1.65].map(radius => <mesh key={radius} rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[radius, radius + 0.025, 40]} /><meshBasicMaterial color={event.accentColor} transparent opacity={0.72} side={THREE.DoubleSide} /></mesh>)}
+    </group>
+  );
+}
+
+/** @param {{ event: Record<string, any>, phase: string, quality: string }} props */
+function ActionSetPiece({ event, phase, quality }) {
   const accent = event.accentColor;
   const template = event.template;
   const propRef = useRef(/** @type {THREE.Group | null} */ (null));
@@ -124,43 +342,32 @@ function ActionSetPiece({ event, phase }) {
   return (
     <group>
       <group ref={propRef} position={[0, 0, -0.25]}>
-        <Float speed={1.3} rotationIntensity={0.08} floatIntensity={0.15}>
-          <LocalProp template={template} accent={accent} />
-        </Float>
+        <LocalProp template={template} accent={accent} />
       </group>
-
-      {template === 'digital' && Array.from({ length: 7 }, (_, index) => (
-        <mesh key={index} position={[-2.2 + index * 0.72, 1.15 + (index % 2) * 0.4, -1.15]} rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[0.28, 0.28, 0.035]} />
-          <meshBasicMaterial color={index % 2 ? '#7b61ff' : accent} transparent opacity={phase === 'action' ? 0.72 : 0.25} wireframe />
-        </mesh>
-      ))}
 
       {(template === 'interview' || template === 'confrontation' || template === 'covert') && (
         <HoloAgent color={template === 'confrontation' ? '#ff5f7f' : '#64748b'} position={[2.2, 0, -0.75]} scale={0.82} />
       )}
-
-      {template === 'pursuit' && Array.from({ length: 6 }, (_, index) => (
-        <mesh key={index} position={[-3.8 + index * 1.5, 0.15, -1.2 - (index % 2) * 0.8]}>
-          <boxGeometry args={[0.95, 0.08, 2.8]} />
-          <meshBasicMaterial color={accent} transparent opacity={0.07 + index * 0.012} />
-        </mesh>
-      ))}
-
-      {template === 'investigation' && Array.from({ length: 3 }, (_, index) => (
-        <mesh key={index} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.35 + index * 0.34, 0]}>
-          <ringGeometry args={[0.7 + index * 0.55, 0.72 + index * 0.55, 64]} />
-          <meshBasicMaterial color={accent} transparent opacity={phase === 'action' ? 0.55 - index * 0.1 : 0.18} side={THREE.DoubleSide} />
-        </mesh>
-      ))}
-
-      <mesh position={[0, 1.05, -0.2]} visible={phase === 'result'}>
-        <octahedronGeometry args={[0.48, 1]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={2.4} transparent opacity={0.86} wireframe />
-      </mesh>
+      <ActionGlyph event={event} phase={phase} quality={quality} />
+      {phase === 'result' && <OutcomeEffect event={event} />}
     </group>
   );
 }
+
+const CAMERA_POSITIONS = Object.freeze({
+  survey: [0, 2.25, 8.1],
+  macro: [0.2, 1.8, 6.5],
+  laboratory: [0, 2.7, 7.4],
+  tunnel: [0, 1.7, 7.1],
+  breach: [0.6, 2, 6.9],
+  wall: [0, 2.05, 7.6],
+  portrait: [0, 2.2, 7],
+  close: [0, 1.9, 6.3],
+  timeline: [0, 2.6, 7.7],
+  table: [0, 2.8, 7],
+  pursuit: [1, 2.4, 7.8],
+  covert: [-0.7, 2, 6.9],
+});
 
 /** @param {{ event: Record<string, any>, phase: string, quality: string }} props */
 function Scene({ event, phase, quality }) {
@@ -169,10 +376,12 @@ function Scene({ event, phase, quality }) {
   const executorColor = AGENT_COLORS[event.executorAgentId] || '#00e5ff';
   useFrame(({ camera, clock }) => {
     const elapsed = clock.elapsedTime;
-    const targetZ = phase === 'establish' ? 8.7 : phase === 'action' ? 7.2 : 6.4;
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetZ, 0.035);
-    camera.position.x = Math.sin(elapsed * 0.28) * (phase === 'result' ? 0.3 : 0.65);
-    camera.position.y = 2.25 + Math.sin(elapsed * 0.4) * 0.12;
+    const base = CAMERA_POSITIONS[event.cameraProfile] || CAMERA_POSITIONS.survey;
+    const phaseDistance = phase === 'establish' ? 1 : phase === 'result' ? -0.35 : 0;
+    const sweep = event.motionProfile === 'chase' ? 0.72 : event.motionProfile === 'orbit' ? 0.46 : 0.28;
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, base[2] + phaseDistance, 0.035);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, base[0] + Math.sin(elapsed * sweep) * (phase === 'result' ? 0.2 : 0.46), 0.04);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, base[1] + Math.sin(elapsed * 0.4) * 0.1, 0.04);
     camera.lookAt(0, 0.75, -0.25);
     if (root.current) root.current.rotation.y = Math.sin(elapsed * 0.22) * 0.045;
   });
@@ -195,16 +404,11 @@ function Scene({ event, phase, quality }) {
       {event.assistAgentId && (
         <HoloAgent color={AGENT_COLORS[event.assistAgentId] || '#9de9ff'} position={[-3.55, 0, -1.25]} scale={0.68} />
       )}
-      <ActionSetPiece event={event} phase={phase} />
-      <DataColumns accent={accent} count={quality === 'high' ? 24 : 11} />
-      <Sparkles
-        count={quality === 'high' ? 88 : 30}
-        scale={[11, 5, 8]}
-        size={quality === 'high' ? 2.2 : 1.4}
-        speed={0.38}
-        color={accent}
-        opacity={0.5}
-      />
+      <ActionSetPiece event={event} phase={phase} quality={quality} />
+      {['data-tunnel', 'firewall-breach', 'camera-matrix'].includes(event.animationId) && (
+        <DataColumns accent={accent} count={quality === 'high' ? 20 : 8} />
+      )}
+      <SeededParticles event={event} quality={quality} />
     </group>
   );
 }
@@ -215,10 +419,12 @@ export default function ActionCinematic({ event, quality = 'high', onComplete })
   const [phase, setPhase] = useState('establish');
   const completeRef = useRef(/** @type {((reason: string) => void) | undefined} */ (onComplete));
   const skipRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  const previousFocusRef = useRef(/** @type {HTMLElement | null} */ (null));
   completeRef.current = onComplete;
   const zh = lang === 'zh';
 
   useEffect(() => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     skipRef.current?.focus();
     const actionTimer = window.setTimeout(() => setPhase('action'), 1200);
     const resultTimer = window.setTimeout(() => setPhase('result'), 4500);
@@ -227,6 +433,7 @@ export default function ActionCinematic({ event, quality = 'high', onComplete })
       window.clearTimeout(actionTimer);
       window.clearTimeout(resultTimer);
       window.clearTimeout(doneTimer);
+      previousFocusRef.current?.focus();
     };
   }, [event.eventId]);
 
@@ -251,6 +458,7 @@ export default function ActionCinematic({ event, quality = 'high', onComplete })
     >
       <Canvas
         className="td-action-cinematic-canvas"
+        aria-hidden="true"
         camera={{ position: [0, 2.25, 9.5], fov: 47, near: 0.1, far: 50 }}
         dpr={quality === 'high' ? [1, 1.5] : 1}
         shadows={quality === 'high'}
@@ -259,7 +467,7 @@ export default function ActionCinematic({ event, quality = 'high', onComplete })
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.domElement.addEventListener('webglcontextlost', browserEvent => {
             browserEvent.preventDefault();
-            completeRef.current?.('fallback');
+            completeRef.current?.('renderer_lost');
           }, { once: true });
         }}
       >
@@ -286,7 +494,3 @@ export default function ActionCinematic({ event, quality = 'high', onComplete })
     </div>
   );
 }
-
-Object.values(MODEL_BY_TEMPLATE).forEach(filename => {
-  useGLTF.preload(`${import.meta.env.BASE_URL}assets/cinematics/${filename}`);
-});
