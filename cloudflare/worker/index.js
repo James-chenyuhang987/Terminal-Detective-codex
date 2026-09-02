@@ -1,6 +1,6 @@
 import { runDetectiveRule } from '../../server/detectiveRules/rules.js';
 import {
-  authReadiness,
+  authConfig,
   logoutFirebase,
   readFirebaseSession,
 } from './auth.js';

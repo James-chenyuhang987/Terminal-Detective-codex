@@ -23,7 +23,7 @@ import {
   updatePassword,
 } from 'firebase/auth';
 import { appParams } from '@/lib/app-params';
-import { AUTH_FEEDBACK_CODES, AUTH_NOTICE_CODES, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
+import { AUTH_FEEDBACK_CODES, AUTH_NOTICE_CODES, authRedirectFeedback, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
 import { firebaseAuthReady, firebasePublicConfig, isFirebaseConfigured } from '@/lib/firebase';
 import { createSessionBootstrap, isRecentAuthTime } from '@/lib/authSession';
 import { setAuthTokenProvider } from '@/lib/authToken';
@@ -75,18 +75,29 @@ function requireThrottle(action) {
   throw Object.assign(feedbackError(AUTH_FEEDBACK_CODES.RATE_LIMITED), { remaining });
 }
 
+function paramsObject(params) {
+  const values = {};
+  params.forEach((value, key) => {
+    values[key] = value;
+  });
+  return values;
+}
+
 function consumeAuthReturn() {
   const url = new URL(window.location.href);
   const action = url.searchParams.get('auth') || '';
   const redirectParams = paramsObject(url.searchParams);
   let feedback = authRedirectFeedback(redirectParams);
   const hashValue = url.hash.replace(/^#\??/, '');
-  if (hashValue && /(?:^|&)error(?:_code|_description)?=/.test(hashValue)) {
+  const hasLegacyErrorHash = Boolean(
+    hashValue && /(?:^|&)error(?:_code|_description)?=/.test(hashValue),
+  );
+  if (hasLegacyErrorHash) {
     feedback ||= authRedirectFeedback(paramsObject(new URLSearchParams(hashValue)));
     url.hash = '';
   }
   const sensitiveKeys = ['auth', 'error', 'error_code', 'error_description'];
-  const changed = sensitiveKeys.some(key => url.searchParams.has(key)) || Boolean(feedback && window.location.hash);
+  const changed = sensitiveKeys.some(key => url.searchParams.has(key)) || hasLegacyErrorHash;
   sensitiveKeys.forEach(key => url.searchParams.delete(key));
   if (changed) {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
@@ -192,9 +203,11 @@ export function AuthProvider({ children }) {
         return true;
       })
       .catch(error => {
-        const backendFailure = error?.code === 'AUTH_BACKEND_NOT_READY'
-          || error?.code === 'FIREBASE_PROJECT_MISMATCH';
-        const code = backendFailure ? AUTH_FEEDBACK_CODES.BACKEND_NOT_READY : AUTH_FEEDBACK_CODES.NETWORK;
+        const code = error?.code === 'FIREBASE_PROJECT_MISMATCH'
+          ? AUTH_FEEDBACK_CODES.BACKEND_MISMATCH
+          : error?.code === 'AUTH_BACKEND_NOT_READY'
+            ? AUTH_FEEDBACK_CODES.BACKEND_NOT_READY
+            : AUTH_FEEDBACK_CODES.NETWORK;
         if (mountedRef.current) {
           setAuthBackendReady(false);
           setAuthServiceError(code);
@@ -270,7 +283,7 @@ export function AuthProvider({ children }) {
       if (throwOnFailure) throw feedbackError(code, error);
       return null;
     }
-  }, [checkAuthBackend]);
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -320,13 +333,16 @@ export function AuthProvider({ children }) {
           setAuthNotice({ kind: 'error', code });
         }
       }
-      if (authReturn.feedback && mountedRef.current) setAuthServiceError(authReturn.feedback);
+      if (authReturn.feedback && mountedRef.current) {
+        setAuthServiceError(authReturn.feedback);
+        setAuthNotice({ kind: 'error', code: authReturn.feedback });
+      }
       unsubscribe = onIdTokenChanged(auth, async nextUser => {
         if (cancelled) return;
         const shouldBlock = !authCheckedRef.current
           || Boolean(nextUser?.emailVerified && authenticatedUidRef.current !== nextUser.uid);
         if (shouldBlock) setIsLoadingAuth(true);
-        if (authReturn === 'verified' && nextUser && !nextUser.emailVerified) {
+        if (!authReturn.feedback && authReturn.action === 'verified' && nextUser && !nextUser.emailVerified) {
           try {
             await reload(nextUser);
             if (nextUser.emailVerified) await nextUser.getIdToken(true);
@@ -336,10 +352,10 @@ export function AuthProvider({ children }) {
           if (!nextUser.emailVerified) {
             setAuthNotice({ kind: 'error', code: AUTH_NOTICE_CODES.VERIFICATION_INCOMPLETE });
           }
-        } else if (authReturn === 'password-reset') {
+        } else if (!authReturn.feedback && authReturn.action === 'password-reset') {
           setAuthNotice({ kind: 'success', code: AUTH_NOTICE_CODES.PASSWORD_RESET_COMPLETE });
         }
-        authReturn = '';
+        authReturn = { action: '', feedback: '' };
         if (!nextUser?.emailVerified) {
           await applyFirebaseUser(nextUser);
         } else {
@@ -638,14 +654,6 @@ export function AuthProvider({ children }) {
     return applyFirebaseUser(instance.currentUser, { forceRefresh: true });
   }, [applyFirebaseUser]);
 
-  const retryAuthService = useCallback(async () => {
-    const ready = await checkAuthBackend();
-    if (!ready) return false;
-    const instance = await firebaseAuthReady();
-    if (instance?.currentUser) await applyFirebaseUser(instance.currentUser, { forceRefresh: true });
-    return true;
-  }, [applyFirebaseUser, checkAuthBackend]);
-
   const getIdToken = useCallback(async (forceRefresh = false) => {
     const instance = await firebaseAuthReady();
     return instance?.currentUser?.getIdToken(Boolean(forceRefresh)) || '';
@@ -687,13 +695,12 @@ export function AuthProvider({ children }) {
     logout,
     clearAuthNotice,
     checkUserAuth,
-    retryAuthService,
     getIdToken,
     cooldownRemaining: getCooldownRemaining,
   }), [
     addPassword, authBackendReady, authChecked, authNotice, authServiceError, changePassword, checkUserAuth, clearAuthNotice, firebaseUser, getCooldownRemaining, getIdToken,
     isAuthenticated, isLoadingAuth, linkGitHub, loginWithGitHub, logout, refreshEmailVerification,
-    retryAuthService, sendPasswordReset, sendVerificationAgain, signInWithEmail, signUpWithEmail, unlinkGitHub, user, verificationEmail,
+    sendPasswordReset, sendVerificationAgain, signInWithEmail, signUpWithEmail, unlinkGitHub, user, verificationEmail,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

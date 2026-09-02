@@ -11,7 +11,6 @@ export const AUTH_FEEDBACK_CODES = Object.freeze({
   NETWORK: 'network',
   DOMAIN_UNAUTHORIZED: 'domain_unauthorized',
   PROVIDER_DISABLED: 'provider_disabled',
-  USER_DISABLED: 'user_disabled',
   BROWSER_UNSUPPORTED: 'browser_unsupported',
   BACKEND_MISMATCH: 'backend_mismatch',
   RECENT_LOGIN_REQUIRED: 'recent_login_required',
@@ -43,7 +42,7 @@ export function validatePassword(password) {
 
 export function mapFirebaseAuthError(error) {
   const code = String(error?.code || '').toLowerCase();
-  if (code.includes('configuration-not-found') || code.includes('invalid-api-key') || code.includes('operation-not-allowed') || code.includes('unauthorized-domain')) return AUTH_FEEDBACK_CODES.CONFIG_MISSING;
+  if (code.includes('configuration-not-found') || code.includes('invalid-api-key')) return AUTH_FEEDBACK_CODES.CONFIG_MISSING;
   if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found') || code.includes('user-mismatch') || code.includes('user-token-expired')) return AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL;
   if (code.includes('user-disabled')) return AUTH_FEEDBACK_CODES.ACCOUNT_DISABLED;
   if (code.includes('email-already-in-use')) return AUTH_FEEDBACK_CODES.EMAIL_IN_USE;
@@ -55,7 +54,6 @@ export function mapFirebaseAuthError(error) {
   if (code.includes('network-request-failed') || code.includes('internal-error') || code.includes('timeout') || error?.name === 'AbortError') return AUTH_FEEDBACK_CODES.NETWORK;
   if (code.includes('unauthorized-domain') || code.includes('app-not-authorized') || code.includes('invalid-continue-uri') || code.includes('missing-continue-uri')) return AUTH_FEEDBACK_CODES.DOMAIN_UNAUTHORIZED;
   if (code.includes('operation-not-allowed') || code.includes('invalid-oauth-client-id')) return AUTH_FEEDBACK_CODES.PROVIDER_DISABLED;
-  if (code.includes('user-disabled')) return AUTH_FEEDBACK_CODES.USER_DISABLED;
   if (code.includes('web-storage-unsupported')) return AUTH_FEEDBACK_CODES.BROWSER_UNSUPPORTED;
   if (code.includes('requires-recent-login')) return AUTH_FEEDBACK_CODES.RECENT_LOGIN_REQUIRED;
   if (code.includes('invalid-email') || code.includes('missing-email')) return AUTH_FEEDBACK_CODES.INVALID_EMAIL;
@@ -69,10 +67,11 @@ export function authRedirectFeedback(params = {}) {
   const description = String(params.error_description || '').toLowerCase();
   const combined = `${code} ${error} ${description}`;
   if (!combined.trim()) return '';
-  if (combined.includes('too_many') || combined.includes('rate') || combined.includes('quota')) return AUTH_FEEDBACK_CODES.RATE_LIMITED;
+  if (combined.includes('too_many') || combined.includes('too-many') || combined.includes('rate') || combined.includes('quota')) return AUTH_FEEDBACK_CODES.RATE_LIMITED;
   if (combined.includes('unauthorized') || combined.includes('redirect') || combined.includes('configuration')) return AUTH_FEEDBACK_CODES.DOMAIN_UNAUTHORIZED;
+  if (combined.includes('operation-not-allowed') || combined.includes('provider-disabled')) return AUTH_FEEDBACK_CODES.PROVIDER_DISABLED;
   if (combined.includes('access_denied') || combined.includes('cancel')) return AUTH_FEEDBACK_CODES.GITHUB_CANCELLED;
-  if (combined.includes('expired') || combined.includes('invalid_action_code')) return AUTH_FEEDBACK_CODES.INVALID_CREDENTIAL;
+  if (combined.includes('expired') || combined.includes('invalid_action_code') || combined.includes('invalid-action-code')) return AUTH_FEEDBACK_CODES.ACTION_EXPIRED;
   return AUTH_FEEDBACK_CODES.UNKNOWN;
 }
 

@@ -14,7 +14,7 @@ export function publicErrorMessage(error, lang = 'zh') {
   const english = lang === 'en';
   const code = String(error?.code || error?.feedbackCode || '').toUpperCase();
   if (SAFE_CODES[code]) return SAFE_CODES[code][english ? 1 : 0];
-  const status = Number(error?.status) || 0;
+  const status = Number(error?.status ?? error?.httpStatus) || 0;
   if (status === 401 || status === 403) return SAFE_CODES.UNAUTHENTICATED[english ? 1 : 0];
   if (status === 429) return SAFE_CODES.RATE_LIMITED[english ? 1 : 0];
   if (status >= 500 || error?.name === 'AbortError' || error instanceof TypeError) {
@@ -25,11 +25,4 @@ export function publicErrorMessage(error, lang = 'zh') {
   return english
     ? 'The operation could not be completed. Retry or reload the latest version.'
     : '操作未能完成，请重试或重新加载最新版本。';
-}
-
-export function errorReference(error) {
-  const source = `${error?.code || error?.name || 'ERR'}:${error?.status || 0}:${Date.now()}`;
-  let hash = 2166136261;
-  for (const char of source) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
-  return `TD-${(hash >>> 0).toString(16).toUpperCase().padStart(8, '0')}`;
 }

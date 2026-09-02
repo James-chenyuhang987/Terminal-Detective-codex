@@ -109,7 +109,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     setBusy(true);
     try {
       const result = await mutate(current => ({ profile: { ...current, ...changes } }));
-      if (message) notify(result?.queued
+      if (message) notify(result?.pending
         ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
         : message);
       return true;
@@ -155,7 +155,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       try {
         const evaluated = await mutate(current => result(current));
         if (!evaluated?.profile || evaluated.error) return rejectResult(evaluated);
-        if (message) notify(evaluated?.queued
+        if (message) notify(evaluated?.pending
           ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
           : message);
         return true;
