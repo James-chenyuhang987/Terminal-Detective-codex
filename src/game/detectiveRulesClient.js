@@ -8,14 +8,19 @@ export function setRulesLang(lang) {
   currentLang = lang === 'en' ? 'en' : 'zh';
 }
 
-function abortError() {
-  const error = new Error(currentLang === 'en' ? 'The rule request was aborted.' : '规则请求已中止。');
+function abortError(lang = currentLang) {
+  const error = new Error(lang === 'en' ? 'The rule request was aborted.' : '规则请求已中止。');
   error.name = 'AbortError';
   return error;
 }
 
-function withAbortAndTimeout(promise, signal) {
-  if (signal?.aborted) return Promise.reject(abortError());
+function normalizeLang(lang) {
+  return lang === 'en' ? 'en' : 'zh';
+}
+
+function withAbortAndTimeout(promise, signal, lang = currentLang) {
+  const requestLang = normalizeLang(lang);
+  if (signal?.aborted) return Promise.reject(abortError(requestLang));
   return new Promise((resolve, reject) => {
     let done = false;
     const finish = (callback, value) => {
@@ -25,10 +30,10 @@ function withAbortAndTimeout(promise, signal) {
       signal?.removeEventListener('abort', onAbort);
       callback(value);
     };
-    const onAbort = () => finish(reject, abortError());
+    const onAbort = () => finish(reject, abortError(requestLang));
     const timer = window.setTimeout(() => {
       const error = Object.assign(
-        new Error(currentLang === 'en' ? 'Rule service timed out.' : '规则服务响应超时。'),
+        new Error(requestLang === 'en' ? 'Rule service timed out.' : '规则服务响应超时。'),
         { code: 'RULE_TIMEOUT' },
       );
       finish(reject, error);
@@ -38,10 +43,12 @@ function withAbortAndTimeout(promise, signal) {
   });
 }
 
-async function invokeRule(task, payload, signal) {
+async function invokeRule(task, payload, signal, lang = currentLang) {
+  const requestLang = normalizeLang(lang);
   const response = await withAbortAndTimeout(
-    cloudflareApi.functions.invoke('detectiveRules', { task, payload: { ...payload, lang: currentLang } }),
+    cloudflareApi.functions.invoke('detectiveRules', { task, payload: { ...payload, lang: requestLang } }),
     signal,
+    requestLang,
   );
   if (response.data?.error) {
     const error = Object.assign(new Error(response.data.error), {
@@ -64,7 +71,8 @@ function teamPayload(team = []) {
   }));
 }
 
-export async function getDecisionOptionPacks({ gameState, caseData, team, signal }) {
+export async function getDecisionOptionPacks({ gameState, caseData, team, signal, lang = currentLang }) {
+  const requestLang = normalizeLang(lang);
   const payload = {
     caseId: caseData.case_id,
     zoneId: gameState.current_zone,
@@ -78,10 +86,10 @@ export async function getDecisionOptionPacks({ gameState, caseData, team, signal
     team: teamPayload(team),
   };
   try {
-    return await invokeRule('decision_options', payload, signal);
+    return await invokeRule('decision_options', payload, signal, requestLang);
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
-    return buildOfflineDecisionPacks({ team, turn: payload.turn, caseId: payload.caseId, lang: currentLang });
+    return buildOfflineDecisionPacks({ team, turn: payload.turn, caseId: payload.caseId, lang: requestLang });
   }
 }
 

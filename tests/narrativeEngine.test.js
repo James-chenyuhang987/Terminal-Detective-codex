@@ -7,6 +7,7 @@ import {
   NARRATIVE_ACTION_BEATS,
   NARRATIVE_ACTIONS,
   NARRATIVE_OUTCOMES,
+  NARRATIVE_PLOT_BEATS,
   renderNarrative,
   resolvePublicZoneName,
 } from '../src/game/narrativeEngine.js';
@@ -16,9 +17,9 @@ import {
   getCaseNarrativeProfile,
 } from '../src/game/caseNarrativeLibrary.js';
 import { ALL_CASES, Case_Data_Lvl_01, localizeCase } from '../src/game/caseData.js';
-import { createInitialGameState, generateObservation } from '../src/game/gameState.js';
+import { createInitialGameState, generateObservation, generateObservationSections } from '../src/game/gameState.js';
 
-test('local narrative library covers every action and outcome with at least six bilingual variants', () => {
+test('local narrative library covers every action and outcome with at least ten bilingual variants', () => {
   for (const actionTag of NARRATIVE_ACTIONS) {
     for (const outcome of NARRATIVE_OUTCOMES) {
       for (const lang of ['zh', 'en']) {
@@ -36,7 +37,7 @@ test('local narrative library covers every action and outcome with at least six 
           assert.ok(result.text.length > 12);
           variants.add(result.templateId);
         }
-        assert.ok(variants.size >= 6, `${actionTag}/${outcome}/${lang} only rendered ${variants.size} variants`);
+        assert.ok(variants.size >= 10, `${actionTag}/${outcome}/${lang} only rendered ${variants.size} variants`);
       }
     }
   }
@@ -45,12 +46,37 @@ test('local narrative library covers every action and outcome with at least six 
 test('every action has a distinct paired bilingual detective-fiction scene corpus', () => {
   assert.deepEqual(new Set(Object.keys(NARRATIVE_ACTION_BEATS)), new Set(NARRATIVE_ACTIONS));
   for (const actionTag of NARRATIVE_ACTIONS) {
-    assert.ok(NARRATIVE_ACTION_BEATS[actionTag].length >= 3, `${actionTag} needs at least three scene beats`);
+    assert.ok(NARRATIVE_ACTION_BEATS[actionTag].length >= 5, `${actionTag} needs at least five scene beats`);
     for (const beat of NARRATIVE_ACTION_BEATS[actionTag]) {
       assert.ok(beat.zh.length >= 45, `${actionTag} Chinese scene beat is too short`);
       assert.ok(beat.en.length >= 100, `${actionTag} English scene beat is too short`);
     }
   }
+});
+
+test('action narration advances through four paired detective-story plot stages', () => {
+  assert.deepEqual(Object.keys(NARRATIVE_PLOT_BEATS), ['opening', 'pursuit', 'escalation', 'convergence']);
+  for (const [stage, beats] of Object.entries(NARRATIVE_PLOT_BEATS)) {
+    assert.ok(beats.length >= 3, `${stage} needs at least three plot beats`);
+    for (const beat of beats) {
+      assert.ok(beat.zh.length >= 25, `${stage} Chinese plot beat is too short`);
+      assert.ok(beat.en.length >= 70, `${stage} English plot beat is too short`);
+    }
+  }
+
+  const shared = {
+    actionTag: 'check_alibi',
+    outcome: 'progress',
+    agentName: 'AURORA-09',
+    zoneName: 'PUBLIC ZONE',
+    seed: 'plot-stage-parity',
+  };
+  const turns = [1, 4, 7, 10];
+  const zh = turns.map(turn => renderNarrative({ ...shared, turn, lang: 'zh' }));
+  const en = turns.map(turn => renderNarrative({ ...shared, turn, lang: 'en' }));
+  assert.equal(new Set(zh.map(result => result.text)).size, 4);
+  assert.equal(new Set(zh.map(result => result.templateId)).size, 4);
+  assert.deepEqual(zh.map(result => result.templateId), en.map(result => result.templateId));
 });
 
 test('Chinese and English select the same semantic scene and outcome templates', () => {
@@ -113,6 +139,7 @@ test('first turn creates a coherent public case opening without leaking internal
   const caseData = localizeCase(Case_Data_Lvl_01, 'zh');
   const state = createInitialGameState(caseData);
   const context = buildPublicCaseContext({ gameState: state, caseData, lang: 'zh' });
+  const sections = generateObservationSections(state, caseData, 'zh');
   const observation = generateObservation(state, caseData, 'zh');
   const thought = buildLocalThought({
     gameState: state,
@@ -123,6 +150,9 @@ test('first turn creates a coherent public case opening without leaking internal
   });
 
   assert.equal(context.isOpening, true);
+  assert.deepEqual(sections.story, context);
+  assert.equal(sections.observation, observation);
+  assert.equal(sections.observation, `${sections.storyBlock}\n\n${sections.scanBlock}`);
   assert.equal(context.zoneName, '数据中心 · 案发现场');
   assert.match(observation, /第一幕.*封锁现场.*霓虹血迹/s);
   assert.match(observation, /现场初勘/);
@@ -132,6 +162,20 @@ test('first turn creates a coherent public case opening without leaking internal
   assert.match(observation, /首要任务/);
   assert.match(thought, /第一条判断必须从现场/);
   assert.doesNotMatch(`${observation}\n${thought}`, /zone_datacenter/);
+});
+
+test('terminal story block preserves the same protected public narrative used by decisions', () => {
+  const hiddenClue = Case_Data_Lvl_01.hidden_clues?.[0];
+  const hiddenRecord = Case_Data_Lvl_01.clue_dictionary.find(clue => clue.clue_id === hiddenClue?.clue_id);
+  const sections = generateObservationSections({
+    ...createInitialGameState(Case_Data_Lvl_01),
+    turn_count: 3,
+    unlocked_clues: hiddenClue ? [hiddenClue.clue_id] : [],
+  }, Case_Data_Lvl_01, 'zh');
+
+  assert.equal(sections.story.clueCount, 0);
+  assert.match(sections.storyBlock, new RegExp(sections.story.narrative.slice(0, 24).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  if (hiddenRecord?.keyword) assert.doesNotMatch(sections.storyBlock, new RegExp(hiddenRecord.keyword));
 });
 
 test('public zone resolver and narrative output replace raw internal ids with readable fallbacks', () => {

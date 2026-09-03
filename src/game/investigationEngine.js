@@ -7,6 +7,9 @@ import { normalizeSettlementResult } from '@/game/settlementResult';
 import { agentExpertise } from '@/game/commandSystem';
 import { buildLocalThought, renderNarrative, stableNarrativeHash } from '@/game/narrativeEngine';
 import { checkDeterministicLink, setRulesLang } from '@/game/detectiveRulesClient';
+import { streamTerminalText } from './terminalTextStream.js';
+
+export { streamTerminalText };
 
 const LEGAL_ACTIONS = new Set([
   'talk_to_npc', 'search_area', 'examine_clue', 'check_alibi',
@@ -21,36 +24,36 @@ export function setInvestigationLang(lang) {
   setRulesLang(currentLang);
 }
 
-function abortError() {
-  const error = new Error(currentLang === 'en' ? 'The investigation turn was aborted.' : '本轮调查已中止。');
+function abortError(lang = currentLang) {
+  const error = new Error(lang === 'en' ? 'The investigation turn was aborted.' : '本轮调查已中止。');
   error.name = 'AbortError';
   return error;
 }
 
-export async function streamThink({ gameState, caseData, agentStrategy, observation, onChunk, onDone, signal }) {
-  const text = buildLocalThought({ gameState, caseData, agentStrategy, observation, lang: currentLang });
-  let index = 0;
+export async function streamThink({
+  gameState,
+  caseData,
+  agentStrategy,
+  observation,
+  instant = false,
+  onStart = null,
+  onChunk = null,
+  onDone = null,
+  signal = null,
+  lang = currentLang,
+}) {
+  const turnLang = lang === 'en' ? 'en' : 'zh';
+  const text = buildLocalThought({ gameState, caseData, agentStrategy, observation, lang: turnLang });
   const speedBoost = Math.max(0, Math.min(0.8, agentStrategy?.skill_effects?.think_speed_boost || 0));
   const intervalMs = Math.max(8, Math.round(20 * (1 - speedBoost)));
-  const chunkSize = Math.max(1, Math.ceil(text.length / 90));
-  return new Promise(resolve => {
-    if (signal?.aborted) {
-      onDone?.('');
-      resolve('');
-      return;
-    }
-    const timer = window.setInterval(() => {
-      if (signal?.aborted || index >= text.length) {
-        window.clearInterval(timer);
-        const completed = signal?.aborted ? text.slice(0, index) : text;
-        onDone?.(completed);
-        resolve(completed);
-        return;
-      }
-      const chunk = text.slice(index, index + chunkSize);
-      onChunk?.(chunk);
-      index += chunk.length;
-    }, intervalMs);
+  return streamTerminalText({
+    text,
+    intervalMs,
+    instant,
+    onStart,
+    onChunk,
+    onDone,
+    signal,
   });
 }
 
@@ -62,8 +65,9 @@ export async function getAction({ agentStrategy = null, signal = null }) {
   return `[ACTION: ${preferred}]`;
 }
 
-export async function settleAction({ actionName, actionTag = null, riskLevel = 'low', gameState, caseData, agentStrategy = null, isIllegal = false, signal = null }) {
-  if (signal?.aborted) throw abortError();
+export async function settleAction({ actionName, actionTag = null, riskLevel = 'low', gameState, caseData, agentStrategy = null, isIllegal = false, signal = null, lang = currentLang }) {
+  const turnLang = lang === 'en' ? 'en' : 'zh';
+  if (signal?.aborted) throw abortError(turnLang);
   const effectiveAction = actionTag || actionName || 'search_area';
   const nextZone = resolveNextZone({
     caseData,
@@ -117,7 +121,7 @@ export async function settleAction({ actionName, actionTag = null, riskLevel = '
     agentId: agentStrategy?.executing_agent_id,
     clueIds: clueId ? [clueId] : [],
     clueName: clue?.keyword,
-    lang: currentLang,
+    lang: turnLang,
     seed,
   }, gameState.narrative_template_history || []);
   return normalizeSettlementResult({

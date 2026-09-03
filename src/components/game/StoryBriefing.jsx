@@ -2,9 +2,10 @@ import React from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import SceneIllustration from '@/components/game/SceneIllustration';
 
-// 决策卡上方的剧情面板：案件开场/前情推进 + 当前目标 + 本轮推理。
-export default function StoryBriefing({ story }) {
-  const { lang } = useLang();
+// 决策工作区的剧情面板：案件开场/前情推进 + 当前目标 + 本轮推理。
+export default function StoryBriefing({ story, headingId = 'td-decision-story-title', language }) {
+  const { lang: currentLang } = useLang();
+  const lang = language === 'en' || language === 'zh' ? language : currentLang;
   const zh = lang === 'zh';
   if (!story) return null;
 
@@ -16,15 +17,7 @@ export default function StoryBriefing({ story }) {
   ].filter(s => s.val !== undefined && s.val !== null && s.val !== '');
 
   return (
-    <div style={{
-      width: '100%', maxWidth: 830, marginBottom: 18,
-      border: '1px solid rgba(0,229,255,0.22)', borderRadius: 16, overflow: 'hidden',
-      background: 'linear-gradient(180deg, rgba(10,18,32,0.55) 0%, rgba(2,6,14,0.4) 100%)',
-      backdropFilter: 'blur(18px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(18px) saturate(180%)',
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 32px rgba(0,0,0,0.5)',
-      animation: 'story-in 0.5s cubic-bezier(.22,1,.36,1) both',
-    }}>
+    <article className="td-story-briefing">
       <SceneIllustration zone={story.zone} actionTag={story.actionTag} />
 
       <div style={{ padding: '16px 20px 18px' }}>
@@ -37,7 +30,7 @@ export default function StoryBriefing({ story }) {
                 ? (zh ? '案 件 开 场 · CASE OPENING' : 'CASE OPENING · INCIDENT BRIEF')
                 : (zh ? '前 情 推 进 · CASE PROGRESS' : 'CASE PROGRESS · THIS TURN'))}
             </div>
-            <h2 style={{ margin: 0, color: '#e9fbff', fontSize: '1.05rem', letterSpacing: '0.08em' }}>
+            <h2 id={headingId} style={{ margin: 0, color: '#e9fbff', fontSize: '1.05rem', letterSpacing: '0.08em' }}>
               {story.caseTitle || (zh ? '当前案件' : 'ACTIVE CASE')}
             </h2>
           </div>
@@ -112,7 +105,6 @@ export default function StoryBriefing({ story }) {
         )}
       </div>
 
-      <style>{`@keyframes story-in{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}`}</style>
-    </div>
+    </article>
   );
 }

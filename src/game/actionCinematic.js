@@ -13,23 +13,65 @@ const TEMPLATE_BY_ACTION = Object.freeze({
   bribe_informant: 'covert',
 });
 
-export const ACTION_CINEMATIC_ANIMATIONS = Object.freeze({
-  search_area: Object.freeze({ animationId: 'scan-sweep', cameraProfile: 'survey', motionProfile: 'sweep' }),
-  examine_clue: Object.freeze({ animationId: 'evidence-orbit', cameraProfile: 'macro', motionProfile: 'orbit' }),
-  analyze_forensics: Object.freeze({ animationId: 'spectral-rebuild', cameraProfile: 'laboratory', motionProfile: 'assemble' }),
-  access_database: Object.freeze({ animationId: 'data-tunnel', cameraProfile: 'tunnel', motionProfile: 'stream' }),
-  hack_terminal: Object.freeze({ animationId: 'firewall-breach', cameraProfile: 'breach', motionProfile: 'impact' }),
-  check_cctv: Object.freeze({ animationId: 'camera-matrix', cameraProfile: 'wall', motionProfile: 'scan' }),
-  talk_to_npc: Object.freeze({ animationId: 'dialogue-pulse', cameraProfile: 'portrait', motionProfile: 'pulse' }),
-  interrogate_suspect: Object.freeze({ animationId: 'pressure-focus', cameraProfile: 'close', motionProfile: 'pressure' }),
-  check_alibi: Object.freeze({ animationId: 'timeline-split', cameraProfile: 'timeline', motionProfile: 'split' }),
-  present_evidence: Object.freeze({ animationId: 'evidence-impact', cameraProfile: 'table', motionProfile: 'reveal' }),
-  tail_suspect: Object.freeze({ animationId: 'lane-chase', cameraProfile: 'pursuit', motionProfile: 'chase' }),
-  bribe_informant: Object.freeze({ animationId: 'dead-drop', cameraProfile: 'covert', motionProfile: 'exchange' }),
+export const ACTION_CINEMATIC_VARIANTS = Object.freeze({
+  search_area: Object.freeze([
+    Object.freeze({ animationId: 'scan-sweep', cameraProfile: 'survey', motionProfile: 'sweep' }),
+    Object.freeze({ animationId: 'trace-grid', cameraProfile: 'grid', motionProfile: 'ripple' }),
+  ]),
+  examine_clue: Object.freeze([
+    Object.freeze({ animationId: 'evidence-orbit', cameraProfile: 'macro', motionProfile: 'orbit' }),
+    Object.freeze({ animationId: 'microscope-lattice', cameraProfile: 'microscope', motionProfile: 'focus' }),
+  ]),
+  analyze_forensics: Object.freeze([
+    Object.freeze({ animationId: 'spectral-rebuild', cameraProfile: 'laboratory', motionProfile: 'assemble' }),
+    Object.freeze({ animationId: 'molecular-match', cameraProfile: 'molecular', motionProfile: 'bond' }),
+  ]),
+  access_database: Object.freeze([
+    Object.freeze({ animationId: 'data-tunnel', cameraProfile: 'tunnel', motionProfile: 'stream' }),
+    Object.freeze({ animationId: 'archive-cascade', cameraProfile: 'archive', motionProfile: 'cascade' }),
+  ]),
+  hack_terminal: Object.freeze([
+    Object.freeze({ animationId: 'firewall-breach', cameraProfile: 'breach', motionProfile: 'impact' }),
+    Object.freeze({ animationId: 'cipher-shatter', cameraProfile: 'cipher', motionProfile: 'shatter' }),
+  ]),
+  check_cctv: Object.freeze([
+    Object.freeze({ animationId: 'camera-matrix', cameraProfile: 'wall', motionProfile: 'scan' }),
+    Object.freeze({ animationId: 'frame-rewind', cameraProfile: 'rewind', motionProfile: 'rewind' }),
+  ]),
+  talk_to_npc: Object.freeze([
+    Object.freeze({ animationId: 'dialogue-pulse', cameraProfile: 'portrait', motionProfile: 'pulse' }),
+    Object.freeze({ animationId: 'testimony-wave', cameraProfile: 'witness', motionProfile: 'wave' }),
+  ]),
+  interrogate_suspect: Object.freeze([
+    Object.freeze({ animationId: 'pressure-focus', cameraProfile: 'close', motionProfile: 'pressure' }),
+    Object.freeze({ animationId: 'contradiction-box', cameraProfile: 'box', motionProfile: 'compress' }),
+  ]),
+  check_alibi: Object.freeze([
+    Object.freeze({ animationId: 'timeline-split', cameraProfile: 'timeline', motionProfile: 'split' }),
+    Object.freeze({ animationId: 'clock-parallax', cameraProfile: 'parallax', motionProfile: 'parallax' }),
+  ]),
+  present_evidence: Object.freeze([
+    Object.freeze({ animationId: 'evidence-impact', cameraProfile: 'table', motionProfile: 'reveal' }),
+    Object.freeze({ animationId: 'case-thread', cameraProfile: 'thread', motionProfile: 'thread' }),
+  ]),
+  tail_suspect: Object.freeze([
+    Object.freeze({ animationId: 'lane-chase', cameraProfile: 'pursuit', motionProfile: 'chase' }),
+    Object.freeze({ animationId: 'shadow-crossing', cameraProfile: 'shadow', motionProfile: 'evade' }),
+  ]),
+  bribe_informant: Object.freeze([
+    Object.freeze({ animationId: 'dead-drop', cameraProfile: 'covert', motionProfile: 'exchange' }),
+    Object.freeze({ animationId: 'signal-handshake', cameraProfile: 'handshake', motionProfile: 'handshake' }),
+  ]),
 });
 
+// The primary map remains available to callers that only need one representative
+// profile per action, while runtime playback selects from every variant.
+export const ACTION_CINEMATIC_ANIMATIONS = Object.freeze(Object.fromEntries(
+  Object.entries(ACTION_CINEMATIC_VARIANTS).map(([actionTag, variants]) => [actionTag, variants[0]]),
+));
+
 export const CINEMATIC_ANIMATION_IDS = Object.freeze(
-  Object.values(ACTION_CINEMATIC_ANIMATIONS).map(profile => profile.animationId),
+  Object.values(ACTION_CINEMATIC_VARIANTS).flatMap(variants => variants.map(profile => profile.animationId)),
 );
 
 const OUTCOME_ACCENTS = Object.freeze({
@@ -104,9 +146,16 @@ export function stableCinematicHash(value) {
 }
 
 export function resolveCinematicAnimation(actionTag, eventId = '') {
-  const profile = ACTION_CINEMATIC_ANIMATIONS[actionTag] || ACTION_CINEMATIC_ANIMATIONS.search_area;
+  const variants = ACTION_CINEMATIC_VARIANTS[actionTag] || ACTION_CINEMATIC_VARIANTS.search_area;
+  const eventMatch = String(eventId).match(/^(.*):(\d+):([^:]+)$/);
+  const turn = eventMatch ? Number(eventMatch[2]) : null;
+  const animationVariant = eventMatch && Number.isSafeInteger(turn)
+    ? (stableCinematicHash(`${eventMatch[1]}:${actionTag}:variant`) + Math.floor(turn / 2)) % variants.length
+    : stableCinematicHash(`${eventId}:${actionTag}:variant`) % variants.length;
+  const profile = variants[animationVariant];
   return {
     ...profile,
+    animationVariant,
     animationSeed: stableCinematicHash(`${eventId}:${profile.animationId}`),
   };
 }

@@ -39,6 +39,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
       zh: '{zone}的灯光掠过对方的眼睛，{agent}顺着语气里的停顿往回走，寻找那句被刻意绕开的事实。',
       en: 'Light from {zone} crosses the witness\'s eyes as {agent} follows the pauses backward, hunting the fact the testimony carefully stepped around.',
     },
+    {
+      zh: '窗外的雨把{zone}切成一格格灰影，{agent}忽然重复了对方半小时前说过的一句话；同样的词句第二次出现时，尾音里多了一丝戒备。',
+      en: 'Rain divides {zone} into panes of gray as {agent} quietly repeats something the witness said half an hour ago. The same words return, but this time their final syllable carries a trace of alarm.',
+    },
+    {
+      zh: '{agent}把无关紧要的问题散落在谈话之间，直到对方习惯回答。真正的问题来临时，{zone}里那一瞬过分迅速的否认，比任何迟疑都更响亮。',
+      en: '{agent} scatters harmless questions through the conversation until answering becomes a habit. When the real question arrives, the denial comes too quickly, and in {zone} its speed is louder than hesitation.',
+    },
   ],
   search_area: [
     {
@@ -52,6 +60,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
     {
       zh: '{agent}先听，再看，最后才触碰。{zone}把秘密藏在日常秩序里，而被移动过的平凡之物往往比血迹更诚实。',
       en: '{agent} listens first, looks second, and touches last. {zone} hides its secrets inside ordinary order, where a moved commonplace object can be more honest than blood.',
+    },
+    {
+      zh: '冷风穿过{zone}没有关严的门，卷起一小片本该静止的灰尘。{agent}俯身追随它落下的方向，一条被匆忙脚步搅乱的路线逐渐显形。',
+      en: 'A cold draft slips through an unlatched door in {zone} and lifts dust that should have remained still. {agent} follows where it settles until a route disturbed by hurried footsteps begins to show.',
+    },
+    {
+      zh: '{agent}关闭主灯，只留下贴地的侧光。{zone}里每件物品都拖出长影，其中一件的影子与底座错开了半寸，像一句没有完全擦掉的更正。',
+      en: '{agent} kills the overhead lights and leaves a beam grazing the floor. Every object in {zone} grows a long shadow; one shadow misses its base by half an inch, like a correction someone failed to erase.',
     },
   ],
   examine_clue: [
@@ -67,6 +83,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
       zh: '在{zone}的放大镜下，微小损伤连成一条不肯说谎的时间线。{agent}逐段核对，直到偶然开始显得过分整齐。',
       en: 'Under magnification in {zone}, minute damage joins into a timeline incapable of lying. {agent} checks it segment by segment until coincidence looks too orderly.',
     },
+    {
+      zh: '{agent}用棉签从证物边缘取下一层几乎透明的油膜。它在{zone}的紫外光下显出断续指纹，也显出某个人试图擦拭时留下的慌乱方向。',
+      en: '{agent} lifts an almost transparent film from the exhibit\'s edge. Under ultraviolet light in {zone}, it reveals a broken print and the frantic direction of the hand that tried to wipe it away.',
+    },
+    {
+      zh: '证物上的尘埃并不均匀。{agent}把沉积厚度绘成等高线，{zone}的屏幕随即勾出一块近期被遮住、又被重新暴露的轮廓。',
+      en: 'Dust lies unevenly across the evidence. {agent} charts its depth like contour lines, and the screen in {zone} outlines a shape that was recently covered, then exposed again.',
+    },
   ],
   check_alibi: [
     {
@@ -80,6 +104,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
     {
       zh: '{agent}让两份时间记录在{zone}并排滚动。它们几乎严丝合缝，正因如此，那处多出来的整齐才像一道新鲜的缝线。',
       en: '{agent} runs two timelines side by side in {zone}. They fit almost perfectly, which makes one patch of excessive neatness resemble a fresh stitch.',
+    },
+    {
+      zh: '{agent}把交通图、门禁日志与天气记录叠在{zone}的光桌上。三条路线都能抵达口供中的终点，却只有一条来得及避开那场暴雨。',
+      en: '{agent} layers transit maps, access logs, and weather records across the light table in {zone}. Three routes reach the claimed destination, but only one could have avoided the storm.',
+    },
+    {
+      zh: '{zone}里三只校准时钟同时跳到下一分钟。{agent}重放那通电话的背景声，一记远处钟响却提前出现，让完美的不在场证明慢了整整一拍。',
+      en: 'Three calibrated clocks in {zone} enter the next minute together. {agent} replays the call, and a distant chime arrives too early, leaving the perfect alibi one full beat behind.',
     },
   ],
   present_evidence: [
@@ -95,6 +127,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
       zh: '{zone}的空气随着证据编号被念出而收紧。{agent}只陈述可证明的部分，把剩下的空白留给对方亲自填错。',
       en: 'The air in {zone} tightens as the evidence number is read aloud. {agent} states only what can be proved and leaves the remaining blank for the other person to fill incorrectly.',
     },
+    {
+      zh: '{agent}将照片反扣在{zone}桌面上，先说出拍摄时间，再说地点，最后才翻开画面。对方在看见内容之前就移开了视线。',
+      en: '{agent} places a photograph face down on the table in {zone}, naming the time first, then the place, and only then revealing the image. The person opposite looks away before seeing what it contains.',
+    },
+    {
+      zh: '证据没有一次全部亮出。{agent}让每一项事实隔着几秒出现，像走廊里依次点亮的灯；到了最后，{zone}已经没有阴影足够容纳原来的说法。',
+      en: 'The evidence is not revealed all at once. {agent} lets each fact appear seconds apart, lights waking down a corridor, until {zone} holds no shadow large enough for the original account.',
+    },
   ],
   interrogate_suspect: [
     {
@@ -108,6 +148,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
     {
       zh: '{agent}突然回到最不起眼的细节，像在旧伤上轻按了一次。对方的目光抢先转向出口，替尚未说出的答案指明方向。',
       en: '{agent} abruptly returns to the smallest detail, pressing once on an old bruise. The subject\'s eyes reach the exit first and point toward the answer not yet spoken.',
+    },
+    {
+      zh: '{zone}桌上的水一口未动，杯壁却留下新的指印。{agent}把同一个问题换了一个主语，对方的手终于从杯子上撤开，仿佛玻璃突然变得灼热。',
+      en: 'The water on the table in {zone} remains untouched, though fresh prints cloud the glass. {agent} asks the same question with a different subject, and the hand withdraws as if the tumbler has turned hot.',
+    },
+    {
+      zh: '{agent}请对方第三次复述那段经过。谎言通常记得骨架，却记不住天气、气味和门开启的方向；这一次，{zone}里少了一场先前存在的风。',
+      en: '{agent} asks for the account a third time. A lie remembers its skeleton but forgets weather, scent, and which way a door opened. This time, a wind that existed before is missing from {zone}.',
     },
   ],
   access_database: [
@@ -123,6 +171,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
       zh: '{zone}的终端吐出一列沉默编号。{agent}交叉核验访问、位置与权限，让原本互不相干的记录在同一秒钟相遇。',
       en: 'A terminal in {zone} yields a column of silent identifiers. {agent} cross-checks access, location, and privilege until unrelated records meet in the same second.',
     },
+    {
+      zh: '{agent}没有搜索名字，而是搜索缺失。{zone}的审计表里，每逢同一个账户出现，下一行总会被整齐清空；规律像黑纸上的白字一样醒目。',
+      en: '{agent} searches not for a name, but for absence. In the audit table of {zone}, every appearance of one account is followed by a perfectly blank row, a pattern bright as white ink on black paper.',
+    },
+    {
+      zh: '一份自动备份在{zone}深层存储里醒来，比现行记录早七分钟。{agent}让两个版本逐字重叠，被替换的字段像暗室中显影的字迹缓慢浮出。',
+      en: 'An automatic backup wakes in the deep storage of {zone}, seven minutes older than the live record. {agent} overlays the versions until the replaced fields emerge like writing in a darkroom tray.',
+    },
   ],
   analyze_forensics: [
     {
@@ -136,6 +192,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
     {
       zh: '检材在{zone}的扫描阵列中逐帧展开。噪点被剥离后，一处过于精确的缺口留下来，带着人为修剪的冷峻边缘。',
       en: 'The specimen unfolds frame by frame across the scanner in {zone}. When noise is stripped away, one gap remains, too exact, carrying the hard edge of deliberate trimming.',
+    },
+    {
+      zh: '{agent}向样本滴入试剂，{zone}的光谱先泛蓝，继而在边缘升起一圈微弱金色。两种本不该相遇的物质，留下了短暂接触的化学回声。',
+      en: '{agent} introduces a reagent to the sample. The spectrum in {zone} turns blue, then raises a faint gold rim: two materials that should never have met, preserving the chemical echo of brief contact.',
+    },
+    {
+      zh: '断口在{zone}的模型中被放大百倍。{agent}旋转两枚碎片，细小齿痕一一咬合，证明它们曾属于同一件东西，也曾被同一股力量分开。',
+      en: 'The fracture is enlarged a hundredfold in the model above {zone}. {agent} rotates two fragments until their tiny teeth interlock, proving they belonged together and were divided by the same force.',
     },
   ],
   tail_suspect: [
@@ -151,6 +215,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
       zh: '{zone}的霓虹把人群切成明暗交替的碎片。{agent}只追踪重复出现的轮廓，让一次秘密会面自己走进视野。',
       en: 'Neon divides the crowd in {zone} into alternating shards of light and dark. {agent} follows only the shape that returns, allowing a secret meeting to enter the frame on its own.',
     },
+    {
+      zh: '目标在{zone}的换乘大厅消失了九十秒。{agent}没有奔跑，只观察哪一扇门后的鸽群突然惊起；城市替逃离者指出了方向。',
+      en: 'The target vanishes for ninety seconds in the transit hall of {zone}. {agent} does not run, watching instead for the doorway that startles a flock of pigeons. The city points after its fugitive.',
+    },
+    {
+      zh: '{agent}借一辆缓行货车遮住身形，在{zone}下一个路口重新取得视线。目标的步速没有变化，右手却始终贴着口袋，守着一件比被跟踪更重要的东西。',
+      en: '{agent} borrows the cover of a slow delivery truck and regains the sightline at the next corner of {zone}. The target\'s pace never changes, but one hand guards a pocket as if its contents matter more than pursuit.',
+    },
   ],
   bribe_informant: [
     {
@@ -164,6 +236,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
     {
       zh: '{agent}让报酬保持可见，却把承诺说得很轻。对方衡量的不是金额，而是这条消息会在黑暗里惊醒多少人。',
       en: '{agent} keeps the payment visible and the promise quiet. The informant weighs not the sum, but how many people this message might wake in the dark.',
+    },
+    {
+      zh: '线人把信封推回{zone}桌面中央，只抽走其中一半。{agent}明白这不是降价，而是警告：剩下的情报必须等某个人离开这座城。',
+      en: 'The informant pushes the envelope back to the center of the table in {zone}, taking only half. {agent} understands it is not a discount, but a warning: the rest of the story must wait until someone leaves the city.',
+    },
+    {
+      zh: '{zone}的霓虹在咖啡上晃成一条红线。{agent}没有追问名字，只报出三个地点；线人在第二个地点前眨了一次眼，交易便有了方向。',
+      en: 'Neon trembles across the coffee in {zone} like a red line. {agent} asks for no name, only lists three places. The informant blinks before the second, and the bargain acquires a direction.',
     },
   ],
   hack_terminal: [
@@ -179,6 +259,14 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
       zh: '{agent}复制访问节奏而非凭据，让终端误以为昨夜尚未结束。日志门缝开启，里面残留着一次被仓促擦除的来访。',
       en: '{agent} copies an access rhythm rather than a credential, persuading the terminal that last night never ended. The log opens a crack around a visit erased in haste.',
     },
+    {
+      zh: '{agent}先在沙箱里放出一段诱饵代码。{zone}的防御程序立即扑向它，真正的权限路径因此短暂无人看守，像警犬离开了错误的门。',
+      en: '{agent} releases a decoy into a sandbox. The defenses of {zone} lunge after it, leaving the real privilege path briefly unattended, a watchdog abandoning the wrong door.',
+    },
+    {
+      zh: '终端每七秒发出一次校验脉冲，规律得像走廊尽头的脚步。{agent}藏在两次脉冲之间移动，让一段被隔离的记录在警报醒来前完成镜像。',
+      en: 'The terminal sends a verification pulse every seven seconds, regular as footsteps at the end of a corridor. {agent} moves between pulses and mirrors an isolated record before the alarm wakes.',
+    },
   ],
   check_cctv: [
     {
@@ -192,6 +280,73 @@ export const NARRATIVE_ACTION_BEATS = Object.freeze({
     {
       zh: '{agent}冻结一帧模糊侧影，再从玻璃反射中取回第二个角度。原本无名的经过者，终于在两个不完整的影像之间获得轮廓。',
       en: '{agent} freezes a blurred profile and recovers a second angle from reflected glass. Between two incomplete images, an anonymous passerby finally acquires a shape.',
+    },
+    {
+      zh: '{agent}将{zone}的画面按影子长度重新排序。错误的时间码彼此争辩，日光却始终诚实，替一段被挪动的录像找回了原位。',
+      en: '{agent} reorders the footage from {zone} by the length of its shadows. Corrupted timecodes argue with one another, but daylight remains honest and returns a displaced recording to its true hour.',
+    },
+    {
+      zh: '一辆车驶过{zone}镜头时，车窗短暂映出街道另一侧。{agent}把那半秒放大、校正，借一块移动的玻璃看见了固定摄像头背后的盲区。',
+      en: 'As a vehicle crosses a camera in {zone}, its window briefly reflects the opposite street. {agent} enlarges and corrects that half-second, using moving glass to see behind the fixed camera\'s blind spot.',
+    },
+  ],
+});
+
+export const NARRATIVE_PLOT_BEATS = Object.freeze({
+  opening: [
+    {
+      zh: '案件还在最初的冷雾里，任何清晰得过早的答案都值得怀疑。',
+      en: 'The case still stands in its first cold fog, and any answer that becomes clear too early deserves suspicion.',
+    },
+    {
+      zh: '这是现场开始说话的时刻，零散细节尚未组成故事，却已经拒绝保持沉默。',
+      en: 'This is the hour when the scene begins to speak. Its details do not yet form a story, but they have already refused silence.',
+    },
+    {
+      zh: '第一条证据尚未决定方向；它只在黑暗中划出边界，提醒调查者哪些地方不能凭想象跨越。',
+      en: 'The first evidence chooses no direction. It only marks a boundary in the dark, warning the investigation where imagination must not cross.',
+    },
+  ],
+  pursuit: [
+    {
+      zh: '几条原本孤立的记录开始彼此投下影子，案件由此从现场延伸到人的选择。',
+      en: 'Records once isolated begin casting shadows across one another, and the case moves from the scene into the choices people made.',
+    },
+    {
+      zh: '调查已经惊动了某种秩序；越接近可验证的事实，周围的沉默便越显得经过安排。',
+      en: 'The investigation has disturbed an established order. The closer it comes to verifiable fact, the more arranged the surrounding silence appears.',
+    },
+    {
+      zh: '线索仍未连成直线，却像夜色中的路标一样，逐渐指向同一片更深的阴影。',
+      en: 'The clues do not yet form a straight line, but like road signs at night they increasingly point toward the same deeper shadow.',
+    },
+  ],
+  escalation: [
+    {
+      zh: '案件开始反过来注视调查者，每一次试探都引来更快、更精确的回应。',
+      en: 'The case has begun to look back at its investigators, answering every probe with something faster and more precise.',
+    },
+    {
+      zh: '旧证词正在承受新证据的重量，裂缝不再孤立，而是沿着同一条因果边缘扩散。',
+      en: 'Old statements are taking the weight of new evidence. Their fractures are no longer isolated, but spreading along the same edge of cause.',
+    },
+    {
+      zh: '有人试图让调查在噪声中迷路；这种不断增加的阻力，反而证明方向正在变得危险而准确。',
+      en: 'Someone is trying to lose the investigation in noise. The growing resistance suggests the direction is becoming both dangerous and accurate.',
+    },
+  ],
+  convergence: [
+    {
+      zh: '散落的时间、地点与动机正在收束，剩下的矛盾已经少到可以逐一听见。',
+      en: 'Scattered times, places, and motives are converging. So few contradictions remain that each can now be heard separately.',
+    },
+    {
+      zh: '案件接近必须作出判断的边缘，但最后的距离仍只能由证据跨越。',
+      en: 'The case approaches the edge where judgment becomes unavoidable, yet only evidence may cross the final distance.',
+    },
+    {
+      zh: '所有被保全的事实正在形成同一幅轮廓；它还没有名字，却已经无法再被当作巧合。',
+      en: 'Every secured fact is forming the same outline. It has no name yet, but it can no longer be dismissed as coincidence.',
     },
   ],
 });
@@ -565,6 +720,14 @@ function selectIndex(seed, length, recentTemplateIds = []) {
   return index;
 }
 
+function actionPlotStage(turn) {
+  const safeTurn = Math.max(1, Number(turn) || 1);
+  if (safeTurn <= 2) return 'opening';
+  if (safeTurn <= 5) return 'pursuit';
+  if (safeTurn <= 8) return 'escalation';
+  return 'convergence';
+}
+
 function fill(template, variables) {
   return template.replace(/\{(\w+)\}/g, (_, key) => variables[key] ?? '');
 }
@@ -577,6 +740,9 @@ export function renderNarrative(event = {}, recentTemplateIds = []) {
   const seed = event.seed || [event.runId, event.caseId, event.turn, actionTag, outcome, event.agentId].join(':');
   const actionBeatIndex = stableNarrativeHash(`${seed}:scene`) % NARRATIVE_ACTION_BEATS[actionTag].length;
   const frameIndex = selectIndex(seed, frames.length, recentTemplateIds);
+  const plotStage = actionPlotStage(event.turn);
+  const plotBeats = NARRATIVE_PLOT_BEATS[plotStage];
+  const plotBeatIndex = stableNarrativeHash(`${seed}:plot`) % plotBeats.length;
   const verbs = ACTION_COPY[actionTag]?.[lang] || ACTION_COPY.search_area[lang];
   const verb = verbs[stableNarrativeHash(`${seed}:verb`) % verbs.length];
   const variables = {
@@ -588,6 +754,7 @@ export function renderNarrative(event = {}, recentTemplateIds = []) {
   const actionBeat = outcome === 'illegal'
     ? ''
     : fill(NARRATIVE_ACTION_BEATS[actionTag][actionBeatIndex][lang], variables);
+  const plotBeat = outcome === 'illegal' ? '' : fill(plotBeats[plotBeatIndex][lang], variables);
   const baseText = fill(frames[frameIndex], variables);
   let caseEcho = '';
   if (event.caseId && outcome !== 'illegal') {
@@ -601,10 +768,10 @@ export function renderNarrative(event = {}, recentTemplateIds = []) {
     }
   }
   return {
-    messageKey: `${event.caseId || 'generic'}.${actionTag}.${outcome}.${actionBeatIndex}.${frameIndex}`,
-    templateId: `${actionTag}:${outcome}:${actionBeatIndex}:${frameIndex}`,
+    messageKey: `${event.caseId || 'generic'}.${actionTag}.${outcome}.${actionBeatIndex}.${plotStage}.${plotBeatIndex}.${frameIndex}`,
+    templateId: `${actionTag}:${outcome}:${actionBeatIndex}:${plotStage}:${plotBeatIndex}:${frameIndex}`,
     tone: OUTCOME_FRAMES[outcome]?.tone || 'info',
-    text: joinSentence(actionBeat, baseText, caseEcho),
+    text: joinSentence(actionBeat, plotBeat, baseText, caseEcho),
   };
 }
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   ACTION_CINEMATIC_ANIMATIONS,
+  ACTION_CINEMATIC_VARIANTS,
   CINEMATIC_ANIMATION_IDS,
   CINEMATIC_ACTION_TAGS,
   CINEMATIC_OUTCOME_EFFECTS,
@@ -43,16 +44,47 @@ test('all twelve legal actions map to one of the six cinematic templates', () =>
   assert.equal(resolveCinematicTemplate('tail_suspect'), 'pursuit');
 });
 
-test('all twelve legal actions have distinct deterministic animation profiles', () => {
+test('all twelve legal actions have two distinct deterministic animation profiles', () => {
   assert.deepEqual(new Set(Object.keys(ACTION_CINEMATIC_ANIMATIONS)), new Set(CINEMATIC_ACTION_TAGS));
-  assert.equal(CINEMATIC_ANIMATION_IDS.length, 12);
-  assert.equal(new Set(CINEMATIC_ANIMATION_IDS).size, 12);
+  assert.deepEqual(new Set(Object.keys(ACTION_CINEMATIC_VARIANTS)), new Set(CINEMATIC_ACTION_TAGS));
+  assert.equal(CINEMATIC_ANIMATION_IDS.length, 24);
+  assert.equal(new Set(CINEMATIC_ANIMATION_IDS).size, 24);
+  for (const actionTag of CINEMATIC_ACTION_TAGS) {
+    assert.equal(ACTION_CINEMATIC_VARIANTS[actionTag].length, 2);
+    const observed = new Set(
+      Array.from({ length: 64 }, (_, index) => resolveCinematicAnimation(actionTag, `event-${index}`).animationId),
+    );
+    assert.deepEqual(observed, new Set(ACTION_CINEMATIC_VARIANTS[actionTag].map(profile => profile.animationId)));
+  }
   const profiles = CINEMATIC_ACTION_TAGS.map(actionTag => resolveCinematicAnimation(actionTag, 'event-7'));
   assert.equal(new Set(profiles.map(profile => profile.animationSeed)).size, 12);
   assert.deepEqual(
     resolveCinematicAnimation('analyze_forensics', 'event-7'),
     resolveCinematicAnimation('analyze_forensics', 'event-7'),
   );
+});
+
+test('real scheduled cinematic event ids rotate through both variants', () => {
+  for (const actionTag of CINEMATIC_ACTION_TAGS) {
+    const observed = new Set([2, 4, 6, 8].map(turn => buildCinematicEvent({
+      previousState: state(turn - 1),
+      nextState: state(turn),
+      settlement: { action_narration: '推进调查' },
+      caseData: CASE_DATA,
+      actionTag,
+      executorAgentId: 'NEXUS-01',
+    }).animationVariant));
+    assert.deepEqual(observed, new Set([0, 1]), `${actionTag} should use both variants`);
+  }
+});
+
+test('unsafe turn values fall back to a deterministic cinematic variant', () => {
+  const eventId = `case-1:${'9'.repeat(400)}:search_area`;
+  const first = resolveCinematicAnimation('search_area', eventId);
+  const second = resolveCinematicAnimation('search_area', eventId);
+
+  assert.deepEqual(first, second);
+  assert.ok(first.animationId);
 });
 
 test('even successful turns trigger while an ordinary odd turn does not', () => {
@@ -109,7 +141,8 @@ test('one cinematic event applies trap, clue, progress and no-yield priority saf
   assert.equal(trapped.narration, '反制启动');
   assert.equal(trapped.template, 'digital');
   assert.equal(trapped.eventId, 'Lvl_Test:2:hack_terminal');
-  assert.equal(trapped.animationId, 'firewall-breach');
+  assert.ok(ACTION_CINEMATIC_VARIANTS.hack_terminal.some(profile => profile.animationId === trapped.animationId));
+  assert.ok([0, 1].includes(trapped.animationVariant));
   assert.equal(trapped.outcomeEffect, CINEMATIC_OUTCOME_EFFECTS.trap);
   assert.equal(typeof trapped.animationSeed, 'number');
   assert.equal(Object.hasOwn(trapped, 'hidden_clues'), false);
@@ -190,4 +223,7 @@ test('cinematic renderer keeps deterministic effects, no eager model preloads an
   assert.match(renderer, /completeRef\.current\?\.\('renderer_lost'\)/);
   assert.match(fallback, /completeRef\.current\?\.\('completed'\)/);
   assert.doesNotMatch(fallback, /completeRef\.current\?\.\('fallback'\)/);
+  for (const animationId of CINEMATIC_ANIMATION_IDS) {
+    assert.match(renderer, new RegExp(`case '${animationId}'`), `${animationId} has no procedural renderer`);
+  }
 });
