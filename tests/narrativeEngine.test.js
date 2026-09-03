@@ -153,6 +153,13 @@ test('first turn creates a coherent public case opening without leaking internal
   assert.deepEqual(sections.story, context);
   assert.equal(sections.observation, observation);
   assert.equal(sections.observation, `${sections.storyBlock}\n\n${sections.scanBlock}`);
+  assert.equal(sections.observationTerminalText, `◈ 回合 1 — 观察阶段\n${sections.observation}`);
+  assert.match(sections.observationTerminalText, /系统扫描 · 回合 1/);
+  assert.match(sections.observationTerminalText, /地点.*数据中心 · 案发现场/s);
+  assert.match(sections.observationTerminalText, /接触人.*Mei Lin/s);
+  assert.match(sections.observationTerminalText, /证据.*0\/9 已保全/s);
+  assert.match(sections.observationTerminalText, /混乱.*HP.*AP/s);
+  assert.match(sections.observationTerminalText, /声望.*100点/s);
   assert.equal(context.zoneName, '数据中心 · 案发现场');
   assert.match(observation, /第一幕.*封锁现场.*霓虹血迹/s);
   assert.match(observation, /现场初勘/);

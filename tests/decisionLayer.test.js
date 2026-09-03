@@ -31,8 +31,9 @@ test('decision workspace keeps the complete story above all controls', () => {
   assert.match(styles, /\.td-decision-workspace\s*\{[^}]*display:\s*flex;[^}]*width:\s*min\(980px,\s*100%\);[^}]*flex-direction:\s*column;/);
   assert.match(styles, /\.td-decision-story-column\s*\{[^}]*position:\s*static;[^}]*width:\s*100%;[^}]*max-height:\s*none;[^}]*overflow:\s*visible;/);
   assert.match(styles, /\.td-decision-controls\s*\{[^}]*width:\s*100%;[^}]*flex-direction:\s*column;/);
-  assert.match(terminal, /transcript:\s*observation/);
-  assert.match(storyBriefing, /story\.transcript[\s\S]*td-story-transcript[\s\S]*【剧情内容】[\s\S]*\{transcript\}/);
+  assert.match(terminal, /transcript:\s*observationTerminalText/);
+  assert.match(storyBriefing, /story\.transcript[\s\S]*【剧情内容】[\s\S]*td-story-transcript[\s\S]*\{transcript\}/);
+  assert.doesNotMatch(storyBriefing, /SceneIllustration/);
   assert.match(styles, /\.td-story-transcript > p\s*\{[\s\S]*overflow-wrap:\s*anywhere;[\s\S]*white-space:\s*pre-wrap;/);
 });
 
@@ -50,8 +51,9 @@ test('investigation loop streams the complete observation then thought before op
   assert.ok(prefetch > 0 && prefetch < observationStream);
   assert.ok(observationStream < thoughtStream);
   assert.ok(thoughtStream < openDecision);
-  assert.match(terminal, /const observationHeader = `◈ \$\{t\.turnLabel\}[\s\S]*const observationTerminalText = `\$\{observationHeader\}\\n\$\{observation\}`/);
+  assert.match(terminal, /observationTerminalText,\s*\} = generateObservationSections/);
   assert.match(terminal, /streamTerminalText\(\{\s*text:\s*observationTerminalText/);
+  assert.match(terminal, /text:\s*observationTerminalText,\s*intervalMs:\s*18,\s*instant:\s*false/);
   assert.match(terminal, /addLine\(observationTerminalText,\s*'observe'\)/);
   assert.doesNotMatch(terminal, /addLine\(`◈ \$\{t\.turnLabel\}.*observationPhase.*'phase'\)/);
   assert.match(terminal, /story:\s*publicStory[\s\S]*setDecisionStory\(\{[\s\S]*\.\.\.publicStory/);

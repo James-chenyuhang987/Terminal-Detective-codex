@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { streamTerminalText } from '../src/game/terminalTextStream.js';
+import { splitTerminalText, streamTerminalText } from '../src/game/terminalTextStream.js';
 
 function createTimerApi() {
   let callback = null;
@@ -30,7 +30,7 @@ test('terminal text streams one visible Unicode character at a time in order', a
   let started = '';
   let done = '';
   const resultPromise = streamTerminalText({
-    text: '案A🔍',
+    text: '案A👩‍💼',
     intervalMs: 1,
     timerApi,
     onStart: text => { started = text; },
@@ -42,11 +42,15 @@ test('terminal text streams one visible Unicode character at a time in order', a
   timerApi.tick();
   timerApi.tick();
 
-  assert.equal(await resultPromise, '案A🔍');
-  assert.equal(started, '案A🔍');
-  assert.deepEqual(chunks, ['案', 'A', '🔍']);
-  assert.equal(done, '案A🔍');
+  assert.equal(await resultPromise, '案A👩‍💼');
+  assert.equal(started, '案A👩‍💼');
+  assert.deepEqual(chunks, ['案', 'A', '👩‍💼']);
+  assert.equal(done, '案A👩‍💼');
   assert.equal(timerApi.cleared, 1);
+});
+
+test('terminal text keeps joined emoji and combining marks intact', () => {
+  assert.deepEqual(splitTerminalText('👩‍💼e\u0301🔬'), ['👩‍💼', 'e\u0301', '🔬']);
 });
 
 test('terminal text completes immediately when motion is reduced', async () => {

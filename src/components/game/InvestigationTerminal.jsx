@@ -424,6 +424,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       const {
         story: publicStory,
         observation,
+        observationTerminalText,
       } = generateObservationSections(gs, caseData, runLang);
       const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
       const optionPacksPromise = getDecisionOptionPacks({
@@ -438,13 +439,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       );
 
       addLine('\n' + '═'.repeat(50), 'divider');
-      const observationHeader = `◈ ${t.turnLabel} ${gs.turn_count + 1} — ${t.observationPhase}`;
-      const observationTerminalText = `${observationHeader}\n${observation}`;
       setStreamingTerminal({ type: 'observe', text: '', fullText: observationTerminalText });
       await streamTerminalText({
         text: observationTerminalText,
-        intervalMs: 16,
-        instant: reduceMotion,
+        intervalMs: 18,
+        instant: false,
         signal: ctrl.signal,
         onChunk: char => {
           setStreamingTerminal(current => current?.type === 'observe'
@@ -523,7 +522,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           contacts: publicStory.npcs.length,
           evidence: `${publicStory.clueCount}/${publicStory.clueTotal}`,
           thought: fullThought,
-          transcript: observation,
+          transcript: observationTerminalText,
           language: runLang,
         });
         if (settings.cinematicsEnabled !== false) {
