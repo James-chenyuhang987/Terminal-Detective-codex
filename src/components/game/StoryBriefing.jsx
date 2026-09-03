@@ -45,7 +45,7 @@ export default function StoryBriefing({ story, headingId = 'td-decision-story-ti
 
         {transcript ? (
           <section className="td-story-transcript" aria-label={zh ? '本回合完整剧情' : 'Complete turn narrative'}>
-            <small>{zh ? '本回合完整剧情' : 'COMPLETE TURN NARRATIVE'}</small>
+            <small>{zh ? '【剧情内容】' : 'COMPLETE STORY'}</small>
             <p>{transcript}</p>
           </section>
         ) : (

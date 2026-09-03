@@ -1268,16 +1268,17 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
             doctrine: commandPlan.doctrine_id,
           } : null}
           onComplete={async () => {
-            setShowSequence(false);
             try {
               const result = await onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout, activeSupport?.id, targetCase?.case_id));
               if (result?.error) {
+                setShowSequence(false);
                 const message = result.error === 'insufficient_energy'
                   ? (lang === 'zh' ? `体力不足，需要 ${result.cost} 点体力` : `Not enough energy. ${result.cost} required.`)
                   : (lang === 'zh' ? '案件启动失败，请重试' : 'Unable to start case. Please retry.');
                 showNotice(`⚠ ${message}`, 2800, 'error');
               }
             } catch {
+              setShowSequence(false);
               showNotice(lang === 'zh' ? '⚠ 案件启动失败，请检查网络' : '⚠ CASE START FAILED. CHECK YOUR CONNECTION.', 2800, 'error');
             }
           }}

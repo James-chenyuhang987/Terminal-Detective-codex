@@ -25,19 +25,20 @@ test('mobile confirmation controls remain in normal document flow', () => {
   assert.doesNotMatch(styles, /\.td-decision-order-row \{ position: sticky;/);
 });
 
-test('decision workspace keeps the complete story left of all controls on desktop', () => {
+test('decision workspace keeps the complete story above all controls', () => {
   assert.match(component, /td-decision-workspace/);
   assert.match(component, /td-decision-story-column[\s\S]*<StoryBriefing[\s\S]*td-decision-controls[\s\S]*td-decision-cards/);
-  assert.match(styles, /\.td-decision-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(300px,\s*400px\)\s*minmax\(0,\s*980px\)/);
-  assert.match(styles, /\.td-decision-story-column\s*\{[\s\S]*position:\s*sticky;[\s\S]*overflow-y:\s*auto;/);
+  assert.match(styles, /\.td-decision-workspace\s*\{[^}]*display:\s*flex;[^}]*width:\s*min\(980px,\s*100%\);[^}]*flex-direction:\s*column;/);
+  assert.match(styles, /\.td-decision-story-column\s*\{[^}]*position:\s*static;[^}]*width:\s*100%;[^}]*max-height:\s*none;[^}]*overflow:\s*visible;/);
+  assert.match(styles, /\.td-decision-controls\s*\{[^}]*width:\s*100%;[^}]*flex-direction:\s*column;/);
   assert.match(terminal, /transcript:\s*observation/);
-  assert.match(storyBriefing, /story\.transcript[\s\S]*td-story-transcript[\s\S]*\{transcript\}/);
+  assert.match(storyBriefing, /story\.transcript[\s\S]*td-story-transcript[\s\S]*【剧情内容】[\s\S]*\{transcript\}/);
   assert.match(styles, /\.td-story-transcript > p\s*\{[\s\S]*overflow-wrap:\s*anywhere;[\s\S]*white-space:\s*pre-wrap;/);
 });
 
-test('narrow decision workspace stacks story and controls without nested scrolling', () => {
-  assert.match(styles, /@media \(max-width: 900px\)\s*\{[\s\S]*\.td-decision-workspace[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
-  assert.match(styles, /@media \(max-width: 900px\)\s*\{[\s\S]*\.td-decision-story-column\s*\{[^}]*position:\s*static;[^}]*overflow:\s*visible;/);
+test('decision story uses the outer dialog scroll instead of a nested story scrollbar', () => {
+  assert.match(styles, /\.td-decision-overlay\s*\{[\s\S]*overflow-y:\s*auto;/);
+  assert.doesNotMatch(styles, /\.td-decision-story-column\s*\{[^}]*overflow-y:\s*auto;/);
 });
 
 test('investigation loop streams the complete observation then thought before opening the decision desk', () => {
