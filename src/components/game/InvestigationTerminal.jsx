@@ -423,8 +423,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       setReactState(ReAct_Enum.OBSERVE);
       const {
         story: publicStory,
-        storyBlock,
-        scanBlock,
         observation,
       } = generateObservationSections(gs, caseData, runLang);
       const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
@@ -440,10 +438,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       );
 
       addLine('\n' + '═'.repeat(50), 'divider');
-      addLine(`◈ ${t.turnLabel} ${gs.turn_count + 1} — ${t.observationPhase}`, 'phase');
-      setStreamingTerminal({ type: 'observe', text: '', fullText: storyBlock });
+      const observationHeader = `◈ ${t.turnLabel} ${gs.turn_count + 1} — ${t.observationPhase}`;
+      const observationTerminalText = `${observationHeader}\n${observation}`;
+      setStreamingTerminal({ type: 'observe', text: '', fullText: observationTerminalText });
       await streamTerminalText({
-        text: storyBlock,
+        text: observationTerminalText,
         intervalMs: 16,
         instant: reduceMotion,
         signal: ctrl.signal,
@@ -455,9 +454,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         },
       });
       if (isCancelled()) return;
-      addLine(storyBlock, 'observe');
+      addLine(observationTerminalText, 'observe');
       setStreamingTerminal(null);
-      addLine(scanBlock, 'observe');
       if (!reduceMotion) await wait(300);
       if (isCancelled()) return;
 
@@ -525,6 +523,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           contacts: publicStory.npcs.length,
           evidence: `${publicStory.clueCount}/${publicStory.clueTotal}`,
           thought: fullThought,
+          transcript: observation,
           language: runLang,
         });
         if (settings.cinematicsEnabled !== false) {

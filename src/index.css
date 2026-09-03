@@ -1106,6 +1106,30 @@ button, input, textarea, select { box-sizing: border-box; }
   animation: story-in .5s cubic-bezier(.22, 1, .36, 1) both;
 }
 
+.td-story-transcript {
+  display: grid;
+  gap: 7px;
+  margin-top: 2px;
+  padding: 12px 13px;
+  border: 1px solid rgba(0, 229, 255, .13);
+  border-radius: 10px;
+  background: rgba(0, 8, 17, .62);
+}
+
+.td-story-transcript > small {
+  color: #66eaf7;
+  font: 700 .52rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .16em;
+}
+
+.td-story-transcript > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #d8edf2;
+  font: .68rem/1.75 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}
+
 @keyframes story-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
 
 .td-decision-assistant-tip { display: flex; align-items: center; gap: 10px; width: min(980px, 100%); padding: 9px 12px; border: 1px solid rgba(242, 201, 111, .34); border-radius: 10px; background: linear-gradient(90deg, rgba(78, 57, 19, .42), rgba(3, 10, 18, .88)); color: #f4d99f; box-shadow: inset 0 1px rgba(255, 255, 255, .035); }
@@ -1155,7 +1179,7 @@ button, input, textarea, select { box-sizing: border-box; }
 
 .td-decision-workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 980px);
+  grid-template-columns: minmax(300px, 400px) minmax(0, 980px);
   align-items: start;
   gap: 18px;
   width: min(1420px, 100%);
@@ -1390,7 +1414,7 @@ button, input, textarea, select { box-sizing: border-box; }
 @keyframes td-cinematic-progress { to { width: 100%; } }
 @keyframes td-cinematic-loader { to { border-color: var(--cine-accent); box-shadow: 0 25px 90px rgba(0, 0, 0, .7), 0 0 54px color-mix(in srgb, var(--cine-accent) 29%, transparent); } }
 
-@media (max-width: 1180px) {
+@media (max-width: 900px) {
   .td-decision-workspace, .td-decision-workspace.is-controls-only { grid-template-columns: minmax(0, 1fr); width: min(980px, 100%); }
   .td-decision-story-column { position: static; max-height: none; overflow: visible; scrollbar-gutter: auto; }
 }
