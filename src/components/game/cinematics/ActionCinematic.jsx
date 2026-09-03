@@ -156,12 +156,17 @@ function ActionGlyph({ event, phase, quality }) {
       sweep: 0.42, orbit: 0.72, assemble: 0.24, stream: 0.16,
       impact: 0.12, scan: 0.3, pulse: 0.2, pressure: -0.14,
       split: 0.1, reveal: 0.24, chase: 0.08, exchange: -0.22,
+      ripple: 0.34, focus: -0.38, bond: 0.48, cascade: 0.18,
+      shatter: -0.32, rewind: -0.46, wave: 0.26, compress: -0.2,
+      parallax: 0.14, thread: 0.3, evade: -0.1, handshake: 0.4,
     }[event.motionProfile] || 0.2;
     ref.current.rotation.y = offset + elapsed * speed;
     ref.current.rotation.z = Math.sin(elapsed * (animationId === 'pressure-focus' ? 1.8 : 0.75) + offset) * 0.045;
-    ref.current.position.y = 0.55 + Math.sin(elapsed * (animationId === 'lane-chase' ? 1.4 : 0.65) + offset) * 0.12;
+    const phaseLift = phase === 'establish' ? -0.18 : phase === 'result' ? 0.12 : 0;
+    ref.current.position.y = 0.55 + phaseLift + Math.sin(elapsed * (animationId === 'lane-chase' ? 1.4 : 0.65) + offset) * 0.12;
     const pulse = 1 + Math.sin(elapsed * (animationId === 'dialogue-pulse' ? 2.2 : 1.1) + offset) * (phase === 'action' ? 0.045 : 0.02);
-    ref.current.scale.setScalar(pulse);
+    const phaseScale = phase === 'establish' ? 0.82 : phase === 'result' ? 1.08 : 1;
+    ref.current.scale.setScalar(pulse * phaseScale);
   });
 
   let glyph;
@@ -179,6 +184,20 @@ function ActionGlyph({ event, phase, quality }) {
         </>
       );
       break;
+    case 'trace-grid':
+      glyph = (
+        <>
+          {[-1.2, -0.6, 0, 0.6, 1.2].map((offsetValue, index) => (
+            <React.Fragment key={offsetValue}>
+              <mesh position={[offsetValue, 0, 0]}><boxGeometry args={[0.025, 2.7, 0.035]} /><meshBasicMaterial color={accent} transparent opacity={0.32 + index * 0.08} /></mesh>
+              <mesh position={[0, offsetValue * 0.7, 0]}><boxGeometry args={[3.1, 0.025, 0.035]} /><meshBasicMaterial color={accent} transparent opacity={0.32 + index * 0.08} /></mesh>
+            </React.Fragment>
+          ))}
+          <mesh rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[0.33, 0.43, 6]} /><meshBasicMaterial color="#f2b84b" side={THREE.DoubleSide} /></mesh>
+          <mesh position={[0.95, -0.52, 0.12]}><sphereGeometry args={[0.12, 10, 10]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.85} /></mesh>
+        </>
+      );
+      break;
     case 'evidence-orbit':
       glyph = (
         <>
@@ -189,6 +208,24 @@ function ActionGlyph({ event, phase, quality }) {
             </mesh>
           ))}
           <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[1.48, 0.018, 6, 64]} /><meshBasicMaterial color={accent} transparent opacity={0.55} /></mesh>
+        </>
+      );
+      break;
+    case 'microscope-lattice':
+      glyph = (
+        <>
+          <mesh><dodecahedronGeometry args={[0.55, 0]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.48} wireframe /></mesh>
+          {Array.from({ length: quality === 'high' ? 10 : 6 }, (_, index) => {
+            const angle = (index / (quality === 'high' ? 10 : 6)) * Math.PI * 2;
+            return (
+              <mesh key={index} position={[Math.cos(angle) * 1.35, Math.sin(angle * 2) * 0.48, Math.sin(angle) * 1.35]}>
+                <sphereGeometry args={[index % 3 === 0 ? 0.13 : 0.08, 8, 8]} />
+                <meshBasicMaterial color={index % 3 === 0 ? '#f2b84b' : accent} />
+              </mesh>
+            );
+          })}
+          <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[1.42, 0.022, 6, 64]} /><meshBasicMaterial color={accent} transparent opacity={0.52} /></mesh>
+          <mesh rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[1.08, 0.018, 6, 48]} /><meshBasicMaterial color={accent} transparent opacity={0.42} /></mesh>
         </>
       );
       break;
@@ -208,6 +245,19 @@ function ActionGlyph({ event, phase, quality }) {
         </>
       );
       break;
+    case 'molecular-match':
+      glyph = (
+        <>
+          {[-1.05, -0.52, 0, 0.52, 1.05].map((x, index) => (
+            <group key={x} position={[x, Math.sin(index * 1.8) * 0.5, 0]}>
+              <mesh><icosahedronGeometry args={[index === 2 ? 0.24 : 0.17, 1]} /><meshStandardMaterial color={index % 2 ? '#a78bfa' : accent} emissive={accent} emissiveIntensity={0.45} /></mesh>
+              {index < 4 && <mesh position={[0.26, -Math.sin(index * 1.8) * 0.16, 0]} rotation={[0, 0, Math.sin(index * 1.8) * 0.35]}><boxGeometry args={[0.56, 0.045, 0.045]} /><meshBasicMaterial color={accent} /></mesh>}
+            </group>
+          ))}
+          <mesh rotation={[Math.PI / 2, 0, 0]}><ringGeometry args={[1.62, 1.68, 6]} /><meshBasicMaterial color={accent} transparent opacity={0.5} side={THREE.DoubleSide} /></mesh>
+        </>
+      );
+      break;
     case 'data-tunnel':
       glyph = Array.from({ length: quality === 'high' ? 10 : 6 }, (_, index) => (
         <mesh key={index} position={[Math.sin(index * 1.7) * 0.65, Math.cos(index * 1.3) * 0.45, -index * 0.52]} rotation={[0.5, index * 0.45, 0]}>
@@ -215,6 +265,23 @@ function ActionGlyph({ event, phase, quality }) {
           <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.5} wireframe />
         </mesh>
       ));
+      break;
+    case 'archive-cascade':
+      glyph = (
+        <>
+          {Array.from({ length: quality === 'high' ? 12 : 7 }, (_, index) => (
+            <mesh
+              key={index}
+              position={[(index % 3 - 1) * 0.78, 1.15 - Math.floor(index / 3) * 0.55, -index * 0.13]}
+              rotation={[0.08, (index % 3 - 1) * 0.16, 0]}
+            >
+              <boxGeometry args={[0.62, 0.34, 0.06]} />
+              <meshStandardMaterial color={index % 4 === 0 ? '#f2b84b' : accent} emissive={accent} emissiveIntensity={0.24} transparent opacity={0.72} wireframe />
+            </mesh>
+          ))}
+          <mesh position={[0, -1.2, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[1.25, 0.035, 8, 48]} /><meshBasicMaterial color={accent} transparent opacity={0.62} /></mesh>
+        </>
+      );
       break;
     case 'firewall-breach':
       glyph = (
@@ -230,6 +297,23 @@ function ActionGlyph({ event, phase, quality }) {
         </>
       );
       break;
+    case 'cipher-shatter':
+      glyph = (
+        <>
+          {Array.from({ length: quality === 'high' ? 11 : 7 }, (_, index) => {
+            const angle = (index / (quality === 'high' ? 11 : 7)) * Math.PI * 2;
+            const radius = 0.5 + (index % 3) * 0.42;
+            return (
+              <mesh key={index} position={[Math.cos(angle) * radius, Math.sin(angle) * radius, (index % 2) * 0.35]} rotation={[angle, angle * 0.6, angle * 0.3]}>
+                <tetrahedronGeometry args={[0.24 + (index % 2) * 0.08, 0]} />
+                <meshStandardMaterial color={index % 4 === 0 ? '#ff3860' : accent} emissive={accent} emissiveIntensity={0.55} wireframe />
+              </mesh>
+            );
+          })}
+          <mesh><octahedronGeometry args={[0.42, 0]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={1.1} /></mesh>
+        </>
+      );
+      break;
     case 'camera-matrix':
       glyph = Array.from({ length: 6 }, (_, index) => (
         <mesh key={index} position={[(index % 3 - 1) * 1.05, (Math.floor(index / 3) - 0.5) * 0.85, 0]} rotation={[0, (index % 3 - 1) * -0.16, 0]}>
@@ -237,6 +321,19 @@ function ActionGlyph({ event, phase, quality }) {
           <meshStandardMaterial color={index === 4 ? '#ff3860' : accent} emissive={accent} emissiveIntensity={0.22} wireframe />
         </mesh>
       ));
+      break;
+    case 'frame-rewind':
+      glyph = (
+        <>
+          {[0, 1, 2, 3].map(index => (
+            <mesh key={index} position={[(index - 1.5) * 0.46, (index - 1.5) * 0.18, -index * 0.42]} rotation={[0, (index - 1.5) * -0.12, 0]}>
+              <boxGeometry args={[1.42, 0.9, 0.055]} />
+              <meshStandardMaterial color={index === 2 ? '#f2b84b' : accent} emissive={accent} emissiveIntensity={0.25} transparent opacity={0.7} wireframe />
+            </mesh>
+          ))}
+          {[-0.26, 0.26].map(x => <mesh key={x} position={[x, -0.82, 0.4]} rotation={[0, 0, Math.PI / 2]}><coneGeometry args={[0.18, 0.42, 3]} /><meshBasicMaterial color={accent} /></mesh>)}
+        </>
+      );
       break;
     case 'dialogue-pulse':
       glyph = [-0.82, 0.82].map((x, index) => (
@@ -246,11 +343,41 @@ function ActionGlyph({ event, phase, quality }) {
         </group>
       ));
       break;
+    case 'testimony-wave':
+      glyph = (
+        <>
+          {Array.from({ length: quality === 'high' ? 13 : 7 }, (_, index) => {
+            const middle = quality === 'high' ? 6 : 3;
+            const height = 0.28 + Math.abs(Math.sin(index * 1.17)) * 1.25;
+            return (
+              <mesh key={index} position={[(index - middle) * 0.23, 0, 0]}>
+                <boxGeometry args={[0.075, height, 0.075]} />
+                <meshStandardMaterial color={index === middle ? '#f2b84b' : accent} emissive={accent} emissiveIntensity={0.38} transparent opacity={0.76} />
+              </mesh>
+            );
+          })}
+          {[-1, 1].map(side => <mesh key={side} position={[side * 1.75, 0, 0]}><sphereGeometry args={[0.3, 12, 10]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.3} wireframe /></mesh>)}
+        </>
+      );
+      break;
     case 'pressure-focus':
       glyph = (
         <>
           {[-1.35, -0.78, 0.78, 1.35].map(x => <mesh key={x} position={[x, 0, 0]}><boxGeometry args={[0.08, 2.4, 0.08]} /><meshBasicMaterial color="#ff3860" transparent opacity={0.7} /></mesh>)}
           <mesh rotation={[0, 0, Math.PI]}><coneGeometry args={[0.62, 1.5, 4]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.42} wireframe /></mesh>
+        </>
+      );
+      break;
+    case 'contradiction-box':
+      glyph = (
+        <>
+          {[0.62, 1.05, 1.48].map((size, index) => (
+            <mesh key={size} rotation={[index * 0.18, index * -0.23, index * 0.12]}>
+              <boxGeometry args={[size * 1.5, size, size * 0.72]} />
+              <meshStandardMaterial color={index === 1 ? '#ff3860' : accent} emissive={accent} emissiveIntensity={0.25 + index * 0.12} transparent opacity={0.72} wireframe />
+            </mesh>
+          ))}
+          <mesh><sphereGeometry args={[0.18, 10, 10]} /><meshBasicMaterial color="#f2b84b" /></mesh>
         </>
       );
       break;
@@ -262,12 +389,39 @@ function ActionGlyph({ event, phase, quality }) {
         </group>
       ));
       break;
+    case 'clock-parallax':
+      glyph = (
+        <>
+          {[-0.8, 0, 0.8].map((x, index) => (
+            <group key={x} position={[x, (index - 1) * 0.2, -index * 0.18]} rotation={[0, (index - 1) * 0.22, 0]}>
+              <mesh><torusGeometry args={[0.62, 0.035, 8, 48]} /><meshBasicMaterial color={index === 1 ? '#ff3860' : accent} transparent opacity={0.82} /></mesh>
+              <mesh rotation={[0, 0, index * 0.65]}><boxGeometry args={[0.045, 0.88, 0.035]} /><meshBasicMaterial color={accent} /></mesh>
+              <mesh rotation={[0, 0, -0.9 + index * 0.28]}><boxGeometry args={[0.035, 0.58, 0.04]} /><meshBasicMaterial color="#f2b84b" /></mesh>
+            </group>
+          ))}
+        </>
+      );
+      break;
     case 'evidence-impact':
       glyph = (
         <>
           <mesh rotation={[0.2, 0.45, 0]}><octahedronGeometry args={[0.9, 0]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} wireframe /></mesh>
           <mesh position={[0, 1.15, 0]}><cylinderGeometry args={[0.035, 0.11, 2.3, 8]} /><meshBasicMaterial color={accent} transparent opacity={0.8} /></mesh>
           {[1.05, 1.6].map(radius => <mesh key={radius} rotation={[Math.PI / 2, 0, 0]} position={[0, -0.56, 0]}><torusGeometry args={[radius, 0.025, 6, 48]} /><meshBasicMaterial color={accent} transparent opacity={0.62} /></mesh>)}
+        </>
+      );
+      break;
+    case 'case-thread':
+      glyph = (
+        <>
+          {[
+            [-1.2, 0.72], [-0.52, -0.58], [0.22, 0.48], [1.15, -0.34], [1.42, 0.78],
+          ].map(([x, y], index) => (
+            <group key={index}>
+              <mesh position={[x, y, 0]}><sphereGeometry args={[index === 2 ? 0.18 : 0.12, 10, 10]} /><meshStandardMaterial color={index === 2 ? '#f2b84b' : accent} emissive={accent} emissiveIntensity={0.72} /></mesh>
+              {index < 4 && <mesh position={[(x + [-0.52, 0.22, 1.15, 1.42][index]) / 2, (y + [-0.58, 0.48, -0.34, 0.78][index]) / 2, -0.02]} rotation={[0, 0, Math.atan2([-0.58, 0.48, -0.34, 0.78][index] - y, [-0.52, 0.22, 1.15, 1.42][index] - x)]}><boxGeometry args={[Math.hypot([-0.52, 0.22, 1.15, 1.42][index] - x, [-0.58, 0.48, -0.34, 0.78][index] - y), 0.025, 0.025]} /><meshBasicMaterial color={accent} transparent opacity={0.7} /></mesh>}
+            </group>
+          ))}
         </>
       );
       break;
@@ -280,13 +434,43 @@ function ActionGlyph({ event, phase, quality }) {
         </group>
       );
       break;
-    default:
+    case 'shadow-crossing':
+      glyph = (
+        <>
+          {[-1, 1].map((side, index) => (
+            <group key={side} position={[side * 0.72, index ? 0.38 : -0.38, index ? -0.8 : 0.45]} rotation={[0, side * 0.22, 0]}>
+              <mesh><boxGeometry args={[0.38, 0.2, 0.72]} /><meshStandardMaterial color={index ? '#ff3860' : accent} emissive={index ? '#ff3860' : accent} emissiveIntensity={0.45} /></mesh>
+              {[0.55, 1.05, 1.55].map(distance => <mesh key={distance} position={[0, 0, distance * side]}><boxGeometry args={[0.06, 0.035, 0.38]} /><meshBasicMaterial color={index ? '#ff3860' : accent} transparent opacity={0.62 - distance * 0.18} /></mesh>)}
+            </group>
+          ))}
+          <mesh rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[1.52, 1.57, 4]} /><meshBasicMaterial color={accent} transparent opacity={0.48} side={THREE.DoubleSide} /></mesh>
+        </>
+      );
+      break;
+    case 'dead-drop':
       glyph = (
         <>
           {[0.95, 1.45].map(radius => <mesh key={radius} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[radius, 0.03, 8, 48]} /><meshBasicMaterial color={accent} transparent opacity={0.65} /></mesh>)}
           <mesh rotation={[0.25, 0.3, -0.18]}><boxGeometry args={[1.3, 0.72, 0.8]} /><meshStandardMaterial color="#f2b84b" emissive="#f2b84b" emissiveIntensity={0.3} wireframe /></mesh>
         </>
       );
+      break;
+    case 'signal-handshake':
+      glyph = (
+        <>
+          {[-1.2, 1.2].map((x, index) => (
+            <group key={x} position={[x, 0, 0]}>
+              <mesh><dodecahedronGeometry args={[0.42, 0]} /><meshStandardMaterial color={index ? '#f2b84b' : accent} emissive={accent} emissiveIntensity={0.42} wireframe /></mesh>
+              {[0.68, 0.92].map(radius => <mesh key={radius} rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[radius, 0.018, 6, 36]} /><meshBasicMaterial color={index ? '#f2b84b' : accent} transparent opacity={0.52} /></mesh>)}
+            </group>
+          ))}
+          {[-0.65, 0, 0.65].map(x => <mesh key={x} position={[x, 0, 0]} rotation={[0, 0, Math.PI / 2]}><octahedronGeometry args={[0.16, 0]} /><meshBasicMaterial color={accent} /></mesh>)}
+          <mesh><boxGeometry args={[1.45, 0.035, 0.035]} /><meshBasicMaterial color={accent} transparent opacity={0.72} /></mesh>
+        </>
+      );
+      break;
+    default:
+      glyph = <mesh><icosahedronGeometry args={[0.8, 1]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} wireframe /></mesh>;
   }
   return <group ref={ref}>{glyph}</group>;
 }
@@ -356,17 +540,56 @@ function ActionSetPiece({ event, phase, quality }) {
 
 const CAMERA_POSITIONS = Object.freeze({
   survey: [0, 2.25, 8.1],
+  grid: [-0.35, 2.55, 7.6],
   macro: [0.2, 1.8, 6.5],
+  microscope: [0.65, 2.05, 6.25],
   laboratory: [0, 2.7, 7.4],
+  molecular: [-0.45, 2.35, 6.8],
   tunnel: [0, 1.7, 7.1],
+  archive: [0.6, 2.2, 7.35],
   breach: [0.6, 2, 6.9],
+  cipher: [-0.55, 1.85, 6.45],
   wall: [0, 2.05, 7.6],
+  rewind: [0.75, 2.4, 7.25],
   portrait: [0, 2.2, 7],
+  witness: [-0.4, 2.05, 6.75],
   close: [0, 1.9, 6.3],
+  box: [0.45, 1.75, 6.05],
   timeline: [0, 2.6, 7.7],
+  parallax: [-0.75, 2.45, 7.25],
   table: [0, 2.8, 7],
+  thread: [0.55, 2.65, 6.85],
   pursuit: [1, 2.4, 7.8],
+  shadow: [-1, 2.15, 7.5],
   covert: [-0.7, 2, 6.9],
+  handshake: [0.7, 2.15, 6.65],
+});
+
+const CAMERA_MOTION = Object.freeze({
+  sweep: { frequency: 0.28, x: 0.5, y: 0.1, z: 0.03 },
+  ripple: { frequency: 0.48, x: 0.36, y: 0.18, z: 0.08 },
+  orbit: { frequency: 0.46, x: 0.52, y: 0.13, z: 0.06 },
+  focus: { frequency: 0.3, x: 0.22, y: 0.08, z: 0.16 },
+  assemble: { frequency: 0.25, x: 0.3, y: 0.14, z: 0.05 },
+  bond: { frequency: 0.55, x: 0.42, y: 0.2, z: 0.08 },
+  stream: { frequency: 0.34, x: 0.28, y: 0.1, z: 0.18 },
+  cascade: { frequency: 0.4, x: 0.4, y: 0.22, z: 0.1 },
+  impact: { frequency: 0.2, x: 0.34, y: 0.08, z: 0.14 },
+  shatter: { frequency: 0.62, x: 0.58, y: 0.16, z: 0.12 },
+  scan: { frequency: 0.3, x: 0.46, y: 0.08, z: 0.04 },
+  rewind: { frequency: -0.38, x: 0.56, y: 0.14, z: 0.08 },
+  pulse: { frequency: 0.24, x: 0.3, y: 0.12, z: 0.05 },
+  wave: { frequency: 0.52, x: 0.42, y: 0.18, z: 0.05 },
+  pressure: { frequency: 0.18, x: 0.2, y: 0.06, z: 0.15 },
+  compress: { frequency: 0.36, x: 0.24, y: 0.09, z: 0.2 },
+  split: { frequency: 0.26, x: 0.38, y: 0.16, z: 0.04 },
+  parallax: { frequency: 0.44, x: 0.7, y: 0.13, z: 0.07 },
+  reveal: { frequency: 0.28, x: 0.32, y: 0.12, z: 0.1 },
+  thread: { frequency: 0.4, x: 0.5, y: 0.18, z: 0.06 },
+  chase: { frequency: 0.72, x: 0.78, y: 0.12, z: 0.1 },
+  evade: { frequency: 0.6, x: 0.9, y: 0.16, z: 0.13 },
+  exchange: { frequency: 0.22, x: 0.36, y: 0.09, z: 0.06 },
+  handshake: { frequency: 0.5, x: 0.44, y: 0.14, z: 0.1 },
 });
 
 /** @param {{ event: Record<string, any>, phase: string, quality: string }} props */
@@ -377,13 +600,26 @@ function Scene({ event, phase, quality }) {
   useFrame(({ camera, clock }) => {
     const elapsed = clock.elapsedTime;
     const base = CAMERA_POSITIONS[event.cameraProfile] || CAMERA_POSITIONS.survey;
+    const motion = CAMERA_MOTION[event.motionProfile] || CAMERA_MOTION.sweep;
     const phaseDistance = phase === 'establish' ? 1 : phase === 'result' ? -0.35 : 0;
-    const sweep = event.motionProfile === 'chase' ? 0.72 : event.motionProfile === 'orbit' ? 0.46 : 0.28;
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, base[2] + phaseDistance, 0.035);
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, base[0] + Math.sin(elapsed * sweep) * (phase === 'result' ? 0.2 : 0.46), 0.04);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, base[1] + Math.sin(elapsed * 0.4) * 0.1, 0.04);
+    const phaseMotion = phase === 'result' ? 0.48 : phase === 'establish' ? 0.72 : 1;
+    camera.position.z = THREE.MathUtils.lerp(
+      camera.position.z,
+      base[2] + phaseDistance + Math.cos(elapsed * Math.abs(motion.frequency || 0.2)) * motion.z,
+      0.035,
+    );
+    camera.position.x = THREE.MathUtils.lerp(
+      camera.position.x,
+      base[0] + Math.sin(elapsed * motion.frequency) * motion.x * phaseMotion,
+      0.04,
+    );
+    camera.position.y = THREE.MathUtils.lerp(
+      camera.position.y,
+      base[1] + Math.cos(elapsed * Math.abs(motion.frequency + 0.17)) * motion.y,
+      0.04,
+    );
     camera.lookAt(0, 0.75, -0.25);
-    if (root.current) root.current.rotation.y = Math.sin(elapsed * 0.22) * 0.045;
+    if (root.current) root.current.rotation.y = Math.sin(elapsed * motion.frequency * 0.75) * 0.055;
   });
 
   return (
@@ -405,7 +641,7 @@ function Scene({ event, phase, quality }) {
         <HoloAgent color={AGENT_COLORS[event.assistAgentId] || '#9de9ff'} position={[-3.55, 0, -1.25]} scale={0.68} />
       )}
       <ActionSetPiece event={event} phase={phase} quality={quality} />
-      {['data-tunnel', 'firewall-breach', 'camera-matrix'].includes(event.animationId) && (
+      {['data-tunnel', 'archive-cascade', 'firewall-breach', 'cipher-shatter', 'camera-matrix', 'frame-rewind'].includes(event.animationId) && (
         <DataColumns accent={accent} count={quality === 'high' ? 20 : 8} />
       )}
       <SeededParticles event={event} quality={quality} />

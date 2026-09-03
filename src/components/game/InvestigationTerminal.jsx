@@ -3,9 +3,9 @@ import { ReAct_Enum, Legal_Actions_List, Phase_Color_Map, Case_Data_Lvl_01, loca
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError';
 import MiniMap from '@/components/game/MiniMap';
-import { createInitialGameState, generateObservation, applySettlementResult, pushCheckpoint, checkConflictClues } from '@/game/gameState';
+import { createInitialGameState, generateObservationSections, applySettlementResult, pushCheckpoint, checkConflictClues } from '@/game/gameState';
 import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
-import { streamInvestigationThought, settleAction, linkCheck, setInvestigationLang } from '@/game/investigationEngine';
+import { streamInvestigationThought, streamTerminalText, settleAction, linkCheck, setInvestigationLang } from '@/game/investigationEngine';
 import {
   getDecisionOptionPacks,
   getInterrogationOptionPacks,
@@ -62,7 +62,7 @@ import {
   stepTerminalTurn,
 } from '@/game/turnArchive';
 import { getRejectedReportPenalty } from '@/game/caseEvaluation';
-import { buildPublicCaseContext, stableNarrativeHash } from '@/game/narrativeEngine';
+import { stableNarrativeHash } from '@/game/narrativeEngine';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
@@ -122,7 +122,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [decisionLog, setDecisionLog] = useState([]);
   const [agentPath, setAgentPath] = useState(() => [getInitialZone(caseDataResolved)].filter(Boolean));
   const [zoneFeedback, setZoneFeedback] = useState({});
-  const [thoughtText, setThoughtText] = useState('');
+  const [streamingTerminal, setStreamingTerminal] = useState(null);
   const [synergyEvent, setSynergyEvent] = useState(null);
   const [showGameOver, setShowGameOver] = useState(false);
   const [showCommandConsole, setShowCommandConsole] = useState(false);
@@ -248,7 +248,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
   useLayoutEffect(() => {
     if (isViewingActiveTerminalTurn) scrollToBottom();
-  }, [visibleTerminalLines.length, thoughtText, isProcessing, isViewingActiveTerminalTurn, scrollToBottom]);
+  }, [visibleTerminalLines.length, streamingTerminal?.text, isProcessing, isViewingActiveTerminalTurn, scrollToBottom]);
 
   useLayoutEffect(() => {
     window.cancelAnimationFrame(terminalScrollFrameRef.current);
@@ -401,6 +401,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   // ── Main ReAct Loop ───────────────────────────────────────────────────────
   const runReActCycle = async () => {
     if (isProcessing || abortCtrlRef.current) return;
+    const runLang = lang === 'en' ? 'en' : 'zh';
     const gs = gameStateRef.current;
     if (gs.action_points_left <= 0) {
       addLine(`\n${t.apDepleted}`, 'error');
@@ -420,26 +421,49 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     try {
       // ── Phase 1: OBSERVE ──────────────────────────────────────────────
       setReactState(ReAct_Enum.OBSERVE);
-      const observation = generateObservation(gs, caseData, lang);
-      addLine('\n' + '═'.repeat(50), 'divider');
-      addLine(`◈ ${t.turnLabel} ${gs.turn_count + 1} — ${t.observationPhase}`, 'phase');
-      addLine(observation, 'observe');
-      await wait(800);
-      if (isCancelled()) return;
-
-      // ── Phase 2: THINK ────────────────────────────────────────────────
-      setReactState(ReAct_Enum.THINK);
-      addLine('\n' + t.neuralProcessing, 'phase');
-      setThoughtText('');
-
-      // Deterministic option packs are prefetched while the local tactical
-      // summary is being rendered, so opening the decision desk adds no model wait.
+      const {
+        story: publicStory,
+        storyBlock,
+        scanBlock,
+        observation,
+      } = generateObservationSections(gs, caseData, runLang);
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
       const optionPacksPromise = getDecisionOptionPacks({
         gameState: gs,
         caseData,
         team: activeAgentStrategy?.team || [],
         signal: ctrl.signal,
+        lang: runLang,
+      }).then(
+        value => ({ ok: true, value, error: null }),
+        error => ({ ok: false, value: null, error }),
+      );
+
+      addLine('\n' + '═'.repeat(50), 'divider');
+      addLine(`◈ ${t.turnLabel} ${gs.turn_count + 1} — ${t.observationPhase}`, 'phase');
+      setStreamingTerminal({ type: 'observe', text: '', fullText: storyBlock });
+      await streamTerminalText({
+        text: storyBlock,
+        intervalMs: 16,
+        instant: reduceMotion,
+        signal: ctrl.signal,
+        onChunk: char => {
+          setStreamingTerminal(current => current?.type === 'observe'
+            ? { ...current, text: current.text + char }
+            : current);
+          if (viewedTerminalTurnRef.current === activeTerminalTurnRef.current) scrollToBottom();
+        },
       });
+      if (isCancelled()) return;
+      addLine(storyBlock, 'observe');
+      setStreamingTerminal(null);
+      addLine(scanBlock, 'observe');
+      if (!reduceMotion) await wait(300);
+      if (isCancelled()) return;
+
+      // ── Phase 2: THINK ────────────────────────────────────────────────
+      setReactState(ReAct_Enum.THINK);
+      addLine('\n' + t.neuralProcessing, 'phase');
 
       startStressTimer();
       let fullThought = '';
@@ -449,10 +473,15 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         caseData,
         agentStrategy: activeAgentStrategy,
         observation,
+        lang: runLang,
+        instant: reduceMotion,
         signal: ctrl.signal,
+        onStart: text => setStreamingTerminal({ type: 'thought', text: '', fullText: text }),
         onChunk: (char) => {
           fullThought += char;
-          setThoughtText(prev => prev + char);
+          setStreamingTerminal(current => current?.type === 'thought'
+            ? { ...current, text: current.text + char }
+            : current);
           if (viewedTerminalTurnRef.current === activeTerminalTurnRef.current) scrollToBottom();
         },
         onDone: (text) => { fullThought = text; }
@@ -462,7 +491,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       if (isCancelled()) return;
 
       addLine(fullThought, 'thought');
-      setThoughtText('');
+      setStreamingTerminal(null);
 
       // ── Phase 3: ACT ──────────────────────────────────────────────────
       setReactState(ReAct_Enum.ACT);
@@ -483,10 +512,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       if (isKeyNode) {
         const fallbackTag = 'search_area';
         addLine(`\n${t.keyDecisionNode}`, 'warning');
-        const optionResult = await optionPacksPromise;
+        const optionLoad = await optionPacksPromise;
+        if (!optionLoad.ok) throw optionLoad.error;
+        const optionResult = optionLoad.value;
         if (isCancelled()) return;
         const packs = optionResult?.packs || {};
-        const publicStory = buildPublicCaseContext({ gameState: gs, caseData, lang });
         setDecisionStory({
           ...publicStory,
           zone: publicStory.zoneId,
@@ -495,6 +525,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           contacts: publicStory.npcs.length,
           evidence: `${publicStory.clueCount}/${publicStory.clueTotal}`,
           thought: fullThought,
+          language: runLang,
         });
         if (settings.cinematicsEnabled !== false) {
           const playback = detectCinematicPlayback({
@@ -557,6 +588,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         riskLevel: cardRisk,
         isIllegal: !isLegal,
         signal: ctrl.signal,
+        lang: runLang,
       });
       if (isCancelled()) return;
 
@@ -761,6 +793,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         abortCtrlRef.current = null;
         setIsProcessing(false);
         setReactState(ReAct_Enum.IDLE);
+        setStreamingTerminal(null);
       }
     }
   };
@@ -779,7 +812,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       stopStressTimer();
       setIsProcessing(false);
       setReactState(ReAct_Enum.IDLE);
-      setThoughtText('');
+      setStreamingTerminal(null);
     }
   };
 
@@ -1211,9 +1244,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         <DecisionCards
           packs={decisionCards}
           story={decisionStory}
+          language={decisionStory?.language}
           team={activeAgentStrategy.team}
           commandState={gameState.command_state}
-          onCommandError={() => notifyCommand(lang === 'zh' ? '指挥点不足' : 'INSUFFICIENT COMMAND POINTS', 'error')}
+          onCommandError={() => notifyCommand(decisionStory?.language === 'en' ? 'INSUFFICIENT COMMAND POINTS' : '指挥点不足', 'error')}
           onChoose={(choice) => decisionResolveRef.current?.(choice)}
         />
       )}
@@ -1374,13 +1408,16 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             {visibleTerminalLines.map(line => (
               <TerminalLine key={line.id} line={line} accentColor={accentColor} />
             ))}
-            {isViewingActiveTerminalTurn && thoughtText && (
-              <div className="text-xs leading-relaxed" style={{ color: '#bf5fff', whiteSpace: 'pre-wrap' }}>
-                {thoughtText}
-                <span className="animate-pulse" style={{ color: '#bf5fff' }}>▊</span>
+            {isViewingActiveTerminalTurn && streamingTerminal && (
+              <div className={`td-terminal-stream is-${streamingTerminal.type}`}>
+                <span aria-hidden="true">
+                  {streamingTerminal.text}
+                  <span className="animate-pulse">▊</span>
+                </span>
+                <span className="td-sr-only">{streamingTerminal.fullText}</span>
               </div>
             )}
-            {isViewingActiveTerminalTurn && isProcessing && !thoughtText && (
+            {isViewingActiveTerminalTurn && isProcessing && !streamingTerminal && (
               <AIProcessingIndicator phase={reactState} stressLevel={stressLevel} />
             )}
           </div>

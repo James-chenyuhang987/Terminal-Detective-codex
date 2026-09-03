@@ -1089,6 +1089,25 @@ button, input, textarea, select { box-sizing: border-box; }
 @keyframes td-onboarding-card-in { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes td-onboarding-spotlight { 50% { border-color: #fff; box-shadow: 0 0 0 9999px rgba(0, 4, 12, .84), 0 0 44px var(--onboarding-accent), inset 0 0 24px color-mix(in srgb, var(--onboarding-accent) 25%, transparent); } }
 
+.td-sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.td-terminal-stream { font: .75rem/1.625 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; }
+.td-terminal-stream.is-observe { color: #00e5ff; }
+.td-terminal-stream.is-thought { color: #bf5fff; }
+.td-terminal-stream > span[aria-hidden="true"] > span { color: currentColor; }
+
+.td-story-briefing {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(0, 229, 255, .22);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(10, 18, 32, .55) 0%, rgba(2, 6, 14, .4) 100%);
+  backdrop-filter: blur(18px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 8px 32px rgba(0, 0, 0, .5);
+  animation: story-in .5s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes story-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+
 .td-decision-assistant-tip { display: flex; align-items: center; gap: 10px; width: min(980px, 100%); padding: 9px 12px; border: 1px solid rgba(242, 201, 111, .34); border-radius: 10px; background: linear-gradient(90deg, rgba(78, 57, 19, .42), rgba(3, 10, 18, .88)); color: #f4d99f; box-shadow: inset 0 1px rgba(255, 255, 255, .035); }
 .td-decision-assistant-tip > span { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border: 1px solid rgba(242, 201, 111, .4); border-radius: 9px; background: rgba(242, 201, 111, .07); }
 .td-decision-assistant-tip > div { display: grid; gap: 3px; }
@@ -1132,6 +1151,37 @@ button, input, textarea, select { box-sizing: border-box; }
   background-size: 32px 32px, 32px 32px, auto;
   backdrop-filter: blur(8px);
   font-family: monospace;
+}
+
+.td-decision-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 980px);
+  align-items: start;
+  gap: 18px;
+  width: min(1420px, 100%);
+}
+
+.td-decision-workspace.is-controls-only {
+  grid-template-columns: minmax(0, 980px);
+  justify-content: center;
+}
+
+.td-decision-story-column {
+  position: sticky;
+  top: 0;
+  max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+  min-width: 0;
+  overflow-y: auto;
+  border-radius: 16px;
+  scrollbar-gutter: stable;
+}
+
+.td-decision-controls {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
 }
 
 .td-decision-heading {
@@ -1340,6 +1390,11 @@ button, input, textarea, select { box-sizing: border-box; }
 @keyframes td-cinematic-progress { to { width: 100%; } }
 @keyframes td-cinematic-loader { to { border-color: var(--cine-accent); box-shadow: 0 25px 90px rgba(0, 0, 0, .7), 0 0 54px color-mix(in srgb, var(--cine-accent) 29%, transparent); } }
 
+@media (max-width: 1180px) {
+  .td-decision-workspace, .td-decision-workspace.is-controls-only { grid-template-columns: minmax(0, 1fr); width: min(980px, 100%); }
+  .td-decision-story-column { position: static; max-height: none; overflow: visible; scrollbar-gutter: auto; }
+}
+
 @media (max-width: 720px) {
   .td-onboarding-ability-demo > div { grid-template-columns: 78px minmax(58px, 1fr) 34px 42px; gap: 6px; }
   .td-decision-assistant-tip { align-items: flex-start; }
@@ -1378,5 +1433,5 @@ button, input, textarea, select { box-sizing: border-box; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .td-assistant-avatar > i, .td-assistant-bubble, .td-onboarding-card, .td-onboarding-spotlight, .td-decision-card, .td-decision-heading > small.is-urgent, .td-action-cinematic, .td-cinematic-progress i, .td-action-cinematic-fallback.is-loading .td-cinematic-fallback-card, .td-gold-flow-text, .td-landing-ambient, .td-landing-case-panel::before, .td-landing-start, .td-landing-start::after, .td-detective-figure, .td-detective-silhouette, .td-detective-lens, .td-detective-orbit, .td-landing-feature, .td-landing-terminal > i { animation: none !important; transition: none !important; }
+  .td-assistant-avatar > i, .td-assistant-bubble, .td-onboarding-card, .td-onboarding-spotlight, .td-story-briefing, .td-decision-card, .td-decision-heading > small.is-urgent, .td-action-cinematic, .td-cinematic-progress i, .td-action-cinematic-fallback.is-loading .td-cinematic-fallback-card, .td-gold-flow-text, .td-landing-ambient, .td-landing-case-panel::before, .td-landing-start, .td-landing-start::after, .td-detective-figure, .td-detective-silhouette, .td-detective-lens, .td-detective-orbit, .td-landing-feature, .td-landing-terminal > i { animation: none !important; transition: none !important; }
 }

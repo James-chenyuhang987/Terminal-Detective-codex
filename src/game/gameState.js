@@ -242,7 +242,7 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
 }
 
 // ── Observation Generator ─────────────────────────────────────────────────
-export function generateObservation(gameState, caseData, lang = 'en') {
+export function generateObservationSections(gameState, caseData, lang = 'en') {
   const zh = lang === 'zh';
   const zone = caseData.scene.zones[gameState.current_zone];
   const story = buildPublicCaseContext({ gameState, caseData, lang });
@@ -279,9 +279,7 @@ ${story.narrative}
 ${zh ? '本轮目标' : 'TURN OBJECTIVE'}：${story.objective}
 ╰────────────────────╯`;
 
-  return `${storyBlock}
-
-╔══ ${zh ? '系统扫描 · 回合' : 'SYSTEM SCAN · TURN'} ${gameState.turn_count + 1} ══╗
+  const scanBlock = `╔══ ${zh ? '系统扫描 · 回合' : 'SYSTEM SCAN · TURN'} ${gameState.turn_count + 1} ══╗
 📍 ${zh ? '地点' : 'Location'} : ${zone?.label || story.zoneName}
 👥 ${zh ? '接触人' : 'Contacts'} : ${npcList}
 🔍 ${zh ? '证据' : 'Evidence'} : ${clueCount}/${clueTotal} ${zh ? '已保全' : 'secured'}
@@ -293,6 +291,17 @@ ${confusionWarning}
 ── ${zh ? '已保全证据' : 'SECURED EVIDENCE'} ──
 ${clueDetails}
 ╚══════════════════════╝`;
+
+  return {
+    story,
+    storyBlock,
+    scanBlock,
+    observation: `${storyBlock}\n\n${scanBlock}`,
+  };
+}
+
+export function generateObservation(gameState, caseData, lang = 'en') {
+  return generateObservationSections(gameState, caseData, lang).observation;
 }
 
 // ── Conflict Dictionary Checker ───────────────────────────────────────────

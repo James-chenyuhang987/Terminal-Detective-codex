@@ -18,8 +18,9 @@ function CommandToggle({ active, disabled, icon, title, detail, onClick }) {
   </button>;
 }
 
-export default function DecisionCards({ cards: legacyCards = [], packs = null, onChoose, timeLimit = 40, story, team = [], commandState, onCommandError }) {
-  const { lang } = useLang();
+export default function DecisionCards({ cards: legacyCards = [], packs = null, onChoose, timeLimit = 40, story, language, team = [], commandState, onCommandError }) {
+  const { lang: currentLang } = useLang();
+  const lang = language === 'en' || language === 'zh' ? language : currentLang;
   const zh = lang === 'zh';
   const [left, setLeft] = useState(timeLimit);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -121,7 +122,13 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
       aria-modal="true"
       aria-labelledby="td-decision-title"
     >
-      <StoryBriefing story={story} />
+      <div className={`td-decision-workspace ${story ? '' : 'is-controls-only'}`}>
+        {story && (
+          <aside className="td-decision-story-column" aria-labelledby="td-decision-story-title">
+            <StoryBriefing story={story} headingId="td-decision-story-title" language={lang} />
+          </aside>
+        )}
+        <section className="td-decision-controls" aria-labelledby="td-decision-title">
       <div className="td-decision-heading">
         <div id="td-decision-title">{zh ? '◈ 指挥席 · 关键决策' : '◈ COMMAND DESK · KEY DECISION'}</div>
         <small className={left <= 10 ? 'is-urgent' : ''}>{zh ? `指令窗口 ${Math.max(0, left)} 秒` : `COMMAND WINDOW ${Math.max(0, left)}s`}</small>
@@ -182,6 +189,8 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
       <div className="td-decision-order-row">
         <div><small>{zh ? '事实贴近度是探员预估，不是系统公布的正确答案。' : 'Alignment is the agent’s estimate, not a revealed correct answer.'}</small></div>
         <button type="button" className="td-ui-button td-button-primary" onClick={confirm}>{zh ? '▶ 确认战术' : '▶ CONFIRM TACTIC'}</button>
+      </div>
+        </section>
       </div>
     </div>
   );
