@@ -8,6 +8,7 @@ export default function StoryBriefing({ story, headingId = 'td-decision-story-ti
   const lang = language === 'en' || language === 'zh' ? language : currentLang;
   const zh = lang === 'zh';
   if (!story) return null;
+  const transcript = String(story.transcript || '').trim();
 
   const stats = [
     { label: zh ? '地点' : 'LOCATION', val: story.locationName },
@@ -42,40 +43,49 @@ export default function StoryBriefing({ story, headingId = 'td-decision-story-ti
           </span>
         </div>
 
-        {story.narrative && (
-          <p style={{
-            margin: 0, color: '#d8dce8', fontSize: '0.76rem', lineHeight: 1.85,
-            whiteSpace: 'pre-wrap',
-          }}>
-            {story.narrative}
-          </p>
-        )}
-
-        {story.isOpening && story.npcs?.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
-            {story.npcs.map((npc, index) => (
-              <span key={`${npc.name}-${index}`} style={{
-                border: '1px solid rgba(255,255,255,.09)', borderRadius: 8,
-                background: 'rgba(255,255,255,.035)', padding: '6px 8px',
-                color: '#b9c7d4', fontSize: '0.62rem', lineHeight: 1.4,
+        {transcript ? (
+          <section className="td-story-transcript" aria-label={zh ? '本回合完整剧情' : 'Complete turn narrative'}>
+            <small>{zh ? '本回合完整剧情' : 'COMPLETE TURN NARRATIVE'}</small>
+            <p>{transcript}</p>
+          </section>
+        ) : (
+          <>
+            {story.narrative && (
+              <p style={{
+                margin: 0, color: '#d8dce8', fontSize: '0.76rem', lineHeight: 1.85,
+                whiteSpace: 'pre-wrap',
               }}>
-                {npc.avatar} <strong style={{ color: '#e6f9fb' }}>{npc.name}</strong> · {npc.role}
-              </span>
-            ))}
-          </div>
-        )}
+                {story.narrative}
+              </p>
+            )}
 
-        {story.objective && (
-          <div style={{
-            marginTop: 13, padding: '10px 12px', borderLeft: '3px solid #d8aa54',
-            background: 'linear-gradient(90deg, rgba(216,170,84,.11), rgba(216,170,84,.025))',
-            color: '#f0dcad', fontSize: '0.68rem', lineHeight: 1.65,
-          }}>
-            <small style={{ display: 'block', color: '#c99f51', letterSpacing: '.18em', marginBottom: 3 }}>
-              {zh ? '本轮调查目标' : 'CURRENT OBJECTIVE'}
-            </small>
-            {story.objective}
-          </div>
+            {story.isOpening && story.npcs?.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 12 }}>
+                {story.npcs.map((npc, index) => (
+                  <span key={`${npc.name}-${index}`} style={{
+                    border: '1px solid rgba(255,255,255,.09)', borderRadius: 8,
+                    background: 'rgba(255,255,255,.035)', padding: '6px 8px',
+                    color: '#b9c7d4', fontSize: '0.62rem', lineHeight: 1.4,
+                  }}>
+                    {npc.avatar} <strong style={{ color: '#e6f9fb' }}>{npc.name}</strong> · {npc.role}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {story.objective && (
+              <div style={{
+                marginTop: 13, padding: '10px 12px', borderLeft: '3px solid #d8aa54',
+                background: 'linear-gradient(90deg, rgba(216,170,84,.11), rgba(216,170,84,.025))',
+                color: '#f0dcad', fontSize: '0.68rem', lineHeight: 1.65,
+              }}>
+                <small style={{ display: 'block', color: '#c99f51', letterSpacing: '.18em', marginBottom: 3 }}>
+                  {zh ? '本轮调查目标' : 'CURRENT OBJECTIVE'}
+                </small>
+                {story.objective}
+              </div>
+            )}
+          </>
         )}
 
         {story.thought && (
