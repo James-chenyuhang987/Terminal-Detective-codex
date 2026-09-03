@@ -1178,30 +1178,30 @@ button, input, textarea, select { box-sizing: border-box; }
 }
 
 .td-decision-workspace {
-  display: grid;
-  grid-template-columns: minmax(300px, 400px) minmax(0, 980px);
+  display: flex;
+  width: min(980px, 100%);
+  flex-direction: column;
   align-items: start;
   gap: 18px;
-  width: min(1420px, 100%);
 }
 
 .td-decision-workspace.is-controls-only {
-  grid-template-columns: minmax(0, 980px);
-  justify-content: center;
+  width: min(980px, 100%);
 }
 
 .td-decision-story-column {
-  position: sticky;
-  top: 0;
-  max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+  position: static;
+  width: 100%;
+  max-height: none;
   min-width: 0;
-  overflow-y: auto;
+  overflow: visible;
   border-radius: 16px;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 
 .td-decision-controls {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex-direction: column;
   align-items: center;
@@ -1413,11 +1413,6 @@ button, input, textarea, select { box-sizing: border-box; }
 @keyframes td-cinematic-enter { from { opacity: 0; transform: scale(1.015); } to { opacity: 1; transform: none; } }
 @keyframes td-cinematic-progress { to { width: 100%; } }
 @keyframes td-cinematic-loader { to { border-color: var(--cine-accent); box-shadow: 0 25px 90px rgba(0, 0, 0, .7), 0 0 54px color-mix(in srgb, var(--cine-accent) 29%, transparent); } }
-
-@media (max-width: 900px) {
-  .td-decision-workspace, .td-decision-workspace.is-controls-only { grid-template-columns: minmax(0, 1fr); width: min(980px, 100%); }
-  .td-decision-story-column { position: static; max-height: none; overflow: visible; scrollbar-gutter: auto; }
-}
 
 @media (max-width: 720px) {
   .td-onboarding-ability-demo > div { grid-template-columns: 78px minmax(58px, 1fr) 34px 42px; gap: 6px; }
