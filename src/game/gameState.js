@@ -291,12 +291,16 @@ ${confusionWarning}
 ── ${zh ? '已保全证据' : 'SECURED EVIDENCE'} ──
 ${clueDetails}
 ╚══════════════════════╝`;
+  const observation = `${storyBlock}\n\n${scanBlock}`;
+  const observationHeader = `◈ ${zh ? '回合' : 'TURN'} ${gameState.turn_count + 1} — ${zh ? '观察阶段' : 'OBSERVATION PHASE'}`;
+  const observationTerminalText = `${observationHeader}\n${observation}`;
 
   return {
     story,
     storyBlock,
     scanBlock,
-    observation: `${storyBlock}\n\n${scanBlock}`,
+    observation,
+    observationTerminalText,
   };
 }
 

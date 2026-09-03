@@ -1,3 +1,14 @@
+const graphemeSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+  ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  : null;
+
+export function splitTerminalText(text) {
+  const value = String(text || '');
+  return graphemeSegmenter
+    ? Array.from(graphemeSegmenter.segment(value), entry => entry.segment)
+    : Array.from(value);
+}
+
 export function streamTerminalText({
   text,
   intervalMs = 20,
@@ -8,7 +19,7 @@ export function streamTerminalText({
   signal = null,
   timerApi = globalThis,
 }) {
-  const units = Array.from(String(text || ''));
+  const units = splitTerminalText(text);
   const fullText = units.join('');
   onStart?.(fullText);
 
