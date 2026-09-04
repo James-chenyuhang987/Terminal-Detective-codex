@@ -8,7 +8,9 @@ import {
   NARRATIVE_ACTIONS,
   NARRATIVE_OUTCOMES,
   NARRATIVE_PLOT_BEATS,
+  OBSERVATION_AFTERMATH_BEATS,
   renderNarrative,
+  renderObservationAftermath,
   resolvePublicZoneName,
 } from '../src/game/narrativeEngine.js';
 import {
@@ -251,4 +253,185 @@ test('action results echo the active case premise without changing deterministic
   assert.notEqual(neon.text, abyss.text);
   assert.ok(CASE_NARRATIVE_LIBRARY.Lvl_01.zh.motifs.some(motif => neon.text.includes(motif)));
   assert.ok(CASE_NARRATIVE_LIBRARY.Lvl_07.zh.motifs.some(motif => abyss.text.includes(motif)));
+});
+
+test('adaptive observation corpus provides multiple paired variants for every action family', () => {
+  assert.deepEqual(
+    new Set(Object.keys(OBSERVATION_AFTERMATH_BEATS)),
+    new Set(['testimony', 'scene', 'timeline', 'digital', 'forensics', 'network']),
+  );
+  for (const [group, beats] of Object.entries(OBSERVATION_AFTERMATH_BEATS)) {
+    assert.ok(beats.length >= 4, `${group} needs at least four aftermath variants`);
+    for (const beat of beats) {
+      assert.ok(beat.zh.length >= 35, `${group} Chinese aftermath is too short`);
+      assert.ok(beat.en.length >= 80, `${group} English aftermath is too short`);
+    }
+  }
+});
+
+test('next observation changes with the selected action and final outcome', () => {
+  const base = {
+    ...createInitialGameState(Case_Data_Lvl_01),
+    turn_count: 1,
+    unlocked_clues: ['c_01'],
+    last_action_context: {
+      version: 1,
+      turn: 1,
+      action_tag: 'interrogate_suspect',
+      executor_agent_id: 'NEXUS-01',
+      assist_agent_id: null,
+      outcome: 'progress',
+      public_clue_ids: [],
+      from_zone: 'zone_datacenter',
+      to_zone: 'zone_datacenter',
+      moved: false,
+      ap_spent: 2,
+      hp_delta: 0,
+      confusion_delta: 2,
+      trap_triggered: false,
+    },
+  };
+  const testimony = buildPublicCaseContext({ gameState: base, caseData: Case_Data_Lvl_01, lang: 'zh' });
+  const digital = buildPublicCaseContext({
+    gameState: {
+      ...base,
+      last_action_context: {
+        ...base.last_action_context,
+        action_tag: 'hack_terminal',
+        outcome: 'trap',
+        confusion_delta: 8,
+        trap_triggered: true,
+      },
+    },
+    caseData: Case_Data_Lvl_01,
+    lang: 'zh',
+  });
+
+  assert.match(testimony.narrative, /审讯相关人员/);
+  assert.match(digital.narrative, /入侵终端/);
+  assert.match(digital.aftermath.text, /反制|警报|陷阱|敌对/);
+  assert.notEqual(testimony.aftermath.text, digital.aftermath.text);
+});
+
+test('adaptive observations are stable and bilingual languages share a semantic template', () => {
+  const gameState = {
+    ...createInitialGameState(Case_Data_Lvl_01),
+    run_id: 'stable-observation-run',
+    turn_count: 2,
+    current_zone: 'zone_lobby',
+    unlocked_clues: ['c_01', 'c_03'],
+    last_action_context: {
+      version: 1,
+      turn: 2,
+      action_tag: 'check_cctv',
+      executor_agent_id: 'CIPHER-47',
+      assist_agent_id: 'NEXUS-01',
+      outcome: 'clue',
+      public_clue_ids: ['c_03'],
+      from_zone: 'zone_datacenter',
+      to_zone: 'zone_lobby',
+      moved: true,
+      ap_spent: 2,
+      hp_delta: 0,
+      confusion_delta: 1,
+      trap_triggered: false,
+    },
+  };
+  const zh = renderObservationAftermath({ gameState, caseData: Case_Data_Lvl_01, lang: 'zh' });
+  const en = renderObservationAftermath({ gameState, caseData: Case_Data_Lvl_01, lang: 'en' });
+
+  assert.deepEqual(renderObservationAftermath({ gameState, caseData: Case_Data_Lvl_01, lang: 'zh' }), zh);
+  assert.equal(zh.templateId, en.templateId);
+  assert.match(zh.text, /复查监控/);
+  assert.match(en.text, /camera review/);
+  assert.match(zh.text, /大堂 · 监控中心/);
+  assert.match(en.text, /Lobby · Surveillance/);
+});
+
+test('stable state seeds expose several aftermath variants without random redraws', () => {
+  const templateIds = new Set();
+  for (let index = 0; index < 40; index += 1) {
+    const gameState = {
+      ...createInitialGameState(Case_Data_Lvl_01),
+      run_id: `variant-run-${index}`,
+      turn_count: 1,
+      last_action_context: {
+        version: 1,
+        turn: 1,
+        action_tag: 'search_area',
+        executor_agent_id: 'AURORA-09',
+        assist_agent_id: null,
+        outcome: 'progress',
+        public_clue_ids: [],
+        from_zone: 'zone_datacenter',
+        to_zone: 'zone_datacenter',
+        moved: false,
+        ap_spent: 1,
+        hp_delta: 0,
+        confusion_delta: 0,
+        trap_triggered: false,
+      },
+    };
+    templateIds.add(renderObservationAftermath({ gameState, caseData: Case_Data_Lvl_01, lang: 'zh' }).templateId);
+  }
+  assert.ok(templateIds.size >= 4);
+});
+
+test('all legal action choices produce distinguishable next-turn story text', () => {
+  const texts = NARRATIVE_ACTIONS.map(actionTag => {
+    const gameState = {
+      ...createInitialGameState(Case_Data_Lvl_01),
+      run_id: 'all-action-observations',
+      turn_count: 1,
+      last_action_context: {
+        version: 1,
+        turn: 1,
+        action_tag: actionTag,
+        executor_agent_id: 'NEXUS-01',
+        assist_agent_id: null,
+        outcome: 'progress',
+        public_clue_ids: [],
+        from_zone: 'zone_datacenter',
+        to_zone: 'zone_datacenter',
+        moved: false,
+        ap_spent: 1,
+        hp_delta: 0,
+        confusion_delta: 0,
+        trap_triggered: false,
+      },
+    };
+    return renderObservationAftermath({ gameState, caseData: Case_Data_Lvl_01, lang: 'zh' }).text;
+  });
+
+  assert.equal(new Set(texts).size, NARRATIVE_ACTIONS.length);
+});
+
+test('adaptive observation never renders hidden clue ids or hidden clue text', () => {
+  const hidden = Case_Data_Lvl_01.hidden_clues[0];
+  const gameState = {
+    ...createInitialGameState(Case_Data_Lvl_01),
+    turn_count: 1,
+    unlocked_clues: [hidden.clue_id],
+    last_action_context: {
+      version: 1,
+      turn: 1,
+      action_tag: 'analyze_forensics',
+      executor_agent_id: 'AURORA-09',
+      assist_agent_id: null,
+      outcome: 'clue',
+      public_clue_ids: [hidden.clue_id],
+      from_zone: 'zone_datacenter',
+      to_zone: 'zone_datacenter',
+      moved: false,
+      ap_spent: 1,
+      hp_delta: 0,
+      confusion_delta: 0,
+      trap_triggered: false,
+    },
+  };
+  const context = buildPublicCaseContext({ gameState, caseData: Case_Data_Lvl_01, lang: 'zh' });
+
+  assert.doesNotMatch(context.narrative, new RegExp(hidden.clue_id));
+  assert.doesNotMatch(context.narrative, new RegExp(hidden.text.slice(0, 12)));
+  assert.equal(context.aftermath.outcome, 'progress');
 });

@@ -549,6 +549,255 @@ const CASE_OUTCOME_ECHOES = Object.freeze({
   },
 });
 
+const OBSERVATION_ACTION_GROUPS = Object.freeze({
+  talk_to_npc: 'testimony',
+  present_evidence: 'testimony',
+  interrogate_suspect: 'testimony',
+  search_area: 'scene',
+  examine_clue: 'scene',
+  check_alibi: 'timeline',
+  tail_suspect: 'timeline',
+  check_cctv: 'timeline',
+  access_database: 'digital',
+  hack_terminal: 'digital',
+  analyze_forensics: 'forensics',
+  bribe_informant: 'network',
+});
+
+const OBSERVATION_ACTION_LABELS = Object.freeze({
+  talk_to_npc: { zh: '接触相关人员', en: 'witness contact' },
+  search_area: { zh: '搜索现场', en: 'scene search' },
+  examine_clue: { zh: '复核证物', en: 'evidence examination' },
+  check_alibi: { zh: '核验不在场证明', en: 'alibi verification' },
+  present_evidence: { zh: '出示证据', en: 'evidence presentation' },
+  interrogate_suspect: { zh: '审讯相关人员', en: 'focused interrogation' },
+  access_database: { zh: '访问数据库', en: 'database access' },
+  analyze_forensics: { zh: '法证分析', en: 'forensic analysis' },
+  tail_suspect: { zh: '秘密跟踪', en: 'covert surveillance' },
+  bribe_informant: { zh: '接触线人', en: 'informant contact' },
+  hack_terminal: { zh: '入侵终端', en: 'terminal intrusion' },
+  check_cctv: { zh: '复查监控', en: 'camera review' },
+});
+
+export const OBSERVATION_AFTERMATH_BEATS = Object.freeze({
+  testimony: [
+    {
+      zh: '{team}结束「{action}」后，证词频道没有立刻安静下来；几处停顿与改口仍在记录中彼此碰撞。',
+      en: 'After {team} completes {action}, the testimony channel does not immediately go quiet; pauses and revisions continue colliding in the record.',
+    },
+    {
+      zh: '上一轮的「{action}」改变了谈话重心。{team}把公开说法重新排进时间轴，先前自然的一句话如今显得需要复核。',
+      en: 'The last turn of {action} shifts the center of the conversation. {team} returns the public accounts to the timeline, where one formerly natural sentence now demands review.',
+    },
+    {
+      zh: '{team}从「{action}」带回的不是口供结论，而是一组语气、顺序与回避方式；它们正在迫使人物关系重新排列。',
+      en: '{team} returns from {action} not with a verdict, but with patterns of tone, sequence, and evasion that force the relationships into a new order.',
+    },
+    {
+      zh: '讯问灯熄灭后，「{action}」留下的矛盾仍悬在{zone}上方。{team}开始区分哪些沉默来自恐惧，哪些来自刻意选择。',
+      en: 'When the interview light goes dark, contradictions left by {action} remain over {zone}. {team} begins separating fearful silence from deliberate omission.',
+    },
+  ],
+  scene: [
+    {
+      zh: '{team}完成「{action}」后，{zone}的物理细节被重新编号；位置、磨损与残留物开始形成一条可复查的现场路径。',
+      en: 'After {team} completes {action}, the physical details in {zone} are renumbered; position, wear, and residue begin forming a reviewable path through the scene.',
+    },
+    {
+      zh: '上一轮的「{action}」让现场尺度发生变化。{team}把被忽略的边缘放大，原本孤立的痕迹开始与房间结构互相解释。',
+      en: 'The last turn of {action} changes the scale of the scene. {team} enlarges the neglected edges until isolated traces begin explaining the room around them.',
+    },
+    {
+      zh: '{zone}在「{action}」之后呈现出另一层秩序：某些物件被移动过，另一些细节则因过于整齐而显得可疑。',
+      en: 'After {action}, another order emerges in {zone}: some objects have moved, while other details look suspicious precisely because they are too neat.',
+    },
+    {
+      zh: '{team}退出扫描范围时，现场仍保留着「{action}」划出的边界。下一轮必须决定哪些痕迹值得交给独立证据验证。',
+      en: 'As {team} leaves the scan perimeter, {zone} retains the boundaries drawn by {action}. The next turn must decide which traces deserve independent verification.',
+    },
+  ],
+  timeline: [
+    {
+      zh: '{team}完成「{action}」后，上一轮的时间点被拆成到达、停留与离开三段；其中的空隙开始比记录本身更醒目。',
+      en: 'After {team} completes {action}, the prior timeline splits into arrival, presence, and departure; the gaps between them become more visible than the record itself.',
+    },
+    {
+      zh: '「{action}」留下了一条不完整但可复查的移动轨迹。{team}正在把它与{zone}的门禁、视线和公开证词逐项对齐。',
+      en: '{action} leaves an incomplete but reviewable movement trail. {team} is aligning it with access events, sightlines, and public testimony from {zone}.',
+    },
+    {
+      zh: '上一轮的「{action}」没有让时间变得简单，却让两个不能同时成立的顺序更加清楚。{team}暂时保留这处裂缝。',
+      en: 'The last turn of {action} does not simplify time, but it clarifies two sequences that cannot both be true. {team} preserves the fracture for now.',
+    },
+    {
+      zh: '{team}从「{action}」返回时带回一串带有间隔的时间戳；{zone}接下来要回答的，是谁有机会穿过这些间隔。',
+      en: '{team} returns from {action} with a broken chain of timestamps. The next question for {zone} is who had the opportunity to pass through those intervals.',
+    },
+  ],
+  digital: [
+    {
+      zh: '{team}结束「{action}」后，{zone}的日志被分成真实访问、自动任务与伪装噪声；三者仍在争夺同一段时间。',
+      en: 'After {team} completes {action}, the logs from {zone} divide into real access, automated tasks, and disguised noise, all competing for the same interval.',
+    },
+    {
+      zh: '上一轮的「{action}」打开了一层数字表皮。{team}没有信任系统给出的顺序，而是开始检查谁有能力改写它。',
+      en: 'The last turn of {action} opens a layer beneath the digital surface. {team} distrusts the order supplied by the system and asks who had the means to rewrite it.',
+    },
+    {
+      zh: '{zone}在「{action}」后留下多组数据回声。{team}正在区分正常同步、延迟写入与人为制造的时间错位。',
+      en: 'After {action}, {zone} holds several data echoes. {team} is separating normal synchronization, delayed writes, and deliberately manufactured time drift.',
+    },
+    {
+      zh: '{team}切断「{action}」通道时，一份看似完整的记录仍有校验缺口；下一轮将从缺口两端同时追查。',
+      en: 'When {team} closes the {action} channel, a seemingly complete record still contains a verification gap. The next turn will approach it from both ends.',
+    },
+  ],
+  forensics: [
+    {
+      zh: '{team}完成「{action}」后，显微读数、材料反应与现场时间开始互相约束；任何解释都必须同时通过三层检验。',
+      en: 'After {team} completes {action}, microscopic readings, material response, and scene timing begin constraining one another; any explanation must survive all three layers.',
+    },
+    {
+      zh: '上一轮的「{action}」把一个肉眼细节变成可测量数据。{team}正在确认它属于事件本身，还是事后留下的干扰。',
+      en: 'The last turn of {action} converts a visible detail into measurable data. {team} is determining whether it belongs to the event or to interference left afterward.',
+    },
+    {
+      zh: '{zone}的样本在「{action}」后出现稳定对照。{team}仍拒绝命名原因，只先固定可以被另一台仪器复现的部分。',
+      en: 'Samples from {zone} produce a stable comparison after {action}. {team} still refuses to name a cause, preserving only what another instrument can reproduce.',
+    },
+    {
+      zh: '{team}关闭分析仪时，「{action}」留下的谱线仍在缓慢重叠；它们尚未指向答案，却已经排除了最方便的解释。',
+      en: 'As {team} powers down the analyzer, spectra left by {action} continue overlapping. They do not point to an answer, but they have ruled out the easiest explanation.',
+    },
+  ],
+  network: [
+    {
+      zh: '{team}结束「{action}」后，一条非正式消息进入案件记录；它的价值不在于可信，而在于能否被公开事实独立印证。',
+      en: 'After {team} completes {action}, an unofficial message enters the case record. Its value lies not in trust, but in whether public facts can verify it independently.',
+    },
+    {
+      zh: '上一轮的「{action}」让城市边缘传回一段带条件的说法。{team}正在剥离其中的交易动机，只保留可核对的细节。',
+      en: 'The last turn of {action} brings back a conditional account from the city fringe. {team} strips away the transactional motive and keeps only testable details.',
+    },
+    {
+      zh: '{team}从「{action}」获得的路线穿过数个利益节点；每个人都可能说真话，也都可能只说对自己有利的部分。',
+      en: 'The route {team} obtains through {action} crosses several interests. Each source may be truthful, and each may be telling only the useful part.',
+    },
+    {
+      zh: '「{action}」结束后，{zone}之外的人际网络短暂亮起。{team}标记了消息传播的方向，而不是把传闻当成证据。',
+      en: 'After {action}, the human network beyond {zone} briefly lights up. {team} marks the direction of transmission without mistaking rumor for evidence.',
+    },
+  ],
+});
+
+const OBSERVATION_OUTCOME_BEATS = Object.freeze({
+  clue: [
+    {
+      zh: '这次行动保全了「{clue}」。它没有直接回答核心谜题，却为{motif}增加了一处能够独立复查的支点。',
+      en: 'The action secures “{clue}”. It does not answer the central mystery, but gives {motif} a point that can be checked independently.',
+    },
+    {
+      zh: '新证据「{clue}」已进入证物链；它迫使旧记录围绕{motif}重新排序，下一步需要寻找第二来源。',
+      en: 'New evidence, “{clue}”, enters the chain and forces the older record around {motif} into a new order. A second source is now required.',
+    },
+    {
+      zh: '「{clue}」从噪声中留下了可重复的特征。有关{motif}的两种解释因此拉开距离，但都还不能被当作结论。',
+      en: '“{clue}” leaves a repeatable signature in the noise. Two readings of {motif} now move apart, though neither is yet a conclusion.',
+    },
+    {
+      zh: '随着「{clue}」被封存，{motif}第一次与一项具体事实相连；调查获得方向，也同时获得了新的验证责任。',
+      en: 'As “{clue}” is sealed, {motif} connects to a concrete fact for the first time. The case gains direction and a new burden of verification.',
+    },
+  ],
+  progress: [
+    {
+      zh: '行动没有取得新证物，但一条错误路线已经被排除；围绕{motif}的搜索面比上一轮更窄。',
+      en: 'The action secures no new exhibit, but eliminates one false route. The search around {motif} is narrower than it was last turn.',
+    },
+    {
+      zh: '本轮只形成了程序性进展：记录更完整、假设更少，{motif}仍需要一次独立验证才能进入证据链。',
+      en: 'This turn yields procedural progress only: a fuller record, fewer hypotheses, and {motif} still awaiting independent verification.',
+    },
+    {
+      zh: '没有突破并不意味着原地踏步。调查已把{motif}附近的一段模糊区压缩成下一轮可以回答的具体问题。',
+      en: 'No breakthrough does not mean no movement. The case compresses one blurred area around {motif} into a concrete question for the next turn.',
+    },
+    {
+      zh: '系统没有登记新线索，却确认当前方法仍可复查；{motif}与现有事实之间还差最后一段可靠连接。',
+      en: 'The system logs no new clue, but confirms that the method remains reviewable. One reliable connection is still missing between {motif} and the known facts.',
+    },
+  ],
+  no_yield: [
+    {
+      zh: '这条路线没有返回可验证信息。{motif}仍停留在证据链之外，下一轮需要改变调查角度。',
+      en: 'The route returns no verifiable information. {motif} remains outside the evidence chain, and the next turn needs a different angle.',
+    },
+    {
+      zh: '扫描只重复了旧噪声，系统没有把猜测写成事实；关于{motif}的空白被保留下来，而不是被虚假答案填满。',
+      en: 'The scan repeats old noise, and the system refuses to write speculation as fact. The blank around {motif} remains unfilled by a false answer.',
+    },
+    {
+      zh: '本轮投入没有产生可复查结果。调查因此标记了一条低价值路径，并将资源转向{motif}的其他入口。',
+      en: 'This turn produces no reviewable result. The investigation marks a low-value route and redirects resources toward another entry to {motif}.',
+    },
+    {
+      zh: '现场对这次尝试保持沉默；唯一确定的是，同样的方法不足以穿透{motif}周围的干扰。',
+      en: 'The scene remains silent after the attempt. The only certainty is that the same method cannot penetrate the interference around {motif}.',
+    },
+  ],
+  trap: [
+    {
+      zh: '行动触发了预设反制，混乱上升 {confusion} 点。有人似乎预料调查会接近{motif}，这份准确本身已被记录。',
+      en: 'The action triggers a prepared countermeasure and raises confusion by {confusion}. Someone appears to have expected an approach toward {motif}, and that precision is now on record.',
+    },
+    {
+      zh: '敌对规则在路径中闭合，试图用噪声覆盖{motif}。调查主状态仍然完整，但下一轮必须先确认哪些读数遭到污染。',
+      en: 'A hostile rule closes around the route and tries to bury {motif} in noise. The core case state survives, but the next turn must identify the contaminated readings.',
+    },
+    {
+      zh: '红色警报短暂接管终端；这不是普通失败，而是一场针对调查方向的反应。{motif}因此变得更危险，也更值得复核。',
+      en: 'A red alert briefly takes the terminal. This is not an ordinary failure but a response to the direction of inquiry, making {motif} both more dangerous and more deserving of review.',
+    },
+    {
+      zh: '陷阱没有给出答案，只暴露了保护答案的手段。{team}保住现场记录，并把{motif}周围的异常防御列为下一轮风险。',
+      en: 'The trap reveals no answer, only the means used to protect one. {team} preserves the scene record and marks the abnormal defense around {motif} as a risk for the next turn.',
+    },
+  ],
+  illegal: [
+    {
+      zh: '上一条指令没有通过行动规则，案件状态未依据它生成结论；下一轮将从合法、可复查的路径重新开始。',
+      en: 'The previous order failed the action rules, so the case state drew no conclusion from it. The next turn resumes from a legal, reviewable route.',
+    },
+    {
+      zh: '系统隔离了无法识别的调查路径，没有让它污染{motif}周围的公开记录。',
+      en: 'The system isolates an unrecognized investigative route before it can contaminate the public record around {motif}.',
+    },
+    {
+      zh: '无效指令已被终止；现场事实保持原样，下一次选择必须映射到允许的调查方法。',
+      en: 'The invalid order has been terminated. Scene facts remain unchanged, and the next choice must map to an allowed investigative method.',
+    },
+    {
+      zh: '规则层拒绝为未知行动伪造结果。关于{motif}的判断被安全推迟，而不是建立在错误输入上。',
+      en: 'The rule layer refuses to invent a result for an unknown action. Judgment around {motif} is safely delayed rather than built on invalid input.',
+    },
+  ],
+});
+
+const OBSERVATION_MOVEMENT_BEATS = Object.freeze([
+  {
+    zh: '调查重心已从{fromZone}转移到{zone}；旧区域留下的问题将随同证物链进入新的现场。',
+    en: 'The investigation shifts from {fromZone} to {zone}; unresolved questions from the old area travel with the evidence chain.',
+  },
+  {
+    zh: '行动路径抵达{zone}，与{fromZone}之间建立了新的空间关系；下一轮将检验这次移动是否补上因果缺口。',
+    en: 'The action path reaches {zone}, establishing a new spatial relationship with {fromZone}. The next turn will test whether the move closes a causal gap.',
+  },
+  {
+    zh: '{team}已将现场边界推进至{zone}。从{fromZone}带来的记录将在这里接受另一组环境事实校验。',
+    en: '{team} advances the scene boundary to {zone}. Records carried from {fromZone} will now be tested against a different environment.',
+  },
+]);
+
 const SAFE_TEXT = /[^\p{L}\p{N}\p{P}\p{Zs}_-]/gu;
 
 const INTERNAL_ZONE_ID = /^(?:zone|area)_[a-z0-9_:-]+$/i;
@@ -618,6 +867,85 @@ export function resolvePublicZoneName(caseData, zoneId, lang = 'zh') {
 /**
  * @param {{ gameState?: Record<string, any>, caseData?: Record<string, any>, lang?: string }} options
  */
+export function renderObservationAftermath({ gameState = {}, caseData = {}, lang = 'zh' } = {}) {
+  const context = gameState.last_action_context;
+  if (!context || typeof context !== 'object' || Number(context.version) !== 1) return null;
+
+  const language = lang === 'en' ? 'en' : 'zh';
+  const actionTag = NARRATIVE_ACTIONS.includes(context.action_tag) ? context.action_tag : 'search_area';
+  const group = OBSERVATION_ACTION_GROUPS[actionTag] || 'scene';
+  const actionBeats = OBSERVATION_AFTERMATH_BEATS[group];
+  const source = localizedCase(caseData, language);
+  const hiddenIds = new Set((source.hidden_clues || []).map(clue => clue?.clue_id).filter(Boolean));
+  const clueDictionary = (source.clue_dictionary || [])
+    .filter(clue => clue?.clue_id && !hiddenIds.has(clue.clue_id));
+  const clueNames = (Array.isArray(context.public_clue_ids) ? context.public_clue_ids : [])
+    .map(id => clueDictionary.find(clue => clue.clue_id === id))
+    .filter(Boolean)
+    .map(clue => publicLabel(clue.keyword, language === 'zh' ? '新证据' : 'new evidence', 'clue', 80));
+  let outcome = NARRATIVE_OUTCOMES.includes(context.outcome) ? context.outcome : 'progress';
+  if (outcome === 'clue' && clueNames.length === 0) outcome = 'progress';
+  if (outcome === 'trap' && context.trap_triggered !== true) outcome = 'progress';
+  const outcomeBeats = OBSERVATION_OUTCOME_BEATS[outcome] || OBSERVATION_OUTCOME_BEATS.progress;
+  const profile = getCaseNarrativeProfile(source.case_id || gameState.case_id, language);
+  const seed = [
+    gameState.run_id,
+    source.case_id || gameState.case_id,
+    context.turn,
+    actionTag,
+    outcome,
+    context.executor_agent_id,
+    context.assist_agent_id,
+    context.from_zone,
+    context.to_zone,
+    (Array.isArray(context.public_clue_ids) ? context.public_clue_ids : []).join(':'),
+  ].join(':');
+  const actionIndex = stableNarrativeHash(`${seed}:observation-action`) % actionBeats.length;
+  const outcomeIndex = stableNarrativeHash(`${seed}:observation-outcome`) % outcomeBeats.length;
+  const movementIndex = stableNarrativeHash(`${seed}:observation-movement`) % OBSERVATION_MOVEMENT_BEATS.length;
+  const motifs = Array.isArray(profile.motifs) ? profile.motifs.filter(Boolean) : [];
+  const motif = motifs.length
+    ? motifs[stableNarrativeHash(`${seed}:observation-motif`) % motifs.length]
+    : (language === 'zh' ? '案件核心疑点' : 'the central uncertainty');
+  const executor = safeText(
+    context.executor_agent_id,
+    language === 'zh' ? '执行探员' : 'the executing agent',
+    48,
+  );
+  const assistant = safeText(context.assist_agent_id, '', 48);
+  const team = assistant
+    ? (language === 'zh' ? `${executor}与${assistant}` : `${executor} and ${assistant}`)
+    : executor;
+  const zone = resolvePublicZoneName(source, context.to_zone || gameState.current_zone, language);
+  const fromZone = resolvePublicZoneName(source, context.from_zone, language);
+  const variables = {
+    team,
+    action: OBSERVATION_ACTION_LABELS[actionTag]?.[language] || OBSERVATION_ACTION_LABELS.search_area[language],
+    zone,
+    fromZone,
+    clue: clueNames.join(language === 'zh' ? '」「' : '”, “') || (language === 'zh' ? '新证据' : 'new evidence'),
+    motif,
+    confusion: Math.max(0, Number(context.confusion_delta) || 0),
+  };
+  const paragraphs = [
+    fill(actionBeats[actionIndex][language], variables),
+    fill(outcomeBeats[outcomeIndex][language], variables),
+  ];
+  if (context.moved === true && context.from_zone && context.to_zone && context.from_zone !== context.to_zone) {
+    paragraphs.push(fill(OBSERVATION_MOVEMENT_BEATS[movementIndex][language], variables));
+  }
+
+  return {
+    actionTag,
+    outcome,
+    templateId: `${group}:${actionIndex}:${outcome}:${outcomeIndex}:${context.moved ? movementIndex : 'stationary'}`,
+    text: paragraphs.join('\n\n'),
+  };
+}
+
+/**
+ * @param {{ gameState?: Record<string, any>, caseData?: Record<string, any>, lang?: string }} options
+ */
 export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = 'zh' } = {}) {
   const language = lang === 'en' ? 'en' : 'zh';
   const zh = language === 'zh';
@@ -648,6 +976,7 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
   const profile = getCaseNarrativeProfile(source.case_id || gameState.case_id, language);
   const stage = narrativeStage({ turn, clueCount: clues.length, clueTotal: totalClues });
   const zoneAtmosphere = safeText(profile.zones?.[gameState.current_zone], '', 260);
+  const aftermath = turn > 1 ? renderObservationAftermath({ gameState, caseData: source, lang: language }) : null;
 
   const sceneReport = publicLabel(
     source.scene?.description,
@@ -668,6 +997,7 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
       ? '目前没有证据足以支撑结论，第一份可复查的记录仍在等待调查。'
       : 'No evidence yet supports a conclusion; the first reviewable record is still waiting to be secured.');
   const progressNarrative = [
+    aftermath?.text,
     profile.stages?.[stage],
     zoneAtmosphere ? `${zoneName}：${zoneAtmosphere}` : '',
     evidenceProgress,
@@ -703,6 +1033,7 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
     chapterLabel: chapterLabel(stage, language),
     question: profile.question,
     zoneAtmosphere,
+    aftermath,
     narrative: turn === 1 ? openingNarrative : progressNarrative,
     objective,
   };

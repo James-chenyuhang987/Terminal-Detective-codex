@@ -1,4 +1,5 @@
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const SETTLEMENT_OUTCOMES = new Set(['clue', 'progress', 'no_yield', 'trap', 'illegal']);
 
 function finiteNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -22,6 +23,7 @@ export function normalizeSettlementResult(value = {}) {
     ...source,
     action_narration: typeof source.action_narration === 'string' ? source.action_narration : '',
     action_name: typeof source.action_name === 'string' ? source.action_name : null,
+    outcome: SETTLEMENT_OUTCOMES.has(source.outcome) ? source.outcome : null,
     new_clues_unlocked: clues,
     confusion_increase: clamp(finiteNumber(source.confusion_increase), 0, 100),
     time_cost: clamp(finiteNumber(source.time_cost ?? source.ap_cost, 1), 0, 20),
