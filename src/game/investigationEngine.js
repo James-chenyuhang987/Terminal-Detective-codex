@@ -127,6 +127,7 @@ export async function settleAction({ actionName, actionTag = null, riskLevel = '
   return normalizeSettlementResult({
     action_narration: narrative.text,
     action_name: effectiveAction,
+    outcome,
     narrative_template_id: narrative.templateId,
     new_clues_unlocked: clueId ? [clueId] : [],
     confusion_increase: confusionIncrease,

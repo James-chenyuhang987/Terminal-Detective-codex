@@ -3,7 +3,14 @@ import { ReAct_Enum, Legal_Actions_List, Phase_Color_Map, Case_Data_Lvl_01, loca
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError';
 import MiniMap from '@/components/game/MiniMap';
-import { createInitialGameState, generateObservationSections, applySettlementResult, pushCheckpoint, checkConflictClues } from '@/game/gameState';
+import {
+  createInitialGameState,
+  generateObservationSections,
+  applySettlementResult,
+  buildLastActionContext,
+  pushCheckpoint,
+  checkConflictClues,
+} from '@/game/gameState';
 import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
 import { streamInvestigationThought, streamTerminalText, settleAction, linkCheck, setInvestigationLang } from '@/game/investigationEngine';
 import {
@@ -638,6 +645,15 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         deferredOutcomeLines.push([`\n${t.logicConflict}`, 'warning']);
       }
 
+      const actualTrapTriggered = (Number(newState.traps_triggered) || 0) > (Number(gs.traps_triggered) || 0);
+      const cinematicSettlement = { ...settlement, is_trap: actualTrapTriggered };
+      newState.last_action_context = buildLastActionContext(gs, newState, cinematicSettlement, caseData, {
+        actionTag: actionTag || 'search_area',
+        executorAgentId: executingStrategy.executing_agent_id,
+        assistAgentId: executingStrategy.assisting_agent_id,
+        actualTrapTriggered,
+      });
+
       // Push checkpoint at key zones
       if (newState.current_zone !== gs.current_zone && caseData.checkpoints?.includes(newState.current_zone)) {
         const milestone = awardCommandMilestone(newState.command_state, `checkpoint:${newState.current_zone}`);
@@ -676,8 +692,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         }
       }
 
-      const actualTrapTriggered = (Number(newState.traps_triggered) || 0) > (Number(gs.traps_triggered) || 0);
-      const cinematicSettlement = { ...settlement, is_trap: actualTrapTriggered };
       if (shouldPlayActionCinematic(gs, newState, cinematicSettlement, caseData)) {
         const event = buildCinematicEvent({
           previousState: gs,

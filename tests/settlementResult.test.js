@@ -27,3 +27,8 @@ test('clamps untrusted numeric settlement fields', () => {
   assert.equal(result.confusion_increase, 0);
   assert.equal(result.health_change, -100);
 });
+
+test('preserves only known narrative outcomes', () => {
+  assert.equal(normalizeSettlementResult({ outcome: 'trap' }).outcome, 'trap');
+  assert.equal(normalizeSettlementResult({ outcome: 'hidden_answer' }).outcome, null);
+});

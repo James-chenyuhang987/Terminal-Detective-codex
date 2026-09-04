@@ -7,7 +7,7 @@ import { DEFAULT_AGENT_CONFIG } from './caseData.js';
 import { getAvailableClueIds, getInitialZone, getZoneClueIds, isValidZoneTransition } from './caseRuntime.js';
 import { normalizeSettlementResult } from './settlementResult.js';
 import { createCommandState } from './commandSystem.js';
-import { buildPublicCaseContext } from './narrativeEngine.js';
+import { buildPublicCaseContext, NARRATIVE_ACTIONS, NARRATIVE_OUTCOMES } from './narrativeEngine.js';
 
 // ── Initial State Factory ─────────────────────────────────────────────────
 export function createInitialGameState(caseData, runtimeEffects = {}, commandPlan = {}, primaryAgentId = 'AURORA-09') {
@@ -35,6 +35,7 @@ export function createInitialGameState(caseData, runtimeEffects = {}, commandPla
     narrative_template_history: [],
     last_observation: '',
     last_action: null,
+    last_action_context: null,
     is_crashed: false,
     trap_shield_charges: runtimeEffects.ignore_first_trap ? 1 : 0,
     traps_triggered: 0,
@@ -239,6 +240,77 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
   newState.turn_count = newState.turn_count + 1;
 
   return { newState, newClues };
+}
+
+function boundedInteger(value, min, max) {
+  const number = Number(value);
+  return Math.min(max, Math.max(min, Number.isFinite(number) ? Math.round(number) : 0));
+}
+
+function safeIdentifier(value, max = 80) {
+  return typeof value === 'string'
+    ? value.replace(/[^a-zA-Z0-9_:+-]/g, '').slice(0, max)
+    : '';
+}
+
+export function buildLastActionContext(
+  previousState,
+  nextState,
+  settlement,
+  caseData,
+  {
+    actionTag = settlement?.action_name,
+    executorAgentId = '',
+    assistAgentId = '',
+    actualTrapTriggered = false,
+  } = {},
+) {
+  const normalized = normalizeSettlementResult(settlement);
+  const safeAction = NARRATIVE_ACTIONS.includes(actionTag) ? actionTag : null;
+  const hiddenIds = new Set((caseData?.hidden_clues || []).map(clue => clue?.clue_id).filter(Boolean));
+  const publicIds = new Set((caseData?.clue_dictionary || [])
+    .map(clue => clue?.clue_id)
+    .filter(id => id && !hiddenIds.has(id)));
+  const previousClues = new Set(previousState?.unlocked_clues || []);
+  const publicClueIds = [...new Set(nextState?.unlocked_clues || [])]
+    .filter(id => publicIds.has(id) && !previousClues.has(id))
+    .slice(0, 4);
+  const fromZone = safeIdentifier(previousState?.current_zone);
+  const toZone = safeIdentifier(nextState?.current_zone);
+  let outcome = 'progress';
+  if (!safeAction || normalized.outcome === 'illegal') outcome = 'illegal';
+  else if (actualTrapTriggered) outcome = 'trap';
+  else if (publicClueIds.length) outcome = 'clue';
+  else if (['progress', 'no_yield'].includes(normalized.outcome)) outcome = normalized.outcome;
+
+  return {
+    version: 1,
+    turn: Math.max(1, boundedInteger(nextState?.turn_count, 1, 999)),
+    action_tag: safeAction || 'search_area',
+    executor_agent_id: safeIdentifier(executorAgentId, 48) || 'AGENT',
+    assist_agent_id: safeIdentifier(assistAgentId, 48) || null,
+    outcome: NARRATIVE_OUTCOMES.includes(outcome) ? outcome : 'progress',
+    public_clue_ids: publicClueIds,
+    from_zone: fromZone || null,
+    to_zone: toZone || fromZone || null,
+    moved: Boolean(fromZone && toZone && fromZone !== toZone),
+    ap_spent: boundedInteger(
+      (Number(previousState?.action_points_left) || 0) - (Number(nextState?.action_points_left) || 0),
+      0,
+      20,
+    ),
+    hp_delta: boundedInteger(
+      (Number(nextState?.current_hp) || 0) - (Number(previousState?.current_hp) || 0),
+      -100,
+      100,
+    ),
+    confusion_delta: boundedInteger(
+      (Number(nextState?.confusion_score) || 0) - (Number(previousState?.confusion_score) || 0),
+      -100,
+      100,
+    ),
+    trap_triggered: actualTrapTriggered === true,
+  };
 }
 
 // ── Observation Generator ─────────────────────────────────────────────────
