@@ -62,3 +62,19 @@ test('investigation loop streams the complete observation then thought before op
   assert.match(terminal, /prefers-reduced-motion: reduce/);
   assert.match(terminal, /aria-hidden="true"[\s\S]*td-sr-only/);
 });
+
+test('decision and interrogation layers expose stamina, costs, and depleted recovery', () => {
+  assert.match(component, /AgentStaminaMeter/);
+  assert.match(component, /canAgentInvestigate\(agent\.stamina,\s*true\)/);
+  assert.match(component, /chooseOnce\(\{ rest: true \}\)/);
+  assert.match(component, /参与者 -\$\{AGENT_STAMINA_INVESTIGATION_COST\}%/);
+  assert.match(terminal, /applyStaminaToTeam\(configuredAgentStrategy\.team,\s*gameState\.agent_stamina\)/);
+  assert.match(terminal, /recoverAgentStaminaTurn\(gs\.agent_stamina,\s*teamIds\)/);
+  assert.match(terminal, /team:\s*roundAgentStrategy\.team/);
+  assert.match(terminal, /buildExecutingStrategy\(\s*roundAgentStrategy/);
+  assert.match(terminal, /spendAgentStamina/);
+  assert.match(terminal, /applyRecoveryTurn/);
+  assert.match(styles, /\.td-agent-stamina\s*\{/);
+  assert.match(styles, /\.td-stamina-warning\s*\{/);
+  assert.match(styles, /\.td-npc-stamina-note\s*\{/);
+});

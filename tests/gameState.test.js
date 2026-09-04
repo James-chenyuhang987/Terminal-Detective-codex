@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyRecoveryTurn,
   applySettlementResult,
   buildLastActionContext,
   createInitialGameState,
+  popCheckpoint,
 } from '../src/game/gameState.js';
 import { Case_Data_Lvl_01, Case_Data_Lvl_02 } from '../src/game/caseData.js';
 
@@ -14,6 +16,64 @@ test('initial state uses the selected case start zone and a unique run id', () =
   assert.equal(first.current_zone, 'zone_lab_core');
   assert.deepEqual(first.visited_zones, ['zone_lab_core']);
   assert.notEqual(first.run_id, second.run_id);
+  assert.deepEqual(first.agent_stamina, {
+    'NEXUS-01': 50,
+    'AURORA-09': 50,
+    'CIPHER-47': 50,
+  });
+});
+
+test('successful turns recover the team by 4% and spend 10% for each participant', () => {
+  const state = createInitialGameState(Case_Data_Lvl_02);
+  const solo = applySettlementResult(state, {
+    action_name: 'search_area',
+    time_cost: 1,
+  }, {
+    team: [{ agent_id: 'NEXUS-01' }, { agent_id: 'AURORA-09' }, { agent_id: 'CIPHER-47' }],
+    executing_agent_id: 'AURORA-09',
+  }, Case_Data_Lvl_02).newState;
+  assert.deepEqual(solo.agent_stamina, {
+    'NEXUS-01': 54,
+    'AURORA-09': 44,
+    'CIPHER-47': 54,
+  });
+
+  const joint = applySettlementResult(state, {
+    action_name: 'search_area',
+    time_cost: 1,
+  }, {
+    team: [{ agent_id: 'NEXUS-01' }, { agent_id: 'AURORA-09' }, { agent_id: 'CIPHER-47' }],
+    executing_agent_id: 'AURORA-09',
+    assisting_agent_id: 'CIPHER-47',
+  }, Case_Data_Lvl_02).newState;
+  assert.deepEqual(joint.agent_stamina, {
+    'NEXUS-01': 54,
+    'AURORA-09': 44,
+    'CIPHER-47': 44,
+  });
+});
+
+test('recovery turns advance once and old checkpoints restore safe stamina defaults', () => {
+  const state = {
+    ...createInitialGameState(Case_Data_Lvl_02),
+    agent_stamina: { 'NEXUS-01': 99, 'AURORA-09': 5, 'CIPHER-47': 0 },
+  };
+  const recovered = applyRecoveryTurn(state, Object.keys(state.agent_stamina));
+  assert.equal(recovered.turn_count, 1);
+  assert.deepEqual(recovered.agent_stamina, {
+    'NEXUS-01': 100,
+    'AURORA-09': 9,
+    'CIPHER-47': 4,
+  });
+
+  const legacySnapshot = { ...state };
+  delete legacySnapshot.agent_stamina;
+  const restored = popCheckpoint({ ...state, checkpoint_stack: [legacySnapshot] });
+  assert.deepEqual(restored.agent_stamina, {
+    'NEXUS-01': 50,
+    'AURORA-09': 50,
+    'CIPHER-47': 50,
+  });
 });
 
 test('settlement applies legacy fields, validates clues, and moves zones', () => {

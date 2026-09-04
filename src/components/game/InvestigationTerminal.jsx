@@ -7,6 +7,7 @@ import {
   createInitialGameState,
   generateObservationSections,
   applySettlementResult,
+  applyRecoveryTurn,
   buildLastActionContext,
   pushCheckpoint,
   checkConflictClues,
@@ -70,6 +71,12 @@ import {
 } from '@/game/turnArchive';
 import { getRejectedReportPenalty } from '@/game/caseEvaluation';
 import { stableNarrativeHash } from '@/game/narrativeEngine';
+import {
+  applyStaminaToTeam,
+  canAgentInvestigate,
+  recoverAgentStaminaTurn,
+  spendAgentStamina,
+} from '@/game/agentStamina';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
@@ -83,7 +90,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const { schedule, wait } = useManagedTimers();
   const caseDataResolved = selectedCase || Case_Data_Lvl_01;
   const [runtimePriority, setRuntimePriority] = useState(() => agentStrategy?.priority_list || []);
-  const activeAgentStrategy = useMemo(() => ({
+  const configuredAgentStrategy = useMemo(() => ({
     ...(agentStrategy || {}),
     priority_list: runtimePriority,
     team: (agentStrategy?.team || []).map(agent => agent.agent_id === agentStrategy?.primary_agent_id
@@ -103,7 +110,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     agentStrategy?.home_effects,
     agentStrategy?.command_plan,
     agentStrategy?.primary_agent_id,
+    (agentStrategy?.team || []).map(agent => agent.agent_id),
   ));
+  const activeAgentStrategy = useMemo(() => ({
+    ...configuredAgentStrategy,
+    team: applyStaminaToTeam(configuredAgentStrategy.team, gameState.agent_stamina),
+  }), [configuredAgentStrategy, gameState.agent_stamina]);
   const [reactState, setReactState] = useState(ReAct_Enum.IDLE);
   const [terminalLines, setTerminalLines] = useState([]);
   const [activeTerminalTurn, setActiveTerminalTurn] = useState(() => Math.max(0, Number(gameState.turn_count) || 0));
@@ -414,6 +426,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       addLine(`\n${t.apDepleted}`, 'error');
       return;
     }
+    const teamIds = configuredAgentStrategy.team.map(agent => agent.agent_id);
+    const roundAgentStrategy = {
+      ...configuredAgentStrategy,
+      team: applyStaminaToTeam(
+        configuredAgentStrategy.team,
+        recoverAgentStaminaTurn(gs.agent_stamina, teamIds),
+      ),
+    };
 
     const nextTurn = Math.max(1, (Number(gs.turn_count) || 0) + 1);
     activeTerminalTurnRef.current = nextTurn;
@@ -437,7 +457,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       const optionPacksPromise = getDecisionOptionPacks({
         gameState: gs,
         caseData,
-        team: activeAgentStrategy?.team || [],
+        team: roundAgentStrategy.team,
         signal: ctrl.signal,
         lang: runLang,
       }).then(
@@ -475,7 +495,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       await streamInvestigationThought({
         gameState: gs,
         caseData,
-        agentStrategy: activeAgentStrategy,
+        agentStrategy: roundAgentStrategy,
         observation,
         lang: runLang,
         instant: reduceMotion,
@@ -505,8 +525,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       let cardRisk = 'low';
       let hiddenBranch = false;
       let executorAgentId = gameStateRef.current.command_state?.active_agent_id
-        || activeAgentStrategy?.primary_agent_id
-        || recommendExecutor(activeAgentStrategy?.team, 'search_area');
+        || roundAgentStrategy.primary_agent_id
+        || recommendExecutor(roundAgentStrategy.team, 'search_area');
       let assistAgentId = null;
       let commandIds = [];
 
@@ -545,10 +565,33 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         setDecisionStory(null);
         decisionResolveRef.current = null;
         if (!choice || isCancelled()) return;
+        if (choice.rest) {
+          const recoveredState = applyRecoveryTurn(gs, teamIds);
+          recoveredState.chat_history = [
+            ...gs.chat_history,
+            {
+              role: 'assistant',
+              actionTag: 'recover_team',
+              content: runLang === 'zh' ? '[ACTION] 探员小队进行战术整备。' : '[ACTION] Agent team performs tactical recovery.',
+            },
+          ].slice(-12);
+          setGameState(recoveredState);
+          addLine(runLang === 'zh'
+            ? '\n↻ 小队完成一回合整备 · 全员体力 +4%'
+            : '\n↻ RECOVERY TURN COMPLETE · ALL AGENTS +4% STAMINA', 'success');
+          setReactState(ReAct_Enum.IDLE);
+          return;
+        }
 
         executorAgentId = choice.executorAgentId || executorAgentId;
         assistAgentId = choice.assistAgentId || null;
         commandIds = Array.isArray(choice.commandIds) ? choice.commandIds : [];
+        const chosenExecutor = roundAgentStrategy.team.find(agent => agent.agent_id === executorAgentId);
+        const chosenAssistant = roundAgentStrategy.team.find(agent => agent.agent_id === assistAgentId);
+        if (!chosenExecutor || !canAgentInvestigate(chosenExecutor.stamina, false)
+          || (assistAgentId && (!chosenAssistant || !canAgentInvestigate(chosenAssistant.stamina, false)))) {
+          throw new Error(runLang === 'zh' ? '所选探员体力不足，请重新开始本回合。' : 'SELECTED AGENT STAMINA IS TOO LOW. RESTART THIS TURN.');
+        }
 
         const card = choice.card;
         actionTag = card.action_tag;
@@ -564,7 +607,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
       const isLegal = actionTag && Legal_Actions_List.includes(actionTag);
       const executingStrategy = buildExecutingStrategy(
-        activeAgentStrategy,
+        roundAgentStrategy,
         actionTag || 'search_area',
         executorAgentId,
         assistAgentId,
@@ -603,6 +646,13 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       const deferredOutcomeLines = [];
       const deferredNotices = [];
       let removedCrisisClueId = null;
+      const staminaSummary = activeAgentStrategy.team
+        .map(agent => `${agent.agent_id} ${Math.round(agent.stamina)}→${newState.agent_stamina?.[agent.agent_id] ?? Math.round(agent.stamina)}`)
+        .join(' · ');
+      deferredOutcomeLines.push([
+        `\n${runLang === 'zh' ? '⚡ 回合体力结算' : '⚡ TURN STAMINA SETTLEMENT'} · ${staminaSummary}`,
+        'system',
+      ]);
       newState.lastAction = actionTag;
       newState.last_action = actionTag;
       const committedCommand = applyDecisionCommandCost(newState, commandIds);
@@ -829,14 +879,19 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleNPCTalk = async (npc) => {
+    const state = gameStateRef.current;
+    const runtimeTeam = applyStaminaToTeam(configuredAgentStrategy.team, state.agent_stamina);
+    const primary = runtimeTeam.find(agent => agent.agent_id === configuredAgentStrategy.primary_agent_id);
+    const executor = (primary && canAgentInvestigate(primary.stamina, false) ? primary : null)
+      || runtimeTeam.find(agent => canAgentInvestigate(agent.stamina, false));
     setSelectedNPC(npc);
     setNpcDialogue([{ role: 'system', text: `— ${npc.name} ${t.npcEnters} —\n"${npc.initial_statement}"` }]);
     setNpcQuestionPacks(null);
-    setNpcQuestionError(null);
-    const executor = activeAgentStrategy?.primary_agent_id || activeAgentStrategy?.team?.[0]?.agent_id || '';
-    setNpcExecutorId(executor);
+    setNpcQuestionError(executor
+      ? null
+      : (lang === 'zh' ? '所有探员体力均不足 10%，请返回行动界面整备。' : 'ALL AGENTS HAVE LESS THAN 10% STAMINA. RETURN TO THE ACTION SCREEN TO RECOVER.'));
+    setNpcExecutorId(executor?.agent_id || runtimeTeam[0]?.agent_id || '');
     if (abortCtrlRef.current) return;
-    const state = gameStateRef.current;
     const { ctrl, operationId } = beginAbortableOperation();
     setIsProcessing(true);
     try {
@@ -844,7 +899,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         gameState: state,
         caseData,
         npcId: npc.npc_id,
-        team: activeAgentStrategy?.team || [],
+        team: runtimeTeam,
         emotionLevel: getEmotion(npcEmotionState, npc.npc_id).level,
         askedQuestionIds: askedQuestionIds[npc.npc_id] || [],
         signal: ctrl.signal,
@@ -867,6 +922,15 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     if (!selectedNPC || !question?.questionId || isProcessing || abortCtrlRef.current) return;
     const npc = selectedNPC;
     const state = gameStateRef.current;
+    const staminaAgent = configuredAgentStrategy.team.find(agent => agent.agent_id === npcExecutorId);
+    if (!staminaAgent || !canAgentInvestigate(state.agent_stamina?.[npcExecutorId], false)) {
+      setNpcQuestionError(lang === 'zh'
+        ? '该探员体力不足 10%，请更换探员或返回行动界面整备。'
+        : 'THIS AGENT HAS LESS THAN 10% STAMINA. SWITCH AGENTS OR RECOVER FROM THE ACTION SCREEN.');
+      return;
+    }
+    setNpcQuestionError(null);
+    const runtimeTeam = applyStaminaToTeam(configuredAgentStrategy.team, state.agent_stamina);
     const previousAsked = askedQuestionIds[npc.npc_id] || [];
     const { ctrl, operationId } = beginAbortableOperation();
     setNpcDialogue(prev => [...prev, { role: 'agent', text: question.text }]);
@@ -879,7 +943,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         npcId: npc.npc_id,
         gameState: state,
         caseData,
-        team: activeAgentStrategy?.team || [],
+        team: runtimeTeam,
         emotionLevel: emo.level,
         askedQuestionIds: previousAsked,
         signal: ctrl.signal,
@@ -898,6 +962,15 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }));
       const nextAsked = [...new Set([...previousAsked, question.questionId])];
       setAskedQuestionIds(prev => ({ ...prev, [npc.npc_id]: nextAsked }));
+      const staminaResult = spendAgentStamina(
+        state.agent_stamina,
+        npcExecutorId,
+        configuredAgentStrategy.team.map(agent => agent.agent_id),
+      );
+      let nextGameState = {
+        ...state,
+        agent_stamina: staminaResult.stamina,
+      };
       if (nextLevel !== emo.level) {
         setNpcDialogue(prev => [...prev, {
           role: 'system',
@@ -908,20 +981,15 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
       const confusionIncrease = Number(result.consequence?.confusionIncrease) || 0;
       if (confusionIncrease > 0) {
-        setGameState(prev => ({
-          ...prev,
-          confusion_score: Math.min(100, prev.confusion_score + confusionIncrease),
-        }));
+        nextGameState.confusion_score = Math.min(100, nextGameState.confusion_score + confusionIncrease);
         addLine(`\n${lang === 'zh' ? `⚠ 无效施压使混乱增加 ${confusionIncrease}` : `⚠ INEFFECTIVE PRESSURE RAISED CONFUSION BY ${confusionIncrease}`}`, 'warning');
       }
       for (const clueId of result.revealedClueIds || []) {
-        if (!gameStateRef.current.unlocked_clues.includes(clueId)) {
+        if (!nextGameState.unlocked_clues.includes(clueId)) {
           const clue = caseData.clue_dictionary.find(c => c.clue_id === clueId);
           if (!clue) continue;
-          setGameState(prev => {
-            const clues = [...prev.unlocked_clues, clueId];
-            return { ...prev, unlocked_clues: clues, unlocked_clues_set: new Set(clues) };
-          });
+          const clues = [...nextGameState.unlocked_clues, clueId];
+          nextGameState = { ...nextGameState, unlocked_clues: clues, unlocked_clues_set: new Set(clues) };
           setNewClueIds(prev => [...prev, clueId]);
           schedule(() => setNewClueIds(prev => prev.filter(id => id !== clueId)), 3000);
           addLine(lang === 'zh'
@@ -930,16 +998,27 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           triggerSynergy('clue_converge', clue);
         }
       }
-      const refreshed = await getInterrogationOptionPacks({
-        gameState: gameStateRef.current,
-        caseData,
-        npcId: npc.npc_id,
-        team: activeAgentStrategy?.team || [],
-        emotionLevel: nextLevel,
-        askedQuestionIds: nextAsked,
-        signal: ctrl.signal,
-      });
-      if (isOperationCurrent(ctrl, operationId)) setNpcQuestionPacks(refreshed.packs || {});
+      setGameState(nextGameState);
+      gameStateRef.current = nextGameState;
+      try {
+        const refreshed = await getInterrogationOptionPacks({
+          gameState: nextGameState,
+          caseData,
+          npcId: npc.npc_id,
+          team: applyStaminaToTeam(configuredAgentStrategy.team, nextGameState.agent_stamina),
+          emotionLevel: nextLevel,
+          askedQuestionIds: nextAsked,
+          signal: ctrl.signal,
+        });
+        if (isOperationCurrent(ctrl, operationId)) setNpcQuestionPacks(refreshed.packs || {});
+      } catch (refreshError) {
+        if (refreshError?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
+          setNpcQuestionPacks({});
+          setNpcQuestionError(lang === 'zh'
+            ? '本次提问结果和体力消耗已保存，但下一组选项刷新失败。请关闭对话后重新打开。'
+            : 'THE RESULT AND STAMINA COST WERE SAVED, BUT NEW OPTIONS COULD NOT LOAD. CLOSE AND REOPEN THE DIALOGUE.');
+        }
+      }
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
         setNpcQuestionError(lang === 'zh' ? '问题选项已过期或规则服务不可用，请关闭后重试。' : 'QUESTION OPTIONS EXPIRED OR RULE SERVICE UNAVAILABLE.');
@@ -1259,7 +1338,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           language={decisionStory?.language}
           team={activeAgentStrategy.team}
           commandState={gameState.command_state}
-          onCommandError={() => notifyCommand(decisionStory?.language === 'en' ? 'INSUFFICIENT COMMAND POINTS' : '指挥点不足', 'error')}
+          onCommandError={(code) => notifyCommand(
+            code === 'insufficient_agent_stamina'
+              ? (decisionStory?.language === 'en' ? 'AGENT STAMINA IS TOO LOW' : '探员体力不足')
+              : (decisionStory?.language === 'en' ? 'INSUFFICIENT COMMAND POINTS' : '指挥点不足'),
+            'error',
+          )}
           onChoose={(choice) => decisionResolveRef.current?.(choice)}
         />
       )}
@@ -1331,6 +1415,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             { label: lang === 'zh' ? 'AP' : 'AP', val: `${gameState.action_points_left}/20` },
             { label: lang === 'zh' ? '线索' : 'CLUES', val: `${gameState.unlocked_clues.length}/${caseData.clue_dictionary.length}` },
             { label: lang === 'zh' ? '混乱' : 'CONFUSION', val: `${gameState.confusion_score}%` },
+            { label: lang === 'zh' ? '体力' : 'STAMINA', val: activeAgentStrategy.team.map(agent => Math.round(agent.stamina)).join('/') },
             { label: lang === 'zh' ? '指挥' : 'COMMAND', val: `◆ ${gameState.command_state?.points || 0}/${gameState.command_state?.max_points || 5}` },
           ].map(s => (
             <div key={s.label} className="text-center">
