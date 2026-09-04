@@ -8,9 +8,21 @@ import { getAvailableClueIds, getInitialZone, getZoneClueIds, isValidZoneTransit
 import { normalizeSettlementResult } from './settlementResult.js';
 import { createCommandState } from './commandSystem.js';
 import { buildPublicCaseContext, NARRATIVE_ACTIONS, NARRATIVE_OUTCOMES } from './narrativeEngine.js';
+import {
+  DEFAULT_CORE_AGENT_IDS,
+  normalizeAgentStamina,
+  recoverAgentStaminaTurn,
+  settleRoundAgentStamina,
+} from './agentStamina.js';
 
 // ── Initial State Factory ─────────────────────────────────────────────────
-export function createInitialGameState(caseData, runtimeEffects = {}, commandPlan = {}, primaryAgentId = 'AURORA-09') {
+export function createInitialGameState(
+  caseData,
+  runtimeEffects = {},
+  commandPlan = {},
+  primaryAgentId = 'AURORA-09',
+  agentIds = DEFAULT_CORE_AGENT_IDS,
+) {
   const initialZone = getInitialZone(caseData);
   return {
     run_id: `${caseData.case_id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -21,6 +33,7 @@ export function createInitialGameState(caseData, runtimeEffects = {}, commandPla
     ap_discount_credit: 0,
     command_ap_credit: 0,
     command_state: createCommandState(commandPlan, primaryAgentId),
+    agent_stamina: normalizeAgentStamina(null, agentIds),
     unlocked_clues: [],
     unlocked_clues_set: new Set(), // fast lookup
     current_zone: initialZone,
@@ -98,7 +111,22 @@ export function popCheckpoint(state) {
   const snap = stack.pop();
   snap.checkpoint_stack = stack;
   snap.unlocked_clues_set = new Set(snap.unlocked_clues || []);
+  snap.agent_stamina = normalizeAgentStamina(
+    snap.agent_stamina,
+    Object.keys(snap.agent_stamina || {}).length ? Object.keys(snap.agent_stamina) : DEFAULT_CORE_AGENT_IDS,
+  );
   return snap;
+}
+
+export function applyRecoveryTurn(state, agentIds = DEFAULT_CORE_AGENT_IDS) {
+  return {
+    ...state,
+    turn_count: Math.max(0, Number(state?.turn_count) || 0) + 1,
+    agent_stamina: recoverAgentStaminaTurn(state?.agent_stamina, agentIds),
+    last_action: null,
+    lastAction: null,
+    last_action_context: null,
+  };
 }
 
 // ── State Mutation Helper ─────────────────────────────────────────────────
@@ -237,6 +265,12 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
     ].slice(0, 6);
   }
 
+  const agentIds = (agentStrategy?.team || []).map(agent => agent?.agent_id).filter(Boolean);
+  newState.agent_stamina = settleRoundAgentStamina(
+    state.agent_stamina,
+    agentIds.length ? agentIds : Object.keys(state.agent_stamina || {}),
+    [agentStrategy?.executing_agent_id, agentStrategy?.assisting_agent_id],
+  );
   newState.turn_count = newState.turn_count + 1;
 
   return { newState, newClues };

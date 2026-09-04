@@ -130,15 +130,41 @@ function stableShuffle(items, seed) {
     .map(entry => entry.item);
 }
 
+function safeStamina(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return clamp(value, 0, 100);
+}
+
+function effectiveAttribute(value, stamina) {
+  const base = clamp(value, 0, 40);
+  if (stamina === null) return base;
+  return Math.round(base * (0.5 + stamina / 200) * 100) / 100;
+}
+
 function safeTeam(value) {
-  return (Array.isArray(value) ? value : []).slice(0, 3).map((agent, index) => ({
-    agentId: String(agent?.agentId || agent?.agent_id || `AGENT-${index + 1}`).slice(0, 64),
-    logic_power: clamp(agent?.logicPower ?? agent?.logic_power, 0, 40),
-    observation_focus: clamp(agent?.observationFocus ?? agent?.observation_focus, 0, 40),
-    hack_level: clamp(agent?.hackLevel ?? agent?.hack_level, 0, 40),
-    confusion_resistance: clamp(agent?.confusionResistance ?? agent?.confusion_resistance, 0, 40),
-    interrogation_bonus: clamp(agent?.interrogationBonus ?? agent?.interrogation_bonus, 0, 0.8),
-  })).filter(agent => agent.agentId);
+  const input = (Array.isArray(value) ? value : []).slice(0, 3);
+  const agentIds = new Set();
+  const team = [];
+  for (const agent of input) {
+    const rawAgentId = agent?.agentId ?? agent?.agent_id;
+    if (typeof rawAgentId !== 'string'
+      || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(rawAgentId)
+      || agentIds.has(rawAgentId)) {
+      return [];
+    }
+    const stamina = safeStamina(agent?.stamina);
+    agentIds.add(rawAgentId);
+    team.push({
+      agentId: rawAgentId,
+      logic_power: effectiveAttribute(agent?.logicPower ?? agent?.logic_power, stamina),
+      observation_focus: effectiveAttribute(agent?.observationFocus ?? agent?.observation_focus, stamina),
+      hack_level: effectiveAttribute(agent?.hackLevel ?? agent?.hack_level, stamina),
+      confusion_resistance: effectiveAttribute(agent?.confusionResistance ?? agent?.confusion_resistance, stamina),
+      interrogation_bonus: clamp(agent?.interrogationBonus ?? agent?.interrogation_bonus, 0, 0.8),
+      stamina,
+    });
+  }
+  return team;
 }
 
 function focusFor(actionTag) {
@@ -342,7 +368,11 @@ export function resolveInterrogation(payload = {}) {
   const emotion = ['calm', 'shaken', 'broken'].includes(payload.emotionLevel || payload.emotion_level)
     ? (payload.emotionLevel || payload.emotion_level)
     : 'calm';
-  const effective = candidate.actual - (repeated ? 24 : 0);
+  const executor = team.find(agent => agent.agentId === executorAgentId);
+  const expertise = interrogationExpertise(executor);
+  const effective = Math.round(
+    (candidate.actual - (repeated ? 24 : 0)) * (0.5 + expertise / 200)
+  );
   const strong = effective >= 72;
   const evidencePressure = candidate.requiredClueIds.length > 0;
   const nextEmotion = strong && (evidencePressure || emotion === 'shaken') ? 'broken' : strong ? 'shaken' : emotion;

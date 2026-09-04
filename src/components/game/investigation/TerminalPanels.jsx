@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { EmotionBadge } from '@/components/game/InterrogationHints';
+import AgentStaminaMeter from '@/components/game/AgentStaminaMeter';
+import { AGENT_STAMINA_INVESTIGATION_COST, canAgentInvestigate } from '@/game/agentStamina';
 
 export function TerminalLine({ line, accentColor }) {
   const colors = {
@@ -24,6 +26,8 @@ export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChang
   }, [dialogue]);
 
   const activePack = packs?.[executorId];
+  const activeAgent = team.find(agent => agent.agent_id === executorId);
+  const canQuestion = Boolean(activeAgent) && canAgentInvestigate(activeAgent.stamina, false);
 
   return (
     <div className="border-t p-3" style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.6)' }}>
@@ -47,22 +51,29 @@ export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChang
       <div className="td-interrogation-agent-tabs">
         {team.slice(0, 3).map(agent => {
           const pack = packs?.[agent.agent_id];
-          return <button type="button" key={agent.agent_id} disabled={isProcessing || !pack}
+          const ready = canAgentInvestigate(agent.stamina, false);
+          return <button type="button" key={agent.agent_id} disabled={isProcessing || !pack || !ready}
             className={executorId === agent.agent_id ? 'is-active' : ''}
             onClick={() => onExecutorChange(agent.agent_id)}>
             <strong>{agent.agent_id}</strong>
             <small>{pack ? `${pack.expertise}% · ${pack.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : pack.confidence === 'medium' ? (zh ? '中置信' : 'MED') : (zh ? '低置信' : 'LOW')}` : (zh ? '加载中' : 'LOADING')}</small>
+            <AgentStaminaMeter stamina={agent.stamina} language={lang} compact />
           </button>;
         })}
+      </div>
+      <div className={`td-npc-stamina-note ${canQuestion ? '' : 'is-depleted'}`} role={canQuestion ? 'note' : 'alert'}>
+        {canQuestion
+          ? (zh ? `本次提问消耗 ${AGENT_STAMINA_INVESTIGATION_COST}% 体力，不触发回合恢复。` : `THIS QUESTION COSTS ${AGENT_STAMINA_INVESTIGATION_COST}% STAMINA WITHOUT TURN RECOVERY.`)
+          : (zh ? '该探员体力不足 10%，请更换探员或返回行动界面整备。' : 'THIS AGENT HAS LESS THAN 10% STAMINA. SWITCH AGENTS OR RECOVER FROM THE ACTION SCREEN.')}
       </div>
       {error && <div className="td-interrogation-error">{error}</div>}
       <div className="td-interrogation-questions" data-onboarding-target="interrogation-questions">
         {(activePack?.questions || []).map(question => (
-          <button type="button" key={question.questionId} disabled={isProcessing}
+          <button type="button" key={question.questionId} disabled={isProcessing || !canQuestion}
             onClick={() => onQuestion(question)} className={question.repeated ? 'is-repeated' : ''}>
             <header><span>{question.repeated ? '↻' : question.tone === 'evidence' ? '📎' : '◇'} {question.text}</span><strong>{question.estimatedAlignment}%</strong></header>
             <div><i><b style={{ width: `${question.estimatedAlignment}%` }} /></i></div>
-            <footer><span>{zh ? '探员预估 · ' : 'AGENT ESTIMATE · '}{question.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : question.confidence === 'medium' ? (zh ? '中置信' : 'MEDIUM') : (zh ? '低置信' : 'LOW')}</span><code>{question.focusAttribute}</code></footer>
+            <footer><span>{zh ? '探员预估 · ' : 'AGENT ESTIMATE · '}{question.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : question.confidence === 'medium' ? (zh ? '中置信' : 'MEDIUM') : (zh ? '低置信' : 'LOW')}</span><code>{question.focusAttribute} · STA -{AGENT_STAMINA_INVESTIGATION_COST}%</code></footer>
           </button>
         ))}
         {!activePack && <div className="td-interrogation-loading">{zh ? '正在校验可用问题…' : 'VALIDATING AVAILABLE QUESTIONS…'}</div>}

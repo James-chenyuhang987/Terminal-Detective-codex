@@ -63,10 +63,11 @@ async function invokeRule(task, payload, signal, lang = currentLang) {
 function teamPayload(team = []) {
   return team.slice(0, 3).map(agent => ({
     agentId: agent.agent_id,
-    logicPower: agent.logic_power,
-    observationFocus: agent.observation_focus,
-    hackLevel: agent.hack_level,
-    confusionResistance: agent.confusion_resistance,
+    logicPower: agent.base_logic_power ?? agent.logic_power,
+    observationFocus: agent.base_observation_focus ?? agent.observation_focus,
+    hackLevel: agent.base_hack_level ?? agent.hack_level,
+    confusionResistance: agent.base_confusion_resistance ?? agent.confusion_resistance,
+    stamina: agent.stamina,
     interrogationBonus: agent.skill_effects?.interrogation_bonus || agent.interrogation_bonus || 0,
   }));
 }

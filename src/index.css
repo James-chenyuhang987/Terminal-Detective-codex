@@ -1155,6 +1155,24 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-decision-agent-tabs > button > small { color: #f4d99f; font: 700 .42rem ui-monospace, monospace; }
 .td-decision-agent-tabs > button > b { grid-column: 2 / -1; color: rgba(205, 238, 246, .42); font: .44rem ui-monospace, monospace; }
 .td-decision-agent-tabs > button.is-active { border-color: #00e5ff; color: #9ff7ff; background: linear-gradient(135deg, rgba(0, 102, 130, .22), rgba(3, 12, 22, .94)); box-shadow: inset 0 0 20px rgba(0, 229, 255, .08), 0 0 18px rgba(0, 229, 255, .1); }
+.td-decision-agent-tabs > button:disabled, .td-decision-executors button:disabled, .td-decision-assist button:disabled { opacity: .4; cursor: not-allowed; filter: saturate(.45); }
+.td-stamina-warning { width: min(980px, 100%); padding: 9px 12px; border: 1px solid rgba(255, 170, 0, .48); border-radius: 9px; background: rgba(74, 41, 0, .38); color: #ffc35b; font: 700 .52rem/1.5 ui-monospace, monospace; letter-spacing: .04em; }
+.td-agent-stamina { display: grid; gap: 4px; min-width: 0; color: #8ee8f2; font: .43rem ui-monospace, monospace; }
+.td-agent-stamina > span { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.td-agent-stamina > span b { color: rgba(196, 235, 242, .52); font-weight: 500; }
+.td-agent-stamina > span strong { color: #8ff4ff; font-weight: 800; }
+.td-agent-stamina > span em { margin-left: auto; color: rgba(196, 235, 242, .42); font-style: normal; }
+.td-agent-stamina > i { display: block; height: 4px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, .09); }
+.td-agent-stamina > i b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #008fa6, #00e5ff); box-shadow: 0 0 8px rgba(0, 229, 255, .45); }
+.td-agent-stamina > small { color: rgba(202, 235, 242, .48); line-height: 1.35; }
+.td-agent-stamina.is-fatigued { color: #ffc35b; }
+.td-agent-stamina.is-fatigued > span strong { color: #ffc35b; }
+.td-agent-stamina.is-fatigued > i b { background: linear-gradient(90deg, #9a5700, #ffaa00); }
+.td-agent-stamina.is-depleted { color: #ff7893; }
+.td-agent-stamina.is-depleted > span strong { color: #ff7893; }
+.td-agent-stamina.is-depleted > i b { background: linear-gradient(90deg, #8a102a, #ff3860); }
+.td-agent-stamina.is-compact { grid-column: 2 / -1; width: 100%; }
+.td-decision-agent-tabs > button > .td-agent-stamina { grid-row: auto; font-size: .4rem; }
 
 @keyframes td-assistant-scan { to { transform: rotate(360deg); } }
 @keyframes td-assistant-message-in { from { opacity: 0; transform: translateX(7px); } to { opacity: 1; transform: translateX(0); } }
@@ -1301,6 +1319,7 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-decision-executors button.is-active, .td-decision-assist button.is-active { border-color: #00e5ff; color: #8ff3ff; box-shadow: inset 0 0 18px rgba(0, 229, 255, .1), 0 0 16px rgba(0, 229, 255, .1); }
 .td-decision-executors button span { margin-right: 4px; }
 .td-decision-executors button small { margin-left: 5px; color: #f4d99f; font-size: .42rem; }
+.td-decision-executors button .td-agent-stamina, .td-decision-assist button .td-agent-stamina { margin: 5px 7px 0; }
 .td-decision-assist { grid-template-columns: auto repeat(2, 1fr) !important; align-items: center; margin-top: 7px; }
 .td-decision-assist > small { color: rgba(255, 255, 255, .35); font-size: .48rem; }
 .td-decision-command-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
@@ -1314,6 +1333,7 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-decision-order-row { display: flex; align-items: stretch; gap: 9px; width: min(980px, 100%); }
 .td-decision-order-row > div { display: flex; flex: 1; min-width: 0; align-items: center; padding: 10px 13px; border: 1px solid rgba(0, 229, 255, .16); border-radius: 9px; background: rgba(1, 6, 12, .76); color: rgba(217, 242, 249, .45); font: .52rem/1.5 ui-monospace, monospace; }
 .td-decision-order-row button { min-width: 210px; min-height: 44px; border: 1px solid rgba(0, 229, 255, .65); border-radius: 9px; background: linear-gradient(135deg, rgba(0, 76, 112, .65), rgba(0, 170, 205, .3)); color: #d7fbff; font: 800 .62rem monospace; }
+.td-decision-order-row button.is-recovery { border-color: rgba(255, 170, 0, .72); background: linear-gradient(135deg, rgba(100, 56, 0, .62), rgba(255, 170, 0, .2)); color: #ffd17e; }
 
 .td-interrogation-agent-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-bottom: 9px; }
 .td-interrogation-agent-tabs button { display: grid; gap: 3px; min-height: 42px; padding: 7px 9px; border: 1px solid rgba(0, 229, 255, .17); border-radius: 8px; background: rgba(2, 10, 18, .82); color: rgba(220, 244, 250, .58); text-align: left; cursor: pointer; }
@@ -1321,6 +1341,8 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-interrogation-agent-tabs button small { color: rgba(204, 235, 243, .4); font: .43rem ui-monospace, monospace; }
 .td-interrogation-agent-tabs button.is-active { border-color: #00e5ff; color: #8ff4ff; box-shadow: inset 0 0 18px rgba(0, 229, 255, .08); }
 .td-interrogation-agent-tabs button:disabled { opacity: .42; cursor: wait; }
+.td-npc-stamina-note { margin: 0 0 9px; padding: 7px 9px; border: 1px solid rgba(0, 229, 255, .18); border-radius: 7px; background: rgba(0, 57, 72, .2); color: rgba(175, 239, 247, .7); font: .47rem/1.5 ui-monospace, monospace; }
+.td-npc-stamina-note.is-depleted { border-color: rgba(255, 56, 96, .42); background: rgba(72, 4, 22, .4); color: #ff7893; }
 .td-interrogation-questions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .td-interrogation-questions > button { display: grid; gap: 7px; min-height: 112px; padding: 10px; border: 1px solid rgba(0, 229, 255, .19); border-radius: 10px; background: linear-gradient(145deg, rgba(3, 18, 29, .9), rgba(1, 7, 13, .96)); color: #dff9ff; text-align: left; cursor: pointer; }
 .td-interrogation-questions > button:hover { border-color: rgba(0, 229, 255, .65); transform: translateY(-1px); }
@@ -1332,6 +1354,7 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-interrogation-questions > button footer { color: rgba(218, 241, 248, .38); font: .42rem ui-monospace, monospace; }
 .td-interrogation-questions > button footer code { color: rgba(244, 217, 159, .58); font-size: .4rem; }
 .td-interrogation-questions > button.is-repeated { opacity: .58; border-style: dashed; }
+.td-interrogation-questions > button:disabled { opacity: .38; cursor: not-allowed; transform: none; }
 .td-interrogation-error, .td-report-error { margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(255, 56, 96, .46); border-radius: 8px; background: rgba(72, 4, 22, .46); color: #ff7893; font: .5rem/1.5 ui-monospace, monospace; }
 .td-interrogation-loading, .td-report-loading { grid-column: 1 / -1; padding: 18px; color: rgba(0, 229, 255, .55); font: .53rem ui-monospace, monospace; text-align: center; letter-spacing: .08em; }
 

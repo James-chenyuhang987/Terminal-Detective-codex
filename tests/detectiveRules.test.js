@@ -46,6 +46,36 @@ test('strong agents receive better options and more accurate stable alignment es
   assert.ok(meanError('ELITE-01') <= meanError('LOW-01'));
 });
 
+test('worker rules reduce option accuracy when an agent has low stamina', () => {
+  const full = buildDecisionPacks({
+    ...baseDecision,
+    team: [{ ...eliteAgent, stamina: 100 }],
+  });
+  const depleted = buildDecisionPacks({
+    ...baseDecision,
+    team: [{ ...eliteAgent, stamina: 0 }],
+  });
+
+  assert.equal(full.packs['ELITE-01'].expertise, 72);
+  assert.ok(depleted.packs['ELITE-01'].expertise < full.packs['ELITE-01'].expertise);
+  assert.ok(depleted.packs['ELITE-01'].expertise <= Math.round(full.packs['ELITE-01'].expertise * 0.7));
+});
+
+test('worker rules reject missing, malformed, and duplicate agent identities', () => {
+  assert.throws(() => buildDecisionPacks({
+    ...baseDecision,
+    team: [{ ...eliteAgent, agentId: undefined }],
+  }), /INVALID_TEAM/);
+  assert.throws(() => buildDecisionPacks({
+    ...baseDecision,
+    team: [{ ...eliteAgent, agentId: 'ELITE 01' }],
+  }), /INVALID_TEAM/);
+  assert.throws(() => buildDecisionPacks({
+    ...baseDecision,
+    team: [eliteAgent, { ...lowAgent, agentId: eliteAgent.agentId }],
+  }), /INVALID_TEAM/);
+});
+
 test('interrogation is option-only, evidence-gated, deterministic and executor-validated', () => {
   const payload = {
     caseId: 'Lvl_01', npcId: 'npc_01', runId: 'interrogation-run', turn: 2,
@@ -71,12 +101,24 @@ test('interrogation is option-only, evidence-gated, deterministic and executor-v
   assert.equal(evidenceResult.nextEmotion, 'broken');
   assert.equal(evidenceResult.revealedClueIds.length, 1);
   assert.equal(evidenceResult.revealedClueIds[0].includes('_secret_'), false);
+  const depletedResult = resolveInterrogation({
+    ...resolutionPayload,
+    questionId: evidenceQuestion.questionId,
+    team: [{ ...eliteAgent, stamina: 0 }],
+  });
+  assert.equal(depletedResult.nextEmotion, 'calm');
+  assert.equal(depletedResult.revealedClueIds.length, 0, 'depleted intellect must weaken interrogation accuracy');
   assert.equal(resolveInterrogation({
     ...resolutionPayload,
     questionId: evidenceQuestion.questionId,
     askedQuestionIds: [evidenceQuestion.questionId],
   }).revealedClueIds.length, 0, 'repeating the same confrontation cannot farm clues');
   assert.throws(() => resolveInterrogation({ ...resolutionPayload, executorAgentId: 'UNKNOWN' }), /INVALID_TEAM/);
+  assert.throws(() => resolveInterrogation({
+    ...resolutionPayload,
+    team: [{ ...eliteAgent, agentId: undefined }],
+    executorAgentId: 'AGENT-1',
+  }), /INVALID_TEAM/);
   assert.throws(() => resolveInterrogation({
     ...resolutionPayload,
     questionId: 'question:Lvl_01:npc_01:evidence:c_02',

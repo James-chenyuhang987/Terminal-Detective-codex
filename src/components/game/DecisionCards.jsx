@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import { useLang } from '@/lib/lang.jsx';
 import StoryBriefing from '@/components/game/StoryBriefing';
+import AgentStaminaMeter from '@/components/game/AgentStaminaMeter';
 import { decisionForecast, recommendExecutor } from '@/game/commandSystem';
+import {
+  AGENT_STAMINA_INVESTIGATION_COST,
+  AGENT_STAMINA_RECOVERY_PER_TURN,
+  canAgentInvestigate,
+} from '@/game/agentStamina';
 
 const STYLE_META = {
   aggressive: { icon: '⚔️', zh: '激进', en: 'AGGRESSIVE', color: '#ff3860' },
@@ -32,6 +38,11 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
   const overlayRef = useRef(null);
   const selectedCardRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const eligibleTeam = useMemo(
+    () => team.filter(agent => canAgentInvestigate(agent.stamina, true)),
+    [team],
+  );
+  const noEligibleAgent = eligibleTeam.length === 0;
   const cards = useMemo(() => packs?.[executorId]?.cards || legacyCards || [], [executorId, legacyCards, packs]);
   const selectedCard = cards[selectedIndex] || cards[0];
   const points = Math.max(0, Number(commandState?.points) || 0);
@@ -39,16 +50,23 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
 
   const recommendedId = useMemo(() => {
     if (packs) {
-      return [...team].sort((a, b) => (packs[b.agent_id]?.expertise || 0) - (packs[a.agent_id]?.expertise || 0))[0]?.agent_id || '';
+      return [...eligibleTeam].sort((a, b) => (packs[b.agent_id]?.expertise || 0) - (packs[a.agent_id]?.expertise || 0))[0]?.agent_id || '';
     }
-    return recommendExecutor(team, selectedCard?.action_tag || 'search_area');
-  }, [packs, selectedCard?.action_tag, team]);
+    return recommendExecutor(eligibleTeam, selectedCard?.action_tag || 'search_area');
+  }, [eligibleTeam, packs, selectedCard?.action_tag]);
 
   useEffect(() => {
-    const next = recommendedId || commandState?.active_agent_id || team[0]?.agent_id || '';
+    const activeAgent = eligibleTeam.find(agent => agent.agent_id === commandState?.active_agent_id);
+    const next = recommendedId || activeAgent?.agent_id || eligibleTeam[0]?.agent_id || '';
     setExecutorId(next);
-    setAssistantId(team.find(agent => agent.agent_id !== next)?.agent_id || '');
-  }, [recommendedId, commandState?.active_agent_id, team]);
+    setAssistantId(eligibleTeam.find(agent => agent.agent_id !== next)?.agent_id || '');
+  }, [eligibleTeam, recommendedId, commandState?.active_agent_id]);
+
+  useEffect(() => {
+    if (!joint) return;
+    const assistantReady = eligibleTeam.some(agent => agent.agent_id === assistantId && agent.agent_id !== executorId);
+    if (!assistantReady) setAssistantId(eligibleTeam.find(agent => agent.agent_id !== executorId)?.agent_id || '');
+  }, [assistantId, eligibleTeam, executorId, joint]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -94,10 +112,12 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
 
   useEffect(() => {
     const fallbackCard = cards[0];
-    if (left === 0 && fallbackCard) {
-      chooseOnce({ card: fallbackCard, executorAgentId: recommendExecutor(team, fallbackCard.action_tag) || executorId, assistAgentId: null, commandIds: [] });
+    if (left === 0 && noEligibleAgent) {
+      chooseOnce({ rest: true });
+    } else if (left === 0 && fallbackCard) {
+      chooseOnce({ card: fallbackCard, executorAgentId: recommendExecutor(eligibleTeam, fallbackCard.action_tag) || executorId, assistAgentId: null, commandIds: [] });
     }
-  }, [cards, chooseOnce, executorId, left, team]);
+  }, [cards, chooseOnce, eligibleTeam, executorId, left, noEligibleAgent]);
 
   const toggleCommand = (id) => {
     const active = id === 'preview' ? preview : joint;
@@ -111,6 +131,14 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
 
   const confirm = () => {
     if (!selectedCard || reserved > points) return onCommandError?.('insufficient_command_points');
+    const executor = team.find(agent => agent.agent_id === executorId);
+    const assistant = team.find(agent => agent.agent_id === assistantId);
+    if (!executor || !canAgentInvestigate(executor.stamina, true)) {
+      return onCommandError?.('insufficient_agent_stamina');
+    }
+    if (joint && (!assistant || assistant.agent_id === executorId || !canAgentInvestigate(assistant.stamina, true))) {
+      return onCommandError?.('insufficient_agent_stamina');
+    }
     chooseOnce(buildChoice({ card: selectedCard }));
   };
 
@@ -137,21 +165,24 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
 
       <div className="td-decision-assistant-tip" role="note">
         <span>🤖</span>
-        <div><small>NOVA · {zh ? '决策提示' : 'DECISION TIP'}</small><strong>{zh ? '先阅读白色的「证据及发现」，再比较收益和风险。' : 'Read the white EVIDENCE & FINDINGS text before comparing benefit and risk.'}</strong></div>
+        <div><small>NOVA · {zh ? '决策提示' : 'DECISION TIP'}</small><strong>{zh ? `先阅读「证据及发现」，再比较收益和风险。本轮全员先恢复 ${AGENT_STAMINA_RECOVERY_PER_TURN}% 体力，参与调查者随后消耗 ${AGENT_STAMINA_INVESTIGATION_COST}%。` : `Read EVIDENCE & FINDINGS first. Every agent recovers ${AGENT_STAMINA_RECOVERY_PER_TURN}% this turn, then participating agents spend ${AGENT_STAMINA_INVESTIGATION_COST}%.`}</strong></div>
       </div>
 
       <div className="td-decision-agent-tabs" aria-label={zh ? '选择执行探员和选项包' : 'Choose agent option pack'}>
         {team.slice(0, 3).map(agent => {
           const pack = packs?.[agent.agent_id];
-          return <button type="button" key={agent.agent_id} className={executorId === agent.agent_id ? 'is-active' : ''}
+          const ready = canAgentInvestigate(agent.stamina, true);
+          return <button type="button" key={agent.agent_id} disabled={!ready} className={executorId === agent.agent_id ? 'is-active' : ''}
             onClick={() => setExecutorId(agent.agent_id)}>
             <span>{AGENT_ICONS[agent.agent_id] || '◈'}</span>
             <strong>{agent.agent_id}</strong>
             {recommendedId === agent.agent_id && <small>{zh ? '推荐' : 'REC'}</small>}
             {pack && <b>{pack.expertise}% · {pack.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : pack.confidence === 'medium' ? (zh ? '中置信' : 'MED') : (zh ? '低置信' : 'LOW')}</b>}
+            <AgentStaminaMeter stamina={agent.stamina} language={lang} compact />
           </button>;
         })}
       </div>
+      {noEligibleAgent && <div className="td-stamina-warning" role="alert">{zh ? '全员在本轮恢复后仍不足 10% 体力，必须整备一回合后才能继续调查。' : 'ALL AGENTS REMAIN BELOW 10% AFTER TURN RECOVERY. RECOVER FOR ONE TURN TO CONTINUE.'}</div>}
 
       <div className="td-decision-cards">
         {cards.map((card, index) => {
@@ -177,18 +208,26 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
       <section className="td-decision-command-desk">
         <div className="td-decision-executors">
           <header><span>{zh ? '执行探员' : 'EXECUTING AGENT'}</span><small>{zh ? '系统推荐已标记，仍可自由改派' : 'RECOMMENDATION MARKED · MANUAL OVERRIDE ALLOWED'}</small></header>
-          <div>{team.slice(0, 3).map(agent => <button type="button" key={agent.agent_id} className={executorId === agent.agent_id ? 'is-active' : ''} onClick={() => setExecutorId(agent.agent_id)}><span>{AGENT_ICONS[agent.agent_id] || '◈'}</span><strong>{agent.agent_id}</strong>{recommendedId === agent.agent_id && <small>{zh ? '推荐' : 'REC'}</small>}</button>)}</div>
-          {joint && <div className="td-decision-assist"><small>{zh ? '协助探员' : 'ASSIST AGENT'}</small>{team.filter(agent => agent.agent_id !== executorId).slice(0, 2).map(agent => <button type="button" key={agent.agent_id} className={assistantId === agent.agent_id ? 'is-active' : ''} onClick={() => setAssistantId(agent.agent_id)}>{AGENT_ICONS[agent.agent_id] || '◈'} {agent.agent_id}</button>)}</div>}
+          <div>{team.slice(0, 3).map(agent => {
+            const ready = canAgentInvestigate(agent.stamina, true);
+            return <button type="button" key={agent.agent_id} disabled={!ready} className={executorId === agent.agent_id ? 'is-active' : ''} onClick={() => setExecutorId(agent.agent_id)}><span>{AGENT_ICONS[agent.agent_id] || '◈'}</span><strong>{agent.agent_id}</strong>{recommendedId === agent.agent_id && <small>{zh ? '推荐' : 'REC'}</small>}<AgentStaminaMeter stamina={agent.stamina} language={lang} compact /></button>;
+          })}</div>
+          {joint && <div className="td-decision-assist"><small>{zh ? '协助探员' : 'ASSIST AGENT'}</small>{team.filter(agent => agent.agent_id !== executorId).slice(0, 2).map(agent => {
+            const ready = canAgentInvestigate(agent.stamina, true);
+            return <button type="button" key={agent.agent_id} disabled={!ready} className={assistantId === agent.agent_id ? 'is-active' : ''} onClick={() => setAssistantId(agent.agent_id)}>{AGENT_ICONS[agent.agent_id] || '◈'} {agent.agent_id}<AgentStaminaMeter stamina={agent.stamina} language={lang} compact /></button>;
+          })}</div>}
         </div>
         <div className="td-decision-command-options">
           <CommandToggle active={preview} disabled={!preview && reserved >= points} icon="⌁" title={zh ? '战术预演' : 'TACTICAL PREVIEW'} detail={zh ? '显示本地风险预测' : 'SHOW LOCAL FORECAST'} onClick={() => toggleCommand('preview')} />
-          <CommandToggle active={joint} disabled={!joint && reserved >= points} icon="◇" title={zh ? '联合行动' : 'JOINT ACTION'} detail={zh ? '双人取高值，AP -1' : 'BEST ATTRIBUTE · AP -1'} onClick={() => toggleCommand('joint')} />
+          <CommandToggle active={joint} disabled={(!joint && reserved >= points) || eligibleTeam.filter(agent => agent.agent_id !== executorId).length === 0} icon="◇" title={zh ? '联合行动' : 'JOINT ACTION'} detail={zh ? '双人取高值，AP -1，双方体力 -10%' : 'BEST ATTRIBUTE · AP -1 · BOTH STA -10%'} onClick={() => toggleCommand('joint')} />
         </div>
       </section>
 
       <div className="td-decision-order-row">
         <div><small>{zh ? '事实贴近度是探员预估，不是系统公布的正确答案。' : 'Alignment is the agent’s estimate, not a revealed correct answer.'}</small></div>
-        <button type="button" className="td-ui-button td-button-primary" onClick={confirm}>{zh ? '▶ 确认战术' : '▶ CONFIRM TACTIC'}</button>
+        {noEligibleAgent
+          ? <button type="button" className="td-ui-button td-button-primary is-recovery" onClick={() => chooseOnce({ rest: true })}>{zh ? `↻ 整备一回合 · 全员 +${AGENT_STAMINA_RECOVERY_PER_TURN}%` : `↻ RECOVER ONE TURN · ALL +${AGENT_STAMINA_RECOVERY_PER_TURN}%`}</button>
+          : <button type="button" className="td-ui-button td-button-primary" onClick={confirm}>{zh ? `▶ 确认战术 · 参与者 -${AGENT_STAMINA_INVESTIGATION_COST}%` : `▶ CONFIRM TACTIC · PARTICIPANTS -${AGENT_STAMINA_INVESTIGATION_COST}%`}</button>}
       </div>
         </section>
       </div>
