@@ -312,7 +312,7 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
           <div style={{ fontSize: '0.5rem', color: `${color}80`, letterSpacing: '0.25em', fontFamily: 'monospace' }}>
             ◈ {zh ? '探员晋升' : 'AGENT ADVANCEMENT'}
           </div>
-          <button onClick={handleClose} style={{
+          <button type="button" onClick={handleClose} aria-label={zh ? '关闭晋升面板' : 'Close advancement panel'} title={zh ? '关闭' : 'Close'} style={{
             background: 'none', border: 'none', color: `${color}60`,
             cursor: 'pointer', fontSize: '1rem', lineHeight: 1,
           }}>✕</button>
