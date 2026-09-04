@@ -170,8 +170,6 @@ function sameOperationContent(left, right) {
     && left.operationId === right.operationId
     && left.lineageId === right.lineageId
     && left.baseRevision === right.baseRevision
-    && left.attempts === right.attempts
-    && left.status === right.status
     && JSON.stringify(left.patch) === JSON.stringify(right.patch);
 }
 
@@ -291,6 +289,25 @@ export function appendProfileOperation({
   if (!cleanPatch || !Object.keys(cleanPatch).length) {
     throw walError('PROFILE_WAL_PATCH_INVALID', 'The pending profile patch is invalid.');
   }
+  const normalizedBaseRevision = Math.max(0, Math.floor(Number(baseRevision) || 0));
+  const requestedOperation = {
+    ownerUid,
+    operationId,
+    lineageId,
+    patch: cleanPatch,
+    baseRevision: normalizedBaseRevision,
+  };
+  const existing = state.entries.find(item => item.operationId === operationId);
+  if (existing) {
+    if (!sameOperationContent(existing, requestedOperation)
+      || (createdAt !== undefined && existing.createdAt !== createdAt)) {
+      throw walError('PROFILE_WAL_OPERATION_REUSED', 'A pending operation id was reused.');
+    }
+    return existing;
+  }
+  if (state.entries.length >= MAX_PENDING_OPERATIONS) {
+    throw walError('PROFILE_WAL_FULL', 'Too many profile changes are waiting to sync.');
+  }
   const latestStoredTime = state.entries.reduce(
     (latest, entry) => Math.max(latest, Date.parse(entry.createdAt)),
     0,
@@ -304,21 +321,11 @@ export function appendProfileOperation({
     operationId,
     lineageId,
     patch: cleanPatch,
-    baseRevision: Math.max(0, Math.floor(Number(baseRevision) || 0)),
+    baseRevision: normalizedBaseRevision,
     createdAt: orderedCreatedAt,
     attempts: 0,
   });
   const entry = checkedEntry({ ...core, checksum: checksumValue(core) }, ownerUid);
-  const existing = state.entries.find(item => item.operationId === operationId);
-  if (existing) {
-    if (existing.checksum !== entry.checksum) {
-      throw walError('PROFILE_WAL_OPERATION_REUSED', 'A pending operation id was reused.');
-    }
-    return existing;
-  }
-  if (state.entries.length >= MAX_PENDING_OPERATIONS) {
-    throw walError('PROFILE_WAL_FULL', 'Too many profile changes are waiting to sync.');
-  }
   writeStoredEntry(state.target, operationKey(ownerUid, operationId), entry);
   return entry;
 }

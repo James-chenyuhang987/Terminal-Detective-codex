@@ -202,16 +202,33 @@ function actualActionAlignment(caseId, actionTag, payload) {
 }
 
 function pickActionSet(caseId, agent, payload) {
-  const candidates = LEGAL_ACTIONS.map(actionTag => ({
+  const banned = new Set(
+    uniqueStrings(payload?.actionBanList ?? payload?.action_ban_list, LEGAL_ACTIONS.length)
+      .filter(actionTag => LEGAL_ACTIONS.includes(actionTag))
+      .slice(-(LEGAL_ACTIONS.length - 3)),
+  );
+  const candidates = LEGAL_ACTIONS.filter(actionTag => !banned.has(actionTag)).map(actionTag => ({
     actionTag,
     actual: actualActionAlignment(caseId, actionTag, payload),
     expertise: calculateExpertise(agent, actionTag),
   })).sort((a, b) => (b.actual + (b.expertise * 0.18)) - (a.actual + (a.expertise * 0.18)));
+  const selectDistinct = (indexes) => {
+    const selected = [];
+    for (const index of indexes) {
+      const candidate = candidates[Math.min(index, candidates.length - 1)];
+      if (candidate && !selected.includes(candidate)) selected.push(candidate);
+    }
+    for (const candidate of candidates) {
+      if (selected.length >= 3) break;
+      if (!selected.includes(candidate)) selected.push(candidate);
+    }
+    return selected;
+  };
   const broadExpertise = Math.max(...candidates.map(item => item.expertise));
   if (broadExpertise >= 90) return candidates.slice(0, 3);
-  if (broadExpertise >= 70) return [candidates[0], candidates[1], candidates[Math.min(5, candidates.length - 1)]];
-  if (broadExpertise >= 40) return [candidates[0], candidates[3], candidates[5]];
-  return [candidates[0], candidates[Math.floor(candidates.length / 2)], candidates[candidates.length - 2]];
+  if (broadExpertise >= 70) return selectDistinct([0, 1, 5]);
+  if (broadExpertise >= 40) return selectDistinct([0, 3, 5]);
+  return selectDistinct([0, Math.floor(candidates.length / 2), candidates.length - 2]);
 }
 
 // Server-module diagnostic used by automated tests. This is never exposed by

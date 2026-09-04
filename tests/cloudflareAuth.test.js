@@ -220,7 +220,27 @@ test('Google signing key failures use a short shared retry backoff', async () =>
     authInternals.firebaseKey('missing-c', unavailable, async () => null),
     error => error.code === 'FIREBASE_KEYS_UNAVAILABLE' && error.status === 503,
   );
-  assert.equal(fetches, 1);
+  assert.equal(fetches, 2);
+});
+
+test('Google signing key timeout covers a stalled successful response body', async () => {
+  authInternals.resetKeyCache();
+  let fetches = 0;
+  const stalledBody = async () => {
+    fetches += 1;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'cache-control': 'public, max-age=120' }),
+      json: () => new Promise(() => {}),
+    };
+  };
+
+  await assert.rejects(
+    authInternals.firebaseKey('missing', stalledBody, async () => null, 5),
+    error => error.code === 'FIREBASE_KEYS_UNAVAILABLE' && error.status === 503,
+  );
+  assert.equal(fetches, 2);
 });
 
 test('unknown signing keys share refreshes and failures do not start the long throttle', async () => {
@@ -239,14 +259,14 @@ test('unknown signing keys share refreshes and failures do not start the long th
       authInternals.firebaseKey('rotated-b', unavailable, async () => null),
     ]);
     assert.deepEqual(failures.map(item => item.status), ['rejected', 'rejected']);
-    assert.equal(fetches, 1);
+    assert.equal(fetches, 2);
 
     now += 6_000;
     await assert.rejects(
       authInternals.firebaseKey('rotated-c', unavailable, async () => null),
       error => error.code === 'FIREBASE_KEYS_UNAVAILABLE',
     );
-    assert.equal(fetches, 2);
+    assert.equal(fetches, 4);
   } finally {
     Date.now = realNow;
     authInternals.resetKeyCache();

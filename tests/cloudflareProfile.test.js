@@ -101,15 +101,15 @@ const session = {
   user: { id: USER_ID, email: 'detective@example.com' },
 };
 
-test('profile writes require an owner header matching the Firebase token owner', async () => {
+test('profile writes ignore client owner headers and use the verified Firebase owner', async () => {
   const DB = fakeProfileDB();
   const response = await handleProfileFunction(
     profileRequest({ action: 'status' }, 'another-user'),
     { DB },
     session,
   );
-  assert.equal(response.status, 409);
-  assert.equal((await response.json()).code, 'PROFILE_OWNER_MISMATCH');
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).profile.user_id, undefined);
 });
 
 test('claiming a profile session does not invalidate pending profile revisions', async () => {
@@ -215,6 +215,24 @@ test('profile replay never reports success before its result revision is visible
   assert.equal(replay.status, 200);
   assert.equal(payload.replayed, true);
   assert.equal(payload.profile.profile_revision, 1);
+});
+
+test('profile replay rejects matching patches recorded against another revision', async () => {
+  const DB = fakeProfileDB();
+  DB.operations.set(`${USER_ID}:profile-operation-0001`, {
+    base_revision: 4,
+    result_revision: 5,
+    patch_hash: await profileInternals.patchHash({ gold: 25 }),
+  });
+  const response = await handleProfileFunction(profileRequest({
+    action: 'patch',
+    operation_id: 'profile-operation-0001',
+    expected_revision: 0,
+    patch: { gold: 25 },
+  }), { DB }, session);
+
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, 'OPERATION_ID_REUSED');
 });
 
 test('profile compare-and-set allows only one operation at a revision', async () => {

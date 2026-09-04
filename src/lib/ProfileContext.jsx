@@ -121,7 +121,6 @@ export function ProfileProvider({ children }) {
     requestControllersRef.current.add(controller);
     try {
       return await invokePlayerProfile(action, payload, {
-        ownerId: ownerUid,
         signal: controller.signal,
       });
     } finally {
@@ -481,10 +480,20 @@ export function ProfileProvider({ children }) {
   }, [isCurrentOwner, mutate, replayWal, updatePendingCount]);
 
   const takeOver = useCallback(async () => {
-    await claim();
+    const ownerUid = ownerRef.current;
+    const generation = lifecycleRef.current;
+    const previousStatus = syncStatusRef.current;
+    try {
+      await claim();
+    } catch (cause) {
+      if (previousStatus === 'readonly' && isCurrentOwner(ownerUid, generation)) {
+        changeSyncStatus('readonly', ownerUid, generation);
+      }
+      throw cause;
+    }
     await replayPending();
     return profileRef.current;
-  }, [claim, replayPending]);
+  }, [changeSyncStatus, claim, isCurrentOwner, replayPending]);
 
   const discardPendingChanges = useCallback(async () => {
     const ownerUid = ownerRef.current;
@@ -627,7 +636,7 @@ export function SessionReadOnlyBanner() {
     <div role="alert" className="td-session-banner">
       <span>{copy[syncStatus]}</span>
       {syncStatus === 'readonly' && (
-        <button type="button" onClick={() => void takeOver()} disabled={syncStatus === 'syncing'}>
+        <button type="button" onClick={() => void takeOver().catch(() => {})} disabled={syncStatus === 'syncing'}>
           {lang === 'zh' ? '接管此设备' : 'TAKE OVER THIS DEVICE'}
         </button>
       )}
@@ -639,7 +648,7 @@ export function SessionReadOnlyBanner() {
         'STALE_PROFILE',
         'OPERATION_ID_REUSED',
       ].includes(error?.code) && (
-        <button type="button" onClick={() => void discardPendingChanges()}>
+        <button type="button" onClick={() => void discardPendingChanges().catch(() => {})}>
           {lang === 'zh' ? '舍弃本地待同步改动' : 'DISCARD PENDING CHANGES'}
         </button>
       )}

@@ -162,7 +162,7 @@ Worker 不接受客户端提交的 UID。它从 ID Token 读取用户身份，�
 | `GET /api/cloudflare/status` | 无 | 聚合服务状态；未就绪时返回 `503`。 |
 | `GET /api/auth/session` | Firebase ID Token | 返回统一的 `firebase-cloudflare` 账户结构。 |
 | `GET /api/apps/:appId/entities/User/me` | Firebase ID Token | 读取当前 Token UID 对应的账户和档案。 |
-| `POST /api/apps/:appId/functions/playerProfile` | ID Token + `X-Profile-Owner` | `claim_session`、`status` 和幂等 `patch`。owner header 必须与 Token UID 一致。 |
+| `POST /api/apps/:appId/functions/playerProfile` | Firebase ID Token | `claim_session`、`status` 和幂等 `patch`；档案 owner 只取自服务端验证后的 Token UID。 |
 | `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID Token | 执行白名单内的确定性案件规则。 |
 
 所有 `/api/*` 未知路径直接返回 JSON 404，不会回退到 SPA。未知服务端故障只向玩家返回匿名 `TD-XXXXXXXXXX` 故障编号；原始异常只写入 Worker 日志。
@@ -217,7 +217,7 @@ Firebase 在这套架构中只负责身份认证，不保存游戏档案；Cloud
 | `cloudflare/migrations/` | D1 表结构变更脚本 | 只有显式执行 migration 才会进入 D1 |
 | Firebase 控制台配置 | 登录方式和 OAuth Provider | Firebase Authentication |
 
-`npm run cloudflare:deploy` 会先运行 `release:check`，确认前端四个 Firebase Web 值、Worker Firebase Project ID、D1 database ID、APP ID 与 CORS origins 完整且相互一致，再构建前端、打包 Worker 并发布二者。它不会自动执行 D1 migration，也不会自动修改 Firebase 或 GitHub OAuth 设置。
+`npm run cloudflare:deploy` 会依次运行完整测试、类型检查、Lint、秘密扫描、`release:check`、Cloudflare 生产构建和 Wrangler dry-run；全部通过后才发布前端 Static Assets 与 Worker。`release:check` 会确认前端四个 Firebase Web 值、Worker Firebase Project ID、D1 database ID、APP ID 与 CORS origins 完整且相互一致。页面中的 `td-build` 默认记录当前 Git 提交；从未提交工作树构建时追加 `-dirty`，Actions 则固定使用发布提交的完整 SHA。部署不会自动执行 D1 migration，也不会自动修改 Firebase 或 GitHub OAuth 设置。
 
 ### 请求与数据流
 
@@ -469,7 +469,7 @@ tests/                      规则、档案、界面行为和安全测试
 | 邮件进入垃圾箱、繁忙或限流 | 按界面语言请求对应模板；页面显示常用发件地址、垃圾箱/广告分类检查和允许列表步骤；正常发送后冷却 60 秒，真正命中限流后按 2、4、8 分钟逐级退避，最高 15 分钟；验证等待页仍可改用 GitHub | Firebase 默认发送信誉、收件服务商规则、日额度、同 IP 频率和滥用保护不受前端控制，邮件仍可能延迟、误判或被限制 |
 | OAuth 回调 404 | GitHub 优先使用 Firebase 弹窗；降级回调使用 Firebase 官方 handler；应用启动时只清除遗留认证错误 query/hash | Firebase Authorized Domains、GitHub Callback URL 或生产域名配置错误时仍会拒绝授权，但界面会提供恢复提示 |
 | 原始 `error` 或空白页 | 已知 Firebase、Worker 和 D1 错误统一映射为中英文提示；未知顶层故障只展示匿名故障编号 | 未知代码缺陷、浏览器扩展拦截或第三方服务整体故障仍可能中断当前操作 |
-| 登录失败 | 登录前检查前后端 Firebase 项目、D1 binding 和必要表字段；会话初始化总计最多等待 10 秒，网络及 `429/502/503/504` 最多重试两次，`401` 只刷新 Token 一次 | 密码错误、邮箱未验证、授权取消、网络中断、Provider 未开启或真实生产配置缺失时仍会拒绝登录 |
+| 登录失败 | 登录前检查前后端 Firebase 项目、D1 binding、必要 migration、主键、邮箱唯一索引和级联外键；Firebase 公钥下载包含响应体读取在内最多等待 3.5 秒，并对网络错误及有限的临时状态重试一次；会话初始化总计最多等待 10 秒，网络及 `429/502/503/504` 最多重试两次，`401` 只刷新 Token 一次 | 密码错误、邮箱未验证、授权取消、网络中断、Provider 未开启或真实生产配置缺失时仍会拒绝登录 |
 | 玩家数据未保存 | 所有档案写入先进入按 Firebase UID、operation ID 与 lineage 隔离的 WAL v2，再以 D1 幂等账本和 revision CAS 写入；断网及临时服务故障会保留乐观结果，并在登录、联网和定时轮询时顺序重放 | 浏览器禁用或清除本地存储、D1 长期不可用、免费额度耗尽、真实版本冲突或另一设备接管时不能保证立即写入云端；界面会明确显示“待同步”“只读”或“需要恢复” |
 
 `404limited` 不是 Firebase 或 Cloudflare 的标准错误名称。认证回调地址错误可能产生 404，限流通常产生 Firebase 限流错误、HTTP `429` 或 Cloudflare `1027`，排查时应分别处理。
@@ -487,8 +487,8 @@ tests/                      规则、档案、界面行为和安全测试
 5. 已使用至少 Gmail、Outlook/Hotmail、QQ 邮箱和 163 邮箱完成验证与重置邮件的投递抽查。
 6. 若启用 GitHub Pages，Actions variables 已提供四个必需的 `VITE_FIREBASE_*` 值，Pages 主机名已加入 Firebase Authorized Domains，Pages 来源已加入 Worker 的 `CORS_ALLOWED_ORIGINS`。
 7. Terminal Detective 专用 GitHub OAuth App 的 callback 指向 Firebase 官方 handler，Client Secret 只保存在 Firebase 控制台。
-8. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用。
-9. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态。
+8. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用；readiness 已确认 `0003_profile_operations.sql`、必要主键、完整邮箱唯一索引及级联外键。
+9. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态，页面源码中的 `td-build` 与本次发布 Git SHA 一致。
 10. 实际完成一次完整冒烟测试：注册 → 验证邮箱 → 登录 → 开始案件 → 产生进度 → 刷新 → 退出 → 重新登录，并确认货币、探员和案件进度均仍存在。
 11. 分别测试 GitHub 登录、错误密码、未验证邮箱、密码重置、网络中断和多设备接管。
 

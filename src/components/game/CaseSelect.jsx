@@ -63,6 +63,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
       {/* Back button */}
       <button
         onClick={onBack}
+        disabled={Boolean(startingId)}
         className="td-case-back td-ui-button td-button-ghost td-button-compact self-start text-xs opacity-70 hover:opacity-100 transition-opacity"
         style={{ color: '#00e5ff', fontFamily: 'monospace' }}
       >

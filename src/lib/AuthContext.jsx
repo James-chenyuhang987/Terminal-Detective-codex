@@ -24,7 +24,8 @@ import {
 } from 'firebase/auth';
 import { appParams } from '@/lib/app-params';
 import { prepareAuthEmail } from '@/lib/authEmail';
-import { AUTH_FEEDBACK_CODES, AUTH_NOTICE_CODES, authRedirectFeedback, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
+import { AUTH_FEEDBACK_CODES, AUTH_NOTICE_CODES, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
+import { consumeCapturedAuthReturn } from '@/lib/authReturn';
 import { firebaseAuthReady, firebasePublicConfig, isFirebaseConfigured } from '@/lib/firebase';
 import { createSessionBootstrap, isRecentAuthTime } from '@/lib/authSession';
 import { setAuthTokenProvider } from '@/lib/authToken';
@@ -74,36 +75,6 @@ function requireThrottle(action) {
   const remaining = authThrottleRemaining(action);
   if (!remaining) return;
   throw Object.assign(feedbackError(AUTH_FEEDBACK_CODES.RATE_LIMITED), { remaining });
-}
-
-function paramsObject(params) {
-  const values = {};
-  params.forEach((value, key) => {
-    values[key] = value;
-  });
-  return values;
-}
-
-function consumeAuthReturn() {
-  const url = new URL(window.location.href);
-  const action = url.searchParams.get('auth') || '';
-  const redirectParams = paramsObject(url.searchParams);
-  let feedback = authRedirectFeedback(redirectParams);
-  const hashValue = url.hash.replace(/^#\??/, '');
-  const hasLegacyErrorHash = Boolean(
-    hashValue && /(?:^|&)error(?:_code|_description)?=/.test(hashValue),
-  );
-  if (hasLegacyErrorHash) {
-    feedback ||= authRedirectFeedback(paramsObject(new URLSearchParams(hashValue)));
-    url.hash = '';
-  }
-  const sensitiveKeys = ['auth', 'error', 'error_code', 'error_description'];
-  const changed = sensitiveKeys.some(key => url.searchParams.has(key)) || hasLegacyErrorHash;
-  sensitiveKeys.forEach(key => url.searchParams.delete(key));
-  if (changed) {
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-  }
-  return { action, feedback };
 }
 
 function rememberRedirectAction(action) {
@@ -297,7 +268,7 @@ export function AuthProvider({ children }) {
     }
 
     let unsubscribe = () => {};
-    let authReturn = consumeAuthReturn();
+    let authReturn = consumeCapturedAuthReturn();
     const redirectAction = consumeRedirectAction();
     let authInstance = null;
     const retryAuth = () => {

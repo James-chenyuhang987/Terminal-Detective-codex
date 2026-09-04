@@ -1,15 +1,10 @@
 import { appParams } from '../lib/app-params.js';
 import { fetchWithAuth } from '../lib/authToken.js';
 
-function headers() {
-  const value = /** @type {Record<string, string>} */ ({
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-    'X-App-Id': String(appParams.appId),
-  });
-  if (typeof window !== 'undefined' && window.location?.href) value['X-Origin-URL'] = window.location.href;
-  return value;
-}
+const JSON_HEADERS = Object.freeze({
+  Accept: 'application/json',
+  'Content-Type': 'application/json',
+});
 
 function requestError(response, body, functionName) {
   const error = /** @type {Error & { status?: number, code?: string, data?: any }} */ (
@@ -21,15 +16,16 @@ function requestError(response, body, functionName) {
   return error;
 }
 
-async function invoke(functionName, data = {}) {
+async function invoke(functionName, data = {}, options = {}) {
   if (!functionName || typeof functionName !== 'string') throw new Error('A Cloudflare function name is required.');
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error(`Function ${functionName} must receive an object with named parameters.`);
   }
   const response = await fetchWithAuth(`${appParams.serverUrl}/api/apps/${appParams.appId}/functions/${encodeURIComponent(functionName)}`, {
     method: 'POST',
-    headers: headers(),
+    headers: JSON_HEADERS,
     body: JSON.stringify(data),
+    signal: options.signal,
   });
   const text = await response.text();
   let body = {};

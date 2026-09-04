@@ -8,11 +8,12 @@ import {
   handleCurrentUser,
   handleProfileFunction,
 } from './profile.js';
+import { readBodyBytes } from './body.js';
 import { validateRuleEnvelope } from './requestSecurity.js';
 
 const RULE_BODY_LIMIT = 96 * 1024;
 const CORS_METHODS = 'GET, POST, OPTIONS';
-const CORS_HEADERS = 'Authorization, Content-Type, Accept, X-Profile-Owner';
+const CORS_HEADERS = 'Authorization, Content-Type, Accept';
 const KNOWN_SERVER_ERRORS = new Set([
   'DATABASE_UNAVAILABLE',
   'FIREBASE_KEYS_UNAVAILABLE',
@@ -109,17 +110,9 @@ function handlePreflight(request, env) {
   return new Response(null, { status: 204, headers: securityHeaders(headers) });
 }
 
-async function readBody(request, maxBytes) {
-  const length = Number(request.headers.get('content-length') || 0);
-  if (length > maxBytes) throw Object.assign(new Error('PAYLOAD_TOO_LARGE'), { status: 413 });
-  const body = await request.arrayBuffer();
-  if (body.byteLength > maxBytes) throw Object.assign(new Error('PAYLOAD_TOO_LARGE'), { status: 413 });
-  return body;
-}
-
 async function handleRules(request) {
   if (request.method !== 'POST') return methodNotAllowed('POST');
-  const raw = await readBody(request, RULE_BODY_LIMIT);
+  const raw = await readBodyBytes(request, RULE_BODY_LIMIT);
   let body;
   try {
     body = JSON.parse(new TextDecoder().decode(raw) || '{}');
@@ -180,22 +173,26 @@ async function routeRequest(request, env) {
     }, config.ready ? 200 : 503);
   }
 
-  const rulesPath = `/api/apps/${encodeURIComponent(env.APP_ID)}/functions/detectiveRules`;
+  const appPrefix = `/api/apps/${encodeURIComponent(env.APP_ID)}`;
+  const rulesPath = `${appPrefix}/functions/detectiveRules`;
+  const currentUserPath = `${appPrefix}/entities/User/me`;
+  const profilePath = `${appPrefix}/functions/playerProfile`;
   if (url.pathname === rulesPath) {
+    if (request.method !== 'POST') return methodNotAllowed('POST');
     const session = await readFirebaseSession(request, env);
     return session ? handleRules(request) : errorResponse('UNAUTHENTICATED', 401);
   }
   if (url.pathname.startsWith('/api/')) {
-    const session = await readFirebaseSession(request, env);
-    const appPrefix = `/api/apps/${encodeURIComponent(env.APP_ID)}`;
-    const currentUserPath = `${appPrefix}/entities/User/me`;
-    const profilePath = `${appPrefix}/functions/playerProfile`;
     if (url.pathname === currentUserPath) {
+      if (request.method !== 'GET') return methodNotAllowed('GET');
+      const session = await readFirebaseSession(request, env);
       return session
         ? handleCurrentUser(request, env, session)
         : errorResponse('UNAUTHENTICATED', 401);
     }
     if (url.pathname === profilePath) {
+      if (request.method !== 'POST') return methodNotAllowed('POST');
+      const session = await readFirebaseSession(request, env);
       return session
         ? handleProfileFunction(request, env, session)
         : errorResponse('UNAUTHENTICATED', 401);

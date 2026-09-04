@@ -474,7 +474,7 @@ test('missing profile function fails closed without writing through another endp
     );
     assert.equal(calls.length, 1);
     assert.equal(calls[0].options.method, 'POST');
-    assert.equal(new Headers(calls[0].options.headers).get('x-profile-owner'), 'firebase-user');
+    assert.equal(new Headers(calls[0].options.headers).has('x-profile-owner'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

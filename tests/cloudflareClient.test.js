@@ -26,11 +26,41 @@ test('Cloudflare client invokes a named Worker function with a Firebase bearer t
     assert.equal(request.url, `${appParams.serverUrl}/api/apps/${appParams.appId}/functions/detectiveRules`);
     assert.equal(request.options.method, 'POST');
     assert.equal(request.options.credentials, undefined);
-    assert.equal(new Headers(request.options.headers).get('Authorization'), 'Bearer firebase-id-token');
+    const headers = new Headers(request.options.headers);
+    assert.equal(headers.get('Authorization'), 'Bearer firebase-id-token');
+    assert.equal(headers.has('X-Origin-URL'), false);
+    assert.equal(headers.has('X-App-Id'), false);
     assert.deepEqual(JSON.parse(request.options.body), {
       task: 'decision_options',
       payload: { lang: 'en' },
     });
+  } finally {
+    setAuthTokenProvider(null);
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Cloudflare client propagates one AbortSignal through token acquisition and fetch', async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  let tokenSignal;
+  let fetchSignal;
+  setAuthTokenProvider(async (_force, signal) => {
+    tokenSignal = signal;
+    return 'firebase-id-token';
+  });
+  globalThis.fetch = async (_url, options) => {
+    fetchSignal = options.signal;
+    return new Response('{}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    await cloudflareApi.functions.invoke('detectiveRules', {}, { signal: controller.signal });
+    assert.equal(tokenSignal, controller.signal);
+    assert.equal(fetchSignal, controller.signal);
   } finally {
     setAuthTokenProvider(null);
     globalThis.fetch = originalFetch;

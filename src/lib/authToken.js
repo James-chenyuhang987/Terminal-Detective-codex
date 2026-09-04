@@ -9,9 +9,36 @@ export function setAuthTokenProvider(provider) {
   tokenProvider = typeof provider === 'function' ? provider : null;
 }
 
-export async function getAuthToken(forceRefresh = false) {
+function abortError() {
+  if (typeof DOMException === 'function') return new DOMException('The operation was aborted.', 'AbortError');
+  return Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' });
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw signal.reason || abortError();
+}
+
+async function waitForToken(value, signal) {
+  if (!signal) return value;
+  throwIfAborted(signal);
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason || abortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([value, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
+export async function getAuthToken(forceRefresh = false, signal) {
   if (!tokenProvider) return '';
-  const value = await tokenProvider(Boolean(forceRefresh));
+  const value = await waitForToken(
+    Promise.resolve().then(() => tokenProvider(Boolean(forceRefresh), signal)),
+    signal,
+  );
   return typeof value === 'string' ? value : '';
 }
 
@@ -27,14 +54,14 @@ function mergeHeaders(initial, token) {
  * an infinite request loop.
  */
 export async function fetchWithAuth(input, init = {}) {
-  const firstToken = await getAuthToken(false);
+  const firstToken = await getAuthToken(false, init.signal);
   const firstResponse = await fetch(input, {
     ...init,
     headers: mergeHeaders(init.headers, firstToken),
   });
   if (firstResponse.status !== 401 || !firstToken) return firstResponse;
 
-  const refreshedToken = await getAuthToken(true);
+  const refreshedToken = await getAuthToken(true, init.signal);
   if (!refreshedToken) return firstResponse;
   return fetch(input, {
     ...init,
