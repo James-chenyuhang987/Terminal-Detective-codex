@@ -1408,7 +1408,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             {caseData.title} · {caseData.subtitle}
           </div>
         </div>
-        <div className="flex items-center gap-6 text-xs">
+        <div className="td-investigation-hud-stats flex items-center gap-6 text-xs">
           {[
             { label: lang === 'zh' ? '阶段' : 'PHASE', val: phaseColor.label },
             { label: lang === 'zh' ? 'HP' : 'HP', val: `${gameState.current_hp}%` },
@@ -1427,27 +1427,37 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             </div>
           ))}
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowCommandConsole(true)}
+        <div className="td-investigation-hud-actions flex gap-2">
+          <button type="button" onClick={() => setShowCommandConsole(true)}
+            aria-label={lang === 'zh' ? '打开全息指挥台' : 'Open holographic command'}
             title={lang === 'zh' ? '打开全息指挥台' : 'Open Holographic Command'}
-            className="td-ui-button td-command-hud-button text-xs px-3 py-1 rounded border transition-all"
+            className="td-ui-button td-command-hud-button td-hud-tool-button text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: '#e8c98a80', color: '#f4d99f', backgroundColor: 'rgba(232,201,138,.08)' }}>
             ◆ {lang === 'zh' ? '指挥台' : 'COMMAND'}
           </button>
-          <button onClick={() => setShowSettings(true)}
+          <button type="button" onClick={() => setShowSettings(true)}
+            aria-label={lang === 'zh' ? '打开设置' : 'Open settings'}
             title={lang === 'zh' ? '设置' : 'Settings'}
-            className="td-ui-button td-icon-button text-xs px-3 py-1 rounded border transition-all"
+            className="td-ui-button td-hud-tool-button text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: `${accentColor}50`, color: accentColor, backgroundColor: 'transparent' }}>
-            ⚙️
+            <span aria-hidden="true">⚙️</span><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span>
           </button>
-          <button onClick={() => setShowOnboarding(true)}
+          <button type="button" onClick={() => setShowOnboarding(true)}
+            aria-label={lang === 'zh' ? '打开调查指引' : 'Open investigation guide'}
             title={lang === 'zh' ? '新手指引' : 'Field Briefing'}
-            className="td-ui-button td-icon-button text-xs px-3 py-1 rounded border transition-all"
+            className="td-ui-button td-hud-tool-button text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: `${accentColor}50`, color: accentColor, backgroundColor: 'transparent' }}>
-            ?
+            <span aria-hidden="true">?</span><span>{lang === 'zh' ? '指引' : 'GUIDE'}</span>
           </button>
-          <button onClick={() => setShowMiniMap(value => !value)} className="td-ui-button td-icon-button td-mobile-only text-xs px-3 py-1 rounded border" style={{ borderColor: `${accentColor}50`, color: accentColor }}>🗺</button>
-          <button data-onboarding-target="report" onClick={() => {
+          <button type="button" onClick={() => setShowMiniMap(value => !value)}
+            className="td-ui-button td-hud-tool-button td-mobile-only text-xs px-3 py-1 rounded border"
+            aria-label={lang === 'zh' ? `${showMiniMap ? '隐藏' : '显示'}小地图` : `${showMiniMap ? 'Hide' : 'Show'} minimap`}
+            aria-pressed={showMiniMap}
+            title={lang === 'zh' ? `${showMiniMap ? '隐藏' : '显示'}小地图` : `${showMiniMap ? 'Hide' : 'Show'} minimap`}
+            style={{ borderColor: `${accentColor}50`, color: accentColor }}>
+            <span aria-hidden="true">🗺</span><span>{lang === 'zh' ? '地图' : 'MAP'}</span>
+          </button>
+          <button type="button" data-onboarding-target="report" onClick={() => {
             setSelectedNPC(null);
             setNpcDialogue([]);
             setNpcQuestionPacks(null);
@@ -1459,7 +1469,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
             {t.btnReport}
           </button>
-          <button onClick={() => { setFinalJudgeResult(judgeResult); setShowGameOver(true); }}
+          <button type="button" onClick={() => { setFinalJudgeResult(judgeResult); setShowGameOver(true); }}
             className="td-ui-button td-button-danger text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: '#ff386050', color: '#ff3860', backgroundColor: 'transparent' }}>
             {t.btnEnd}

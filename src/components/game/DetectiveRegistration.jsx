@@ -71,18 +71,20 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
                     borderRadius: 9, padding: '11px 13px', color: '#00e5ff',
                     fontFamily: 'monospace', fontSize: '0.82rem', outline: 'none',
                   }} />
-                <button className="td-ui-button td-icon-button" onClick={rollName} title={zh ? '随机代号' : 'Random codename'} style={{
+                <button type="button" className="td-ui-button td-registration-random" onClick={rollName}
+                  aria-label={zh ? '生成随机代号' : 'Generate random codename'}
+                  title={zh ? '随机代号' : 'Random codename'} style={{
                   padding: '0 14px', borderRadius: 9, cursor: 'pointer',
                   border: '1px solid rgba(0,229,255,0.35)', background: 'rgba(0,229,255,0.1)',
-                  color: '#00e5ff', fontSize: '1rem',
-                }}>🎲</button>
+                  color: '#00e5ff',
+                }}><span aria-hidden="true">🎲</span><span>{zh ? '随机' : 'RANDOM'}</span></button>
               </div>
             </Field>
 
             {/* 头像 */}
             <Field label={zh ? '侦探头像' : 'DETECTIVE AVATAR'} hint={zh ? '左右滑动选择' : 'SWIPE TO SELECT'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Arrow dir="◄" onClick={() => setAvatarIdx(i => (i - 1 + AVATARS.length) % AVATARS.length)} />
+                <Arrow dir="◄" label={zh ? '上一个头像' : 'Previous avatar'} onClick={() => setAvatarIdx(i => (i - 1 + AVATARS.length) % AVATARS.length)} />
                 <div style={{ flex: 1, display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 2px' }}>
                   {AVATARS.map((a, i) => (
                     <button className={`td-ui-button td-select-tile ${i === avatarIdx ? 'is-active' : ''}`} key={a + i} onClick={() => setAvatarIdx(i)} style={{
@@ -94,7 +96,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
                     }}>{a}</button>
                   ))}
                 </div>
-                <Arrow dir="►" onClick={() => setAvatarIdx(i => (i + 1) % AVATARS.length)} />
+                <Arrow dir="►" label={zh ? '下一个头像' : 'Next avatar'} onClick={() => setAvatarIdx(i => (i + 1) % AVATARS.length)} />
               </div>
             </Field>
 
@@ -185,9 +187,10 @@ function Field({ label, hint = '', children }) {
   );
 }
 
-function Arrow({ dir, onClick }) {
+function Arrow({ dir, label, onClick }) {
   return (
-    <button className="td-ui-button td-icon-button td-registration-arrow" onClick={onClick} style={{
+    <button type="button" className="td-ui-button td-icon-button td-registration-arrow" onClick={onClick}
+      aria-label={label} title={label} style={{
       background: 'transparent', border: 'none', cursor: 'pointer',
       color: 'rgba(0,229,255,0.55)', fontSize: '0.8rem', padding: 4,
     }}>{dir}</button>

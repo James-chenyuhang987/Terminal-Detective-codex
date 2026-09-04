@@ -235,6 +235,15 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     { key: 'comms', icon: '✉️', label: 'COMMS', desc: 'System and story mail' },
     { key: 'settings', icon: '🔧', label: 'SETTINGS', desc: 'Game and account' },
   ];
+  const topActions = lang === 'zh' ? [
+    { icon: '✉️', key: 'comms', label: '通讯' },
+    { icon: '📅', key: 'checkin', label: '签到' },
+    { icon: '🔧', key: 'settings', label: '设置' },
+  ] : [
+    { icon: '✉️', key: 'comms', label: 'COMMS' },
+    { icon: '📅', key: 'checkin', label: 'CHECK-IN' },
+    { icon: '🔧', key: 'settings', label: 'SETTINGS' },
+  ];
 
   return (
     <div className="td-home td-page-shell" style={{
@@ -262,8 +271,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <ResourceBar profile={profile} onPick={openModule} />
           <div style={{ display: 'flex', gap: 10, fontSize: 15 }}>
-            {[['✉️', 'comms'], ['📅', 'checkin'], ['🔧', 'settings']].map(([ic, k]) => (
-              <button className="td-ui-button td-icon-button td-home-top-action" key={k} onClick={() => openModule(k)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0.75 }}>{ic}</button>
+            {topActions.map(({ icon, key, label }) => (
+              <button type="button" className="td-ui-button td-home-top-action" key={key}
+                onClick={() => openModule(key)} aria-label={label} title={label}>
+                <span aria-hidden="true">{icon}</span><span>{label}</span>
+              </button>
             ))}
             <span title={`${syncLabel} · BUILD ${BUILD_ID}`} style={{ color: syncColor, fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
           </div>

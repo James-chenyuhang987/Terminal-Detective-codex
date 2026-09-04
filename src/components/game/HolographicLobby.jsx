@@ -738,10 +738,12 @@ function StatusBar({ onBack, onOpenSettings, profile, readOnly, lighting }) {
         <span style={{ color: '#00e5ff', fontWeight: 700 }}>
           {time.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
-        <button onClick={onOpenSettings} title={lang === 'zh' ? '设置' : 'Settings'} style={{
-          padding: '2px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+        <button type="button" className="td-lobby-settings-button" onClick={onOpenSettings}
+          aria-label={lang === 'zh' ? '打开设置' : 'Open settings'}
+          title={lang === 'zh' ? '设置' : 'Settings'} style={{
+          padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
           border: '1px solid rgba(0,229,255,0.4)', background: 'rgba(0,229,255,0.1)', color: '#00e5ff',
-        }}>⚙️</button>
+        }}><span aria-hidden="true">⚙️</span><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span></button>
       </div>
     </div>
   );
@@ -904,7 +906,7 @@ function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose })
     }}>
       <header style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div><small style={{ color: '#f0d28b', letterSpacing: '.14em' }}>♛ CORE CONTRACT VAULT</small><h2 style={{ margin: '5px 0 0', color: '#f8e5b8', fontSize: '1rem' }}>{slotNames[slot]}</h2></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ color: '#7de8ff', font: '800 .62rem monospace' }}>💎 {diamonds.toLocaleString('en-US')}</span><button type="button" disabled={busy} onClick={onClose} style={{ width: 44, height: 44, borderRadius: 10, border: '1px solid rgba(0,229,255,.35)', background: 'rgba(0,229,255,.08)', color: '#7df1ff', cursor: busy ? 'wait' : 'pointer', opacity: busy ? .45 : 1 }}>×</button></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ color: '#7de8ff', font: '800 .62rem monospace' }}>💎 {diamonds.toLocaleString('en-US')}</span><button type="button" disabled={busy} onClick={onClose} aria-label={zh ? '关闭核心探员契约库' : 'Close core contract vault'} title={zh ? '关闭' : 'Close'} style={{ width: 44, height: 44, borderRadius: 10, border: '1px solid rgba(0,229,255,.35)', background: 'rgba(0,229,255,.08)', color: '#7df1ff', cursor: busy ? 'wait' : 'pointer', opacity: busy ? .45 : 1 }}>×</button></div>
       </header>
       <p style={{ margin: '0 0 15px', color: 'rgba(235,247,255,.5)', fontSize: '.58rem', lineHeight: 1.7 }}>{zh
         ? '核心探员价格高于普通支援。签约后永久拥有，可替换当前席位；原核心不会消失，经验、技能树与专长进度继续由该职业席位继承。'

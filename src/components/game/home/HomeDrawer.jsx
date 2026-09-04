@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useLang } from '@/lib/lang.jsx';
 
 export default function HomeDrawer({ title, subtitle, children, onClose, busy = false, width = 620 }) {
+  const { lang } = useLang();
   const closeRef = useRef(null);
   const drawerRef = useRef(null);
   const previousFocusRef = useRef(null);
@@ -58,7 +60,10 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
             <div className="td-home-drawer-title">{title}</div>
             {subtitle && <div className="td-home-drawer-subtitle">{subtitle}</div>}
           </div>
-          <button className="td-ui-button td-icon-button td-home-drawer-close" ref={closeRef} onClick={requestClose} disabled={busy} aria-label="Close">{busy ? 'SYNC…' : '✕'}</button>
+          <button type="button" className="td-ui-button td-icon-button td-home-drawer-close" ref={closeRef}
+            onClick={requestClose} disabled={busy}
+            aria-label={lang === 'zh' ? '关闭面板' : 'Close panel'}
+            title={lang === 'zh' ? '关闭' : 'Close'}>{busy ? 'SYNC…' : '✕'}</button>
         </header>
         <div className="td-home-drawer-content" style={{ pointerEvents: busy ? 'none' : 'auto', opacity: busy ? .72 : 1 }}>{children}</div>
         {busy && <div className="td-home-drawer-sync" />}

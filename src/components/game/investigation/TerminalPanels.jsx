@@ -99,7 +99,7 @@ export function StructuredReportPanel({ options, value, onChange, onSubmit, onCa
   const complete = fields.every(([key]) => value[key]) && (value.evidenceIds?.length || 0) >= 1;
   return (
     <section className="td-structured-report" data-onboarding-target="structured-report">
-      <header><div><small>{zh ? '结构化结案报告' : 'STRUCTURED CASE REPORT'}</small><h3>{zh ? '用已经发现的证据重建案件' : 'RECONSTRUCT THE CASE FROM DISCOVERED EVIDENCE'}</h3></div><button type="button" onClick={onCancel}>✕</button></header>
+      <header><div><small>{zh ? '结构化结案报告' : 'STRUCTURED CASE REPORT'}</small><h3>{zh ? '用已经发现的证据重建案件' : 'RECONSTRUCT THE CASE FROM DISCOVERED EVIDENCE'}</h3></div><button type="button" onClick={onCancel} aria-label={zh ? '关闭结案报告' : 'Close case report'} title={zh ? '关闭' : 'Close'}>✕</button></header>
       {error && <div className="td-report-error" role="alert">⚠ {error}</div>}
       {!options ? <div className="td-report-loading">{zh ? '正在读取合法报告选项…' : 'LOADING LEGAL REPORT OPTIONS…'}</div> : <>
         <div className="td-report-fields">
