@@ -251,10 +251,18 @@ function TerminalPreview({ lang }) {
   );
 }
 
-function StartButton({ onClick, t, lang }) {
+function StartButton({ busy, error, onClick, t, lang }) {
   const copy = lang === 'zh'
-    ? { label: '开启案件调查', action: '进入调查终端', hint: '确认身份 · 连接全息现场 · 部署探员' }
-    : { label: 'OPEN CASE INVESTIGATION', action: 'ENTER CASE TERMINAL', hint: 'VERIFY IDENTITY · LINK SCENE · DEPLOY AGENTS' };
+    ? {
+      label: '开启案件调查',
+      action: busy ? '正在连接调查终端…' : '进入调查终端',
+      hint: busy ? '验证身份 · 同步云端档案' : '确认身份 · 连接全息现场 · 部署探员',
+    }
+    : {
+      label: 'OPEN CASE INVESTIGATION',
+      action: busy ? 'CONNECTING TO CASE TERMINAL…' : 'ENTER CASE TERMINAL',
+      hint: busy ? 'VERIFYING IDENTITY · SYNCING CLOUD PROFILE' : 'VERIFY IDENTITY · LINK SCENE · DEPLOY AGENTS',
+    };
 
   return (
     <div className="td-landing-start-wrap">
@@ -262,11 +270,19 @@ function StartButton({ onClick, t, lang }) {
       <small>{copy.label}</small>
       <h2 className="td-gold-flow-text">{t.startBtn}</h2>
       <p>{t.startHint}</p>
-      <button className="td-landing-start" onClick={onClick}>
-        <span aria-hidden="true">◆</span>
+      <button
+        aria-busy={busy}
+        aria-describedby={error ? 'td-landing-start-error' : undefined}
+        className={`td-landing-start${busy ? ' is-busy' : ''}`}
+        disabled={busy}
+        onClick={onClick}
+        type="button"
+      >
+        <span aria-hidden="true">{busy ? '◌' : '◆'}</span>
         <strong>{copy.action}</strong>
         <small>{copy.hint}</small>
       </button>
+      {error && <div className="td-landing-start-error" id="td-landing-start-error" role="alert">⚠ {error}</div>}
     </div>
   );
 }
@@ -280,7 +296,7 @@ function LangToggle() {
   );
 }
 
-function CaseLaunchPanel({ lang, t, onStart }) {
+function CaseLaunchPanel({ busy, error, lang, t, onStart }) {
   const copy = lang === 'zh'
     ? { dossier: '最高机密案件档案', state: '案件通道已加密', caseName: '霓虹血迹', danger: 'Ω 级高危案件' }
     : { dossier: 'TOP SECRET CASE DOSSIER', state: 'CASE CHANNEL ENCRYPTED', caseName: 'NEON BLOOD', danger: 'OMEGA-CLASS THREAT' };
@@ -301,13 +317,13 @@ function CaseLaunchPanel({ lang, t, onStart }) {
       <StatRow t={t} />
       <div className="td-landing-case-action">
         <TerminalPreview lang={lang} />
-        <StartButton lang={lang} onClick={onStart} t={t} />
+        <StartButton busy={busy} error={error} lang={lang} onClick={onStart} t={t} />
       </div>
     </section>
   );
 }
 
-export default function GameLanding({ onStart }) {
+export default function GameLanding({ busy = false, error = '', onStart }) {
   const { lang, t } = useLang();
 
   return (
@@ -331,7 +347,7 @@ export default function GameLanding({ onStart }) {
         <section className="td-landing-hero">
           <div className="td-landing-copy">
             <TitleLogo lang={lang} t={t} />
-            <CaseLaunchPanel lang={lang} onStart={onStart} t={t} />
+            <CaseLaunchPanel busy={busy} error={error} lang={lang} onStart={onStart} t={t} />
           </div>
           <DetectiveFigure lang={lang} />
         </section>

@@ -6,6 +6,7 @@ import { useProfile } from '@/lib/ProfileContext.jsx';
 import { buildTeamConfig } from '@/game/teamConfig';
 import { getActiveSupportAgentId, getSelectedCoreAgentIds, purchaseAgent } from '@/game/agentMarket';
 import { useLang } from '@/lib/lang.jsx';
+import { publicErrorMessage } from '@/lib/publicError.js';
 import { ALL_CASES } from '@/game/caseData';
 
 const loadAgentLobby = () => import('@/components/game/AgentLobby');
@@ -28,8 +29,11 @@ function ScreenFallback() {
 
 export default function TerminalDetective() {
   const { lang } = useLang();
-  const { profile, mutate, refresh, settle, isReadOnly } = useProfile();
+  const { profile, mutate, refresh, loadProfile, settle, isReadOnly } = useProfile();
   const [screen, setScreen] = useState('LANDING');
+  const [startBusy, setStartBusy] = useState(false);
+  const [startError, setStartError] = useState('');
+  const startRef = useRef(false);
   const [agentStrategy, setAgentStrategy] = useState(null);
   const [selectedCase, setSelectedCase] = useState(null);
   const [regBusy, setRegBusy] = useState(false);
@@ -61,13 +65,31 @@ export default function TerminalDetective() {
   }, [preferredCaseId, screen]);
 
   const handleStart = async () => {
-    const current = profile || await refresh();
-    if (current.detective_name) {
-      void loadDetectiveHome();
-      void loadAgentLobby();
-      void loadCaseSelect();
+    if (startRef.current) return;
+    startRef.current = true;
+    setStartBusy(true);
+    setStartError('');
+    try {
+      const current = profile || await loadProfile();
+      if (!current || typeof current !== 'object') {
+        const unavailable = /** @type {Error & { code?: string }} */ (
+          new Error('Cloud profile did not return a usable profile.')
+        );
+        unavailable.code = 'PROFILE_UNAVAILABLE';
+        throw unavailable;
+      }
+      if (current.detective_name) {
+        void loadDetectiveHome();
+        void loadAgentLobby();
+        void loadCaseSelect();
+      }
+      setScreen(current.detective_name ? 'HOME' : 'REGISTRATION');
+    } catch (cause) {
+      setStartError(publicErrorMessage(cause, lang));
+    } finally {
+      startRef.current = false;
+      setStartBusy(false);
     }
-    setScreen(current.detective_name ? 'HOME' : 'REGISTRATION');
   };
 
   const handleRegister = async (identity) => {
@@ -172,7 +194,7 @@ export default function TerminalDetective() {
 
   let content;
   if (screen === 'LANDING') {
-    content = <GameLanding onStart={handleStart} />;
+    content = <GameLanding busy={startBusy} error={startError} onStart={handleStart} />;
   } else if (screen === 'REGISTRATION') {
     content = (
       <DetectiveRegistration
