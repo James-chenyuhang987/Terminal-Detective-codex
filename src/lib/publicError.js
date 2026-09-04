@@ -4,6 +4,7 @@ const SAFE_CODES = Object.freeze({
   SESSION_TAKEN: ['账号已在另一台设备接管，当前页面已转为只读。', 'Another device took over this account. This page is now read-only.'],
   STALE_PROFILE: ['云端档案已更新，正在合并最新进度。', 'The cloud profile changed. Merging the latest progress.'],
   PROFILE_TIMEOUT: ['云端档案响应超时，进度会在网络恢复后继续同步。', 'The cloud profile timed out. Progress will sync when the connection recovers.'],
+  PROFILE_NETWORK: ['无法连接云端档案，请检查网络或代理后重试。', 'The cloud profile could not be reached. Check your network or proxy and retry.'],
   DATABASE_UNAVAILABLE: ['云端档案暂时不可用，本地进度已进入待同步队列。', 'Cloud storage is temporarily unavailable. Progress is queued locally.'],
   FIREBASE_KEYS_UNAVAILABLE: ['身份校验服务暂时不可用，请稍后重试。', 'Identity verification is temporarily unavailable. Try again shortly.'],
   RATE_LIMITED: ['请求过于频繁，请稍后重试。', 'Too many requests. Try again shortly.'],

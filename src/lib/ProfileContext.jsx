@@ -18,6 +18,7 @@ import {
   removeProfileOperation,
   updateProfileOperation,
 } from '@/game/profileWal';
+import { createSingleFlight } from '@/lib/singleFlight.js';
 
 const POLL_MS = 20_000;
 const PROFILE_MIGRATION_OPERATION_ID = 'profile-migration-v2';
@@ -73,6 +74,7 @@ export function ProfileProvider({ children }) {
   const lifecycleRef = useRef(0);
   const requestControllersRef = useRef(new Set());
   const replayingRef = useRef(null);
+  const claimFlightRef = useRef(createSingleFlight());
   const mountedRef = useRef(true);
   const syncStatusRef = useRef('loading');
   const [profile, setProfile] = useState(null);
@@ -274,9 +276,7 @@ export function ProfileProvider({ children }) {
     updatePendingCount,
   ]);
 
-  const claim = useCallback(async () => {
-    const ownerUid = ownerRef.current;
-    const generation = lifecycleRef.current;
+  const performClaim = useCallback(async (ownerUid, generation) => {
     if (!ownerUid) throw profileError('PROFILE_OWNER_MISSING', 'No authenticated profile owner.');
     changeSyncStatus('syncing', ownerUid, generation);
     commitError(null, ownerUid, generation);
@@ -331,6 +331,19 @@ export function ProfileProvider({ children }) {
     transmitEntry,
     updatePendingCount,
   ]);
+
+  const claim = useCallback(() => {
+    const ownerUid = ownerRef.current;
+    const generation = lifecycleRef.current;
+    return claimFlightRef.current.run(
+      `${generation}:${ownerUid}`,
+      () => performClaim(ownerUid, generation),
+    );
+  }, [performClaim]);
+
+  const loadProfile = useCallback(() => (
+    profileRef.current ? Promise.resolve(profileRef.current) : claim()
+  ), [claim]);
 
   const refresh = useCallback(async () => {
     const ownerUid = ownerRef.current;
@@ -510,6 +523,7 @@ export function ProfileProvider({ children }) {
     requestControllersRef.current.clear();
     queueRef.current = Promise.resolve();
     replayingRef.current = null;
+    claimFlightRef.current.clear();
     const ownerUid = isAuthenticated && user?.id ? user.id : '';
     ownerRef.current = ownerUid;
     profileRef.current = null;
@@ -555,6 +569,7 @@ export function ProfileProvider({ children }) {
     error,
     mutate,
     refresh,
+    loadProfile,
     takeOver,
     settle,
     discardPendingChanges,
@@ -567,6 +582,7 @@ export function ProfileProvider({ children }) {
     pendingCount,
     profile,
     refresh,
+    loadProfile,
     settle,
     syncStatus,
     takeOver,
