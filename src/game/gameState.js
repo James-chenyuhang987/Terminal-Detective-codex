@@ -99,7 +99,11 @@ export const LocalStorage = {
 // ── Checkpoint Manager ────────────────────────────────────────────────────
 export function pushCheckpoint(state) {
   // Deep-clone safe snapshot (exclude non-serializable Set)
-  const snap = JSON.parse(JSON.stringify({ ...state, unlocked_clues_set: undefined }));
+  const snap = JSON.parse(JSON.stringify({
+    ...state,
+    checkpoint_stack: [],
+    unlocked_clues_set: undefined,
+  }));
   const stack = [...(state.checkpoint_stack || []), snap].slice(-3);
   LocalStorage.saveCheckpoints(stack);
   return stack;
@@ -243,7 +247,7 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
   const isZeroYield = newClues.length === 0 && (settlement.health_change || 0) === 0;
   if (isZeroYield) {
     // Push current action to ban list, keep max 3
-    const banned = [newState.last_action, ...(newState.action_ban_list || [])].filter(Boolean);
+    const banned = [settlement.action_name, ...(newState.action_ban_list || [])].filter(Boolean);
     newState.action_ban_list = [...new Set(banned)].slice(0, 3);
     // Extra confusion penalty for consecutive zero-yield
     if (newState.action_ban_list.length >= 2) {

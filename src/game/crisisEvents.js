@@ -38,8 +38,8 @@ export function rollCrisis(gameState, caseData, lang = 'zh') {
         : `An unknown process is purging evidence: ${clue?.visual_icon || '🔍'} “${clue?.keyword || clueId}”. Secure it now or lose it permanently.`,
       payload: { clue_id: clueId, keyword: clue?.keyword || clueId },
       choices: [
-        { id: 'secure_now', label: zh ? '紧急保全' : 'SECURE NOW', risk: zh ? '稳健' : 'STEADY', riskColor: '#00ff88', desc: zh ? '立即消耗 3 AP 锁定证据，确保安全' : 'Spend 3 AP immediately to secure the evidence' },
-        { id: 'defer', label: zh ? '稍后处理' : 'DEFER', risk: zh ? '高风险' : 'HIGH RISK', riskColor: '#ff3860', desc: zh ? '2 轮内的调查行动有 50% 概率顺带保全，超时则永久丢失' : 'Actions have a 50% chance to secure it within 2 turns; then it is lost' },
+        { id: 'secure_now', label: zh ? '紧急保全' : 'SECURE NOW', risk: zh ? '稳健' : 'STEADY', riskColor: '#00ff88', ap_cost: 3, desc: zh ? '立即消耗 3 AP 锁定证据，确保安全' : 'Spend 3 AP immediately to secure the evidence' },
+        { id: 'defer', label: zh ? '稍后处理' : 'DEFER', risk: zh ? '高风险' : 'HIGH RISK', riskColor: '#ff3860', ap_cost: 0, desc: zh ? '2 轮内的调查行动有 50% 概率顺带保全，超时则永久丢失' : 'Actions have a 50% chance to secure it within 2 turns; then it is lost' },
       ],
     };
   }
@@ -55,8 +55,8 @@ export function rollCrisis(gameState, caseData, lang = 'zh') {
         : `${npc.avatar || '👤'} ${npc.name} has withdrawn all prior statements, claiming their memory was altered. The testimony is invalid and requires a new interrogation.`,
       payload: { npc_id: npc.npc_id, npc_name: npc.name },
       choices: [
-        { id: 'reinterrogate', label: zh ? '立即重新审讯' : 'REINTERROGATE', risk: zh ? '稳健' : 'STEADY', riskColor: '#00ff88', desc: zh ? '打开审讯面板，直接对峙（混乱 +5）' : 'Open interrogation and confront the witness (Confusion +5)' },
-        { id: 'ignore', label: zh ? '暂时搁置' : 'SET ASIDE', risk: zh ? '激进' : 'AGGRESSIVE', riskColor: '#ffaa00', desc: zh ? '继续调查，但混乱值 +10，声望 -5' : 'Continue investigating (Confusion +10, Reputation -5)' },
+        { id: 'reinterrogate', label: zh ? '立即重新审讯' : 'REINTERROGATE', risk: zh ? '稳健' : 'STEADY', riskColor: '#00ff88', ap_cost: 0, desc: zh ? '打开审讯面板，直接对峙（混乱 +5）' : 'Open interrogation and confront the witness (Confusion +5)' },
+        { id: 'ignore', label: zh ? '暂时搁置' : 'SET ASIDE', risk: zh ? '激进' : 'AGGRESSIVE', riskColor: '#ffaa00', ap_cost: 0, desc: zh ? '继续调查，但混乱值 +10，声望 -5' : 'Continue investigating (Confusion +10, Reputation -5)' },
       ],
     };
   }
@@ -68,9 +68,9 @@ export function rollCrisis(gameState, caseData, lang = 'zh') {
     desc: zh ? '一个敌对 AI 进程正在追踪你的调查信号，逻辑矩阵开始受到干扰（混乱值 +15）。必须立即做出应对！' : 'A hostile AI process is tracing your investigation signal and disrupting the logic matrix (Confusion +15). Respond immediately.',
     payload: {},
     choices: [
-      { id: 'evade', label: zh ? '甩脱' : 'EVADE', risk: zh ? '稳健' : 'STEADY', riskColor: '#00ff88', desc: zh ? '消耗 2 AP 切换信道，抵消全部混乱冲击' : 'Spend 2 AP to switch channels and negate all confusion' },
-      { id: 'confront', label: zh ? '对峙' : 'CONFRONT', risk: zh ? '高风险' : 'HIGH RISK', riskColor: '#ff3860', desc: zh ? '50% 概率反制成功（混乱 -10），失败则声望 -10' : '50% chance to counter (Confusion -10); failure costs 10 reputation' },
-      { id: 'hide', label: zh ? '隐匿' : 'HIDE', risk: zh ? '激进' : 'AGGRESSIVE', riskColor: '#ffaa00', desc: zh ? '静默潜行：只承受一半混乱冲击，无 AP 消耗' : 'Go silent and take half the confusion impact without AP cost' },
+      { id: 'evade', label: zh ? '甩脱' : 'EVADE', risk: zh ? '稳健' : 'STEADY', riskColor: '#00ff88', ap_cost: 2, desc: zh ? '消耗 2 AP 切换信道，抵消全部混乱冲击' : 'Spend 2 AP to switch channels and negate all confusion' },
+      { id: 'confront', label: zh ? '对峙' : 'CONFRONT', risk: zh ? '高风险' : 'HIGH RISK', riskColor: '#ff3860', ap_cost: 0, desc: zh ? '50% 概率反制成功（混乱 -10），失败则声望 -10' : '50% chance to counter (Confusion -10); failure costs 10 reputation' },
+      { id: 'hide', label: zh ? '隐匿' : 'HIDE', risk: zh ? '激进' : 'AGGRESSIVE', riskColor: '#ffaa00', ap_cost: 0, desc: zh ? '静默潜行：只承受一半混乱冲击，无 AP 消耗' : 'Go silent and take half the confusion impact without AP cost' },
     ],
   };
 }
@@ -81,11 +81,17 @@ export function applyCrisisChoice(event, choiceId, gameState, agentStrategy, lan
   const zh = lang === 'zh';
   const scale = penaltyScale(agentStrategy);
   const p = (n) => Math.round(n * scale);
+  const choice = event?.choices?.find(item => item.id === choiceId);
+  if (!choice) return { error: 'invalid_choice', changes: {}, resultText: '' };
+  const apCost = Math.max(0, Number(choice.ap_cost) || 0);
+  if (Math.max(0, Number(gameState?.action_points_left) || 0) < apCost) {
+    return { error: 'insufficient_ap', requiredAp: apCost, changes: {}, resultText: '' };
+  }
 
   if (event.type === 'evidence') {
     if (choiceId === 'secure_now') {
       return {
-        changes: { ap_delta: -3 },
+        changes: { ap_delta: -apCost },
         resultText: zh ? `✅ 证据「${event.payload.keyword}」已紧急加密封存，威胁解除。（AP -3）` : `✅ Evidence “${event.payload.keyword}” encrypted and secured. Threat cleared. (AP -3)`,
       };
     }
@@ -111,7 +117,7 @@ export function applyCrisisChoice(event, choiceId, gameState, agentStrategy, lan
   // tracker
   if (choiceId === 'evade') {
     return {
-      changes: { ap_delta: -2 },
+      changes: { ap_delta: -apCost },
       resultText: zh ? '🛰️ 信道已切换，追踪者失去目标。混乱冲击被完全抵消。（AP -2）' : '🛰️ Channel switched. The tracker lost your signal and the confusion impact was negated. (AP -2)',
     };
   }

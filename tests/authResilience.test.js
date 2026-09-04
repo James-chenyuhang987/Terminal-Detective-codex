@@ -8,7 +8,12 @@ import {
   recordAuthRateLimit,
   recordAuthSuccess,
 } from '../src/lib/authThrottle.js';
-import { sanitizedAuthReturnUrl } from '../src/lib/authReturn.js';
+import {
+  authReturnInternals,
+  captureAuthReturnLocation,
+  consumeCapturedAuthReturn,
+  sanitizedAuthReturnUrl,
+} from '../src/lib/authReturn.js';
 import { requestAuthReadiness } from '../src/lib/authReadiness.js';
 import { createFaultReference } from '../src/lib/faultReference.js';
 
@@ -53,6 +58,32 @@ test('legacy OAuth errors are removed without damaging app routes or unrelated q
   assert.deepEqual(
     sanitizedAuthReturnUrl('https://game.example/#error=access_denied&error_description=nope'),
     { changed: true, path: '/' },
+  );
+});
+
+test('auth return feedback is captured before sensitive query parameters are removed', () => {
+  let replacement = '';
+  const location = {
+    href: 'https://game.example/play?case=1&auth=github&error=access_denied&error_description=denied#/case/2',
+  };
+  const history = {
+    state: { navigation: 1 },
+    replaceState: (_state, _title, path) => { replacement = path; },
+  };
+
+  assert.deepEqual(captureAuthReturnLocation(location, history), {
+    action: 'github',
+    feedback: 'github_cancelled',
+  });
+  assert.equal(replacement, '/play?case=1#/case/2');
+  assert.deepEqual(consumeCapturedAuthReturn(), {
+    action: 'github',
+    feedback: 'github_cancelled',
+  });
+  assert.deepEqual(consumeCapturedAuthReturn(), { action: '', feedback: '' });
+  assert.equal(
+    authReturnInternals.parseAuthReturnUrl(location.href).feedback,
+    'github_cancelled',
   );
 });
 

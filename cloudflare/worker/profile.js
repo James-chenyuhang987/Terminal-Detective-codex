@@ -1,3 +1,5 @@
+import { readBodyText } from './body.js';
+
 const MAX_BODY_BYTES = 512 * 1024;
 const MAX_PROFILE_BYTES = 512 * 1024;
 const PROFILE_VALUE_LIMITS = Object.freeze({
@@ -21,12 +23,12 @@ const PROFILE_FIELDS = new Set([
   'agent_progression', 'skill_loadout', 'saved_team_config', 'home_progress_version',
 ]);
 
-function json(payload, status = 200) {
-  return Response.json(payload, { status, headers: { 'Cache-Control': 'no-store' } });
+function json(payload, status = 200, headers = {}) {
+  return Response.json(payload, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
 }
 
-function error(code, message, status = 400, extra = {}) {
-  return json({ error: code, code, message, ...extra }, status);
+function error(code, message, status = 400, extra = {}, headers = {}) {
+  return json({ error: code, code, message, ...extra }, status, headers);
 }
 
 function validSessionId(value) {
@@ -133,15 +135,13 @@ function successPayload(row, session, operationId = '', replayed = false) {
 }
 
 export async function handleProfileFunction(request, env, session) {
-  if (request.method !== 'POST') return error('METHOD_NOT_ALLOWED', 'POST is required.', 405);
-  if (request.headers.get('x-profile-owner') !== session.user_id) {
-    return error('PROFILE_OWNER_MISMATCH', 'The profile owner does not match the authenticated account.', 409);
-  }
-  const length = Number(request.headers.get('content-length') || 0);
-  if (length > MAX_BODY_BYTES) return error('INVALID_PATCH', 'Request body is too large.', 413);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
-    return error('INVALID_PATCH', 'Request body is too large.', 413);
+  if (request.method !== 'POST') return error('METHOD_NOT_ALLOWED', 'POST is required.', 405, {}, { Allow: 'POST' });
+  let raw;
+  try {
+    raw = await readBodyText(request, MAX_BODY_BYTES, 'INVALID_PATCH');
+  } catch (cause) {
+    if (cause?.status === 413) return error('INVALID_PATCH', 'Request body is too large.', 413);
+    throw cause;
   }
   let body;
   try { body = JSON.parse(raw || '{}'); } catch { return error('INVALID_PATCH', 'Invalid JSON body.'); }
@@ -173,8 +173,10 @@ export async function handleProfileFunction(request, env, session) {
   const hash = await patchHash(patch);
   const prior = await readProfileOperation(env, session.user_id, body.operation_id);
   if (prior) {
-    if (prior.patch_hash !== hash) {
-      return error('OPERATION_ID_REUSED', 'Operation id was already used for a different patch.', 409);
+    if (prior.patch_hash !== hash
+      || Number(prior.base_revision) !== expected
+      || Number(prior.result_revision) !== expected + 1) {
+      return error('OPERATION_ID_REUSED', 'Operation id was already used for a different profile operation.', 409);
     }
     const replayRow = await readProfileRow(env, session.user_id);
     if ((Number(replayRow?.profile_revision) || 0) < (Number(prior.result_revision) || 0)) {
@@ -224,8 +226,10 @@ export async function handleProfileFunction(request, env, session) {
     const duplicate = await readProfileOperation(env, session.user_id, body.operation_id);
     const current = await readProfileRow(env, session.user_id);
     if (duplicate) {
-      if (duplicate.patch_hash !== hash) {
-        return error('OPERATION_ID_REUSED', 'Operation id was already used for a different patch.', 409);
+      if (duplicate.patch_hash !== hash
+        || Number(duplicate.base_revision) !== expected
+        || Number(duplicate.result_revision) !== expected + 1) {
+        return error('OPERATION_ID_REUSED', 'Operation id was already used for a different profile operation.', 409);
       }
       if ((Number(current?.profile_revision) || 0) < (Number(duplicate.result_revision) || 0)) {
         return error('DATABASE_UNAVAILABLE', 'The profile operation is still being committed.', 503);
@@ -253,7 +257,7 @@ export async function handleCurrentUser(request, env, session) {
     const row = await readProfileRow(env, session.user_id);
     return json({ ...session.user, ...profilePayload(row) });
   }
-  return error('METHOD_NOT_ALLOWED', 'GET is required.', 405);
+  return error('METHOD_NOT_ALLOWED', 'GET is required.', 405, {}, { Allow: 'GET' });
 }
 
 export const profileInternals = Object.freeze({

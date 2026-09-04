@@ -1139,23 +1139,33 @@ export function buildLocalThought({ gameState, caseData, agentStrategy, observat
   return joinSentence(thought, reflection);
 }
 
-const FALLBACK_ACTIONS = Object.freeze(['search_area', 'examine_clue', 'check_cctv']);
-
-export function buildOfflineDecisionPacks({ team = [], turn = 0, caseId = '', lang = 'zh' }) {
+export function buildOfflineDecisionPacks({
+  team = [],
+  turn = 0,
+  caseId = '',
+  lang = 'zh',
+  actionBanList = [],
+}) {
   const language = lang === 'en' ? 'en' : 'zh';
   const styles = ['steady', 'aggressive', 'deceptive'];
   const risks = ['low', 'medium', 'medium'];
+  const banned = new Set(
+    [...new Set((Array.isArray(actionBanList) ? actionBanList : []).filter(action => NARRATIVE_ACTIONS.includes(action)))]
+      .slice(-(NARRATIVE_ACTIONS.length - 3)),
+  );
+  const availableActions = NARRATIVE_ACTIONS.filter(action => !banned.has(action));
   const packs = {};
   (team || []).slice(0, 3).forEach((agent, agentIndex) => {
-    const cards = FALLBACK_ACTIONS.map((baseAction, index) => {
-      const actionTag = FALLBACK_ACTIONS[(index + agentIndex) % FALLBACK_ACTIONS.length];
+    const start = stableNarrativeHash(`${caseId}:${turn}:${agent.agent_id}:${agentIndex}`) % availableActions.length;
+    const cards = Array.from({ length: 3 }, (_, index) => {
+      const actionTag = availableActions[(start + index) % availableActions.length];
       const focus = getActionFocus(actionTag)[0];
       return {
         optionId: `offline:${caseId}:${turn}:${agent.agent_id}:${actionTag}`,
         action_tag: actionTag,
         style: styles[index],
         risk_level: risks[index],
-        label: language === 'zh' ? ['区域复查', '证物检验', '监控校验'][index] : ['RECHECK ZONE', 'EXAMINE EVIDENCE', 'VERIFY CCTV'][index],
+        label: OBSERVATION_ACTION_LABELS[actionTag][language],
         benefit_desc: language === 'zh' ? '离线安全行动，可继续普通调查。' : 'Safe offline action; ordinary investigation can continue.',
         risk_desc: language === 'zh' ? '战术数据离线，无法显示事实贴近度。' : 'Tactical data is offline; alignment is unavailable.',
         estimatedAlignment: null,

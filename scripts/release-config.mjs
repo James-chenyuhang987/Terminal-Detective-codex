@@ -1,10 +1,22 @@
+import { parse, printParseErrorCode } from 'jsonc-parser';
+
 const PLACEHOLDER = /^(?:REPLACE_WITH_|YOUR_|<)/i;
 const FIREBASE_PROJECT_ID = /^[a-z0-9](?:[a-z0-9-]{4,28}[a-z0-9])$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function configValue(source, key) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return String(source || '').match(new RegExp(`"${escaped}"\\s*:\\s*"([^"]*)"`))?.[1]?.trim() || '';
+function parseJsonc(source) {
+  const errors = [];
+  const config = parse(String(source || ''), errors, {
+    allowTrailingComma: true,
+    disallowComments: false,
+  });
+  if (errors.length) {
+    const first = errors[0];
+    throw new Error(
+      `wrangler.jsonc is invalid at offset ${first.offset}: ${printParseErrorCode(first.error)}`,
+    );
+  }
+  return config;
 }
 
 function exactOrigin(value) {
@@ -23,11 +35,14 @@ function exactOrigin(value) {
 
 export function validateReleaseConfig(configSource, environment = {}) {
   const errors = [];
-  const workerProjectId = configValue(configSource, 'FIREBASE_PROJECT_ID');
+  const config = parseJsonc(configSource);
+  const vars = config?.vars || {};
+  const database = Array.isArray(config?.d1_databases) ? config.d1_databases[0] : null;
+  const workerProjectId = String(vars.FIREBASE_PROJECT_ID || '').trim();
   const frontendProjectId = String(environment.VITE_FIREBASE_PROJECT_ID || '').trim();
-  const databaseId = configValue(configSource, 'database_id');
-  const appId = configValue(configSource, 'APP_ID');
-  const allowedOrigins = configValue(configSource, 'CORS_ALLOWED_ORIGINS')
+  const databaseId = String(database?.database_id || '').trim();
+  const appId = String(vars.APP_ID || '').trim();
+  const allowedOrigins = String(vars.CORS_ALLOWED_ORIGINS || '')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean);

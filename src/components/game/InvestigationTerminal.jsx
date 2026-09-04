@@ -148,6 +148,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [commandNotice, setCommandNotice] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(() => settings.investigationTutorialEnabled !== false);
   const [finalJudgeResult, setFinalJudgeResult] = useState(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   // ── 关键决策 / 危机事件 / 推理连线 ──
   const [decisionCards, setDecisionCards] = useState(null);
   const [decisionStory, setDecisionStory] = useState(null);
@@ -157,6 +158,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [truthFragments, setTruthFragments] = useState(0);
   const [redFlash, setRedFlash] = useState(0);
   const [crisis, setCrisis] = useState(null);
+  const [crisisPending, setCrisisPending] = useState(false);
+  const [crisisError, setCrisisError] = useState(null);
   const [insightEvent, setInsightEvent] = useState(null);
   const [linkedPairs, setLinkedPairs] = useState([]);
   const [isLinkChecking, setIsLinkChecking] = useState(false);
@@ -169,6 +172,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const actionCinematicResolveRef = useRef(null);
   const actionCinematicTimerRef = useRef(null);
   const playedActionCinematicsRef = useRef(new Set());
+  const finalizingRef = useRef(false);
+  const crisisPendingRef = useRef(false);
+  const finalSettlementRef = useRef(null);
 
   const triggerSynergy = useCallback((type, clue) => {
     setSynergyEvent({
@@ -188,6 +194,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   activeTerminalTurnRef.current = activeTerminalTurn;
   const viewedTerminalTurnRef = useRef(viewedTerminalTurn);
   viewedTerminalTurnRef.current = viewedTerminalTurn;
+  const interactionLocked = isProcessing || isFinalizing || crisisPending;
 
   useEffect(() => () => {
     activeRunRef.current += 1;
@@ -351,7 +358,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }, [addLine, gameState, lang, notifyCommand]);
 
   const handleEmergencyStabilize = useCallback(() => {
-    if (isProcessing) return;
+    if (isProcessing || finalizingRef.current || crisisPendingRef.current) return;
     const result = applyEmergencyStabilize(gameStateRef.current);
     if (result.error) {
       const message = result.error === 'insufficient_command_points'
@@ -419,7 +426,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
   // ── Main ReAct Loop ───────────────────────────────────────────────────────
   const runReActCycle = async () => {
-    if (isProcessing || abortCtrlRef.current) return;
+    if (isProcessing || abortCtrlRef.current || finalizingRef.current || crisisPendingRef.current) return;
     const runLang = lang === 'en' ? 'en' : 'zh';
     const gs = gameStateRef.current;
     if (gs.action_points_left <= 0) {
@@ -726,16 +733,16 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         const ec = newState.evidence_crisis;
         if (newState.unlocked_clues.includes(ec.clue_id) === false) {
           newState.evidence_crisis = null;
-        } else if ((stableNarrativeHash(`${newState.run_id}:${newState.turn_count}:${ec.clue_id}:secure`) % 100) < 50) {
-          deferredOutcomeLines.push([lang === 'zh'
-            ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${ec.keyword}」！威胁解除。`
-            : `\n🛡️ This action also encrypted and secured “${ec.keyword}”. Threat cleared.`, 'success']);
-          newState.evidence_crisis = null;
         } else if (newState.turn_count > ec.deadline) {
           newState.unlocked_clues = newState.unlocked_clues.filter(id => id !== ec.clue_id);
           newState.unlocked_clues_set = new Set(newState.unlocked_clues);
           removedCrisisClueId = ec.clue_id;
           deferredOutcomeLines.push([lang === 'zh' ? `\n💀 证据「${ec.keyword}」已被销毁，永久丢失！` : `\n💀 Evidence “${ec.keyword}” was destroyed and is permanently lost.`, 'error']);
+          newState.evidence_crisis = null;
+        } else if ((stableNarrativeHash(`${newState.run_id}:${newState.turn_count}:${ec.clue_id}:secure`) % 100) < 50) {
+          deferredOutcomeLines.push([lang === 'zh'
+            ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${ec.keyword}」！威胁解除。`
+            : `\n🛡️ This action also encrypted and secured “${ec.keyword}”. Threat cleared.`, 'success']);
           newState.evidence_crisis = null;
         } else {
           deferredOutcomeLines.push([lang === 'zh' ? `\n⏳ 证据「${ec.keyword}」仍处于销毁倒计时（第 ${ec.deadline} 轮前需保全）` : `\n⏳ Evidence “${ec.keyword}” remains on a purge timer (secure it before turn ${ec.deadline}).`, 'warning']);
@@ -759,10 +766,21 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       // ── 危机事件引擎：每 4-6 轮随机触发 ──────────────────────────────
       if (newState.turn_count >= nextCrisisTurnRef.current) {
         nextCrisisTurnRef.current = newState.turn_count + nextCrisisIn();
-        const evt = rollCrisis(newState, caseData, lang);
-        schedule(() => setCrisis(evt), 900);
+        crisisPendingRef.current = true;
+        setCrisisPending(true);
+        setCrisisError(null);
+        addLine(`\n🚨 ${lang === 'zh' ? '危机信号已锁定，等待应急响应。' : 'CRISIS SIGNAL LOCKED. EMERGENCY RESPONSE REQUIRED.'}`, 'warning');
+        schedule(() => {
+          if (activeRunRef.current !== runId || finalizingRef.current) {
+            crisisPendingRef.current = false;
+            setCrisisPending(false);
+            return;
+          }
+          setCrisis(rollCrisis(newState, caseData, lang));
+        }, 900);
       }
 
+      gameStateRef.current = newState;
       setGameState(newState);
       if (removedCrisisClueId) {
         setLinkedPairs(prev => prev.filter(pair => pair.a !== removedCrisisClueId && pair.b !== removedCrisisClueId));
@@ -861,6 +879,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleAbort = () => {
+    if (finalizingRef.current) return;
     if (abortCtrlRef.current) {
       activeRunRef.current += 1;
       abortCtrlRef.current.abort();
@@ -879,6 +898,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleNPCTalk = async (npc) => {
+    if (finalizingRef.current || crisisPendingRef.current || isProcessing || abortCtrlRef.current) return;
     const state = gameStateRef.current;
     const runtimeTeam = applyStaminaToTeam(configuredAgentStrategy.team, state.agent_stamina);
     const primary = runtimeTeam.find(agent => agent.agent_id === configuredAgentStrategy.primary_agent_id);
@@ -891,7 +911,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       ? null
       : (lang === 'zh' ? '所有探员体力均不足 10%，请返回行动界面整备。' : 'ALL AGENTS HAVE LESS THAN 10% STAMINA. RETURN TO THE ACTION SCREEN TO RECOVER.'));
     setNpcExecutorId(executor?.agent_id || runtimeTeam[0]?.agent_id || '');
-    if (abortCtrlRef.current) return;
     const { ctrl, operationId } = beginAbortableOperation();
     setIsProcessing(true);
     try {
@@ -919,7 +938,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleNPCQuestion = async (question) => {
-    if (!selectedNPC || !question?.questionId || isProcessing || abortCtrlRef.current) return;
+    if (!selectedNPC || !question?.questionId || isProcessing || abortCtrlRef.current
+      || finalizingRef.current || crisisPendingRef.current) return;
     const npc = selectedNPC;
     const state = gameStateRef.current;
     const staminaAgent = configuredAgentStrategy.team.find(agent => agent.agent_id === npcExecutorId);
@@ -1034,18 +1054,27 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   // ── 危机事件应对 ──────────────────────────────────────────────────────────
   const handleCrisisChoice = (choiceId) => {
     const evt = crisis;
+    if (!evt || !crisisPendingRef.current) return;
+    const outcome = applyCrisisChoice(evt, choiceId, gameStateRef.current, activeAgentStrategy, lang);
+    if (outcome.error) {
+      setCrisisError(outcome.error === 'insufficient_ap'
+        ? (lang === 'zh' ? `行动点不足，需要 ${outcome.requiredAp} AP。请选择其他应对方案。` : `Insufficient AP. This response requires ${outcome.requiredAp} AP. Choose another option.`)
+        : (lang === 'zh' ? '该应对方案已失效，请重新选择。' : 'That response is no longer valid. Choose again.'));
+      return;
+    }
+    crisisPendingRef.current = false;
+    setCrisisPending(false);
+    setCrisisError(null);
     setCrisis(null);
-    if (!evt) return;
-    const { changes, resultText } = applyCrisisChoice(evt, choiceId, gameStateRef.current, activeAgentStrategy, lang);
+    const { changes, resultText } = outcome;
     addLine(`\n🚨 ${resultText}`, changes.confusion_delta > 0 ? 'warning' : 'success');
-    setGameState(prev => {
-      const next = { ...prev };
-      if (changes.confusion_delta) next.confusion_score = Math.max(0, Math.min(100, next.confusion_score + changes.confusion_delta));
-      if (changes.ap_delta) next.action_points_left = Math.max(0, next.action_points_left + changes.ap_delta);
-      if (changes.reputation_delta) next.reputation = Math.max(0, next.reputation + changes.reputation_delta);
-      if (changes.defer_evidence) next.evidence_crisis = changes.defer_evidence;
-      return next;
-    });
+    const next = { ...gameStateRef.current };
+    if (changes.confusion_delta) next.confusion_score = Math.max(0, Math.min(100, next.confusion_score + changes.confusion_delta));
+    if (changes.ap_delta) next.action_points_left = Math.max(0, next.action_points_left + changes.ap_delta);
+    if (changes.reputation_delta) next.reputation = Math.max(0, next.reputation + changes.reputation_delta);
+    if (changes.defer_evidence) next.evidence_crisis = changes.defer_evidence;
+    gameStateRef.current = next;
+    setGameState(next);
     if (changes.reopen_npc) {
       const npc = caseData.npcs.find(n => n.npc_id === changes.reopen_npc);
       if (npc) handleNPCTalk(npc);
@@ -1129,7 +1158,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const handleLink = async (aId, bId) => {
     const clueA = caseData.clue_dictionary.find(c => c.clue_id === aId);
     const clueB = caseData.clue_dictionary.find(c => c.clue_id === bId);
-    if (!clueA || !clueB || isLinkChecking || isProcessing || abortCtrlRef.current) return;
+    if (!clueA || !clueB || isLinkChecking || isProcessing || abortCtrlRef.current
+      || finalizingRef.current || crisisPendingRef.current) return;
     const { ctrl, operationId } = beginAbortableOperation();
     setIsLinkChecking(true);
     setIsProcessing(true);
@@ -1190,7 +1220,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       && structuredReport.motiveId
       && structuredReport.timelineId
       && evidenceCount >= 1;
-    if (!isComplete || isProcessing || abortCtrlRef.current) return;
+    if (!isComplete || isProcessing || abortCtrlRef.current
+      || finalizingRef.current || crisisPendingRef.current) return;
     const { ctrl, operationId } = beginAbortableOperation();
     setIsProcessing(true);
     setReportError(null);
@@ -1207,6 +1238,19 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       if (result.is_passed) {
         addLine(`\n${t.caseSolved}`, 'success');
         addLine(`\n${t.judgeVerdict} [${result.score}]: ${result.critique}`, 'success');
+        const settledState = gameStateRef.current;
+        finalSettlementRef.current = {
+          gameState: {
+            ...settledState,
+            unlocked_clues: [...settledState.unlocked_clues],
+            agent_stamina: { ...(settledState.agent_stamina || {}) },
+            command_state: { ...(settledState.command_state || {}) },
+          },
+          linkedPairs: linkedPairs.map(pair => ({ ...pair })),
+          bsodCount: bsodCountRef.current,
+        };
+        finalizingRef.current = true;
+        setIsFinalizing(true);
         setFinalJudgeResult(result);
         schedule(() => setShowGameOver(true), 1800);
       } else {
@@ -1255,29 +1299,36 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const accentColor = phaseColor.accent;
 
   if (showGameOver) {
+    const finalSettlement = finalSettlementRef.current || {
+      gameState,
+      linkedPairs,
+      bsodCount: bsodCountRef.current,
+    };
+    const finalGameState = finalSettlement.gameState;
+    const finalLinkedPairs = finalSettlement.linkedPairs;
     return (
       <GameOverScreen
         judgeResult={finalJudgeResult}
-        gameState={gameState}
+        gameState={finalGameState}
         caseData={caseData}
         rewardEligible={Boolean(finalJudgeResult?.score)}
         onSettlement={({ xpGain }) => onSettlement?.({
-          run_id: gameState.run_id,
+          run_id: finalGameState.run_id,
           case_id: caseDataResolved.case_id,
           difficulty: caseDataResolved.difficulty,
           score: finalJudgeResult?.score || 'D',
           is_passed: finalJudgeResult?.is_passed === true,
-          clues: gameState.unlocked_clues,
-          valid_links: linkedPairs.filter(pair => pair.valid).map(pair => [pair.a, pair.b]),
-          valid_link_count: linkedPairs.filter(pair => pair.valid).length,
-          invalid_link_count: linkedPairs.filter(pair => !pair.valid).length,
-          turns: gameState.turn_count,
-          ap_left: gameState.action_points_left,
-          confusion: gameState.confusion_score,
-          bsod_count: bsodCountRef.current,
-          traps_triggered: gameState.traps_triggered || 0,
-          clue_ratio: gameState.unlocked_clues.length / Math.max(1, caseDataResolved.clue_dictionary.length),
-          all_hidden_clues: (caseDataResolved.hidden_clues || []).every(clue => gameState.unlocked_clues.includes(clue.clue_id)),
+          clues: finalGameState.unlocked_clues,
+          valid_links: finalLinkedPairs.filter(pair => pair.valid).map(pair => [pair.a, pair.b]),
+          valid_link_count: finalLinkedPairs.filter(pair => pair.valid).length,
+          invalid_link_count: finalLinkedPairs.filter(pair => !pair.valid).length,
+          turns: finalGameState.turn_count,
+          ap_left: finalGameState.action_points_left,
+          confusion: finalGameState.confusion_score,
+          bsod_count: finalSettlement.bsodCount,
+          traps_triggered: finalGameState.traps_triggered || 0,
+          clue_ratio: finalGameState.unlocked_clues.length / Math.max(1, caseDataResolved.clue_dictionary.length),
+          all_hidden_clues: (caseDataResolved.hidden_clues || []).every(clue => finalGameState.unlocked_clues.includes(clue.clue_id)),
           xp_gain: xpGain,
         })}
         onReturnToLobby={onBackToLobby}
@@ -1325,7 +1376,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
       {showCommandConsole && <CommandConsole
         commandState={gameState.command_state}
-        busy={isProcessing}
+        busy={interactionLocked}
         onStabilize={handleEmergencyStabilize}
         onClose={() => setShowCommandConsole(false)}
       />}
@@ -1386,7 +1437,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       )}
 
       {/* 危机事件警报 */}
-      {crisis && <CrisisAlert event={crisis} onChoose={handleCrisisChoice} />}
+      {crisis && (
+        <CrisisAlert
+          event={crisis}
+          actionPoints={gameState.action_points_left}
+          error={crisisError}
+          onChoose={handleCrisisChoice}
+        />
+      )}
 
       {/* 推理突破高潮特效 */}
       <InsightFlashFX event={insightEvent} onDone={() => setInsightEvent(null)} />
@@ -1402,7 +1460,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           borderRadius: '0 0 16px 16px',
         }}>
         <div className="flex items-center gap-4">
-          <button onClick={onBackToLobby} className="td-ui-button td-button-ghost td-button-compact text-xs opacity-60 hover:opacity-100 transition-opacity"
+          <button onClick={onBackToLobby} disabled={interactionLocked} className="td-ui-button td-button-ghost td-button-compact text-xs opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
             style={{ color: accentColor }}>{t.lobbyBtn}</button>
           <div className="text-xs font-bold tracking-widest" style={{ color: accentColor, textShadow: `0 0 10px ${accentColor}` }}>
             {caseData.title} · {caseData.subtitle}
@@ -1465,12 +1523,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             setJudgeResult(null);
             setReportMode(value => !value);
           }}
-            className="td-ui-button td-button-secondary text-xs px-3 py-1 rounded border transition-all"
+            disabled={interactionLocked}
+            className="td-ui-button td-button-secondary text-xs px-3 py-1 rounded border transition-all disabled:opacity-30"
             style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
             {t.btnReport}
           </button>
           <button type="button" onClick={() => { setFinalJudgeResult(judgeResult); setShowGameOver(true); }}
-            className="td-ui-button td-button-danger text-xs px-3 py-1 rounded border transition-all"
+            disabled={interactionLocked}
+            className="td-ui-button td-button-danger text-xs px-3 py-1 rounded border transition-all disabled:opacity-30"
             style={{ borderColor: '#ff386050', color: '#ff3860', backgroundColor: 'transparent' }}>
             {t.btnEnd}
           </button>
@@ -1572,7 +1632,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
                 setNpcQuestionPacks(null);
                 setNpcQuestionError(null);
               }}
-              isProcessing={isProcessing}
+              isProcessing={interactionLocked}
               accentColor={accentColor}
               emotion={getEmotion(npcEmotionState, selectedNPC.npc_id)}
               team={activeAgentStrategy.team}
@@ -1592,7 +1652,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               }}
               onSubmit={handleSubmitReport}
               onCancel={() => setReportMode(false)}
-              isProcessing={isProcessing}
+              isProcessing={interactionLocked}
               judgeResult={judgeResult}
               error={reportError}
             />
@@ -1601,7 +1661,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           {/* Action Bar */}
           <div className="td-investigation-actions td-action-dock p-4 border-t flex items-center gap-3 flex-wrap"
             style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <button data-onboarding-target="execute" onClick={runReActCycle} disabled={isProcessing || gameState.action_points_left <= 0}
+            <button data-onboarding-target="execute" onClick={runReActCycle} disabled={interactionLocked || gameState.action_points_left <= 0}
               className="td-ui-button td-button-primary px-6 py-2 text-xs font-bold tracking-widest rounded border transition-all disabled:opacity-30"
               style={{
                 borderColor: accentColor, color: accentColor,
@@ -1611,8 +1671,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               }}>
               {t.executeCycle}
             </button>
-            {isProcessing && (
-              <button onClick={handleAbort}
+            {isProcessing && !isFinalizing && (
+              <button onClick={handleAbort} disabled={crisisPending}
                 className="td-ui-button td-button-danger px-4 py-2 text-xs rounded border transition-all"
                 style={{ borderColor: '#ff386060', color: '#ff3860', backgroundColor: '#ff386015' }}>
                 {t.abortBtn}
@@ -1622,7 +1682,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             <div data-onboarding-target="interrogate" className="td-investigation-npc-list flex gap-2 flex-wrap">
               {caseData.npcs.map(npc => (
                 <button key={npc.npc_id} onClick={() => handleNPCTalk(npc)}
-                  disabled={isProcessing}
+                  disabled={interactionLocked}
                   className="td-ui-button td-npc-chip px-3 py-1 text-xs rounded border transition-all disabled:opacity-30 inline-flex items-center gap-2"
                   style={{ borderColor: `${accentColor}40`, color: `${accentColor}cc`, backgroundColor: `${accentColor}08` }}>
                   <span>{npc.avatar} {npc.name}</span>
@@ -1658,7 +1718,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               unlockedIds={gameState.unlocked_clues}
               linkedPairs={linkedPairs}
               onLink={handleLink}
-              isChecking={isLinkChecking}
+              isChecking={isLinkChecking || interactionLocked}
               accentColor={accentColor}
             />
           ) : toolTab === 'map' ? (

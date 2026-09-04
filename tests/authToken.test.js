@@ -46,3 +46,48 @@ test('authenticated fetch never loops after a second 401', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('authenticated fetch aborts while waiting for the initial token', async () => {
+  const controller = new AbortController();
+  let requestedSignal;
+  setAuthTokenProvider((_force, signal) => {
+    requestedSignal = signal;
+    return new Promise(() => {});
+  });
+
+  try {
+    const pending = fetchWithAuth('https://game.example/api/profile', {
+      signal: controller.signal,
+    });
+    controller.abort();
+    await assert.rejects(pending, error => error?.name === 'AbortError');
+    assert.equal(requestedSignal, controller.signal);
+  } finally {
+    setAuthTokenProvider(null);
+  }
+});
+
+test('authenticated fetch aborts while waiting for a forced token refresh', async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  let refreshStarted;
+  const waitingForRefresh = new Promise(resolve => { refreshStarted = resolve; });
+  setAuthTokenProvider(force => {
+    if (!force) return 'stale-token';
+    refreshStarted();
+    return new Promise(() => {});
+  });
+  globalThis.fetch = async () => new Response('', { status: 401 });
+
+  try {
+    const pending = fetchWithAuth('https://game.example/api/profile', {
+      signal: controller.signal,
+    });
+    await waitingForRefresh;
+    controller.abort();
+    await assert.rejects(pending, error => error?.name === 'AbortError');
+  } finally {
+    setAuthTokenProvider(null);
+    globalThis.fetch = originalFetch;
+  }
+});

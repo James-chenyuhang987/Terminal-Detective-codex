@@ -246,16 +246,14 @@ function safeProfileErrorMessage(code, status = 0) {
 /**
  * @param {string} action
  * @param {Record<string, any>} [payload]
- * @param {{ ownerId?: string, signal?: AbortSignal }} [options]
+ * @param {{ signal?: AbortSignal }} [options]
  */
 export async function invokePlayerProfile(action, payload = {}, options = {}) {
-  const { ownerId = '', signal: externalSignal } = options;
+  const { signal: externalSignal } = options;
   const headers = /** @type {Record<string, string>} */ ({
     'Content-Type': 'application/json',
     Accept: 'application/json',
-    'X-App-Id': String(appParams.appId),
   });
-  if (ownerId) headers['X-Profile-Owner'] = ownerId;
   const controller = new AbortController();
   const onExternalAbort = () => controller.abort();
   if (externalSignal?.aborted) controller.abort();

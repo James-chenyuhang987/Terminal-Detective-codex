@@ -46,3 +46,25 @@ test('release configuration requires every public Firebase Web App value', () =>
     /VITE_FIREBASE_API_KEY is required/,
   );
 });
+
+test('release configuration accepts Wrangler JSONC comments and trailing commas', () => {
+  const jsonc = `{
+    // Worker configuration
+    "vars": {
+      "APP_ID": "terminal-detective",
+      "FIREBASE_PROJECT_ID": "terminal-detective-e1714",
+      "CORS_ALLOWED_ORIGINS": "https://game.example",
+    },
+    "d1_databases": [{
+      "database_id": "4afe18c5-2a7b-49a9-9c8c-6fcdbfb86d23",
+    }],
+  }`;
+  assert.equal(validateReleaseConfig(jsonc, environment).appId, 'terminal-detective');
+});
+
+test('release configuration rejects unterminated JSONC comments', () => {
+  assert.throws(
+    () => validateReleaseConfig(`${config}\n/* unfinished`, environment),
+    /wrangler\.jsonc is invalid/,
+  );
+});

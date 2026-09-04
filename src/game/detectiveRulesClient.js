@@ -46,7 +46,11 @@ function withAbortAndTimeout(promise, signal, lang = currentLang) {
 async function invokeRule(task, payload, signal, lang = currentLang) {
   const requestLang = normalizeLang(lang);
   const response = await withAbortAndTimeout(
-    cloudflareApi.functions.invoke('detectiveRules', { task, payload: { ...payload, lang: requestLang } }),
+    cloudflareApi.functions.invoke(
+      'detectiveRules',
+      { task, payload: { ...payload, lang: requestLang } },
+      { signal },
+    ),
     signal,
     requestLang,
   );
@@ -84,13 +88,20 @@ export async function getDecisionOptionPacks({ gameState, caseData, team, signal
     recentActionTags: (gameState.chat_history || []).slice(-5).map(item => item?.actionTag || '').filter(Boolean),
     confusion: gameState.confusion_score || 0,
     actionPoints: gameState.action_points_left || 0,
+    actionBanList: gameState.action_ban_list || [],
     team: teamPayload(team),
   };
   try {
     return await invokeRule('decision_options', payload, signal, requestLang);
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
-    return buildOfflineDecisionPacks({ team, turn: payload.turn, caseId: payload.caseId, lang: requestLang });
+    return buildOfflineDecisionPacks({
+      team,
+      turn: payload.turn,
+      caseId: payload.caseId,
+      lang: requestLang,
+      actionBanList: payload.actionBanList,
+    });
   }
 }
 

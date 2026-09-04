@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react'
+import { execFileSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 
@@ -20,6 +21,20 @@ function resolveBasePath() {
   }
   return '/'
 }
+
+function resolveBuildSha() {
+  const configured = String(process.env.VITE_BUILD_SHA || '').trim()
+  if (configured) return configured
+  try {
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim()
+    return `${sha}${dirty ? '-dirty' : ''}`
+  } catch {
+    return 'development'
+  }
+}
+
+process.env.VITE_BUILD_SHA = resolveBuildSha()
 
 // https://vite.dev/config/
 export default defineConfig({

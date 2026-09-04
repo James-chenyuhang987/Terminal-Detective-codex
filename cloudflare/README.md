@@ -25,10 +25,10 @@ Runtime baseline: Node.js 22+ for tooling, React 18.3.1, Firebase Web SDK 12.18.
 | `GET /api/cloudflare/status` | Public | Aggregate readiness; returns `503` until all checks pass. |
 | `GET /api/auth/session` | Firebase ID token | Return the normalized `firebase-cloudflare` account. |
 | `GET /api/apps/:appId/entities/User/me` | Firebase ID token | Read the current token owner's account and profile. |
-| `POST /api/apps/:appId/functions/playerProfile` | ID token + `X-Profile-Owner` | Claim a device session, read status or apply an idempotent patch. |
+| `POST /api/apps/:appId/functions/playerProfile` | Firebase ID token | Claim a device session, read status or apply an idempotent patch for the verified token UID. |
 | `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID token | Run allowlisted deterministic game rules. |
 
-The profile owner header is a consistency guard, not an identity source: it must equal the verified token UID. Unknown `/api/*` paths return JSON 404 and never fall through to the SPA.
+The browser cannot select a profile owner through a request header or payload; the Worker derives it only from the verified Firebase token. Unknown `/api/*` paths return JSON 404 and never fall through to the SPA.
 
 ## Required configuration
 
@@ -67,7 +67,7 @@ Same-origin requests need no CORS entry. HTTP `localhost` and `127.0.0.1` origin
 
 The Worker does not require a Firebase service-account private key. Google signing certificates are downloaded from the official metadata endpoint and cached according to its `Cache-Control` header.
 
-Certificate refreshes are shared across concurrent requests. Unknown key IDs are throttled for one minute and certificate-download failures use a short retry backoff, preventing a malformed-token burst or Google outage from amplifying outbound requests.
+Certificate refreshes are shared across concurrent requests. The 3.5-second deadline covers both the metadata request and response-body parsing; network failures and temporary `429/5xx` responses receive one retry. Unknown key IDs are throttled for one minute and certificate-download failures use a short retry backoff, preventing a malformed-token burst or Google outage from amplifying outbound requests.
 
 ## GitHub provider
 
@@ -90,7 +90,7 @@ The GitHub Pages workflow reads the four `VITE_FIREBASE_*` values from GitHub Ac
 
 Do not run the remote migration until Firebase login has been configured and the production reset has been explicitly approved. Building, testing and deploying Worker code do not run D1 migrations automatically.
 
-`/api/auth/config` verifies the Firebase project ID, D1 binding, and required schema. `/api/cloudflare/status` returns HTTP `503` until those checks pass; the frontend also confirms that its Firebase project ID matches the Worker before starting authentication.
+`/api/auth/config` verifies the Firebase project ID, D1 binding, required columns, migration `0003_profile_operations.sql`, table primary keys, one complete non-partial unique `users.email` index, and the profile cascade foreign keys. `/api/cloudflare/status` returns HTTP `503` until those checks pass; the frontend also confirms that its Firebase project ID matches the Worker before starting authentication.
 
 ## Profile durability model
 
@@ -113,7 +113,7 @@ This protects against refreshes and temporary outages, not deletion of browser s
 4. Confirm the Wrangler account, D1 database ID and reset approval; schedule a maintenance window.
 5. Run `npm run release:check` and the full local verification below.
 6. Apply the reviewed remote migrations. Because `0002` deletes legacy player data, do not reopen the game between migration and deployment.
-7. Deploy the Worker/assets immediately, then require both readiness endpoints and a real registration/login/profile smoke test to pass before reopening.
+7. Deploy the Worker/assets immediately, then require both readiness endpoints, the production page `td-build` marker, and a real registration/login/profile smoke test to pass before reopening.
 
 ```bash
 npm run cloudflare:d1:remote
@@ -134,3 +134,5 @@ npm run cloudflare:dev
 ```
 
 Remote migrations and deployment change production state. Run them only after reviewing the selected Cloudflare account and D1 database.
+
+The GitHub Actions production workflow follows the same ordering for `main`: verify the repository, deploy Worker code and Static Assets from one Git SHA, check both readiness endpoints and the `td-build` marker, then publish the optional Pages mirror. New runs do not cancel a production deployment already in progress.

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 
 // 危机事件全屏警报 — 橙红警报覆盖层（BSoD 级视觉强度）
-export default function CrisisAlert({ event, onChoose }) {
+export default function CrisisAlert({ event, onChoose, actionPoints = 0, error = null }) {
   const { lang } = useLang();
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -61,18 +61,31 @@ export default function CrisisAlert({ event, onChoose }) {
           {event.desc}
         </div>
 
+        {error && (
+          <div role="alert" style={{
+            color: '#ffd27a', border: '1px solid #ffaa0060', borderRadius: 8,
+            background: 'rgba(255,170,0,0.1)', padding: '9px 12px', marginBottom: 12,
+            fontSize: '0.58rem', lineHeight: 1.6,
+          }}>
+            ⚠ {error}
+          </div>
+        )}
+
         {/* Choices */}
         <div style={{ display: 'flex', gap: 10 }}>
-          {event.choices.map((c, i) => (
-            <button key={c.id} onClick={() => onChoose(c.id)} style={{
-              flex: 1, padding: '14px 12px', borderRadius: 10, cursor: 'pointer',
+          {event.choices.map((c, i) => {
+            const disabled = (Number(c.ap_cost) || 0) > actionPoints;
+            return (
+            <button key={c.id} onClick={() => onChoose(c.id)} disabled={disabled} style={{
+              flex: 1, padding: '14px 12px', borderRadius: 10, cursor: disabled ? 'not-allowed' : 'pointer',
               border: `1px solid ${c.riskColor}55`,
               background: `${c.riskColor}0c`,
               fontFamily: 'monospace', textAlign: 'center',
               transition: 'all 0.15s',
               animation: `ca-choice-in 0.3s ${0.15 + i * 0.08}s ease both`,
+              opacity: disabled ? 0.45 : 1,
             }}
-              onMouseEnter={e => { e.currentTarget.style.background = `${c.riskColor}22`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 0 20px ${c.riskColor}40`; }}
+              onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = `${c.riskColor}22`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 0 20px ${c.riskColor}40`; } }}
               onMouseLeave={e => { e.currentTarget.style.background = `${c.riskColor}0c`; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
             >
               <div style={{
@@ -81,9 +94,12 @@ export default function CrisisAlert({ event, onChoose }) {
                 marginBottom: 6, background: `${c.riskColor}15`,
               }}>{c.risk}</div>
               <div style={{ color: '#fff', fontSize: '0.72rem', fontWeight: 900, marginBottom: 5 }}>{c.label}</div>
+              <div style={{ color: c.ap_cost ? '#ffd27a' : '#8fffc4', fontSize: '0.46rem', marginBottom: 5 }}>
+                {c.ap_cost ? `AP -${c.ap_cost}` : (lang === 'zh' ? '无 AP 消耗' : 'NO AP COST')}
+              </div>
               <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.48rem', lineHeight: 1.6 }}>{c.desc}</div>
             </button>
-          ))}
+          )})}
         </div>
       </div>
 

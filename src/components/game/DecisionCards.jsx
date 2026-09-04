@@ -115,9 +115,9 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
     if (left === 0 && noEligibleAgent) {
       chooseOnce({ rest: true });
     } else if (left === 0 && fallbackCard) {
-      chooseOnce({ card: fallbackCard, executorAgentId: recommendExecutor(eligibleTeam, fallbackCard.action_tag) || executorId, assistAgentId: null, commandIds: [] });
+      chooseOnce({ card: fallbackCard, executorAgentId: executorId, assistAgentId: null, commandIds: [] });
     }
-  }, [cards, chooseOnce, eligibleTeam, executorId, left, noEligibleAgent]);
+  }, [cards, chooseOnce, executorId, left, noEligibleAgent]);
 
   const toggleCommand = (id) => {
     const active = id === 'preview' ? preview : joint;

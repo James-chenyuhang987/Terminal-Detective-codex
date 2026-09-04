@@ -11,19 +11,47 @@ const env = {
   },
 };
 
-function readyDB() {
+function readyDB(indexResults = [{
+  index_name: 'sqlite_autoindex_users_2',
+  is_unique: 1,
+  is_partial: 0,
+  column_position: 0,
+  column_name: 'email',
+}]) {
   const schema = {
     users: ['id', 'email', 'email_verified', 'display_name', 'avatar_url'],
     profiles: ['user_id', 'profile_json', 'profile_revision', 'active_session_id'],
     profile_operations: ['user_id', 'operation_id', 'base_revision', 'result_revision', 'patch_hash'],
   };
   return {
-    prepare() {
+    prepare(sql) {
       return {
+        bind() { return this; },
         async all() {
+          if (sql.includes('d1_migrations')) {
+            return { results: [{ name: '0003_profile_operations.sql' }] };
+          }
+          if (sql.includes("pragma_index_list('users')")) {
+            return { results: indexResults };
+          }
+          if (sql.includes('pragma_foreign_key_list')) {
+            return { results: ['profiles', 'profile_operations'].map(table_name => ({
+              table_name,
+              parent_table: 'users',
+              child_column: 'user_id',
+              parent_column: 'id',
+              on_delete: 'CASCADE',
+            })) };
+          }
           return {
             results: Object.entries(schema).flatMap(([table_name, columns]) => (
-              columns.map(name => ({ table_name, name }))
+              columns.map(name => ({
+                table_name,
+                name,
+                pk: table_name === 'profile_operations'
+                  ? ({ user_id: 1, operation_id: 2 }[name] || 0)
+                  : name === (table_name === 'users' ? 'id' : 'user_id') ? 1 : 0,
+              }))
             )),
           };
         },
@@ -105,6 +133,41 @@ test('auth readiness distinguishes a reachable D1 database from an incomplete sc
   assert.deepEqual(payload.checks, { database: true, schema: false });
 });
 
+test('auth readiness requires one complete non-partial unique email index', async () => {
+  for (const indexes of [
+    [
+      {
+        index_name: 'users_email_id_unique',
+        is_unique: 1,
+        is_partial: 0,
+        column_position: 0,
+        column_name: 'email',
+      },
+      {
+        index_name: 'users_email_id_unique',
+        is_unique: 1,
+        is_partial: 0,
+        column_position: 1,
+        column_name: 'id',
+      },
+    ],
+    [{
+      index_name: 'users_email_partial_unique',
+      is_unique: 1,
+      is_partial: 1,
+      column_position: 0,
+      column_name: 'email',
+    }],
+  ]) {
+    const response = await handleRequest(new Request('https://game.example/api/auth/config'), {
+      ...env,
+      FIREBASE_PROJECT_ID: 'terminal-detective-test',
+      DB: readyDB(indexes),
+    });
+    assert.equal((await response.json()).ready, false);
+  }
+});
+
 test('Firebase session endpoint requires a bearer token', async () => {
   const response = await handleRequest(new Request('https://game.example/api/auth/session'), env);
   assert.equal(response.status, 401);
@@ -145,16 +208,21 @@ test('deterministic detective rules require a Cloudflare session', async () => {
   assert.equal(payload.code, 'UNAUTHENTICATED');
 });
 
-test('profile read and write routes fail closed without an authenticated owner', async () => {
+test('profile read and write routes fail closed before database access', async () => {
   for (const [path, method] of [
     [`/api/apps/${APP_ID}/entities/User/me`, 'GET'],
     [`/api/apps/${APP_ID}/functions/playerProfile`, 'POST'],
-    [`/api/apps/${APP_ID}/functions/playerProfile`, 'DELETE'],
   ]) {
     const response = await handleRequest(new Request(`https://game.example${path}`, { method }), env);
     assert.equal(response.status, 401);
     assert.equal((await response.json()).code, 'UNAUTHENTICATED');
   }
+  const wrongMethod = await handleRequest(new Request(
+    `https://game.example/api/apps/${APP_ID}/functions/playerProfile`,
+    { method: 'DELETE' },
+  ), env);
+  assert.equal(wrongMethod.status, 405);
+  assert.equal(wrongMethod.headers.get('allow'), 'POST');
 });
 
 test('gateway rejects unknown API routes instead of proxying to another backend', async () => {
