@@ -15,6 +15,8 @@ import StatusToast from '@/components/game/StatusToast';
 import HomeDrawer from '@/components/game/home/HomeDrawer';
 import { getHomeModuleMeta } from '@/components/game/home/homeModuleMeta';
 import { transactionErrorMessage } from '@/game/transactionFeedback';
+import { useSettings } from '@/lib/settings.jsx';
+import StoryModeControl from '@/components/game/theater/StoryModeControl';
 
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
@@ -32,8 +34,9 @@ function HomeModuleSkeleton({ lang }) {
   );
 }
 
-export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister }) {
+export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, suspendedCase = null, onResume = () => {} }) {
   const { lang } = useLang();
+  const { settings, updateSetting } = useSettings();
   const {
     profile,
     mutate,
@@ -49,6 +52,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   const [checkinCelebration, setCheckinCelebration] = useState(null);
   const toastTimerRef = useRef(null);
   const busyRef = useRef(false);
+  const resumeRef = useRef(null);
   const hasSavedTeam = !!profile?.saved_team_config;
   const loadError = ['error', 'recovery', 'storage_unavailable'].includes(syncStatus);
   const syncLabel = {
@@ -65,6 +69,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     : ['syncing', 'pending', 'loading'].includes(syncStatus) ? '#ffaa00' : '#ff3860';
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
+
+  useEffect(() => {
+    if (suspendedCase) resumeRef.current?.focus({ preventScroll: true });
+  }, [suspendedCase]);
 
   useEffect(() => {
     const preload = () => {
@@ -154,6 +162,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   };
 
   const enterLobby = (targetCaseId = null) => {
+    if (suspendedCase) { onResume(); return; }
     onEnterLobby(targetCaseId);
     if (!isReadOnly) {
       void mutate(current => ({ profile: markActivity(current, 'lobby_visits') })).catch(() => {});
@@ -162,6 +171,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
 
   const openCase = (caseId) => {
     setModule(null);
+    if (suspendedCase) { onResume(); return; }
     onOpenCases(caseId);
   };
 
@@ -177,6 +187,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
   }, []);
 
   const quickStart = () => {
+    if (suspendedCase) { onResume(); return; }
     if (profile.saved_team_config) openModule('cases');
     else void enterLobby();
   };
@@ -292,6 +303,29 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
             </div>
           </div>
 
+          <div style={{ width: '100%', maxWidth: 600 }}>
+            <StoryModeControl value={settings.storyMode} onChange={value => updateSetting('storyMode', value)} />
+          </div>
+          {suspendedCase && (
+            <section aria-label={lang === 'zh' ? '进行中的调查' : 'Investigation in progress'} style={{
+              width: '100%', maxWidth: 600, padding: 16, borderRadius: 12,
+              border: '1px solid #e8c98a80', background: 'rgba(44,32,13,.9)', color: '#f0d9a5',
+            }}>
+              <h2 style={{ margin: 0, fontSize: '.85rem' }}>
+                {lang === 'zh' ? '调查已暂存' : 'Investigation suspended'} · {lang === 'en' ? (suspendedCase.en?.title || suspendedCase.subtitle || suspendedCase.title) : suspendedCase.title}
+              </h2>
+              <p style={{ fontSize: '.7rem', lineHeight: 1.7, color: '#d5c7ae' }}>
+                {lang === 'zh'
+                  ? '当前页面保留案件与编队。切换模式后可继续同一调查；案件和编队入口也会返回当前调查，不再扣费。刷新或关闭页面将离开本次现场。'
+                  : 'Your case and squad remain in this page. Resume after switching modes; case and squad entry also resume this run without another charge. Reloading or closing the page leaves this live session.'}
+              </p>
+              <button ref={resumeRef} type="button" className="td-ui-button td-button-gold" onClick={onResume} style={{
+                minHeight: 44, padding: '10px 16px', borderRadius: 8, border: '1px solid #e8c98a',
+                background: '#e8c98a20', color: '#ffe5b0', cursor: 'pointer', fontFamily: 'monospace',
+              }}>{lang === 'zh' ? '继续当前调查' : 'Resume current investigation'}</button>
+            </section>
+          )}
+
           <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
             {!named ? (
               onRegister
@@ -321,7 +355,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
               }}>
                 <div style={{ fontSize: 24 }}>🔎</div>
                 <div style={{ color: '#e8c98a', fontWeight: 900, letterSpacing: '0.2em', fontSize: '1rem', margin: '8px 0 6px' }}>
-                  {lang === 'zh' ? '「开始调查」' : 'START INVESTIGATION'}
+                  {suspendedCase ? (lang === 'zh' ? '「继续调查」' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '「开始调查」' : 'START INVESTIGATION')}
                 </div>
                 <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
                   {lang === 'zh'
@@ -332,7 +366,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
                   width: '100%', padding: '11px', cursor: 'pointer', borderRadius: 10,
                   border: '1px solid #c5a059', background: 'rgba(197,160,89,0.22)',
                   color: '#f0d9a5', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
-                }}>{lang === 'zh' ? '开始调查' : 'START INVESTIGATION'}</button>
+                }}>{suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '开始调查' : 'START INVESTIGATION')}</button>
                 <button className="td-ui-button td-button-ghost td-button-compact" onClick={() => openModule('profile')} style={{
                   marginTop: 8, background: 'transparent', border: 'none', cursor: 'pointer',
                   color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: '0.55rem',

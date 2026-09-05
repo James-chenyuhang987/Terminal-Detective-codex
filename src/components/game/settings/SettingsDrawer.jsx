@@ -7,6 +7,7 @@ import { useProfile } from '@/lib/ProfileContext.jsx';
 import { migrateProfileV2, normalizeProfile, sanitizeProfileWrite } from '@/game/playerProfile';
 import { ToggleRow, SegmentRow, ActionRow, SectionTitle } from '@/components/game/settings/SettingRow';
 import StatusToast from '@/components/game/StatusToast';
+import StoryModeControl from '@/components/game/theater/StoryModeControl';
 
 const TX = {
   zh: {
@@ -248,8 +249,8 @@ export default function SettingsDrawer({ onClose }) {
       }}>
         {/* Header */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: 'max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 14px 16px', borderBottom: `1px solid ${skin.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+          padding: 'calc(76px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right)) 14px 16px', borderBottom: `1px solid ${skin.border}`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <span style={{ fontSize: 15 }}>⚙️</span>
@@ -269,6 +270,8 @@ export default function SettingsDrawer({ onClose }) {
         <div aria-busy={saving} style={{ flex: 1, overflowY: 'auto', padding: '4px max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) 16px', pointerEvents: saving ? 'none' : 'auto', opacity: saving ? .68 : 1 }}>
           <SectionTitle skin={skin}>{tx.general}</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <StoryModeControl value={settings.storyMode} onChange={value => change('storyMode', value)}
+              light={settings.panelLight} disabled={saving} />
             <SegmentRow skin={skin} label={tx.language} desc={tx.languageDesc}
               value={lang}
               options={[{ value: 'zh', label: '中文' }, { value: 'en', label: 'ENGLISH' }]}

@@ -8,6 +8,9 @@ import { getActiveSupportAgentId, getSelectedCoreAgentIds, purchaseAgent } from 
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError.js';
 import { ALL_CASES } from '@/game/caseData';
+import { useSettings } from '@/lib/settings.jsx';
+import { normalizeStoryMode } from '@/game/storyMode';
+import StoryModeChooser from '@/components/game/theater/StoryModeChooser';
 
 const loadAgentLobby = () => import('@/components/game/AgentLobby');
 const loadInvestigationTerminal = () => import('@/components/game/InvestigationTerminal');
@@ -30,7 +33,11 @@ function ScreenFallback() {
 export default function TerminalDetective() {
   const { lang } = useLang();
   const { profile, mutate, refresh, loadProfile, settle, isReadOnly } = useProfile();
+  const { settings, updateSetting } = useSettings();
   const [screen, setScreen] = useState('LANDING');
+  const [showModeChooser, setShowModeChooser] = useState(false);
+  const entryRequestRef = useRef(0);
+  const caseStartRef = useRef(false);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState('');
   const startRef = useRef(false);
@@ -64,13 +71,29 @@ export default function TerminalDetective() {
     return () => clearTimeout(id);
   }, [preferredCaseId, screen]);
 
-  const handleStart = async () => {
+  const handleStart = () => {
+    setStartError('');
+    setShowModeChooser(true);
+  };
+
+  const handleCancelMode = () => {
+    entryRequestRef.current += 1;
+    startRef.current = false;
+    setStartBusy(false);
+    setStartError('');
+    setShowModeChooser(false);
+  };
+
+  const handleConfirmMode = async (mode) => {
     if (startRef.current) return;
     startRef.current = true;
+    const requestId = ++entryRequestRef.current;
+    updateSetting('storyMode', normalizeStoryMode(mode));
     setStartBusy(true);
     setStartError('');
     try {
       const current = profile || await loadProfile();
+      if (requestId !== entryRequestRef.current) return;
       if (!current || typeof current !== 'object') {
         const unavailable = /** @type {Error & { code?: string }} */ (
           new Error('Cloud profile did not return a usable profile.')
@@ -83,12 +106,16 @@ export default function TerminalDetective() {
         void loadAgentLobby();
         void loadCaseSelect();
       }
+      setShowModeChooser(false);
       setScreen(current.detective_name ? 'HOME' : 'REGISTRATION');
     } catch (cause) {
+      if (requestId !== entryRequestRef.current) return;
       setStartError(publicErrorMessage(cause, lang));
     } finally {
-      startRef.current = false;
-      setStartBusy(false);
+      if (requestId === entryRequestRef.current) {
+        startRef.current = false;
+        setStartBusy(false);
+      }
     }
   };
 
@@ -116,6 +143,10 @@ export default function TerminalDetective() {
   };
 
   const handleDeploy = async (strategy) => {
+    if (selectedCase) {
+      setScreen('GAME');
+      return { error: null };
+    }
     setAgentStrategy(strategy);
     if (preferredCaseId) {
       const targetCase = ALL_CASES.find(item => item.case_id === preferredCaseId);
@@ -142,33 +173,55 @@ export default function TerminalDetective() {
   const handleAgentPurchase = async (agentId) => mutate(current => purchaseAgent(current, agentId));
 
   const handleCaseSelect = async (caseData, strategyOverride = null) => {
-    await loadInvestigationTerminal();
-    const currentStrategy = strategyOverride || agentStrategy;
-    const result = await mutate(current => startCase(current, caseData));
-    if (result?.error) return result;
-    const currentSkills = currentStrategy?.skill_effects || {};
-    const extraSkills = result.effects.skill_effects || {};
-    const skillEffects = { ...currentSkills };
-    Object.entries(extraSkills).forEach(([key, value]) => {
-      skillEffects[key] = typeof value === 'number' ? (Number(skillEffects[key]) || 0) + value : value || skillEffects[key];
-    });
-    setAgentStrategy({
-      ...(currentStrategy || {}), skill_effects: skillEffects,
-      home_effects: {
-        initial_ap_bonus: result.effects.initial_ap_bonus + Math.max(0, Number(currentStrategy?.support_effects?.initial_ap_bonus) || 0),
-        ignore_first_trap: result.effects.ignore_first_trap,
-      },
-    });
-    setSelectedCase(caseData);
-    setScreen('GAME');
-    return result;
+    if (selectedCase) {
+      setScreen('GAME');
+      return { error: null };
+    }
+    if (caseStartRef.current) return { error: 'busy' };
+    caseStartRef.current = true;
+    try {
+      await loadInvestigationTerminal();
+      const currentStrategy = strategyOverride || agentStrategy;
+      const result = await mutate(current => startCase(current, caseData));
+      if (result?.error) return result;
+      const currentSkills = currentStrategy?.skill_effects || {};
+      const extraSkills = result.effects.skill_effects || {};
+      const skillEffects = { ...currentSkills };
+      Object.entries(extraSkills).forEach(([key, value]) => {
+        skillEffects[key] = typeof value === 'number' ? (Number(skillEffects[key]) || 0) + value : value || skillEffects[key];
+      });
+      setAgentStrategy({
+        ...(currentStrategy || {}), skill_effects: skillEffects,
+        home_effects: {
+          initial_ap_bonus: result.effects.initial_ap_bonus + Math.max(0, Number(currentStrategy?.support_effects?.initial_ap_bonus) || 0),
+          ignore_first_trap: result.effects.ignore_first_trap,
+        },
+      });
+      setSelectedCase(caseData);
+      setScreen('GAME');
+      return result;
+    } finally {
+      caseStartRef.current = false;
+    }
   };
 
   const handleSettlement = async (summary) => {
     return settle(summary);
   };
 
+  const handleOpenHome = () => setScreen('HOME');
+  const handleResume = () => { if (selectedCase) setScreen('GAME'); };
+  const leaveRun = (nextScreen) => {
+    setSelectedCase(null);
+    setPreferredCaseId(null);
+    setScreen(nextScreen);
+  };
+
   const openLobbyForCase = (caseId = null, returnScreen = 'HOME') => {
+    if (selectedCase) {
+      setScreen('GAME');
+      return;
+    }
     void loadAgentLobby();
     setPreferredCaseId(caseId);
     setLobbyReturnScreen(returnScreen);
@@ -176,6 +229,10 @@ export default function TerminalDetective() {
   };
 
   const openCasesWithSavedTeam = async (caseId = null) => {
+    if (selectedCase) {
+      setScreen('GAME');
+      return;
+    }
     void loadCaseSelect();
     const saved = profile?.saved_team_config;
     if (!saved) {
@@ -210,6 +267,8 @@ export default function TerminalDetective() {
         onEnterLobby={openLobbyForCase}
         onOpenCases={openCasesWithSavedTeam}
         onRegister={() => setScreen('REGISTRATION')}
+        suspendedCase={selectedCase}
+        onResume={handleResume}
       />
     );
   } else if (screen === 'LOBBY') {
@@ -239,21 +298,33 @@ export default function TerminalDetective() {
         preferredCaseId={preferredCaseId}
       />
     );
-  } else {
-    content = (
-      <InvestigationTerminal
-        agentStrategy={agentStrategy}
-        selectedCase={selectedCase}
-        onSettlement={handleSettlement}
-        onGameEnd={() => setScreen('HOME')}
-        onBackToLobby={() => setScreen('LOBBY')}
-      />
-    );
   }
 
   return (
-    <Suspense fallback={<ScreenFallback />}>
-      <div key={screen} className="td-screen-stage">{content}</div>
-    </Suspense>
+    <>
+      <Suspense fallback={<ScreenFallback />}>
+        <div key={screen} hidden={screen === 'GAME'} className="td-screen-stage">{content}</div>
+      </Suspense>
+      {/* This stable sibling preserves the run while HOME or presentation settings change. */}
+      <div {...(screen !== 'GAME' ? { inert: '' } : {})} hidden={screen !== 'GAME'} aria-hidden={screen !== 'GAME'} className="td-active-run">
+        <Suspense fallback={<ScreenFallback />}>
+          {selectedCase && (
+            <InvestigationTerminal
+              agentStrategy={agentStrategy}
+              selectedCase={selectedCase}
+              onSettlement={handleSettlement}
+              presentationActive={screen === 'GAME'}
+              onOpenHome={handleOpenHome}
+              onGameEnd={() => leaveRun('HOME')}
+              onBackToLobby={() => leaveRun('LOBBY')}
+            />
+          )}
+        </Suspense>
+      </div>
+      {showModeChooser && (
+        <StoryModeChooser initialMode={settings.storyMode} onConfirm={handleConfirmMode}
+          onCancel={handleCancelMode} busy={startBusy} error={startError} />
+      )}
+    </>
   );
 }

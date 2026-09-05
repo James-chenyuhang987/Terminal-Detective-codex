@@ -1,9 +1,11 @@
 // 全局设置：主题(面板浅色) · 音效 · 视觉特效 · 数据管理
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { DEFAULT_STORY_MODE, normalizeStoryMode } from '@/game/storyMode';
 
 const KEY = 'td_settings_v1';
 
 export const DEFAULT_SETTINGS = {
+  storyMode: DEFAULT_STORY_MODE, // 剧情呈现方式，与行动过场独立
   panelLight: false,      // 文字密集面板浅色化
   sfxEnabled: true,       // 音效总开关
   scanlines: true,        // CRT 扫描线
@@ -33,13 +35,16 @@ export const LEGACY_CLOUD_KEYS = [
 function readStored() {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    const stored = raw ? JSON.parse(raw) : null;
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...stored, storyMode: normalizeStoryMode(stored.storyMode) };
   } catch { return DEFAULT_SETTINGS; }
 }
 
 const SettingsContext = createContext({
   settings: DEFAULT_SETTINGS,
   setSetting: (_key, _value) => {},
+  updateSetting: (_key, _value) => {},
   resetSettings: () => {},
 });
 
@@ -51,13 +56,13 @@ export function SettingsProvider({ children }) {
   }, [settings]);
 
   const setSetting = useCallback((key, value) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSettings(prev => ({ ...prev, [key]: key === 'storyMode' ? normalizeStoryMode(value) : value }));
   }, []);
 
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
 
   return (
-    <SettingsContext.Provider value={{ settings, setSetting, resetSettings }}>
+    <SettingsContext.Provider value={{ settings, setSetting, updateSetting: setSetting, resetSettings }}>
       {children}
     </SettingsContext.Provider>
   );
