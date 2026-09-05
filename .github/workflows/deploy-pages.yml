@@ -63,7 +63,7 @@ jobs:
         run: |
           status="$(curl --fail-with-body --silent --show-error "$PRODUCTION_URL/api/cloudflare/status")"
           node -e 'const value=JSON.parse(process.argv[1]); if (!value.ok || value.mode !== "firebase_cloudflare" || !value.checks?.schema) process.exit(1)' "$status"
-          curl --fail-with-body --silent --show-error "$PRODUCTION_URL/" | grep -F '<meta name="td-build" content="${{ github.sha }}">'
+          curl --fail-with-body --silent --show-error "$PRODUCTION_URL/" | grep -E '<meta name="td-build" content="${{ github.sha }}"[[:space:]]*/?>'
 
   deploy-pages:
     needs: deploy-worker
