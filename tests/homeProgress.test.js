@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 
 import {
   ACHIEVEMENTS, DETECTIVE_LEVEL_CAP, ENERGY_MAX, LEVEL_REWARDS, XP_PER_LEVEL,
@@ -77,6 +78,35 @@ test('check-in follows the seven-day table and cannot be claimed twice', () => {
   assert.equal(second.profile.diamonds, 10);
   assert.equal(second.profile.checkin_streak, 2);
 });
+
+for (const [zone, previous, next] of [
+  ['America/New_York', '2026-03-08T00:30:00-05:00', '2026-03-09T00:30:00-04:00'],
+  ['America/New_York', '2026-11-01T00:30:00-04:00', '2026-11-02T00:30:00-05:00'],
+  ['Europe/Berlin', '2026-03-29T00:30:00+01:00', '2026-03-30T00:30:00+02:00'],
+  ['Australia/Lord_Howe', '2026-10-04T00:30:00+10:30', '2026-10-05T00:30:00+11:00'],
+]) {
+  test(`check-in uses calendar days across ${zone} transition on ${next.slice(0, 10)}`, () => {
+    const moduleUrl = new URL('../src/game/homeProgress.js', import.meta.url).href;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import { applyCheckin, normalizeProfile } from ${JSON.stringify(moduleUrl)};
+      const previous = new Date(${JSON.stringify(previous)});
+      const next = new Date(${JSON.stringify(next)});
+      const originalTime = next.getTime();
+      const first = applyCheckin(normalizeProfile({}, previous), previous);
+      const second = applyCheckin(first.profile, next);
+      assert.equal(second.profile.checkin_streak, 2);
+      assert.equal(second.day, 2);
+      assert.equal(second.reward.diamonds, 10);
+      assert.equal(next.getTime(), originalTime);
+      assert.equal(applyCheckin(second.profile, next).error, 'already_claimed');
+      const afterGap = new Date(next);
+      afterGap.setDate(afterGap.getDate() + 2);
+      assert.equal(applyCheckin(second.profile, afterGap).profile.checkin_streak, 1);
+    `], { env: { ...process.env, TZ: zone }, encoding: 'utf8', timeout: 10000 });
+    assert.equal(result.status, 0, result.error?.message || result.stderr || result.stdout);
+  });
+}
 
 test('warehouse purchase, use and loadout rules are deterministic', () => {
   let current = profile({ gold: 3000, diamonds: 100, energy: 100 });

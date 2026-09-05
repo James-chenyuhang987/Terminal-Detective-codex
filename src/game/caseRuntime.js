@@ -69,8 +69,8 @@ export function getZoneClueIds(caseData, zoneId) {
   return (caseData?.clue_dictionary || []).map(clue => clue.clue_id);
 }
 
-export function getAvailableClueIds(caseData, zoneId, unlockedClues = [], turn = 0) {
-  const known = new Set(unlockedClues);
+export function getAvailableClueIds(caseData, zoneId, unlockedClues = [], turn = 0, destroyedClues = []) {
+  const known = new Set([...unlockedClues, ...(Array.isArray(destroyedClues) ? destroyedClues : [])]);
   const protectedUntil = new Map(
     (caseData?.hidden_clues || []).map(clue => [
       clue?.clue_id,

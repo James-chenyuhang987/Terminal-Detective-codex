@@ -321,7 +321,9 @@ export function applyCheckin(profile, now = new Date()) {
   const p = normalizeProfile(profile, now);
   if (!canCheckin(p, now)) return { profile: p, reward: null, error: 'already_claimed' };
   const today = localDateKey(now);
-  const yesterday = localDateKey(new Date(new Date(now).getTime() - 86400000));
+  const previousDay = new Date(now);
+  previousDay.setDate(previousDay.getDate() - 1);
+  const yesterday = localDateKey(previousDay);
   const streak = p.last_checkin === yesterday ? p.checkin_streak + 1 : 1;
   const rewards = [
     { gold: 500 }, { diamonds: 10 }, { energy: 30 }, { gold: 800 },

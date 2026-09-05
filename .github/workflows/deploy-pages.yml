@@ -57,13 +57,12 @@ jobs:
       - name: Verify and deploy Worker
         run: npm run cloudflare:deploy
 
-      - name: Smoke test production
+      - name: Smoke test Worker
         env:
-          PRODUCTION_URL: https://terminal-detective-codex.terminal-detective.workers.dev
-        run: |
-          status="$(curl --fail-with-body --silent --show-error "$PRODUCTION_URL/api/cloudflare/status")"
-          node -e 'const value=JSON.parse(process.argv[1]); if (!value.ok || value.mode !== "firebase_cloudflare" || !value.checks?.schema) process.exit(1)' "$status"
-          curl --fail-with-body --silent --show-error "$PRODUCTION_URL/" | grep -E '<meta name="td-build" content="${{ github.sha }}"[[:space:]]*/?>'
+          SMOKE_TARGET: worker
+          SMOKE_SITE_URL: https://terminal-detective-codex.terminal-detective.workers.dev
+          SMOKE_API_URL: https://terminal-detective-codex.terminal-detective.workers.dev
+        run: node scripts/smoke-production.mjs
 
   deploy-pages:
     needs: deploy-worker
@@ -114,3 +113,10 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
+
+      - name: Smoke test Pages
+        env:
+          SMOKE_TARGET: pages
+          SMOKE_SITE_URL: ${{ steps.deployment.outputs.page_url }}
+          SMOKE_API_URL: ${{ env.VITE_API_SERVER_URL }}
+        run: node scripts/smoke-production.mjs

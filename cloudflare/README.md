@@ -86,11 +86,11 @@ The production workflow reads the four `VITE_FIREBASE_*` values from GitHub Acti
 
 Worker deployment also requires a repository Actions secret named `CLOUDFLARE_API_TOKEN` with permission to edit this Worker. Configure `CLOUDFLARE_ACCOUNT_ID` as either a repository secret or variable. The workflow checks both values before installing dependencies so a missing production credential fails immediately with an actionable error.
 
-## Database reset warning
+## Historical database initialization — not a release step
 
-`cloudflare/migrations/0002_reset_for_firebase.sql` intentionally removes the old users, OAuth accounts, sessions and profiles before the Firebase UID rollout. It is included because the product decision is to start without old players. `0003_profile_operations.sql` adds the idempotency ledger required by profile writes. The production database has applied migrations `0001` through `0003`; review the target database before applying the same sequence to a new environment.
+`cloudflare/migrations/0002_reset_for_firebase.sql` intentionally removed the old users, OAuth accounts, sessions and profiles for the original Firebase UID rollout. That destructive initialization is historical, not part of ongoing releases. **Never rerun `0002` against a live database with player data.** Do not reset migration history or apply its SQL manually to make a readiness check pass.
 
-Do not run the remote migration until Firebase login has been configured and the production reset has been explicitly approved. Building, testing and deploying Worker code do not run D1 migrations automatically.
+`0003_profile_operations.sql` adds the idempotency ledger required by profile writes. Production has applied migrations `0001` through `0003`. Any future schema change needs a separately reviewed migration and backup/recovery plan; a new empty environment also requires explicit review before initialization. Building, testing, deploying and smoke-checking code never apply D1 migrations automatically.
 
 `/api/auth/config` verifies the Firebase project ID, D1 binding, required columns, migration `0003_profile_operations.sql`, table primary keys, one complete non-partial unique `users.email` index, and the profile cascade foreign keys. `/api/cloudflare/status` returns HTTP `503` until those checks pass; the frontend also confirms that its Firebase project ID matches the Worker before starting authentication.
 
@@ -107,20 +107,49 @@ Do not run the remote migration until Firebase login has been configured and the
 
 This protects against refreshes and temporary outages, not deletion of browser site data or an indefinitely unavailable D1 database. A device takeover makes the previous device read-only and preserves its local pending records for an explicit recovery decision.
 
-## Production activation order
+## Ongoing production publication (no migration)
 
-1. Configure Firebase Email/Password, GitHub, one-account-per-email, email-enumeration protection and every authorized frontend domain.
-2. Configure the dedicated GitHub OAuth callback as `https://<FIREBASE_PROJECT_ID>.firebaseapp.com/__/auth/handler`; keep its client secret only in Firebase.
-3. Inject the four public `VITE_FIREBASE_*` values into the frontend build and set the same project ID in Worker `FIREBASE_PROJECT_ID`.
-4. Confirm the Wrangler account, D1 database ID and reset approval; schedule a maintenance window.
-5. Run `npm run release:check` and the full local verification below.
-6. Apply the reviewed remote migrations. Because `0002` deletes legacy player data, do not reopen the game between migration and deployment.
-7. Deploy the Worker/assets immediately, then require both readiness endpoints, the production page `td-build` marker, and a real registration/login/profile smoke test to pass before reopening.
+1. Keep Firebase providers, authorized domains, repository Web App variables and the matching Worker Firebase project configured as above. Confirm the target Worker/account and existing D1 binding; do not initialize or reset the live database.
+2. Review and merge the release PR into `main`. The production workflow uses the exact 40-character `github.sha` for both builds, and new runs do not cancel a deployment already in progress.
+3. The Worker job runs the unchanged full `npm run cloudflare:deploy` gate: tests, typecheck, lint, security checks, release/build validation and Wrangler dry run before the deployment. There is no automatic migration.
+4. Require the Worker post-deploy smoke gate to pass. Only then can the dependent Pages job verify, build and publish its mirror.
+5. After `actions/deploy-pages`, require the same strict smoke gate against its actual `page_url`, including the Pages subpath, critical assets and the configured Worker API origin. A failed postcheck fails the job; it does not undo a deployment already published.
+
+For an explicitly approved manual code deployment, `npm run cloudflare:deploy` retains the same full gate; run both applicable site postchecks below afterwards. Database administration is a separate operation, never a prerequisite for an ordinary code release.
+
+## Read-only release smoke gate
+
+`node scripts/smoke-production.mjs` uses only Node's built-in capabilities. The workflow supplies:
+
+| Environment variable | Meaning |
+| --- | --- |
+| `SMOKE_TARGET` | `worker` or `pages`. |
+| `SMOKE_SITE_URL` | Worker homepage, or the exact Pages deployment `page_url` including its repository subpath. |
+| `SMOKE_API_URL` | Expected Worker HTTPS origin, without an API path; both sites check readiness here. |
+| `VITE_BUILD_SHA` | Exact 40-character release commit; missing, wrong and `-dirty` markers cannot pass. |
+| `VITE_FIREBASE_PROJECT_ID` | Expected public Firebase project shared by frontend and Worker. |
+| `VITE_APP_ID` | Expected application ID embedded in the frontend. |
+
+Each bounded round separately checks `GET /api/cloudflare/status` (`ok`, service, mode, Firebase, database and schema), `GET /api/auth/config` (ready, primary provider, Firebase project and database/schema checks), the homepage build meta marker, and every linked module entry, stylesheet and module preload. Valid meta attribute ordering, spacing, quotes and self-closing forms are accepted without weakening the exact SHA comparison. Entry assets must be nonempty, use the proper JavaScript/CSS MIME type and not return an HTML SPA fallback. Pages assets must resolve inside the deployed subpath. The downloaded entry JS must contain the actual Vite runtime APP_ID, Firebase project and API URL settings: `same-origin` on Worker, the exact expected Worker origin on Pages. An unrelated URL or extra meta marker is not configuration proof.
+
+The fixed production ceilings are **5 rounds**, **10 seconds per request including its response body**, **120 seconds overall**, and **2 seconds between retryable rounds**. Only network failures, timeouts, HTTP `429`/`5xx`, stale/missing deployment content and temporarily absent assets retry. Invalid JSON, known configuration/project mismatches, unexpected redirects, incorrect asset MIME and HTTP `403` fail immediately; the gate never bypasses a challenge. Exhaustion always exits nonzero. Diagnostics identify public stages, bounded round/status/error codes and sanitized expected/actual SHAs, never response bodies, tokens or player records.
+
+With the three expected `VITE_*` values exported from the reviewed release configuration, repeat the read-only postchecks when needed:
 
 ```bash
-npm run cloudflare:d1:remote
-npm run cloudflare:deploy
+SMOKE_TARGET=worker \
+SMOKE_SITE_URL=https://terminal-detective-codex.terminal-detective.workers.dev \
+SMOKE_API_URL=https://terminal-detective-codex.terminal-detective.workers.dev \
+node scripts/smoke-production.mjs
+
+# Use the actual page_url returned by the reviewed Pages deployment.
+SMOKE_TARGET=pages \
+SMOKE_SITE_URL="$PAGE_URL" \
+SMOKE_API_URL=https://terminal-detective-codex.terminal-detective.workers.dev \
+node scripts/smoke-production.mjs
 ```
+
+These checks issue public GET requests only: no registration, login, profile writes, session takeovers or D1 mutations. They validate published readiness and release assets, not an authenticated browser journey. A later healthy response does not establish why an earlier opaque gate failed; deployment propagation is only one possible cause, not a confirmed diagnosis.
 
 ## Local verification
 
@@ -137,4 +166,4 @@ npm run cloudflare:dev
 
 Remote migrations and deployment change production state. Run them only after reviewing the selected Cloudflare account and D1 database.
 
-The GitHub Actions production workflow follows the same ordering for `main`: verify the repository, deploy Worker code and Static Assets from one Git SHA, check both readiness endpoints and the `td-build` marker, then publish the optional Pages mirror. New runs do not cancel a production deployment already in progress.
+The GitHub Actions production workflow follows the no-migration publication order above. Local migration commands target local development only; never substitute `--remote` as part of routine verification or to repair a smoke failure.

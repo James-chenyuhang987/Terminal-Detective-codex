@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 
 import { validateReleaseConfig } from '../scripts/release-config.mjs';
 
@@ -71,24 +70,39 @@ test('release configuration rejects unterminated JSONC comments', () => {
   );
 });
 
-test('production smoke check accepts both meta tag forms but rejects the wrong build', () => {
-  const workflow = readFileSync(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8');
-  const match = workflow.match(/grep -E '([^'\n]+)'/);
-  assert.ok(match, 'Production must validate its build marker');
-  const sha = '1dc68bf7424b9bc87344e1aa106028dc7200beb3';
-  const pattern = match[1].replace('${{ github.sha }}', sha);
-  for (const ending of ['>', '/>', ' />']) {
-    const result = spawnSync('grep', ['-E', pattern], {
-      input: `<meta name="td-build" content="${sha}"${ending}\n`,
-      encoding: 'utf8',
-    });
-    assert.equal(result.status, 0, `Accept valid meta ending ${ending}`);
+const workflow = readFileSync(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8');
+const [workerJob, pagesJob] = workflow.split('\n  deploy-pages:');
+const workerOrigin = 'https://terminal-detective-codex.terminal-detective.workers.dev';
+
+test('Worker release uses the strict Node smoke gate after the unchanged full deploy command', () => {
+  assert.match(workerJob, /run: npm run cloudflare:deploy/);
+  assert.ok(workerJob.indexOf('name: Smoke test Worker') > workerJob.indexOf('run: npm run cloudflare:deploy'));
+  assert.match(workerJob, /SMOKE_TARGET: worker/);
+  assert.ok(workerJob.includes(`SMOKE_SITE_URL: ${workerOrigin}`));
+  assert.ok(workerJob.includes(`SMOKE_API_URL: ${workerOrigin}`));
+  assert.match(workerJob, /run: node scripts\/smoke-production\.mjs/);
+});
+
+test('Pages waits for Worker and checks the deployed page URL and configured Worker origin', () => {
+  assert.match(pagesJob, /needs: deploy-worker/);
+  assert.ok(pagesJob.indexOf('name: Smoke test Pages') > pagesJob.indexOf('uses: actions/deploy-pages@'));
+  assert.match(pagesJob, /id: deployment/);
+  assert.match(pagesJob, /SMOKE_TARGET: pages/);
+  assert.ok(pagesJob.includes('SMOKE_SITE_URL: ${{ steps.deployment.outputs.page_url }}'));
+  assert.ok(pagesJob.includes('SMOKE_API_URL: ${{ env.VITE_API_SERVER_URL }}'));
+  assert.ok(pagesJob.includes(`VITE_API_SERVER_URL: ${workerOrigin}`));
+  assert.match(pagesJob, /run: node scripts\/smoke-production\.mjs/);
+});
+
+test('both release gates inherit exact build/config values and cannot mask failures or migrate data', () => {
+  for (const job of [workerJob, pagesJob]) {
+    assert.ok(job.includes('VITE_BUILD_SHA: ${{ github.sha }}'));
+    assert.ok(job.includes('VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}'));
+    assert.match(job, /VITE_APP_ID: terminal-detective/);
   }
-  for (const input of [
-    `<meta name="td-build" content="${'0'.repeat(40)}" />`,
-    `<meta name="td-build" content="${sha}-dirty" />`,
-    '<html><head></head></html>',
-  ]) {
-    assert.equal(spawnSync('grep', ['-E', pattern], { input, encoding: 'utf8' }).status, 1);
-  }
+  assert.equal((workflow.match(/run: node scripts\/smoke-production\.mjs/g) || []).length, 2);
+  assert.doesNotMatch(workflow, /continue-on-error|always\(\)|\|\|\s*true|grep -E|curl --fail-with-body|d1 migrations|cloudflare:d1:remote/);
+  const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(scripts['cloudflare:deploy'], 'npm test && npm run typecheck && npm run lint && npm run security:check && npm run cloudflare:check && wrangler deploy');
+  assert.doesNotMatch(scripts['cloudflare:deploy'], /migration|d1:remote/);
 });
