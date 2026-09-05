@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 import { validateReleaseConfig } from '../scripts/release-config.mjs';
 
@@ -67,4 +69,26 @@ test('release configuration rejects unterminated JSONC comments', () => {
     () => validateReleaseConfig(`${config}\n/* unfinished`, environment),
     /wrangler\.jsonc is invalid/,
   );
+});
+
+test('production smoke check accepts both meta tag forms but rejects the wrong build', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8');
+  const match = workflow.match(/grep -E '([^'\n]+)'/);
+  assert.ok(match, 'Production must validate its build marker');
+  const sha = '1dc68bf7424b9bc87344e1aa106028dc7200beb3';
+  const pattern = match[1].replace('${{ github.sha }}', sha);
+  for (const ending of ['>', '/>', ' />']) {
+    const result = spawnSync('grep', ['-E', pattern], {
+      input: `<meta name="td-build" content="${sha}"${ending}\n`,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, `Accept valid meta ending ${ending}`);
+  }
+  for (const input of [
+    `<meta name="td-build" content="${'0'.repeat(40)}" />`,
+    `<meta name="td-build" content="${sha}-dirty" />`,
+    '<html><head></head></html>',
+  ]) {
+    assert.equal(spawnSync('grep', ['-E', pattern], { input, encoding: 'utf8' }).status, 1);
+  }
 });
