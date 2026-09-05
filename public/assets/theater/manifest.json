@@ -1,0 +1,1367 @@
+{
+  "version": 1,
+  "units": "meters",
+  "upAxis": "Y",
+  "forwardAxis": "+Z",
+  "coordinateConversion": {
+    "authoring": "Blender Z-up",
+    "toBlender": "[x, -z, y]",
+    "gltf": "export_yup=True; runtime [x,y,z] in meters"
+  },
+  "spawn": [
+    0,
+    0,
+    3
+  ],
+  "walkableBounds": {
+    "min": [
+      -5.5,
+      -4.6
+    ],
+    "max": [
+      5.5,
+      4.6
+    ]
+  },
+  "palette": "matte navy / warm cream / amber and cyan",
+  "license": "Original procedural geometry and materials created for Terminal Detective; no third-party assets.",
+  "scenes": {
+    "office": {
+      "file": "office.glb",
+      "spawn": [
+        0,
+        0,
+        3
+      ],
+      "colliders": [
+        {
+          "id": "side-wall--5.86",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -5.72,
+            5.0
+          ]
+        },
+        {
+          "id": "side-wall-5.86",
+          "min": [
+            5.72,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            5.0
+          ]
+        },
+        {
+          "id": "rear-wall--3.37",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -0.74,
+            -4.34
+          ]
+        },
+        {
+          "id": "rear-wall-3.37",
+          "min": [
+            0.74,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            -4.34
+          ]
+        },
+        {
+          "id": "portal-jamb--0.82",
+          "min": [
+            -0.88,
+            -4.99
+          ],
+          "max": [
+            -0.76,
+            -4.69
+          ]
+        },
+        {
+          "id": "portal-jamb-0.82",
+          "min": [
+            0.76,
+            -4.99
+          ],
+          "max": [
+            0.88,
+            -4.69
+          ]
+        },
+        {
+          "id": "workstation",
+          "min": [
+            -4.975,
+            -3.32
+          ],
+          "max": [
+            -2.325,
+            -2.18
+          ]
+        },
+        {
+          "id": "evidence-island",
+          "min": [
+            2.74,
+            -3.485
+          ],
+          "max": [
+            4.76,
+            -2.215
+          ]
+        },
+        {
+          "id": "archive-shelf",
+          "min": [
+            -5.635,
+            -0.425
+          ],
+          "max": [
+            -4.565,
+            1.725
+          ]
+        },
+        {
+          "id": "waiting-sofa",
+          "min": [
+            4.125,
+            -0.6
+          ],
+          "max": [
+            5.475,
+            1.9
+          ]
+        },
+        {
+          "id": "plant--4.8",
+          "min": [
+            -5.425,
+            2.975
+          ],
+          "max": [
+            -4.175,
+            4.225
+          ]
+        },
+        {
+          "id": "plant-4.8",
+          "min": [
+            4.175,
+            2.975
+          ],
+          "max": [
+            5.425,
+            4.225
+          ]
+        }
+      ],
+      "doors": [
+        {
+          "id": "exit",
+          "position": [
+            0,
+            0,
+            -4.65
+          ],
+          "width": 1.6
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "workstation",
+          "position": [
+            -3.6,
+            0,
+            -1.55
+          ],
+          "radius": 1.15
+        },
+        {
+          "id": "evidence",
+          "position": [
+            3.7,
+            0,
+            -1.7
+          ],
+          "radius": 1.15
+        }
+      ],
+      "npcs": [
+        {
+          "role": "witness",
+          "position": [
+            -2.1,
+            0,
+            0.25
+          ],
+          "rotationY": 0.25
+        },
+        {
+          "role": "security",
+          "position": [
+            2.1,
+            0,
+            1.35
+          ],
+          "rotationY": -0.35
+        },
+        {
+          "role": "scientist",
+          "position": [
+            2.1,
+            0,
+            -2.25
+          ],
+          "rotationY": -0.25
+        }
+      ],
+      "bytes": 706016,
+      "triangles": 11728,
+      "bounds": {
+        "min": [
+          -6.0,
+          -0.22,
+          -5.0
+        ],
+        "max": [
+          6.0,
+          3.3,
+          5.0
+        ]
+      },
+      "meshes": 1,
+      "materials": 14
+    },
+    "datacenter": {
+      "file": "datacenter.glb",
+      "spawn": [
+        0,
+        0,
+        3
+      ],
+      "colliders": [
+        {
+          "id": "side-wall--5.86",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -5.72,
+            5.0
+          ]
+        },
+        {
+          "id": "side-wall-5.86",
+          "min": [
+            5.72,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            5.0
+          ]
+        },
+        {
+          "id": "rear-wall--3.37",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -0.74,
+            -4.34
+          ]
+        },
+        {
+          "id": "rear-wall-3.37",
+          "min": [
+            0.74,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            -4.34
+          ]
+        },
+        {
+          "id": "portal-jamb--0.82",
+          "min": [
+            -0.88,
+            -4.99
+          ],
+          "max": [
+            -0.76,
+            -4.69
+          ]
+        },
+        {
+          "id": "portal-jamb-0.82",
+          "min": [
+            0.76,
+            -4.99
+          ],
+          "max": [
+            0.88,
+            -4.69
+          ]
+        },
+        {
+          "id": "workstation",
+          "min": [
+            -4.975,
+            -3.32
+          ],
+          "max": [
+            -2.325,
+            -2.18
+          ]
+        },
+        {
+          "id": "evidence-island",
+          "min": [
+            2.74,
+            -3.485
+          ],
+          "max": [
+            4.76,
+            -2.215
+          ]
+        },
+        {
+          "id": "server--4.8",
+          "min": [
+            -5.38,
+            -4.6
+          ],
+          "max": [
+            -4.22,
+            -3.4
+          ]
+        },
+        {
+          "id": "server--3.48",
+          "min": [
+            -4.06,
+            -4.6
+          ],
+          "max": [
+            -2.9,
+            -3.4
+          ]
+        },
+        {
+          "id": "server-2.42",
+          "min": [
+            1.84,
+            -4.6
+          ],
+          "max": [
+            3.0,
+            -3.4
+          ]
+        },
+        {
+          "id": "server-3.74",
+          "min": [
+            3.16,
+            -4.6
+          ],
+          "max": [
+            4.32,
+            -3.4
+          ]
+        },
+        {
+          "id": "server-5.06",
+          "min": [
+            4.48,
+            -4.6
+          ],
+          "max": [
+            5.64,
+            -3.4
+          ]
+        },
+        {
+          "id": "cooling--5.05",
+          "min": [
+            -5.55,
+            0.2
+          ],
+          "max": [
+            -4.55,
+            1.5
+          ]
+        },
+        {
+          "id": "cooling-5.05",
+          "min": [
+            4.55,
+            0.2
+          ],
+          "max": [
+            5.55,
+            1.5
+          ]
+        },
+        {
+          "id": "plant--4.8",
+          "min": [
+            -5.425,
+            2.975
+          ],
+          "max": [
+            -4.175,
+            4.225
+          ]
+        },
+        {
+          "id": "plant-4.8",
+          "min": [
+            4.175,
+            2.975
+          ],
+          "max": [
+            5.425,
+            4.225
+          ]
+        }
+      ],
+      "doors": [
+        {
+          "id": "exit",
+          "position": [
+            0,
+            0,
+            -4.65
+          ],
+          "width": 1.6
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "workstation",
+          "position": [
+            -3.6,
+            0,
+            -1.55
+          ],
+          "radius": 1.15
+        },
+        {
+          "id": "evidence",
+          "position": [
+            3.7,
+            0,
+            -1.7
+          ],
+          "radius": 1.15
+        }
+      ],
+      "npcs": [
+        {
+          "role": "witness",
+          "position": [
+            -2.1,
+            0,
+            0.25
+          ],
+          "rotationY": 0.25
+        },
+        {
+          "role": "security",
+          "position": [
+            2.1,
+            0,
+            1.35
+          ],
+          "rotationY": -0.35
+        },
+        {
+          "role": "scientist",
+          "position": [
+            2.1,
+            0,
+            -2.25
+          ],
+          "rotationY": -0.25
+        }
+      ],
+      "bytes": 1401552,
+      "triangles": 21908,
+      "bounds": {
+        "min": [
+          -6.0,
+          -0.22,
+          -5.0
+        ],
+        "max": [
+          6.0,
+          3.3,
+          5.0
+        ]
+      },
+      "meshes": 1,
+      "materials": 13
+    },
+    "lobby": {
+      "file": "lobby.glb",
+      "spawn": [
+        0,
+        0,
+        3
+      ],
+      "colliders": [
+        {
+          "id": "side-wall--5.86",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -5.72,
+            5.0
+          ]
+        },
+        {
+          "id": "side-wall-5.86",
+          "min": [
+            5.72,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            5.0
+          ]
+        },
+        {
+          "id": "rear-wall--3.37",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -0.74,
+            -4.34
+          ]
+        },
+        {
+          "id": "rear-wall-3.37",
+          "min": [
+            0.74,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            -4.34
+          ]
+        },
+        {
+          "id": "portal-jamb--0.82",
+          "min": [
+            -0.88,
+            -4.99
+          ],
+          "max": [
+            -0.76,
+            -4.69
+          ]
+        },
+        {
+          "id": "portal-jamb-0.82",
+          "min": [
+            0.76,
+            -4.99
+          ],
+          "max": [
+            0.88,
+            -4.69
+          ]
+        },
+        {
+          "id": "workstation",
+          "min": [
+            -4.975,
+            -3.32
+          ],
+          "max": [
+            -2.325,
+            -2.18
+          ]
+        },
+        {
+          "id": "evidence-island",
+          "min": [
+            2.74,
+            -3.485
+          ],
+          "max": [
+            4.76,
+            -2.215
+          ]
+        },
+        {
+          "id": "lounge--4.95",
+          "min": [
+            -5.53,
+            -0.54
+          ],
+          "max": [
+            -4.37,
+            1.78
+          ]
+        },
+        {
+          "id": "lounge-4.95",
+          "min": [
+            4.37,
+            -0.54
+          ],
+          "max": [
+            5.53,
+            1.78
+          ]
+        },
+        {
+          "id": "orbit-sculpture",
+          "min": [
+            3.325,
+            2.555
+          ],
+          "max": [
+            4.375,
+            3.605
+          ]
+        },
+        {
+          "id": "plant--4.8",
+          "min": [
+            -5.425,
+            2.975
+          ],
+          "max": [
+            -4.175,
+            4.225
+          ]
+        },
+        {
+          "id": "plant-4.8",
+          "min": [
+            4.175,
+            2.975
+          ],
+          "max": [
+            5.425,
+            4.225
+          ]
+        }
+      ],
+      "doors": [
+        {
+          "id": "exit",
+          "position": [
+            0,
+            0,
+            -4.65
+          ],
+          "width": 1.6
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "workstation",
+          "position": [
+            -3.6,
+            0,
+            -1.55
+          ],
+          "radius": 1.15
+        },
+        {
+          "id": "evidence",
+          "position": [
+            3.7,
+            0,
+            -1.7
+          ],
+          "radius": 1.15
+        }
+      ],
+      "npcs": [
+        {
+          "role": "witness",
+          "position": [
+            -2.1,
+            0,
+            0.25
+          ],
+          "rotationY": 0.25
+        },
+        {
+          "role": "security",
+          "position": [
+            2.1,
+            0,
+            1.35
+          ],
+          "rotationY": -0.35
+        },
+        {
+          "role": "scientist",
+          "position": [
+            2.1,
+            0,
+            -2.25
+          ],
+          "rotationY": -0.25
+        }
+      ],
+      "bytes": 719576,
+      "triangles": 12644,
+      "bounds": {
+        "min": [
+          -6.0,
+          -0.22,
+          -5.0
+        ],
+        "max": [
+          6.0,
+          3.3,
+          5.0
+        ]
+      },
+      "meshes": 1,
+      "materials": 12
+    },
+    "laboratory": {
+      "file": "laboratory.glb",
+      "spawn": [
+        0,
+        0,
+        3
+      ],
+      "colliders": [
+        {
+          "id": "side-wall--5.86",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -5.72,
+            5.0
+          ]
+        },
+        {
+          "id": "side-wall-5.86",
+          "min": [
+            5.72,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            5.0
+          ]
+        },
+        {
+          "id": "rear-wall--3.37",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -0.74,
+            -4.34
+          ]
+        },
+        {
+          "id": "rear-wall-3.37",
+          "min": [
+            0.74,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            -4.34
+          ]
+        },
+        {
+          "id": "portal-jamb--0.82",
+          "min": [
+            -0.88,
+            -4.99
+          ],
+          "max": [
+            -0.76,
+            -4.69
+          ]
+        },
+        {
+          "id": "portal-jamb-0.82",
+          "min": [
+            0.76,
+            -4.99
+          ],
+          "max": [
+            0.88,
+            -4.69
+          ]
+        },
+        {
+          "id": "workstation",
+          "min": [
+            -4.975,
+            -3.32
+          ],
+          "max": [
+            -2.325,
+            -2.18
+          ]
+        },
+        {
+          "id": "evidence-island",
+          "min": [
+            2.74,
+            -3.485
+          ],
+          "max": [
+            4.76,
+            -2.215
+          ]
+        },
+        {
+          "id": "lab-locker--4.45",
+          "min": [
+            -5.2,
+            -4.725
+          ],
+          "max": [
+            -3.7,
+            -4.055
+          ]
+        },
+        {
+          "id": "lab-locker--2.85",
+          "min": [
+            -3.6,
+            -4.725
+          ],
+          "max": [
+            -2.1,
+            -4.055
+          ]
+        },
+        {
+          "id": "lab-locker-2.85",
+          "min": [
+            2.1,
+            -4.725
+          ],
+          "max": [
+            3.6,
+            -4.055
+          ]
+        },
+        {
+          "id": "lab-locker-4.45",
+          "min": [
+            3.7,
+            -4.725
+          ],
+          "max": [
+            5.2,
+            -4.055
+          ]
+        },
+        {
+          "id": "lab-bench--5.0",
+          "min": [
+            -5.615,
+            -0.22
+          ],
+          "max": [
+            -4.385,
+            1.82
+          ]
+        },
+        {
+          "id": "lab-bench-5.0",
+          "min": [
+            4.385,
+            -0.22
+          ],
+          "max": [
+            5.615,
+            1.82
+          ]
+        },
+        {
+          "id": "plant--4.8",
+          "min": [
+            -5.425,
+            2.975
+          ],
+          "max": [
+            -4.175,
+            4.225
+          ]
+        },
+        {
+          "id": "plant-4.8",
+          "min": [
+            4.175,
+            2.975
+          ],
+          "max": [
+            5.425,
+            4.225
+          ]
+        }
+      ],
+      "doors": [
+        {
+          "id": "exit",
+          "position": [
+            0,
+            0,
+            -4.65
+          ],
+          "width": 1.6
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "workstation",
+          "position": [
+            -3.6,
+            0,
+            -1.55
+          ],
+          "radius": 1.15
+        },
+        {
+          "id": "evidence",
+          "position": [
+            3.7,
+            0,
+            -1.7
+          ],
+          "radius": 1.15
+        }
+      ],
+      "npcs": [
+        {
+          "role": "witness",
+          "position": [
+            -2.1,
+            0,
+            0.25
+          ],
+          "rotationY": 0.25
+        },
+        {
+          "role": "security",
+          "position": [
+            2.1,
+            0,
+            1.35
+          ],
+          "rotationY": -0.35
+        },
+        {
+          "role": "scientist",
+          "position": [
+            2.1,
+            0,
+            -2.25
+          ],
+          "rotationY": -0.25
+        }
+      ],
+      "bytes": 766416,
+      "triangles": 14064,
+      "bounds": {
+        "min": [
+          -6.0,
+          -0.22,
+          -5.0
+        ],
+        "max": [
+          6.0,
+          3.3,
+          5.0
+        ]
+      },
+      "meshes": 1,
+      "materials": 12
+    },
+    "balcony": {
+      "file": "balcony.glb",
+      "spawn": [
+        0,
+        0,
+        3
+      ],
+      "colliders": [
+        {
+          "id": "side-parapet--5.86",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -5.72,
+            5.0
+          ]
+        },
+        {
+          "id": "side-parapet-5.86",
+          "min": [
+            5.72,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            5.0
+          ]
+        },
+        {
+          "id": "rear-parapet--3.37",
+          "min": [
+            -6.0,
+            -5.0
+          ],
+          "max": [
+            -0.74,
+            -4.72
+          ]
+        },
+        {
+          "id": "rear-parapet-3.37",
+          "min": [
+            0.74,
+            -5.0
+          ],
+          "max": [
+            6.0,
+            -4.72
+          ]
+        },
+        {
+          "id": "portal-jamb--0.82",
+          "min": [
+            -0.88,
+            -4.99
+          ],
+          "max": [
+            -0.76,
+            -4.69
+          ]
+        },
+        {
+          "id": "portal-jamb-0.82",
+          "min": [
+            0.76,
+            -4.99
+          ],
+          "max": [
+            0.88,
+            -4.69
+          ]
+        },
+        {
+          "id": "workstation",
+          "min": [
+            -4.975,
+            -3.32
+          ],
+          "max": [
+            -2.325,
+            -2.18
+          ]
+        },
+        {
+          "id": "evidence-island",
+          "min": [
+            2.74,
+            -3.485
+          ],
+          "max": [
+            4.76,
+            -2.215
+          ]
+        },
+        {
+          "id": "roof-planter--4.75-0.05",
+          "min": [
+            -5.525,
+            -0.925
+          ],
+          "max": [
+            -3.975,
+            1.025
+          ]
+        },
+        {
+          "id": "roof-planter--4.75-2.45",
+          "min": [
+            -5.525,
+            1.475
+          ],
+          "max": [
+            -3.975,
+            3.425
+          ]
+        },
+        {
+          "id": "roof-planter-4.75-0.05",
+          "min": [
+            3.975,
+            -0.925
+          ],
+          "max": [
+            5.525,
+            1.025
+          ]
+        },
+        {
+          "id": "roof-planter-4.75-2.45",
+          "min": [
+            3.975,
+            1.475
+          ],
+          "max": [
+            5.525,
+            3.425
+          ]
+        },
+        {
+          "id": "weather-mast--3.0",
+          "min": [
+            -3.21,
+            -4.45
+          ],
+          "max": [
+            -2.79,
+            -4.03
+          ]
+        },
+        {
+          "id": "weather-mast-3.0",
+          "min": [
+            2.79,
+            -4.45
+          ],
+          "max": [
+            3.21,
+            -4.03
+          ]
+        }
+      ],
+      "doors": [
+        {
+          "id": "exit",
+          "position": [
+            0,
+            0,
+            -4.65
+          ],
+          "width": 1.6
+        }
+      ],
+      "hotspots": [
+        {
+          "id": "workstation",
+          "position": [
+            -3.6,
+            0,
+            -1.55
+          ],
+          "radius": 1.15
+        },
+        {
+          "id": "evidence",
+          "position": [
+            3.7,
+            0,
+            -1.7
+          ],
+          "radius": 1.15
+        }
+      ],
+      "npcs": [
+        {
+          "role": "witness",
+          "position": [
+            -2.1,
+            0,
+            0.25
+          ],
+          "rotationY": 0.25
+        },
+        {
+          "role": "security",
+          "position": [
+            2.1,
+            0,
+            1.35
+          ],
+          "rotationY": -0.35
+        },
+        {
+          "role": "scientist",
+          "position": [
+            2.1,
+            0,
+            -2.25
+          ],
+          "rotationY": -0.25
+        }
+      ],
+      "bytes": 619644,
+      "triangles": 11788,
+      "bounds": {
+        "min": [
+          -6.0,
+          -0.22,
+          -5.0
+        ],
+        "max": [
+          6.0,
+          2.98601,
+          5.0
+        ]
+      },
+      "meshes": 1,
+      "materials": 13
+    }
+  },
+  "characters": {
+    "detective": {
+      "file": "detective.glb",
+      "animations": [
+        "Idle",
+        "Walk",
+        "Talk"
+      ],
+      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "forward": "+Z",
+      "feetY": 0,
+      "bytes": 442720,
+      "triangles": 6931,
+      "bounds": {
+        "min": [
+          -0.38,
+          0.0,
+          -0.15284
+        ],
+        "max": [
+          0.38,
+          1.77795,
+          0.1935
+        ]
+      },
+      "meshes": 1,
+      "materials": 10,
+      "height": 1.7779
+    },
+    "witness": {
+      "file": "witness.glb",
+      "animations": [
+        "Idle",
+        "Walk",
+        "Talk"
+      ],
+      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "forward": "+Z",
+      "feetY": 0,
+      "bytes": 475564,
+      "triangles": 7464,
+      "bounds": {
+        "min": [
+          -0.38,
+          0.0,
+          -0.205
+        ],
+        "max": [
+          0.38,
+          1.818,
+          0.1935
+        ]
+      },
+      "meshes": 1,
+      "materials": 12,
+      "height": 1.818
+    },
+    "security": {
+      "file": "security.glb",
+      "animations": [
+        "Idle",
+        "Walk",
+        "Talk"
+      ],
+      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "forward": "+Z",
+      "feetY": 0,
+      "bytes": 484244,
+      "triangles": 7712,
+      "bounds": {
+        "min": [
+          -0.38,
+          0.0,
+          -0.15284
+        ],
+        "max": [
+          0.38,
+          1.77795,
+          0.1935
+        ]
+      },
+      "meshes": 1,
+      "materials": 10,
+      "height": 1.7779
+    },
+    "scientist": {
+      "file": "scientist.glb",
+      "animations": [
+        "Idle",
+        "Walk",
+        "Talk"
+      ],
+      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "forward": "+Z",
+      "feetY": 0,
+      "bytes": 485516,
+      "triangles": 7412,
+      "bounds": {
+        "min": [
+          -0.38,
+          0.0,
+          -0.15284
+        ],
+        "max": [
+          0.38,
+          1.77795,
+          0.1935
+        ]
+      },
+      "meshes": 1,
+      "materials": 12,
+      "height": 1.7779
+    }
+  },
+  "totalBytes": 6101248
+}
