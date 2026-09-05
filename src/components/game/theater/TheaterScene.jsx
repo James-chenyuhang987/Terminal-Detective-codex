@@ -410,16 +410,12 @@ export default function TheaterScene({ caseData, zoneId, selectedNpcId, paused, 
   useViewportInput(viewport, controlsRef, live, input, interact);
   useEffect(() => { if (paused) input.current.clear?.(); }, [paused]);
 
+  // Fiber always mounts native canvas fallback content, including on working WebGL devices.
   return <div ref={viewport} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：点击聚焦，WASD 或方向键移动，拖动视角，E 交互' : '3D detective scene: click to focus, WASD or arrows to move, drag to orbit, E to interact'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>
-    {manifest && <Canvas frameloop="demand" dpr={[1, settings.dpr]} shadows={settings.shadows} gl={{ antialias: settings.antialias, alpha: false, powerPreference: 'low-power' }} camera={{ position: [0, 3.2, 6], fov: 52, near: 0.06, far: 70 }} aria-label={zh ? '以第三人称探索案件现场' : 'Explore the case scene in third person'} fallback={<CanvasUnavailable onFailure={onFailure} zh={zh} />}>
+    {manifest && <Canvas frameloop="demand" dpr={[1, settings.dpr]} shadows={settings.shadows} gl={{ antialias: settings.antialias, alpha: false, powerPreference: 'low-power' }} camera={{ position: [0, 3.2, 6], fov: 52, near: 0.06, far: 70 }} aria-label={zh ? '以第三人称探索案件现场' : 'Explore the case scene in third person'} fallback={<p>{zh ? '此设备无法显示 3D 场景，请切换文字模式继续调查。' : 'This device cannot display the 3D scene. Continue your investigation in text mode.'}</p>}>
       <RendererLifecycle live={live} input={input} suspended={suspended} />
       <Suspense fallback={null}><World key={roomKey} caseData={caseData} zoneId={zoneId} manifest={manifest} selectedNpcId={selectedNpcId} controlsRef={controlsRef} spatialRef={spatialRef} live={live} input={input} nearbyRef={nearby} sceneReady={ready} quality={settings} /></Suspense>
     </Canvas>}
     <LoadingProgress zh={zh} preparing={readyRoom !== roomKey} />
   </div>;
-}
-
-function CanvasUnavailable({ onFailure, zh }) {
-  useEffect(() => { onFailure?.(new Error('WebGL is unavailable on this device. Continue in text mode.')); }, [onFailure]);
-  return <p role="alert">{zh ? '此设备无法显示 3D 场景，请切换文字模式继续调查。' : 'This device cannot display the 3D scene. Continue your investigation in text mode.'}</p>;
 }
