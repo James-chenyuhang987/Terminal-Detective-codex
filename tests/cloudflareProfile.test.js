@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { handleProfileFunction, profileInternals } from '../cloudflare/worker/profile.js';
+import { normalizeProfile, startCase } from '../src/game/homeProgress.js';
+import { diffProfileWrite } from '../src/game/playerProfile.js';
+import { appendProfileOperation, readProfileOperations, updateProfileOperation } from '../src/game/profileWal.js';
 
 const USER_ID = 'firebase-user-123';
 const SESSION_ID = 'web-1234567890123456';
@@ -100,6 +103,42 @@ const session = {
   user_id: USER_ID,
   user: { id: USER_ID, email: 'detective@example.com' },
 };
+
+test('a lost case-start response can be replayed after energy regeneration without charging twice', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-05T00:00:00.000Z') });
+  const values = new Map();
+  const storage = {
+    get length() { return values.size; },
+    key: index => [...values.keys()][index] ?? null,
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key),
+  };
+  const before = normalizeProfile({ energy: 120 });
+  const started = startCase(before, { case_id: 'Lvl_01', difficulty: 'OMEGA' });
+  const DB = fakeProfileDB(JSON.stringify(before));
+  const entry = appendProfileOperation({
+    ownerUid: USER_ID, patch: diffProfileWrite(before, started.profile), baseRevision: 0,
+  }, storage);
+  const send = operation => handleProfileFunction(profileRequest({
+    action: 'patch', operation_id: operation.operationId,
+    expected_revision: operation.baseRevision, patch: operation.patch,
+  }), { DB }, session);
+  assert.equal((await send(entry)).status, 200);
+  // Simulate a committed request whose response never reached the browser.
+  t.mock.timers.tick(30 * 60 * 1000);
+  const [restored] = readProfileOperations(USER_ID, storage);
+  const retried = updateProfileOperation(USER_ID, restored.operationId, { incrementAttempts: true }, storage);
+  const response = await send(retried);
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.replayed, true);
+  assert.equal(payload.profile.energy, 100);
+  assert.equal(payload.profile.activity_stats.cases_started, 1);
+  assert.equal(payload.profile.profile_revision, 1);
+  assert.equal(normalizeProfile(payload.profile).energy, 106);
+  assert.equal(DB.operations.size, 1);
+});
 
 test('profile writes ignore client owner headers and use the verified Firebase owner', async () => {
   const DB = fakeProfileDB();

@@ -184,7 +184,7 @@ export function isoWeekKey(date = new Date()) {
   return `${utc.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-export function normalizeProfile(raw = {}, now = new Date()) {
+export function normalizeProfile(raw = {}, now = new Date(), { regenerateEnergy = true } = {}) {
   const allowed = Object.fromEntries(PROFILE_FIELD_KEYS
     .filter(key => Object.prototype.hasOwnProperty.call(raw || {}, key))
     .map(key => [key, raw[key]]));
@@ -241,7 +241,7 @@ export function normalizeProfile(raw = {}, now = new Date()) {
   p.home_progress_version = Math.max(1, Math.floor(finite(p.home_progress_version, 1)));
   const knownSolved = p.solved_cases.filter(id => KNOWN_CASE_IDS.includes(id));
   p.unsolved_count = Math.max(0, KNOWN_CASE_IDS.length - knownSolved.length);
-  return regenEnergy(p, now);
+  return regenerateEnergy ? regenEnergy(p, now) : p;
 }
 
 export function regenEnergy(profile, now = new Date()) {

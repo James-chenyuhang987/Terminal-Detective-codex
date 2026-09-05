@@ -16,7 +16,7 @@ import {
   sanitizeProfileWrite,
   sanitizeProfilePatch,
 } from '../src/game/playerProfile.js';
-import { normalizeProfile } from '../src/game/homeProgress.js';
+import { normalizeProfile, startCase } from '../src/game/homeProgress.js';
 import { normalizeSavedTeamConfig } from '../src/game/teamConfig.js';
 import {
   applyPendingProfileOperations,
@@ -41,6 +41,51 @@ function memoryStorage(initial = {}) {
     removeItem: key => values.delete(key),
   };
 }
+
+test('case energy WAL survives elapsed regeneration time without changing the saved operation', (t) => {
+  const now = new Date('2026-09-05T00:00:00.000Z');
+  t.mock.timers.enable({ apis: ['Date'], now });
+  const storage = memoryStorage();
+  const before = normalizeProfile({ energy: 120 });
+  const result = startCase(before, { case_id: 'Lvl_01', difficulty: 'OMEGA' });
+  const entry = appendProfileOperation({
+    ownerUid: 'energy-owner', patch: diffProfileWrite(before, result.profile), baseRevision: 0,
+  }, storage);
+  assert.equal(entry.patch.energy, 100);
+  t.mock.timers.tick(30 * 60 * 1000);
+  const [restored] = readProfileOperations('energy-owner', storage);
+  assert.deepEqual(restored, entry);
+  const retried = updateProfileOperation('energy-owner', entry.operationId, { incrementAttempts: true }, storage);
+  assert.deepEqual(retried.patch, entry.patch);
+  assert.equal(normalizeProfile(applyPendingProfileOperations(before, [retried])).energy, 106);
+});
+
+test('profile serialization preserves energy and timestamps without applying gameplay regeneration', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-05T01:00:00.000Z') });
+  const patch = { energy: 100, energy_updated_at: '2026-09-05T00:00:00.000Z' };
+  assert.deepEqual(sanitizeProfilePatch(patch), patch);
+  assert.deepEqual(sanitizeProfilePatch({ energy_updated_at: null }), { energy_updated_at: null });
+  const before = normalizeProfile(patch, new Date(patch.energy_updated_at));
+  const after = normalizeProfile(before);
+  assert.equal(diffProfileWrite(before, after).energy, 112);
+});
+
+test('checksummed legacy WAL payloads survive normalization changes without rewriting their values', () => {
+  const ownerUid = 'legacy-energy-owner';
+  const storage = memoryStorage();
+  // A historical payload can differ from today's normalization defaults.
+  const core = {
+    version: 1, ownerUid, operationId: 'profile-legacy-energy',
+    patch: { energy: 100, energy_updated_at: '2026-09-01T00:00:00.000Z', rank_title: '资深探员' },
+    baseRevision: 3, createdAt: '2026-09-01T00:00:00.000Z', attempts: 1, status: 'pending',
+  };
+  storage.setItem(profileWalInternals.ownerKey(ownerUid), JSON.stringify({
+    version: 1, ownerUid, entries: [{ ...core, checksum: profileWalInternals.checksumValue(core) }],
+  }));
+  const [restored] = readProfileOperations(ownerUid, storage);
+  assert.deepEqual(restored.patch, core.patch);
+  assert.deepEqual(readProfileOperations(ownerUid, storage)[0].patch, core.patch);
+});
 
 test('profile writes use an explicit allowlist and never echo provider metadata', () => {
   const clean = sanitizeProfileWrite({

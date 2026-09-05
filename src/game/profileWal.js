@@ -65,7 +65,10 @@ function checkedEntry(value, ownerUid) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw walError('PROFILE_WAL_CORRUPT', 'Pending profile data is damaged.');
   }
-  const patch = sanitizeProfilePatch(value.patch);
+  // Validate supported fields, but verify and replay the exact stored payload.
+  // Re-normalizing here can change historical values (and their checksum) as
+  // time passes or normalization rules change in a new application version.
+  const patch = sanitizeProfilePatch(value.patch) ? value.patch : null;
   const isLegacy = value.version === LEGACY_PROFILE_WAL_VERSION;
   const core = entryCore({
     ...value,

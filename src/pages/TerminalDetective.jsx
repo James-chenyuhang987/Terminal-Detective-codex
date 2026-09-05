@@ -229,6 +229,7 @@ export default function TerminalDetective() {
     content = (
       <CaseSelect
         profile={profile}
+        readOnly={isReadOnly}
         onSelect={handleCaseSelect}
         onPlan={caseId => openLobbyForCase(caseId, 'CASE_SELECT')}
         onBack={() => {

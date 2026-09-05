@@ -62,7 +62,9 @@ function pendingItemKey(ownerId, runId) {
 }
 
 export function sanitizeProfileWrite(profile) {
-  const normalized = normalizeProfile(profile || {});
+  // Serialization must not advance the game clock: WAL checksums and server
+  // operation hashes must describe the same snapshot on every retry.
+  const normalized = normalizeProfile(profile || {}, undefined, { regenerateEnergy: false });
   return Object.fromEntries(PROFILE_PATCH_FIELDS.map(key => [key, normalized[key]]));
 }
 

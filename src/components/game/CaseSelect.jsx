@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ALL_CASES } from '@/game/caseData';
 import { CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS } from '@/game/playerProfile';
 import { useLang } from '@/lib/lang.jsx';
@@ -11,7 +11,7 @@ const DIFFICULTY_CONFIG = {
 
 const CASE_COVER_ICONS = ['🏙️', '🔬', '🦋', '🧊', '🛰️', '🏛️', '🌊', '♾️'];
 
-export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId = null, profile }) {
+export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId = null, profile, readOnly = false }) {
   const { lang, t } = useLang();
   const [hovered, setHovered] = useState(null);
   const [selected, setSelected] = useState(preferredCaseId);
@@ -19,8 +19,10 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
   const [error, setError] = useState('');
   const startingRef = useRef(false);
 
+  useEffect(() => { setError(''); }, [readOnly]);
+
   const handleStart = async (caseData) => {
-    if (startingRef.current) return;
+    if (startingRef.current || readOnly) return;
     const energyCost = CASE_ENERGY_COST[caseData.difficulty] || 10;
     if ((profile?.energy || 0) < energyCost) {
       setError(lang === 'zh' ? `体力不足，需要 ${energyCost} 点体力。请返回侦探之家补给。` : `Not enough energy. This case requires ${energyCost}.`);
@@ -44,7 +46,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
       startingRef.current = false;
       setStartingId(null);
       setSelected(preferredCaseId);
-      setError(lang === 'zh' ? '云端同步失败，体力未扣除。' : 'Cloud sync failed. Energy was not spent.');
+      setError(lang === 'zh' ? '调查未能开始，请先恢复档案同步后重试。' : 'The investigation could not start. Restore profile sync before retrying.');
     }
   };
 
@@ -103,7 +105,8 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
           const setting = loc(c, 'setting');
           const energyCost = CASE_ENERGY_COST[c.difficulty] || 10;
           const firstClear = !profile?.solved_cases?.includes(c.case_id);
-          const canStart = (profile?.energy || 0) >= energyCost;
+          const hasEnergy = (profile?.energy || 0) >= energyCost;
+          const canStart = !readOnly && hasEnergy;
           const isStarting = startingId !== null;
 
           return (
@@ -231,6 +234,8 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
               >
                 {startingId === c.case_id
                   ? t.loadingCase
+                  : readOnly
+                    ? (lang === 'zh' ? '等待档案恢复' : 'AWAITING PROFILE RECOVERY')
                   : canStart
                     ? t.startCase
                     : (lang === 'zh' ? '体力不足' : 'LOW ENERGY')}
