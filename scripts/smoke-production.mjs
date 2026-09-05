@@ -230,11 +230,16 @@ export async function runProductionSmoke(options = {}) {
         return { rounds: round, expectedSha };
       } catch (error) {
         if (!(error instanceof SmokeFailure)) throw error;
-        if (!error.retryable || round === limits.maxRounds || remaining() <= 0) throw error;
-        emit('retry', error.report);
-        const delay = Math.min(limits.retryDelayMs, Math.max(0, remaining()));
-        await new Promise(resolve => setTimeout(resolve, Math.ceil(delay)));
+        if (!error.retryable) throw error;
         if (remaining() <= 0) fail(stage, 'total_deadline');
+        if (round === limits.maxRounds) throw error;
+        emit('retry', error.report);
+        const budget = Math.max(0, remaining());
+        const totalLimited = budget <= limits.retryDelayMs;
+        const delay = Math.min(limits.retryDelayMs, budget);
+        await new Promise(resolve => setTimeout(resolve, Math.ceil(delay)));
+        // A deadline-limited timer is terminal even if the monotonic clock is slightly behind its wakeup.
+        if (totalLimited || remaining() <= 0) fail(stage, 'total_deadline');
       }
     }
   } catch (error) {

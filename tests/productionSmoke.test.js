@@ -146,6 +146,32 @@ test('a finite total deadline bounds unresolved promises and retry delays', asyn
   }
 });
 
+test('an elapsed total deadline takes precedence over a late retryable response', async (t) => {
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  const f = fixture({ totalTimeoutMs: 35, requestTimeoutMs: 1_000, maxRounds: 1,
+    override: () => {
+      now = 36;
+      return text('busy', 'text/plain', 503);
+    },
+  });
+  await assert.rejects(f.run(), /total_deadline/);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.events.filter(event => event.status === 'retry').length, 0);
+  assert.equal(f.events.at(-1).code, 'total_deadline');
+});
+
+test('a deadline-limited retry delay cannot start another request when its timer wakes early', async (t) => {
+  t.mock.method(performance, 'now', () => 0);
+  const f = fixture({ totalTimeoutMs: 35, requestTimeoutMs: 1_000, retryDelayMs: 1_000, maxRounds: 2,
+    override: () => text('busy', 'text/plain', 503),
+  });
+  await assert.rejects(f.run(), /total_deadline/);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.events.filter(event => event.status === 'retry').length, 1);
+  assert.equal(f.events.at(-1).code, 'total_deadline');
+});
+
 test('retry caps and exhausted transient responses fail closed', async () => {
   const f = fixture({ override: () => text('busy', 'text/plain', 503) });
   await assert.rejects(f.run(), /http_error/);
