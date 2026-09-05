@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   applySettlementToProfile,
+  clearPendingSettlements,
   diffProfileWrite,
   enqueuePendingSettlement,
   knownAchievementCount,
@@ -25,8 +26,10 @@ import {
   profileWalInternals,
   readProfileOperations,
   removeProfileOperation,
+  replaceProfileOperationId,
   updateProfileOperation,
 } from '../src/game/profileWal.js';
+import { profileRecoveryDetails } from '../src/lib/profileRecovery.js';
 
 function memoryStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -125,6 +128,20 @@ test('settlement outbox persists and removes individual runs', () => {
   assert.deepEqual(readPendingSettlements(storage, 'account_a').map(item => item.run_id), ['underscore-owner-run']);
 });
 
+test('settlement cleanup removes only the selected owner pending data', () => {
+  const storage = memoryStorage();
+  enqueuePendingSettlement({ run_id: 'account-a-run' }, storage, 'account-a');
+  enqueuePendingSettlement({ run_id: 'account-b-run' }, storage, 'account-b');
+
+  clearPendingSettlements(storage, 'account-a');
+
+  assert.deepEqual(readPendingSettlements(storage, 'account-a'), []);
+  assert.deepEqual(
+    readPendingSettlements(storage, 'account-b').map(item => item.run_id),
+    ['account-b-run'],
+  );
+});
+
 test('profile WAL isolates owners, verifies records and updates operations atomically', () => {
   const storage = memoryStorage();
   const operationId = createProfileOperationId(() => '12345678-1234-1234-1234-123456789012');
@@ -195,6 +212,43 @@ test('profile WAL stores operations independently and migrates legacy documents'
   assert.deepEqual(readProfileOperations(ownerUid, storage).map(entry => entry.operationId), [firstId]);
   assert.equal(storage.getItem(legacyKey), null);
   assert.notEqual(storage.getItem(profileWalInternals.operationKey(ownerUid, firstId)), null);
+});
+
+test('legacy migration operation ids are replaced without losing or duplicating the patch', () => {
+  const ownerUid = 'firebase-user';
+  const storage = memoryStorage();
+  appendProfileOperation({
+    ownerUid,
+    operationId: 'profile-migration-v2',
+    lineageId: 'web-session-00000001',
+    patch: { home_progress_version: 2 },
+    baseRevision: 4,
+    createdAt: '2026-09-02T00:00:00.000Z',
+  }, storage);
+
+  const replacement = replaceProfileOperationId(
+    ownerUid,
+    'profile-migration-v2',
+    'profile-new-migration-operation',
+    storage,
+  );
+  assert.equal(replacement.operationId, 'profile-new-migration-operation');
+  assert.deepEqual(replacement.patch, { home_progress_version: 2 });
+  assert.deepEqual(
+    readProfileOperations(ownerUid, storage).map(entry => entry.operationId),
+    ['profile-new-migration-operation'],
+  );
+});
+
+test('profile recovery guidance identifies conflicts and confirms destructive cleanup', () => {
+  const stale = profileRecoveryDetails({ code: 'STALE_PROFILE' }, 'zh', 2);
+  assert.match(stale.message, /其他页面或设备/);
+  assert.equal(stale.canDiscard, true);
+  assert.match(stale.confirm, /2 项未同步改动将被永久删除/);
+
+  const corruptCloud = profileRecoveryDetails({ code: 'PROFILE_DATA_CORRUPT' }, 'en', 0);
+  assert.match(corruptCloud.message, /contact an administrator/);
+  assert.equal(corruptCloud.canDiscard, false);
 });
 
 test('legacy WAL migration preserves insertion order when timestamps tie', () => {

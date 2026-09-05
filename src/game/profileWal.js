@@ -173,6 +173,14 @@ function sameOperationContent(left, right) {
     && JSON.stringify(left.patch) === JSON.stringify(right.patch);
 }
 
+function sameOperationPayload(left, right) {
+  return left.ownerUid === right.ownerUid
+    && left.lineageId === right.lineageId
+    && left.baseRevision === right.baseRevision
+    && left.createdAt === right.createdAt
+    && JSON.stringify(left.patch) === JSON.stringify(right.patch);
+}
+
 function readLegacyEntries(target, key, ownerUid) {
   let raw;
   try {
@@ -344,6 +352,28 @@ export function updateProfileOperation(ownerUid, operationId, changes = {}, stor
   const updated = { ...core, checksum: checksumValue(core) };
   writeStoredEntry(state.target, operationKey(ownerUid, operationId), updated);
   return updated;
+}
+
+export function replaceProfileOperationId(ownerUid, operationId, replacementOperationId, storage) {
+  if (operationId === replacementOperationId) {
+    const existing = readDocument(ownerUid, storage).entries.find(entry => entry.operationId === operationId);
+    if (!existing) throw walError('PROFILE_WAL_OPERATION_MISSING', 'Pending profile operation was not found.');
+    return existing;
+  }
+  const state = readDocument(ownerUid, storage);
+  const existing = state.entries.find(entry => entry.operationId === operationId);
+  if (!existing) throw walError('PROFILE_WAL_OPERATION_MISSING', 'Pending profile operation was not found.');
+  const core = entryCore({ ...existing, operationId: replacementOperationId });
+  const replacement = checkedEntry({ ...core, checksum: checksumValue(core) }, ownerUid);
+  const alreadyWritten = state.entries.find(entry => entry.operationId === replacementOperationId);
+  if (alreadyWritten && !sameOperationPayload(alreadyWritten, replacement)) {
+    throw walError('PROFILE_WAL_OPERATION_REUSED', 'A pending operation id was reused.');
+  }
+  if (!alreadyWritten) {
+    writeStoredEntry(state.target, operationKey(ownerUid, replacementOperationId), replacement);
+  }
+  removeStoredEntry(state.target, operationKey(ownerUid, operationId));
+  return alreadyWritten || replacement;
 }
 
 export function removeProfileOperation(ownerUid, operationId, storage) {

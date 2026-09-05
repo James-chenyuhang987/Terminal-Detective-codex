@@ -195,6 +195,19 @@ export function removePendingSettlement(runId, storage, ownerId = '') {
   return readPendingSettlements(target, ownerId);
 }
 
+export function clearPendingSettlements(storage, ownerId = '') {
+  const target = storageOrNull(storage);
+  if (!target) return;
+  const legacyKey = pendingKey(ownerId);
+  const prefix = pendingItemPrefix(ownerId);
+  const keys = [];
+  for (let index = 0; index < target.length; index += 1) {
+    const key = target.key(index);
+    if (key === legacyKey || key?.startsWith(prefix)) keys.push(key);
+  }
+  keys.forEach(key => target.removeItem(key));
+}
+
 export function applySettlementToProfile(profile, summary) {
   if (profile?.rewarded_runs?.includes(summary?.run_id)) return settleCase(profile, summary);
   const progression = normalizeAgentProgression(profile.agent_progression);

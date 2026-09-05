@@ -82,7 +82,9 @@ Enter the GitHub Client ID and Client Secret only in Firebase Authentication →
 
 Enable one-account-per-email and email-enumeration protection. Add every frontend hostname that can start Firebase Authentication—including the production Worker, GitHub Pages when enabled, `localhost` and `127.0.0.1`—to Firebase Authentication → Settings → Authorized domains.
 
-The GitHub Pages workflow reads the four `VITE_FIREBASE_*` values from GitHub Actions repository variables. Configure `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` and `VITE_FIREBASE_APP_ID` before enabling Pages deployment. These are public Web App identifiers; the GitHub Client Secret remains only in Firebase.
+The production workflow reads the four `VITE_FIREBASE_*` values from GitHub Actions repository variables. Configure `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` and `VITE_FIREBASE_APP_ID` before enabling deployment. These are public Web App identifiers; the GitHub Client Secret remains only in Firebase.
+
+Worker deployment also requires a repository Actions secret named `CLOUDFLARE_API_TOKEN` with permission to edit this Worker. Configure `CLOUDFLARE_ACCOUNT_ID` as either a repository secret or variable. The workflow checks both values before installing dependencies so a missing production credential fails immediately with an actionable error.
 
 ## Database reset warning
 
