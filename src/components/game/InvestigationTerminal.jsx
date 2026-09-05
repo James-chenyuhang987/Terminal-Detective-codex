@@ -13,6 +13,8 @@ import {
   checkConflictClues,
 } from '@/game/gameState';
 import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
+import { acquireClues, destroyClues, getHiddenCluesDue, removeEvidenceLinks } from '@/game/clueState';
+import { advanceCrisisSchedule, settleRoundEvidence } from '@/game/roundCrisis';
 import { streamInvestigationThought, streamTerminalText, settleAction, linkCheck, setInvestigationLang } from '@/game/investigationEngine';
 import {
   getDecisionOptionPacks,
@@ -243,11 +245,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       const firstClue = caseData.zone_clue_map?.[prev.current_zone]?.[0]
         || caseData.clue_dictionary?.[0]?.clue_id;
       if (!firstClue) return prev;
-      return {
-        ...prev,
-        unlocked_clues: [firstClue],
-        unlocked_clues_set: new Set([firstClue]),
-      };
+      return acquireClues(prev, [firstClue]);
     });
   }, [agentStrategy, caseData]);
 
@@ -375,21 +373,62 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
   // Check for auto-released hidden clues on turn change
   useEffect(() => {
-    const hidden = caseData.hidden_clues || [];
+    const hidden = getHiddenCluesDue(caseData, gameStateRef.current);
     hidden.forEach(hc => {
-      if (gameState.turn_count >= hc.unlock_turn && !gameState.unlocked_clues.includes(hc.clue_id)) {
-        addLine(`\n${t.encryptedMessage} "${hc.text}"`, 'system');
-        addLine(`${t.newEvidenceSecured} ${hc.clue_id}`, 'success');
-        setGameState(prev => ({
-          ...prev,
-          unlocked_clues: [...prev.unlocked_clues, hc.clue_id],
-          unlocked_clues_set: new Set([...prev.unlocked_clues, hc.clue_id]),
-        }));
-        setNewClueIds(prev => [...prev, hc.clue_id]);
-        schedule(() => setNewClueIds(prev => prev.filter(id => id !== hc.clue_id)), 3000);
-      }
+      addLine(`\n${t.encryptedMessage} "${hc.text}"`, 'system');
+      addLine(`${t.newEvidenceSecured} ${hc.clue_id}`, 'success');
+      const next = acquireClues(gameStateRef.current, [hc.clue_id]);
+      gameStateRef.current = next;
+      setGameState(next);
+      setNewClueIds(prev => [...prev, hc.clue_id]);
+      schedule(() => setNewClueIds(prev => prev.filter(id => id !== hc.clue_id)), 3000);
     });
   }, [gameState.turn_count]);
+
+  const commitRound = (result, runId, runLang) => {
+    const { state, evidence, outcome } = result;
+    gameStateRef.current = state;
+    setGameState(state);
+    if (outcome === 'destroyed') {
+      setLinkedPairs(prev => removeEvidenceLinks(prev, [evidence.clue_id]));
+      addLine(runLang === 'zh'
+        ? `\n💀 证据「${evidence.keyword}」已被销毁，永久丢失！`
+        : `\n💀 Evidence “${evidence.keyword}” was destroyed and is permanently lost.`, 'error');
+    } else if (outcome === 'secured') {
+      addLine(runLang === 'zh'
+        ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${evidence.keyword}」！威胁解除。`
+        : `\n🛡️ This action also encrypted and secured “${evidence.keyword}”. Threat cleared.`, 'success');
+    } else if (outcome === 'pending') {
+      addLine(runLang === 'zh'
+        ? `\n⏳ 证据「${evidence.keyword}」仍处于销毁倒计时（第 ${evidence.deadline} 轮前需保全）`
+        : `\n⏳ Evidence “${evidence.keyword}” remains on a purge timer (secure it before turn ${evidence.deadline}).`, 'warning');
+    }
+
+    if (crisisPendingRef.current) return;
+    const timing = advanceCrisisSchedule(state.turn_count, nextCrisisTurnRef.current, nextCrisisIn);
+    if (!timing.due) return;
+    try {
+      const event = rollCrisis(state, caseData, runLang);
+      crisisPendingRef.current = true;
+      setCrisisPending(true);
+      setCrisisError(null);
+      schedule(() => {
+        if (activeRunRef.current !== runId || finalizingRef.current) {
+          crisisPendingRef.current = false;
+          setCrisisPending(false);
+          return;
+        }
+        setCrisis(event);
+      }, 900);
+      nextCrisisTurnRef.current = timing.nextTurn;
+      addLine(`\n🚨 ${runLang === 'zh' ? '危机信号已锁定，等待应急响应。' : 'CRISIS SIGNAL LOCKED. EMERGENCY RESPONSE REQUIRED.'}`, 'warning');
+    } catch (error) {
+      crisisPendingRef.current = false;
+      setCrisisPending(false);
+      setCrisis(null);
+      addLine(publicErrorMessage(error, runLang), 'error');
+    }
+  };
 
   // Confusion / crash monitoring
   useEffect(() => {
@@ -582,7 +621,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               content: runLang === 'zh' ? '[ACTION] 探员小队进行战术整备。' : '[ACTION] Agent team performs tactical recovery.',
             },
           ].slice(-12);
-          setGameState(recoveredState);
+          commitRound(settleRoundEvidence(recoveredState), runId, runLang);
           addLine(runLang === 'zh'
             ? '\n↻ 小队完成一回合整备 · 全员体力 +4%'
             : '\n↻ RECOVERY TURN COMPLETE · ALL AGENTS +4% STAMINA', 'success');
@@ -652,7 +691,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       let { newState, newClues } = applySettlementResult(gs, settlement, executingStrategy, caseData);
       const deferredOutcomeLines = [];
       const deferredNotices = [];
-      let removedCrisisClueId = null;
       const staminaSummary = activeAgentStrategy.team
         .map(agent => `${agent.agent_id} ${Math.round(agent.stamina)}→${newState.agent_stamina?.[agent.agent_id] ?? Math.round(agent.stamina)}`)
         .join(' · ');
@@ -685,12 +723,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       if (hiddenBranch) {
         const locked = (caseData.clue_dictionary || [])
           .map(c => c.clue_id)
-          .filter(id => !newState.unlocked_clues.includes(id));
+          .filter(id => !newState.unlocked_clues.includes(id) && !newState.destroyed_clue_ids.includes(id));
         if (locked.length) {
           const bonusSeed = `${newState.run_id}:${newState.turn_count}:${actionTag}:hidden-clue`;
           const bonus = locked[stableNarrativeHash(bonusSeed) % locked.length];
-          newState.unlocked_clues = [...newState.unlocked_clues, bonus];
-          newState.unlocked_clues_set = new Set(newState.unlocked_clues);
+          newState = acquireClues(newState, [bonus]);
           newClues.push(bonus);
           deferredOutcomeLines.push([`\n${lang === 'zh' ? '🩸 高风险策略撬开了隐藏分支 — 一条本不该出现的证据浮出水面。' : '🩸 THE HIGH-RISK PLAY CRACKED A HIDDEN BRANCH — evidence surfaces that never should have.'}`, 'trap']);
         }
@@ -728,26 +765,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         { role: 'user', actionTag, content: `[RESULT] ${settlement.action_narration}` }
       ].slice(-12);
 
-      // ── 证据危机延期结算：行动有 50% 概率顺带保全，超时永久丢失 ──────
-      if (newState.evidence_crisis) {
-        const ec = newState.evidence_crisis;
-        if (newState.unlocked_clues.includes(ec.clue_id) === false) {
-          newState.evidence_crisis = null;
-        } else if (newState.turn_count > ec.deadline) {
-          newState.unlocked_clues = newState.unlocked_clues.filter(id => id !== ec.clue_id);
-          newState.unlocked_clues_set = new Set(newState.unlocked_clues);
-          removedCrisisClueId = ec.clue_id;
-          deferredOutcomeLines.push([lang === 'zh' ? `\n💀 证据「${ec.keyword}」已被销毁，永久丢失！` : `\n💀 Evidence “${ec.keyword}” was destroyed and is permanently lost.`, 'error']);
-          newState.evidence_crisis = null;
-        } else if ((stableNarrativeHash(`${newState.run_id}:${newState.turn_count}:${ec.clue_id}:secure`) % 100) < 50) {
-          deferredOutcomeLines.push([lang === 'zh'
-            ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${ec.keyword}」！威胁解除。`
-            : `\n🛡️ This action also encrypted and secured “${ec.keyword}”. Threat cleared.`, 'success']);
-          newState.evidence_crisis = null;
-        } else {
-          deferredOutcomeLines.push([lang === 'zh' ? `\n⏳ 证据「${ec.keyword}」仍处于销毁倒计时（第 ${ec.deadline} 轮前需保全）` : `\n⏳ Evidence “${ec.keyword}” remains on a purge timer (secure it before turn ${ec.deadline}).`, 'warning']);
-        }
-      }
+      const roundEvidence = settleRoundEvidence(newState, { investigativeAction: true });
+      newState = roundEvidence.state;
 
       if (shouldPlayActionCinematic(gs, newState, cinematicSettlement, caseData)) {
         const event = buildCinematicEvent({
@@ -763,28 +782,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         if (isCancelled()) return;
       }
 
-      // ── 危机事件引擎：每 4-6 轮随机触发 ──────────────────────────────
-      if (newState.turn_count >= nextCrisisTurnRef.current) {
-        nextCrisisTurnRef.current = newState.turn_count + nextCrisisIn();
-        crisisPendingRef.current = true;
-        setCrisisPending(true);
-        setCrisisError(null);
-        addLine(`\n🚨 ${lang === 'zh' ? '危机信号已锁定，等待应急响应。' : 'CRISIS SIGNAL LOCKED. EMERGENCY RESPONSE REQUIRED.'}`, 'warning');
-        schedule(() => {
-          if (activeRunRef.current !== runId || finalizingRef.current) {
-            crisisPendingRef.current = false;
-            setCrisisPending(false);
-            return;
-          }
-          setCrisis(rollCrisis(newState, caseData, lang));
-        }, 900);
-      }
-
-      gameStateRef.current = newState;
-      setGameState(newState);
-      if (removedCrisisClueId) {
-        setLinkedPairs(prev => prev.filter(pair => pair.a !== removedCrisisClueId && pair.b !== removedCrisisClueId));
-      }
+      commitRound(roundEvidence, runId, runLang);
       deferredOutcomeLines.forEach(([message, type]) => addLine(message, type));
       deferredNotices.forEach(message => notifyCommand(message));
 
@@ -1005,11 +1003,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         addLine(`\n${lang === 'zh' ? `⚠ 无效施压使混乱增加 ${confusionIncrease}` : `⚠ INEFFECTIVE PRESSURE RAISED CONFUSION BY ${confusionIncrease}`}`, 'warning');
       }
       for (const clueId of result.revealedClueIds || []) {
-        if (!nextGameState.unlocked_clues.includes(clueId)) {
+        if (!nextGameState.unlocked_clues.includes(clueId) && !nextGameState.destroyed_clue_ids.includes(clueId)) {
           const clue = caseData.clue_dictionary.find(c => c.clue_id === clueId);
           if (!clue) continue;
-          const clues = [...nextGameState.unlocked_clues, clueId];
-          nextGameState = { ...nextGameState, unlocked_clues: clues, unlocked_clues_set: new Set(clues) };
+          nextGameState = acquireClues(nextGameState, [clueId]);
           setNewClueIds(prev => [...prev, clueId]);
           schedule(() => setNewClueIds(prev => prev.filter(id => id !== clueId)), 3000);
           addLine(lang === 'zh'
@@ -1090,11 +1087,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     if (Math.random() < 0.5 && gs.unlocked_clues.length > 0) {
       const lost = gs.unlocked_clues[Math.floor(Math.random() * gs.unlocked_clues.length)];
       const lostClue = caseData.clue_dictionary.find(c => c.clue_id === lost);
-      setGameState(prev => {
-        const clues = prev.unlocked_clues.filter(id => id !== lost);
-        return { ...prev, unlocked_clues: clues, unlocked_clues_set: new Set(clues) };
-      });
-      setLinkedPairs(prev => prev.filter(p => p.a !== lost && p.b !== lost));
+      setGameState(prev => destroyClues(prev, [lost]));
+      setLinkedPairs(prev => removeEvidenceLinks(prev, [lost]));
       setRedFlash(Date.now());
       addLine(`\n${zh
         ? `🔥 凶手反制：你的错误推演暴露了调查方向。证据「${lostClue?.keyword || lost}」已被彻底销毁。`
@@ -1134,17 +1128,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
     if (c.is_core_link) {
       const gs = gameStateRef.current;
-      const locked = getAvailableClueIds(caseData, gs.current_zone, gs.unlocked_clues);
+      const locked = getAvailableClueIds(caseData, gs.current_zone, gs.unlocked_clues, gs.turn_count, gs.destroyed_clue_ids);
       const bonus = locked.length ? locked[Math.floor(Math.random() * locked.length)] : null;
-      setGameState(prev => {
-        const clues = bonus ? [...prev.unlocked_clues, bonus] : prev.unlocked_clues;
-        return {
-          ...prev,
-          unlocked_clues: clues,
-          unlocked_clues_set: new Set(clues),
-          linked_core_pairs: [...(prev.linked_core_pairs || []), c.pairKey],
-        };
-      });
+      setGameState(prev => ({
+        ...acquireClues(prev, bonus ? [bonus] : []),
+        linked_core_pairs: [...(prev.linked_core_pairs || []), c.pairKey],
+      }));
       if (bonus) {
         const bc = caseData.clue_dictionary.find(x => x.clue_id === bonus);
         setNewClueIds(ids => [...ids, bonus]);

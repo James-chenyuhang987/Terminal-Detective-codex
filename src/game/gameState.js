@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { DEFAULT_AGENT_CONFIG } from './caseData.js';
+import { acquireClues, normalizeClueState } from './clueState.js';
 import { getAvailableClueIds, getInitialZone, getZoneClueIds, isValidZoneTransition } from './caseRuntime.js';
 import { normalizeSettlementResult } from './settlementResult.js';
 import { createCommandState } from './commandSystem.js';
@@ -35,6 +36,7 @@ export function createInitialGameState(
     command_state: createCommandState(commandPlan, primaryAgentId),
     agent_stamina: normalizeAgentStamina(null, agentIds),
     unlocked_clues: [],
+    destroyed_clue_ids: [],
     unlocked_clues_set: new Set(), // fast lookup
     current_zone: initialZone,
     visited_zones: initialZone ? [initialZone] : [],
@@ -100,7 +102,7 @@ export const LocalStorage = {
 export function pushCheckpoint(state) {
   // Deep-clone safe snapshot (exclude non-serializable Set)
   const snap = JSON.parse(JSON.stringify({
-    ...state,
+    ...normalizeClueState(state),
     checkpoint_stack: [],
     unlocked_clues_set: undefined,
   }));
@@ -112,9 +114,12 @@ export function pushCheckpoint(state) {
 export function popCheckpoint(state) {
   const stack = [...(state.checkpoint_stack || [])];
   if (stack.length === 0) return null;
-  const snap = stack.pop();
+  // Rewinding the same run cannot restore permanently purged evidence.
+  const snapshot = stack.pop();
+  const sameRun = snapshot.run_id === state.run_id
+    || (!snapshot.run_id && snapshot.case_id === state.case_id);
+  const snap = normalizeClueState(snapshot, sameRun ? state.destroyed_clue_ids : []);
   snap.checkpoint_stack = stack;
-  snap.unlocked_clues_set = new Set(snap.unlocked_clues || []);
   snap.agent_stamina = normalizeAgentStamina(
     snap.agent_stamina,
     Object.keys(snap.agent_stamina || {}).length ? Object.keys(snap.agent_stamina) : DEFAULT_CORE_AGENT_IDS,
@@ -136,6 +141,7 @@ export function applyRecoveryTurn(state, agentIds = DEFAULT_CORE_AGENT_IDS) {
 // ── State Mutation Helper ─────────────────────────────────────────────────
 export function applySettlementResult(state, settlement, agentStrategy, caseData) {
   settlement = normalizeSettlementResult(settlement);
+  state = normalizeClueState(state);
   const newState = { ...state };
   // 已装备技能效果 + 协同技能（大厅配置真实生效）
   const fx = agentStrategy?.skill_effects || {};
@@ -191,6 +197,7 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
     nextZone,
     state.unlocked_clues,
     state.turn_count + 1,
+    state.destroyed_clue_ids,
   ).filter(id => !incomingClues.includes(id));
   if (synergySkills.includes('digital_forensics') && isForensic && lockedIds.length > 0 && Math.random() < 0.20) {
     incomingClues = [...incomingClues, lockedIds[Math.floor(Math.random() * lockedIds.length)]];
@@ -203,6 +210,7 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
   // 神经接口：被动扫描优先发现当前区域的隐藏线索。
   const passiveScanIds = allIds.filter(id =>
     zoneIds.has(id) && !state.unlocked_clues.includes(id) && !incomingClues.includes(id)
+      && !state.destroyed_clue_ids.includes(id)
   );
   if (fx.passive_scan_chance && passiveScanIds.length > 0 && Math.random() < fx.passive_scan_chance) {
     const hiddenIds = new Set((caseData?.hidden_clues || []).map(clue => clue.clue_id));
@@ -212,11 +220,12 @@ export function applySettlementResult(state, settlement, agentStrategy, caseData
     if (pool.length) incomingClues = [...incomingClues, pool[Math.floor(Math.random() * pool.length)]];
   }
 
-  const newClues = incomingClues.filter(id =>
-    id && allIds.includes(id) && zoneIds.has(id) && !newState.unlocked_clues.includes(id)
-  );
-  newState.unlocked_clues = [...newState.unlocked_clues, ...newClues];
-  newState.unlocked_clues_set = new Set(newState.unlocked_clues);
+  const acquiredState = acquireClues(newState, incomingClues.filter(id =>
+    id && allIds.includes(id) && zoneIds.has(id)
+  ));
+  const newClues = acquiredState.unlocked_clues.filter(id => !newState.unlocked_clues.includes(id));
+  newState.unlocked_clues = acquiredState.unlocked_clues;
+  newState.unlocked_clues_set = acquiredState.unlocked_clues_set;
 
   // Zone movement is deterministic and validated against the case graph.
   if (nextZone && nextZone !== state.current_zone) {

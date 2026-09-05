@@ -81,6 +81,7 @@ export async function settleAction({ actionName, actionTag = null, riskLevel = '
     nextZone,
     gameState.unlocked_clues,
     gameState.turn_count + 1,
+    gameState.destroyed_clue_ids,
   );
   const executor = (agentStrategy?.team || []).find(agent => agent.agent_id === agentStrategy?.executing_agent_id)
     || agentStrategy?.team?.[0]

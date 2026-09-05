@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, diffProfileWrite, knownAchievementCount, markActivity } from '@/game/playerProfile';
+import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, knownAchievementCount, markActivity } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { useLang } from '@/lib/lang.jsx';
 import NameInputDialog from '@/components/game/home/NameInputDialog';
@@ -91,38 +91,13 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
     toastTimerRef.current = setTimeout(() => setToast(null), 3200);
   };
 
-  const patch = async (next, message = '') => {
-    if (isReadOnly) {
-      notify(lang === 'zh' ? '当前设备为只读模式，请先接管此设备' : 'This device is read-only. Take over this device before making changes.', 'error');
-      return false;
-    }
-    if (busyRef.current) {
-      notify(lang === 'zh' ? '正在同步上一项操作，请稍候' : 'The previous action is still syncing. Please wait.', 'error');
-      return false;
-    }
-    const changes = diffProfileWrite(profile, next);
-    if (!Object.keys(changes).length) {
-      if (message) notify(message);
-      return true;
-    }
-    busyRef.current = true;
-    setBusy(true);
-    try {
-      const result = await mutate(current => ({ profile: { ...current, ...changes } }));
-      if (message) notify(result?.pending
-        ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
-        : message);
-      return true;
-    } catch {
-      notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
-      return false;
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
+  const notifySaved = (message, result) => {
+    if (message) notify(result?.pending
+      ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
+      : message);
   };
 
-  const applyResult = async (result, message = '') => {
+  const applyResult = async (reducer, message = '') => {
     if (isReadOnly) {
       notify(lang === 'zh' ? '当前设备为只读模式，请先接管此设备' : 'This device is read-only. Take over this device before making changes.', 'error');
       return false;
@@ -146,41 +121,36 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister })
       notify(transactionErrorMessage(failedResult?.error, lang) || errors[failedResult?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'), 'error');
       return false;
     };
-    // Inventory actions must be evaluated against the newest queued profile.
-    // Computing them in the click handler can reuse a stale item count while a
-    // previous cloud write is finishing.
-    if (typeof result === 'function') {
-      busyRef.current = true;
-      setBusy(true);
-      try {
-        const evaluated = await mutate(current => result(current));
-        if (!evaluated?.profile || evaluated.error) return rejectResult(evaluated);
-        if (message) notify(evaluated?.pending
-          ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
-          : message);
-        return true;
-      } catch {
-        notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
-        return false;
-      } finally {
-        busyRef.current = false;
-        setBusy(false);
-      }
+    // Evaluate every action inside the queue so background settlements cannot
+    // be overwritten by a profile captured during rendering.
+    if (typeof reducer !== 'function') return rejectResult(null);
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const evaluated = await mutate(reducer);
+      if (!evaluated?.profile || evaluated.error) return rejectResult(evaluated);
+      notifySaved(message, evaluated);
+      return evaluated;
+    } catch {
+      notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
+      return false;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
-    if (!result?.profile || result.error) return rejectResult(result);
-    return patch(result.profile, message);
   };
 
   const handleName = async (name) => {
-    await patch({ ...profile, detective_name: name });
+    await applyResult(current => ({ profile: { ...current, detective_name: name } }));
   };
 
   const handleCheckin = async () => {
-    const { profile: next, reward, day } = applyCheckin(profile);
-    if (!reward) return;
+    const saved = await applyResult(current => applyCheckin(current));
+    if (!saved?.reward) return;
+    const { reward, day } = saved;
     const parts = [reward.energy ? `⚡+${reward.energy}` : '', reward.gold ? `🪙+${reward.gold}` : '', reward.diamonds ? `💎+${reward.diamonds}` : ''].filter(Boolean).join(' · ');
-    const saved = await patch(next, `${lang === 'zh' ? '签到成功' : 'Check-in complete'} · ${parts || '🎁'}`);
-    if (saved) setCheckinCelebration({ reward, day });
+    notifySaved(`${lang === 'zh' ? '签到成功' : 'Check-in complete'} · ${parts || '🎁'}`, saved);
+    setCheckinCelebration({ reward, day });
   };
 
   const enterLobby = (targetCaseId = null) => {
