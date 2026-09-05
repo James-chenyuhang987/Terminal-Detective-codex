@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useLang } from '@/lib/lang.jsx';
 import {
   applySettlementToProfile,
+  clearPendingSettlements,
   diffProfileWrite,
   enqueuePendingSettlement,
   invokePlayerProfile,
@@ -14,14 +15,17 @@ import {
   applyPendingProfileOperations,
   appendProfileOperation,
   clearProfileOperations,
+  createProfileOperationId,
   readProfileOperations,
   removeProfileOperation,
+  replaceProfileOperationId,
   updateProfileOperation,
 } from '@/game/profileWal';
+import { profileRecoveryDetails } from '@/lib/profileRecovery.js';
 import { createSingleFlight } from '@/lib/singleFlight.js';
 
 const POLL_MS = 20_000;
-const PROFILE_MIGRATION_OPERATION_ID = 'profile-migration-v2';
+const LEGACY_PROFILE_MIGRATION_OPERATION_ID = 'profile-migration-v2';
 const TRANSIENT_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);
 const ProfileContext = createContext(null);
 
@@ -167,12 +171,37 @@ export function ProfileProvider({ children }) {
     }
 
     try {
-      const payload = await invokeOwned('patch', {
-        session_id: sessionIdRef.current,
-        operation_id: pendingEntry.operationId,
-        expected_revision: pendingEntry.baseRevision,
-        patch: pendingEntry.patch,
-      }, ownerUid, generation);
+      let payload;
+      try {
+        payload = await invokeOwned('patch', {
+          session_id: sessionIdRef.current,
+          operation_id: pendingEntry.operationId,
+          expected_revision: pendingEntry.baseRevision,
+          patch: pendingEntry.patch,
+        }, ownerUid, generation);
+      } catch (cause) {
+        if (cause?.code !== 'OPERATION_ID_REUSED'
+          || pendingEntry.operationId !== LEGACY_PROFILE_MIGRATION_OPERATION_ID) {
+          throw cause;
+        }
+        pendingEntry = replaceProfileOperationId(
+          ownerUid,
+          pendingEntry.operationId,
+          createProfileOperationId(),
+        );
+        pendingEntry = updateProfileOperation(
+          ownerUid,
+          pendingEntry.operationId,
+          { incrementAttempts: true },
+        );
+        updatePendingCount(ownerUid, generation);
+        payload = await invokeOwned('patch', {
+          session_id: sessionIdRef.current,
+          operation_id: pendingEntry.operationId,
+          expected_revision: pendingEntry.baseRevision,
+          patch: pendingEntry.patch,
+        }, ownerUid, generation);
+      }
       removeProfileOperation(ownerUid, pendingEntry.operationId);
       const remaining = updatePendingCount(ownerUid, generation);
       const saved = acceptPayload(payload, ownerUid, generation, remaining);
@@ -302,7 +331,7 @@ export function ProfileProvider({ children }) {
           const firstCreatedAt = pendingEntries[0]?.createdAt;
           appendProfileOperation({
             ownerUid,
-            operationId: PROFILE_MIGRATION_OPERATION_ID,
+            operationId: createProfileOperationId(),
             lineageId: pendingEntries[0]?.lineageId || sessionIdRef.current,
             patch: migrationPatch,
             baseRevision: Number(payload.profile?.profile_revision) || 0,
@@ -500,6 +529,7 @@ export function ProfileProvider({ children }) {
     const generation = lifecycleRef.current;
     try {
       clearProfileOperations(ownerUid);
+      clearPendingSettlements(undefined, ownerUid);
       setPendingCount(0);
       commitError(null, ownerUid, generation);
       changeSyncStatus('syncing', ownerUid, generation);
@@ -616,6 +646,13 @@ export function SessionReadOnlyBanner() {
     takeOver,
   } = useProfile();
   const { lang } = useLang();
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const recovery = profileRecoveryDetails(error, lang, pendingCount);
+  useEffect(() => {
+    setConfirmDiscard(false);
+    setDiscarding(false);
+  }, [error?.code, syncStatus]);
   if (!isReadOnly && syncStatus !== 'pending') return null;
 
   const copy = {
@@ -625,33 +662,61 @@ export function SessionReadOnlyBanner() {
     storage_unavailable: lang === 'zh'
       ? '浏览器本地存储不可用。为防止进度丢失，档案修改已暂停。'
       : 'Browser storage is unavailable. Profile changes are paused to prevent data loss.',
-    recovery: lang === 'zh'
-      ? '本地或云端档案需要恢复，档案修改已暂停。'
-      : 'Local or cloud profile data needs recovery. Profile changes are paused.',
+    recovery: recovery.message,
     pending: lang === 'zh'
       ? `有 ${pendingCount} 项改动等待同步；联网后会自动重试。`
       : `${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to sync. Retrying automatically.`,
   };
+
+  const restoreCloudProfile = async () => {
+    setDiscarding(true);
+    try {
+      await discardPendingChanges();
+    } catch {
+      // ProfileContext records and exposes the recovery failure.
+    } finally {
+      setDiscarding(false);
+      setConfirmDiscard(false);
+    }
+  };
+
   return (
     <div role="alert" className="td-session-banner">
-      <span>{copy[syncStatus]}</span>
-      {syncStatus === 'readonly' && (
-        <button type="button" onClick={() => void takeOver().catch(() => {})} disabled={syncStatus === 'syncing'}>
-          {lang === 'zh' ? '接管此设备' : 'TAKE OVER THIS DEVICE'}
-        </button>
-      )}
-      {syncStatus === 'recovery' && [
-        'PROFILE_WAL_CORRUPT',
-        'PROFILE_WAL_FULL',
-        'PROFILE_WAL_DIVERGED',
-        'PROFILE_WAL_OPERATION_REUSED',
-        'STALE_PROFILE',
-        'OPERATION_ID_REUSED',
-      ].includes(error?.code) && (
-        <button type="button" onClick={() => void discardPendingChanges().catch(() => {})}>
-          {lang === 'zh' ? '舍弃本地待同步改动' : 'DISCARD PENDING CHANGES'}
-        </button>
-      )}
+      <div className="td-session-banner__copy">
+        <span>{copy[syncStatus]}</span>
+        {confirmDiscard && <strong>{recovery.confirm}</strong>}
+      </div>
+      <div className="td-session-banner__actions">
+        {syncStatus === 'readonly' && (
+          <button type="button" onClick={() => void takeOver().catch(() => {})} disabled={syncStatus === 'syncing'}>
+            {lang === 'zh' ? '接管此设备' : 'TAKE OVER THIS DEVICE'}
+          </button>
+        )}
+        {syncStatus === 'recovery' && recovery.canDiscard && !confirmDiscard && (
+          <button
+            type="button"
+            aria-expanded="false"
+            onClick={() => setConfirmDiscard(true)}
+          >
+            {recovery.action}
+          </button>
+        )}
+        {syncStatus === 'recovery' && recovery.canDiscard && confirmDiscard && (
+          <>
+            <button type="button" onClick={() => setConfirmDiscard(false)} disabled={discarding}>
+              {recovery.cancelAction}
+            </button>
+            <button
+              type="button"
+              className="td-session-banner__danger"
+              onClick={() => void restoreCloudProfile()}
+              disabled={discarding}
+            >
+              {recovery.confirmAction}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

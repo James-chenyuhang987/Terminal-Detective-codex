@@ -2,7 +2,7 @@ const SAFE_CODES = Object.freeze({
   UNAUTHENTICATED: ['登录状态已失效，请重新登录。', 'Your session has expired. Sign in again.'],
   TOKEN_EXPIRED: ['登录状态已过期，系统正在尝试恢复。', 'Your session expired. The app is attempting recovery.'],
   SESSION_TAKEN: ['账号已在另一台设备接管，当前页面已转为只读。', 'Another device took over this account. This page is now read-only.'],
-  STALE_PROFILE: ['云端档案已更新，正在合并最新进度。', 'The cloud profile changed. Merging the latest progress.'],
+  STALE_PROFILE: ['云端档案已更新，本地改动已暂停以避免覆盖进度。', 'The cloud profile changed. Local changes are paused to prevent overwriting progress.'],
   PROFILE_TIMEOUT: ['云端档案响应超时，进度会在网络恢复后继续同步。', 'The cloud profile timed out. Progress will sync when the connection recovers.'],
   PROFILE_NETWORK: ['无法连接云端档案，请检查网络或代理后重试。', 'The cloud profile could not be reached. Check your network or proxy and retry.'],
   DATABASE_UNAVAILABLE: ['云端档案暂时不可用，本地进度已进入待同步队列。', 'Cloud storage is temporarily unavailable. Progress is queued locally.'],

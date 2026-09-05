@@ -558,12 +558,20 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-session-banner {
   position: fixed; z-index: 500; top: max(10px, env(safe-area-inset-top)); left: 50%;
   transform: translateX(-50%); display: flex; align-items: center; gap: 12px;
-  width: min(620px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid #ff7d9c80;
+  width: min(720px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid #ff7d9c80;
   border-radius: 12px; background: rgba(42, 4, 18, .96); color: #ffd5df;
   box-shadow: 0 18px 60px rgba(0,0,0,.55); font: 11px/1.5 ui-monospace, monospace;
 }
-.td-session-banner span { flex: 1; }
+.td-session-banner__copy { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.td-session-banner__copy strong { color: #ffb9ca; font-weight: 700; }
+.td-session-banner__actions { display: flex; align-items: center; gap: 8px; }
 .td-session-banner button { min-height: 36px; border: 1px solid #ff7d9c; border-radius: 8px; padding: 0 12px; background: #ff7d9c18; color: #ffd5df; cursor: pointer; }
+.td-session-banner button:disabled { cursor: wait; opacity: .55; }
+.td-session-banner button.td-session-banner__danger { background: #ff4e781f; color: #fff0f4; }
+@media (max-width: 640px) {
+  .td-session-banner { align-items: stretch; flex-direction: column; }
+  .td-session-banner__actions { justify-content: flex-end; flex-wrap: wrap; }
+}
 .td-error-boundary { min-height: 100dvh; display: grid; place-items: center; padding: 20px; background: #02060e; color: #dffcff; font-family: ui-monospace, monospace; }
 .td-error-boundary > div { width: min(500px, 100%); padding: 26px; border: 1px solid #00e5ff55; border-radius: 18px; background: #071322; text-align: center; }
 .td-error-boundary span { color: #00e5ff; font-size: 10px; letter-spacing: .2em; }
