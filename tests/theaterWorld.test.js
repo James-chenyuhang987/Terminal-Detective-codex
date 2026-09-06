@@ -77,6 +77,9 @@ test('malformed or unsafe manifest geometry produces explanatory asset errors', 
     input => { input.scenes.office.npcs[0].position = [-4, 0, -3]; }, input => { input.scenes.office.npcs = []; },
     input => { input.characters.detective.file = 'https://example.com/detective.glb'; }, input => { input.characters.detective.animations = ['Idle']; },
     input => { input.characters.detective.height = 0; },
+    input => { input.characters.detective.locomotion = { speed: Infinity, duration: 1 }; },
+    input => { input.characters.detective.locomotion = { speed: 1.4, duration: 0 }; },
+    input => { input.characters.detective.locomotion = null; },
   ];
   for (const mutate of mutations) { const invalid = manifest(); mutate(invalid); assert.throws(() => validateTheaterManifest(invalid), /Theater asset manifest:/); }
   for (const invalid of [null, {}, [], 'bad']) assert.throws(() => validateTheaterManifest(invalid), /Theater asset manifest:/);
@@ -100,7 +103,7 @@ test('capsule stays within xz bounds, stops at colliders and slides along furnit
   for (let i = 0; i < 300; i++) position = movePlayer(position, [1, 0], 1 / 60, geometry);
   close(position[0], -PLAYER_RADIUS, 0.001);
   for (let i = 0; i < 100; i++) position = movePlayer(position, [1, 1], 1 / 60, geometry);
-  assert.ok(position[2] > 2);
+  close(position[2], WALK_SPEED * 100 / 60 / Math.sqrt(2), 0.001);
   assert.ok(isWalkable(position, geometry));
   geometry.colliders = [];
   for (let i = 0; i < 1000; i++) position = movePlayer(position, [1, 1], 1 / 60, geometry);
@@ -240,7 +243,9 @@ test('keyboard ownership excludes form fields, editable content, buttons and pag
 test('renderer uses local GLBs, skinned clones, animations and intent-only focused controls', () => {
   const source = readFileSync(new URL('../src/components/game/theater/TheaterScene.jsx', import.meta.url), 'utf8');
   assert.match(source, /useGLTF\(/);
-  assert.match(source, /useAnimations\(/);
+  assert.match(source, /new AnimationMixer\(model\)/);
+  assert.match(source, /updateAvatarAnimation\(/);
+  assert.doesNotMatch(source, /useAnimations\(|intersectObject\(/);
   assert.match(source, /SkeletonUtils/);
   assert.match(source, /dispose=\{null\}/);
   assert.match(source, /webglcontextlost/);
