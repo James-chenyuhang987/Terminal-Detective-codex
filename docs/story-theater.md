@@ -96,11 +96,37 @@ Loading shows an explanatory status/progress view. A failed manifest/GLB request
 
 The existing Node runner covers mode validation/routing contracts, scene semantics across the eight cases, manifest/collision/input helpers, contact intent mapping, no-cost/no-clue prop interactions, mounted-run integration, decision suspension and the unchanged state/round/settlement rules. Source-contract tests protect the React ownership and callback wiring; they do not claim to simulate browser reconciliation. Behavioral helper tests exercise the actual intent, collision and game-state functions.
 
-Run relevant tests with `node --test tests/storyMode.test.js tests/theaterAssets.test.js tests/theaterWorld.test.js tests/theaterPresentation.test.js tests/theaterFallback.test.js tests/theaterInput.test.js tests/terminalEntry.test.js tests/decisionLayer.test.js tests/gameState.test.js tests/roundCrisis.test.js tests/caseRuntime.test.js tests/agentStamina.test.js tests/settlementResult.test.js`, then the repository typecheck, lint, security check and production build. The integrated revision passes all 99 tests in this targeted command and all four checks. The earlier asset/UI integration also passed the then-current complete 350-test suite. The production build retains a non-blocking warning for the lazy Three/GLTF chunk.
+Run the combined narrative, motion, asset, renderer and authority regressions with:
+
+```sh
+node --test tests/theater*.test.js tests/storyMode.test.js tests/caseRuntime.test.js \
+  tests/terminalEntry.test.js tests/decisionLayer.test.js tests/gameState.test.js \
+  tests/roundCrisis.test.js tests/agentStamina.test.js tests/settlementResult.test.js
+npm run typecheck
+npm run lint
+npm run security:check
+python3 scripts/blender/validate_assets.py
+VITE_API_SERVER_URL=same-origin VITE_BASE_PATH=/ npm run build
+```
+
+The combined narrative/motion revision passes **133 targeted tests** and every check above. The production build retains the existing non-blocking lazy Three/GLTF chunk-size warning. The earlier pre-narrative integration passed its then-current 99-test selection and, before that, the then-current complete 350-test suite; those historical counts are not a claim of a new full-suite run.
 
 ### Narrative enhancement verification — 2026-09-06
 
-`node --test tests/theaterNarrative.test.js tests/storyMode.test.js tests/theaterPresentation.test.js tests/terminalEntry.test.js tests/decisionLayer.test.js tests/gameState.test.js tests/roundCrisis.test.js tests/caseRuntime.test.js tests/agentStamina.test.js tests/settlementResult.test.js` passes **81 tests**, including 17 new narrative tests. The new suite evaluates actual entry/question/close handlers and overlay timer/focus effects with adapters, plus public-copy, queue, stage and source-ownership contracts. It covers cancellation before charge, duplicate confirmation, retry, asynchronous switches and stale results, preserved stamina/ask history/clue effects, option-refresh failure, stage dedupe, safe deferral and lifecycle cleanup. Typecheck, lint and production build pass; the existing lazy Three/GLTF chunk size warning remains non-blocking. These Node tests do not simulate browser reconciliation, native focus containment or real viewport layout; independent isolated browser integration is still required for the new narrative UI.
+The 17 narrative tests evaluate actual entry/question/close handlers and overlay timer/focus effects with adapters, plus public-copy, queue, stage and source-ownership contracts. They cover cancellation before charge, duplicate confirmation, retry, asynchronous switches and stale results, preserved stamina/ask history/clue effects, option-refresh failure, stage dedupe, safe deferral and lifecycle cleanup. These Node tests do not simulate browser reconciliation, native focus containment or real viewport layout; the separate browser checks below cover those integration boundaries.
+
+### Combined narrative and motion browser integration — 2026-09-06
+
+Verified the integrated changes with real React routes, the final bundled GLBs and existing local detective rules in isolated Chrome 152 using SwiftShader. Authentication/profile storage were in-memory fixtures; unrelated API routes were blocked. Test agents used legal 20-point specializations, and evidence/stamina came from actual UI decisions and question results, not injected run state. No production Firebase/D1 writes were made.
+
+- **Entry:** Home Start opened the world prologue, followed by case selection and the public briefing. Cancelling either passage left profile resources unchanged and created no run. Two synchronous briefing confirmations created one run and charged exactly 20 energy once. There was no duplicate arrival panel, and Home Resume did not replay either entry passage.
+- **Layout and focus:** prologue and interlude were native `:modal` dialogs at 375×812, 768×1024 and 1440×900, contained focus, stayed within the upper half, and had no horizontal document overflow. Interlude passage scrolling left all controls inside the frame with at least 44px height.
+- **Question timing and dedupe:** a weak answer did not enqueue. A real evidence-backed effective answer queued a `pursuit` chapter without opening it while dialogue remained visible; explicit dialogue close released it. After Continue removed that head, another effective answer in the same stage applied its normal one-time stamina charge without replaying the chapter.
+- **Suspension and language:** dispatched window blur/focus events paused/resumed revealing without a reset. Home, Settings and text-mode suspension retained the same queue and reveal position. Switching to English preserved the chapter; emulated `prefers-reduced-motion: reduce` revealed the full passage. Native-dialog W/Space input and presentation changes left authoritative run/profile state unchanged. This is simulated focus/media coverage, not an OS-background or assistive-technology test.
+- **Final motion/input:** repeated forward/release, pointer orbit plus forward, blur/bare focus and Home Resume with the final gait. Spatial movement occurred; bare focus did not restart a held direction, and investigation/profile state was unchanged. At 375×812, real CDP touch events and fresh Space on a direction button resumed after blur/focus without an extra scene tap. Touch targets remained at least 44×44px.
+- **Physical/CPU checks:** the reproducible GLTFLoader motion benchmark measured 0.229mm full-weight floor penetration, 0.232mm planted-stance drift and zero loop discontinuity. All 1,200 blended start/stop samples stayed above the floor within numerical error after model-only grounding. Across 8,304 camera rays, center-ray results matched original geometry and all five portals retained 2m clearance. See `docs/theater-assets.md` for commands, measurement scope and limitations.
+
+JSON assertions and screenshots are retained as local validation artifacts. The software renderer's frame timings are diagnostic only: these checks do not establish hardware FPS improvements. The earlier report/ending, production-path and failure-recovery browser checks below remain explicitly baseline evidence rather than newly repeated full playthroughs.
 
 ### Local browser integration — 2026-09-06 (baseline before narrative chapters)
 
