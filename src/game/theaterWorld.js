@@ -1,7 +1,7 @@
 // Pure presentation geometry. This module deliberately has no engine/state imports.
 export const PLAYER_RADIUS = 0.28;
 export const MAX_FRAME_DELTA = 0.05;
-export const WALK_SPEED = 2.35;
+export const WALK_SPEED = 1.4;
 export const SCENE_FILES = Object.freeze({ office: 'office.glb', datacenter: 'datacenter.glb', lobby: 'lobby.glb', laboratory: 'laboratory.glb', balcony: 'balcony.glb' });
 export const CHARACTER_FILES = Object.freeze({ detective: 'detective.glb', witness: 'witness.glb', security: 'security.glb', scientist: 'scientist.glb' });
 
@@ -54,14 +54,18 @@ function positive(value, name, max = 20) {
 
 export function isWalkable(position, room, radius = PLAYER_RADIUS) {
   if (!Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite) || !Number.isFinite(radius) || radius <= 0) return false;
-  const [x, , z] = position;
+  return isWalkableXZ(position[0], position[2], room, radius);
+}
+
+function isWalkableXZ(x, z, room, radius) {
   if (x < room.bounds.min[0] + radius || x > room.bounds.max[0] - radius || z < room.bounds.min[2] + radius || z > room.bounds.max[2] - radius) return false;
   if (room.walkableBounds && (x < room.walkableBounds.min[0] || x > room.walkableBounds.max[0] || z < room.walkableBounds.min[1] || z > room.walkableBounds.max[1])) return false;
-  return room.colliders.every(box => {
+  for (const box of room.colliders) {
     const nearestX = Math.max(box.min[0], Math.min(x, box.max[0]));
     const nearestZ = Math.max(box.min[1], Math.min(z, box.max[1]));
-    return (x - nearestX) ** 2 + (z - nearestZ) ** 2 >= radius ** 2 - 1e-10;
-  });
+    if ((x - nearestX) ** 2 + (z - nearestZ) ** 2 < radius ** 2 - 1e-10) return false;
+  }
+  return true;
 }
 
 /** Extract known fields only; filenames cannot redirect a loader to an external URL. */
@@ -113,7 +117,11 @@ export function validateTheaterManifest(input) {
     const source = input.characters?.[key];
     check(source?.file === file, `${key}.file must be the bundled ${file}`);
     check(Array.isArray(source.animations) && ['Idle', 'Walk', 'Talk'].every(name => source.animations.includes(name)), `${key} needs Idle, Walk and Talk animations`);
-    characters[key] = { file, height: positive(source.height, `${key}.height`, 3), bounds: dimensions(source.bounds, `${key}.bounds`), animations: ['Idle', 'Walk', 'Talk'] };
+    const locomotion = source.locomotion === undefined ? { speed: WALK_SPEED, duration: 1 } : {
+      speed: positive(source.locomotion?.speed, `${key}.locomotion.speed`, 3),
+      duration: positive(source.locomotion?.duration, `${key}.locomotion.duration`, 4),
+    };
+    characters[key] = { file, height: positive(source.height, `${key}.height`, 3), bounds: dimensions(source.bounds, `${key}.bounds`), animations: ['Idle', 'Walk', 'Talk'], locomotion };
   }
   return { version: 1, units: 'meters', upAxis: 'Y', forwardAxis: '+Z', spawn: defaultSpawn, scenes, characters };
 }
@@ -126,17 +134,20 @@ export function withNpcColliders(room, npcs) {
   }))] };
 }
 
-export function cameraRelativeMovement(controls, yaw = 0) {
+export function cameraRelativeMovement(controls, yaw = 0, output = [0, 0]) {
   const forward = Number(Boolean(controls?.forward)) - Number(Boolean(controls?.backward));
   const right = Number(Boolean(controls?.right)) - Number(Boolean(controls?.left));
   const magnitude = Math.hypot(forward, right);
-  if (!magnitude || !Number.isFinite(yaw)) return [0, 0];
-  return [(right * Math.cos(yaw) - forward * Math.sin(yaw)) / magnitude, (-forward * Math.cos(yaw) - right * Math.sin(yaw)) / magnitude];
+  output[0] = !magnitude || !Number.isFinite(yaw) ? 0 : (right * Math.cos(yaw) - forward * Math.sin(yaw)) / magnitude;
+  output[1] = !magnitude || !Number.isFinite(yaw) ? 0 : (-forward * Math.cos(yaw) - right * Math.sin(yaw)) / magnitude;
+  return output;
 }
 
 /** Circle footprint of an upright capsule, axis sliding and radius-sized substeps. */
-export function movePlayer(position, direction, delta, room, radius = PLAYER_RADIUS, speed = WALK_SPEED) {
-  const origin = isWalkable(position, room, radius) ? [...position] : [...room.spawn];
+export function movePlayer(position, direction, delta, room, radius = PLAYER_RADIUS, speed = WALK_SPEED, output = [0, 0, 0]) {
+  const source = isWalkable(position, room, radius) ? position : room.spawn;
+  const origin = output;
+  origin[0] = source[0]; origin[1] = source[1]; origin[2] = source[2];
   if (!Number.isFinite(delta) || delta <= 0 || !Number.isFinite(speed) || speed <= 0 || !Number.isFinite(radius) || radius <= 0 || !Array.isArray(direction) || direction.length !== 2 || !direction.every(Number.isFinite)) return origin;
   const magnitude = Math.hypot(...direction);
   if (!magnitude) return origin;
@@ -146,15 +157,13 @@ export function movePlayer(position, direction, delta, room, radius = PLAYER_RAD
   const count = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (radius * 0.3)));
   const advanceAxis = (axis, amount) => {
     const start = origin[axis];
-    const candidate = [...origin];
-    candidate[axis] = start + amount;
-    if (isWalkable(candidate, room, radius)) { origin[axis] = candidate[axis]; return; }
+    const walkable = value => isWalkableXZ(axis === 0 ? value : origin[0], axis === 2 ? value : origin[2], room, radius);
+    if (walkable(start + amount)) { origin[axis] = start + amount; return; }
     let low = 0;
     let high = 1;
     for (let attempt = 0; attempt < 12; attempt++) {
       const fraction = (low + high) / 2;
-      candidate[axis] = start + amount * fraction;
-      if (isWalkable(candidate, room, radius)) low = fraction;
+      if (walkable(start + amount * fraction)) low = fraction;
       else high = fraction;
     }
     origin[axis] = start + amount * low;

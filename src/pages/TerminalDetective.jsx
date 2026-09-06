@@ -11,6 +11,8 @@ import { ALL_CASES } from '@/game/caseData';
 import { useSettings } from '@/lib/settings.jsx';
 import { normalizeStoryMode } from '@/game/storyMode';
 import StoryModeChooser from '@/components/game/theater/StoryModeChooser';
+import NarrativeOverlay from '@/components/game/theater/NarrativeOverlay';
+import { caseBriefingNarrative, worldNarrative } from '@/game/theaterNarrative';
 
 const loadAgentLobby = () => import('@/components/game/AgentLobby');
 const loadInvestigationTerminal = () => import('@/components/game/InvestigationTerminal');
@@ -48,6 +50,16 @@ export default function TerminalDetective() {
   const [regError, setRegError] = useState('');
   const [preferredCaseId, setPreferredCaseId] = useState(null);
   const [lobbyReturnScreen, setLobbyReturnScreen] = useState('HOME');
+  const [entryNarrative, setEntryNarrative] = useState(null);
+  const [narrativeBusy, setNarrativeBusy] = useState(false);
+  const [narrativeError, setNarrativeError] = useState('');
+  const briefingRequestRef = useRef(null);
+  const briefedRunRef = useRef(false);
+
+  useEffect(() => () => {
+    briefingRequestRef.current?.resolve({ error: 'cancelled' });
+    briefingRequestRef.current = null;
+  }, []);
 
   useEffect(() => {
     const preload = () => {
@@ -150,7 +162,7 @@ export default function TerminalDetective() {
     setAgentStrategy(strategy);
     if (preferredCaseId) {
       const targetCase = ALL_CASES.find(item => item.case_id === preferredCaseId);
-      if (targetCase) return handleCaseSelect(targetCase, strategy);
+      if (targetCase) return requestCaseSelect(targetCase, strategy);
     }
     void loadCaseSelect();
     setScreen('CASE_SELECT');
@@ -203,6 +215,67 @@ export default function TerminalDetective() {
     } finally {
       caseStartRef.current = false;
     }
+  };
+
+  const requestCaseSelect = (caseData, strategyOverride = null) => {
+    if (selectedCase) { setScreen('GAME'); return Promise.resolve({ error: null }); }
+    if (briefingRequestRef.current || caseStartRef.current) return Promise.resolve({ error: 'busy' });
+    briefedRunRef.current = false;
+    if (settings.storyMode !== 'theater') return handleCaseSelect(caseData, strategyOverride);
+    setNarrativeError('');
+    setEntryNarrative({ kind: 'briefing', caseData });
+    return new Promise(resolve => {
+      briefingRequestRef.current = { caseData, strategyOverride, resolve, confirming: false };
+    });
+  };
+
+  const cancelEntryNarrative = () => {
+    const request = briefingRequestRef.current;
+    if (request?.confirming) return;
+    briefingRequestRef.current = null;
+    request?.resolve({ error: 'cancelled' });
+    setEntryNarrative(null);
+    setNarrativeError('');
+    setPreferredCaseId(null);
+    setScreen('HOME');
+  };
+
+  const completeEntryNarrative = async () => {
+    if (entryNarrative?.kind === 'prologue') {
+      setEntryNarrative(null);
+      await openCasesWithSavedTeam();
+      return;
+    }
+    const request = briefingRequestRef.current;
+    if (!request || request.confirming) return;
+    request.confirming = true;
+    setNarrativeBusy(true);
+    setNarrativeError('');
+    try {
+      // Set before selecting the run: its stable owner consumes this only at initialization.
+      briefedRunRef.current = true;
+      const result = await handleCaseSelect(request.caseData, request.strategyOverride);
+      if (result?.error) {
+        briefedRunRef.current = false;
+        setNarrativeError(lang === 'en' ? 'Unable to enter. Check your energy and profile sync, then retry or return home.' : '暂时无法进入，请检查体力与档案同步后重试，或返回主页。');
+        return;
+      }
+      briefingRequestRef.current = null;
+      setEntryNarrative(null);
+      request.resolve(result);
+    } catch (cause) {
+      briefedRunRef.current = false;
+      setNarrativeError(publicErrorMessage(cause, lang));
+    } finally {
+      request.confirming = false;
+      setNarrativeBusy(false);
+    }
+  };
+
+  const handleHomeStartInvestigation = () => {
+    if (selectedCase) { setScreen('GAME'); return; }
+    setNarrativeError('');
+    setEntryNarrative({ kind: 'prologue' });
   };
 
   const handleSettlement = async (summary) => {
@@ -266,6 +339,7 @@ export default function TerminalDetective() {
       <DetectiveHome
         onEnterLobby={openLobbyForCase}
         onOpenCases={openCasesWithSavedTeam}
+        onStartInvestigation={settings.storyMode === 'theater' ? handleHomeStartInvestigation : null}
         onRegister={() => setScreen('REGISTRATION')}
         suspendedCase={selectedCase}
         onResume={handleResume}
@@ -289,7 +363,7 @@ export default function TerminalDetective() {
       <CaseSelect
         profile={profile}
         readOnly={isReadOnly}
-        onSelect={handleCaseSelect}
+        onSelect={requestCaseSelect}
         onPlan={caseId => openLobbyForCase(caseId, 'CASE_SELECT')}
         onBack={() => {
           setPreferredCaseId(null);
@@ -314,6 +388,7 @@ export default function TerminalDetective() {
               selectedCase={selectedCase}
               onSettlement={handleSettlement}
               presentationActive={screen === 'GAME'}
+              narrativeBriefed={briefedRunRef.current}
               onOpenHome={handleOpenHome}
               onGameEnd={() => leaveRun('HOME')}
               onBackToLobby={() => leaveRun('LOBBY')}
@@ -321,6 +396,12 @@ export default function TerminalDetective() {
           )}
         </Suspense>
       </div>
+      {entryNarrative && <NarrativeOverlay
+        key={entryNarrative.kind === 'briefing' ? entryNarrative.caseData.case_id : 'prologue'}
+        {...(entryNarrative.kind === 'briefing' ? caseBriefingNarrative(entryNarrative.caseData, lang) : worldNarrative(lang))}
+        lang={lang} busy={narrativeBusy} error={narrativeError}
+        onComplete={completeEntryNarrative} onCancel={cancelEntryNarrative}
+      />}
       {showModeChooser && (
         <StoryModeChooser initialMode={settings.storyMode} onConfirm={handleConfirmMode}
           onCancel={handleCancelMode} busy={startBusy} error={startError} />

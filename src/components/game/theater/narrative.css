@@ -1,0 +1,50 @@
+.td-narrative {
+  position: fixed;
+  inset: max(8px, env(safe-area-inset-top, 0px)) 12px auto;
+  margin: 0 auto;
+  width: min(1000px, calc(100% - 24px));
+  max-width: none;
+  height: calc(50dvh - max(8px, env(safe-area-inset-top, 0px)));
+  max-height: calc(100dvh - 24px);
+  padding: clamp(12px, 2vw, 22px);
+  border: 1px solid #68cbd5;
+  border-radius: 12px;
+  background: #06131bf5;
+  color: #ddf6f4;
+  box-shadow: 0 8px 48px #0009, inset 0 0 32px #20778c18;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+}
+.td-narrative[open] { display: flex; flex-direction: column; gap: 10px; }
+.td-narrative::backdrop { background: #01081033; }
+.td-narrative header { flex: 0 0 auto; }
+.td-narrative header small { color: #85d6da; font-size: 11px; letter-spacing: .12em; }
+.td-narrative h2 { margin: 5px 0 0; font-size: clamp(16px, 2vw, 22px); line-height: 1.35; overflow-wrap: anywhere; }
+.td-narrative-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.td-narrative-copy { white-space: pre-wrap; overflow-wrap: anywhere; font-size: clamp(14px, 1.3vw, 17px); line-height: 1.65; margin: 0; }
+.td-narrative-unrevealed { visibility: hidden; }
+.td-narrative footer { flex: 0 0 auto; }
+.td-narrative-actions, .td-narrative nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.td-narrative nav { margin-top: 6px; }
+.td-narrative button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 12px;
+  border: 1px solid #5196a2;
+  border-radius: 6px;
+  background: #0b2632;
+  color: #e6ffff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.td-narrative button:disabled { opacity: .5; cursor: default; }
+.td-narrative :focus-visible { outline: 2px solid #f4d99f; outline-offset: 2px; }
+.td-narrative-error { margin: 0; color: #ffb4b4; font-size: 13px; max-height: 3em; overflow: auto; }
+.td-narrative-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: pre-wrap; border: 0; }
+@media (max-width: 480px) {
+  .td-narrative { inset-inline: 8px; width: calc(100% - 16px); gap: 8px; }
+  .td-narrative button { padding-inline: 8px; font-size: 12px; }
+  .td-narrative nav button { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .td-narrative { scroll-behavior: auto; } }

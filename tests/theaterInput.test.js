@@ -47,7 +47,8 @@ function harness() {
   };
   const empty = evaluate(declaration('EMPTY_CONTROLS'), {});
   const controlsRef = { current: { ...empty } };
-  const input = { current: { keys: { ...empty }, focused: false, windowActive: true, orbitX: 0, orbitY: 0, invalidate: null } };
+  let stopped = 0;
+  const input = { current: { keys: { ...empty }, focused: false, windowActive: true, orbitX: 0, orbitY: 0, invalidate: null, stopMotion: () => { stopped++; } } };
   const live = { current: { paused: false, suspended: false } };
   let frames = 0;
   const cleanups = [];
@@ -82,7 +83,7 @@ function harness() {
     const effect = findNodes(presentation, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect' && node.arguments[1]?.getText() === '[movementPaused]')[0].arguments[0];
     evaluate(effect, { movementPaused: true, controlsRef })();
   }
-  return { document, window, viewport, canvas, input, live, controlsRef, handler, event, hideAndReturn, pausePresentation, frames: () => frames, cleanup: () => cleanups.reverse().forEach(cleanup => cleanup()) };
+  return { document, window, viewport, canvas, input, live, controlsRef, handler, event, hideAndReturn, pausePresentation, frames: () => frames, stopped: () => stopped, cleanup: () => cleanups.reverse().forEach(cleanup => cleanup()) };
 }
 
 test('touch press after hide/show/focus explicitly resumes demand rendering without an extra viewport tap', () => {
@@ -96,6 +97,7 @@ test('touch press after hide/show/focus explicitly resumes demand rendering with
   assert.equal(h.input.current.keys.forward, false);
   assert.equal(h.controlsRef.current.left, false);
   assert.equal(h.input.current.orbitX, 0);
+  assert.ok(h.stopped() > 0, 'blur clears motion even if demand rendering has stopped');
   const frames = h.frames();
   h.handler('onPointerDown')(h.event());
   assert.equal(h.controlsRef.current.forward, true);
@@ -200,6 +202,24 @@ test('multi-direction touch and every release path work without clearing the act
   h.handler('onPointerDown')(h.event({ button: 2 }));
   assert.equal(h.controlsRef.current.forward, false);
   h.cleanup();
+});
+
+test('scene pause or Home suspension clears held controls and physical velocity before resuming', () => {
+  const effect = findNodes(scene, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect' && node.arguments[1]?.getText() === '[paused, suspended]')[0].arguments[0];
+  for (const condition of ['paused', 'suspended']) {
+    const h = harness();
+    h.viewport.focus();
+    h.viewport.dispatch('keydown', h.event({ code: 'KeyW', target: h.viewport }));
+    h.controlsRef.current.left = true;
+    const stopped = h.stopped();
+    evaluate(effect, { paused: condition === 'paused', suspended: condition === 'suspended', input: h.input })();
+    assert.equal(h.input.current.keys.forward, false);
+    assert.equal(h.controlsRef.current.left, false);
+    assert.ok(h.stopped() > stopped);
+    evaluate(effect, { paused: false, suspended: false, input: h.input })();
+    assert.equal(h.input.current.keys.forward, false, 'resuming cannot restore stale keys');
+    h.cleanup();
+  }
 });
 
 test('viewport focus and pointer activation share the live/document guard with direction controls', () => {

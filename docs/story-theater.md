@@ -13,9 +13,9 @@ This is an original, room-scale story theater, not an open world or an AAA chara
 
 1. **Landing → mode chooser.** Start Investigation first opens a bilingual, keyboard-accessible choice. Select a presentation and confirm, or go back. The choice itself neither registers a profile nor starts/charges a case.
 2. **Identity → home.** Existing account/profile loading and identity registration remain authoritative. The chosen presentation is stored locally, independently of the cloud profile. Home and Settings expose the same two-mode control.
-3. **Case / briefing / team.** Use the existing unlocked case selection, briefing and investigator configuration. The existing `startCase` path is the only route that charges for entering a new case.
-4. **Scene arrival.** Theater displays the public case briefing and an explanation of controls/resource costs before exploration. Text mode keeps its existing mission briefing. A mode change is not a new scene visit for game-rule purposes.
-5. **Explore and interview.** Walk around a room, orbit the camera, approach a marked contact or prop and interact. Contacts open the existing NPC initial statement and dynamically validated, investigator-specific question choices. A labelled Contacts list is an equivalent non-spatial interaction path. Statements are claims, not verified facts.
+3. **Home Start → world prologue → case / team → case briefing.** In theater mode only, Home's explicit **开始调查 / Start Investigation** opens a generic, original world-setting passage before any case is selected. Continue or Skip opens the existing saved-team case selector; without a saved team, the existing investigator configuration still comes first. Direct case cards, team/navigation links and Home Resume do not trigger the prologue. Selecting a case (including deployment from its team planner) opens a bilingual briefing built from the public `caseNarrativeLibrary` and `localizeCase` scene description. **Back home**, including Escape, cancels either entry passage without starting a run or charging energy. On the case briefing, **Continue / Skip confirms entry and its normal energy cost** through the single-flight existing `startCase` handler. Once that transaction has begun, entry/cancel controls are disabled; failures retain a retryable briefing and safe error message. Text mode keeps its original entry flow.
+4. **Scene arrival.** A run that received the new case briefing suppresses the older duplicate arrival panel using the existing presentation spatial ref. The briefing includes movement/contact controls, resource costs and the distinction between claims and proof. Text-started runs that later switch to theater retain the original arrival explanation. Text mode keeps its existing mission preparation page; narration does not append duplicate bootstrap lines to its transcript. A mode change is not a new scene visit for game-rule purposes.
+5. **Explore and interview.** Walk around a room, orbit the camera, approach a marked contact or prop and interact. Contacts open the existing NPC initial statement and dynamically validated, investigator-specific question choices. A labelled Contacts list is an equivalent non-spatial interaction path. Statements are claims, not verified facts. After an effective answer and dialogue closure, theater can show one reflective interlude per public story stage (see the trigger contract below).
 6. **Investigate and choose.** A workstation opens the investigation explanation; Investigate / Recover invokes the existing observation → thought → decision → settlement cycle. The decision desk chooses the actual investigator, action and optional commands. Recovery remains the existing depleted-team recovery choice, not a new free-rest rule. Each investigation turn restores 4% stamina before participants spend 10%; an interview question spends 10% without recovery. Recovery advances the same round/deadline clock.
 7. **Move between rooms.** A door shows connected zones and their action entry requirements. It is **not** a free teleport. Choose an action through the decision desk and existing route-priority tool. Only the existing legal action and settlement can update `current_zone`; the renderer follows that value.
 8. **Evidence and reconstruction.** Open the evidence locker, link board, visual board, case-flow map and decision log from the toolkit. Only discovered evidence is available. Validating links and writing the structured report call the same handlers in both modes. Public outcomes appear as field subtitles; the full transcript remains in the notebook.
@@ -39,6 +39,25 @@ Changing `storyMode` only updates the validated local setting (`terminal` or `th
 - The fixed controls render in a body portal above action overlays. They switch presentation or suspend the run; they never invoke the existing abort or ending callbacks. GameOver stays mounted during Home/Settings/mode changes, including a pending reward write.
 
 The older **ActionCinematic** setting remains separate: it enables an optional short action-result replay. It is not the permanent story presentation mode and does not select it implicitly.
+
+### Narrative queue and trigger contract
+
+`theaterNarrative.js` owns only public copy and a pure queue/dedupe reducer. `InvestigationTerminal` initializes that reducer once with the existing `run_id`; it remains beside, not inside, authoritative `gameState`.
+
+- A question is eligible if submitted in theater mode. The returned current-operation result must have a nonempty response, positive `cooperationChange`, no repeated-question flag, no error and no confusion penalty. The UI's estimated alignment, merely opening a contact, weak/repeated answers, rejected requests and aborted/stale responses cannot enqueue chapters.
+- The event is dispatched **after the original question effects commit and before refreshing options**. Consequently an option-refresh failure cannot lose a successful chapter. Home or mode changes during either request do not cancel the operation, repeat spending, forget the answer, or change eligibility after submission. Terminal-origin questions do not acquire chapters retroactively by switching to theater.
+- The stage is captured from the committed public progress: `opening` for turns 0–1 or no clues, otherwise `convergence` at ≥55% discovered clues, and `pursuit` in between. These are the existing observation chapter boundaries. Each stage is marked seen on enqueue, not every question; subsequent questions, language/settings changes, Home Resume and mode switches cannot enqueue it again. A fresh run has a fresh queue.
+- A queued entry waits for the matching dialogue to close. Explicitly replacing that dialogue with another contact or a text report also closes/releases it, but selected dialogue/report still prevents presentation. Entries are ordered, and only completion/Skip removes the head. Switching presentation or suspending leaves both queue and typewriter progress intact.
+- Presentation waits for an active theater route with no question/action/link transaction, selected dialogue, report, decision, crisis (including its delayed claim), action/link cinematic, crash, settlement/ending, Settings, onboarding, command console or tools. Finishing an investigation never waits on narration, and ending/settlement remains authoritative.
+- Interludes use original, stage-specific reflection on recorded answers and the need for verification. They do not quote protected answers, claim an unobserved case event, identify a suspect as guilty, reveal a clue or report solution, call rules, alter ask history, spend stamina/AP or grant evidence. Existing question effects remain the only source of their usual consequences.
+
+### Narrative frame and accessibility
+
+`NarrativeOverlay.jsx` and isolated `narrative.css` render a native modal terminal frame in the upper half of the viewport; the scene remains visible below the lightly shaded input-blocking backdrop. The full passage reserves its wrapping from the first frame, while only its prefix is visually revealed. The scrollable passage and fixed-in-frame button rows keep **Show all / Continue / Skip** reachable on 375×812, 768×1024 and 1440×900 layouts.
+
+The native dialog contains keyboard focus and blocks underlying scene/HUD actions. A static accessible passage is separate from the character animation; no character-by-character live announcement occurs. The passage can be keyboard-scrolled. Reduced motion reveals immediately. The timer is cleared when inactive, busy, hidden, unfocused or unmounted, and resumes without resetting the passage on language changes or Home/Settings return. Connected visible focus is restored on close; stale dialogue focus falls back to the active run's presentation controls rather than focusing a hidden run.
+
+During interludes, equivalent Home / Settings / text-mode controls are provided **inside** the dialog because the underlying portal toolbar is intentionally inert under a native modal. Settings or Home hides/closes the presentation modal without consuming the chapter. Escape skips an interlude; Escape cancels an unconfirmed entry passage. Continue remains disabled until full reveal; Skip advances directly.
 
 ## Scene and asset architecture
 
@@ -77,9 +96,39 @@ Loading shows an explanatory status/progress view. A failed manifest/GLB request
 
 The existing Node runner covers mode validation/routing contracts, scene semantics across the eight cases, manifest/collision/input helpers, contact intent mapping, no-cost/no-clue prop interactions, mounted-run integration, decision suspension and the unchanged state/round/settlement rules. Source-contract tests protect the React ownership and callback wiring; they do not claim to simulate browser reconciliation. Behavioral helper tests exercise the actual intent, collision and game-state functions.
 
-Run relevant tests with `node --test tests/storyMode.test.js tests/theaterAssets.test.js tests/theaterWorld.test.js tests/theaterPresentation.test.js tests/theaterFallback.test.js tests/theaterInput.test.js tests/terminalEntry.test.js tests/decisionLayer.test.js tests/gameState.test.js tests/roundCrisis.test.js tests/caseRuntime.test.js tests/agentStamina.test.js tests/settlementResult.test.js`, then the repository typecheck, lint, security check and production build. The integrated revision passes all 99 tests in this targeted command and all four checks. The earlier asset/UI integration also passed the then-current complete 350-test suite. The production build retains a non-blocking warning for the lazy Three/GLTF chunk.
+Run the combined narrative, motion, asset, renderer and authority regressions with:
 
-### Local browser integration — 2026-09-06
+```sh
+node --test tests/theater*.test.js tests/storyMode.test.js tests/caseRuntime.test.js \
+  tests/terminalEntry.test.js tests/decisionLayer.test.js tests/gameState.test.js \
+  tests/roundCrisis.test.js tests/agentStamina.test.js tests/settlementResult.test.js
+npm run typecheck
+npm run lint
+npm run security:check
+python3 scripts/blender/validate_assets.py
+VITE_API_SERVER_URL=same-origin VITE_BASE_PATH=/ npm run build
+```
+
+The combined narrative/motion revision passes **133 targeted tests** and every check above. The production build retains the existing non-blocking lazy Three/GLTF chunk-size warning. The earlier pre-narrative integration passed its then-current 99-test selection and, before that, the then-current complete 350-test suite; those historical counts are not a claim of a new full-suite run.
+
+### Narrative enhancement verification — 2026-09-06
+
+The 17 narrative tests evaluate actual entry/question/close handlers and overlay timer/focus effects with adapters, plus public-copy, queue, stage and source-ownership contracts. They cover cancellation before charge, duplicate confirmation, retry, asynchronous switches and stale results, preserved stamina/ask history/clue effects, option-refresh failure, stage dedupe, safe deferral and lifecycle cleanup. These Node tests do not simulate browser reconciliation, native focus containment or real viewport layout; the separate browser checks below cover those integration boundaries.
+
+### Combined narrative and motion browser integration — 2026-09-06
+
+Verified the integrated changes with real React routes, the final bundled GLBs and existing local detective rules in isolated Chrome 152 using SwiftShader. Authentication/profile storage were in-memory fixtures; unrelated API routes were blocked. Test agents used legal 20-point specializations, and evidence/stamina came from actual UI decisions and question results, not injected run state. No production Firebase/D1 writes were made.
+
+- **Entry:** Home Start opened the world prologue, followed by case selection and the public briefing. Cancelling either passage left profile resources unchanged and created no run. Two synchronous briefing confirmations created one run and charged exactly 20 energy once. There was no duplicate arrival panel, and Home Resume did not replay either entry passage.
+- **Layout and focus:** prologue and interlude were native `:modal` dialogs at 375×812, 768×1024 and 1440×900, contained focus, stayed within the upper half, and had no horizontal document overflow. Interlude passage scrolling left all controls inside the frame with at least 44px height.
+- **Question timing and dedupe:** a weak answer did not enqueue. A real evidence-backed effective answer queued a `pursuit` chapter without opening it while dialogue remained visible; explicit dialogue close released it. After Continue removed that head, another effective answer in the same stage applied its normal one-time stamina charge without replaying the chapter.
+- **Suspension and language:** dispatched window blur/focus events paused/resumed revealing without a reset. Home, Settings and text-mode suspension retained the same queue and reveal position. Switching to English preserved the chapter; emulated `prefers-reduced-motion: reduce` revealed the full passage. Native-dialog W/Space input and presentation changes left authoritative run/profile state unchanged. This is simulated focus/media coverage, not an OS-background or assistive-technology test.
+- **Final motion/input:** repeated forward/release, pointer orbit plus forward, blur/bare focus and Home Resume with the final gait. Spatial movement occurred; bare focus did not restart a held direction, and investigation/profile state was unchanged. At 375×812, real CDP touch events and fresh Space on a direction button resumed after blur/focus without an extra scene tap. Touch targets remained at least 44×44px.
+- **Physical/CPU checks:** the reproducible GLTFLoader motion benchmark measured 0.229mm full-weight floor penetration, 0.232mm planted-stance drift and zero loop discontinuity. All 1,200 blended start/stop samples stayed above the floor within numerical error after model-only grounding. Across 8,304 camera rays, center-ray results matched original geometry and all five portals retained 2m clearance. See `docs/theater-assets.md` for commands, measurement scope and limitations.
+
+JSON assertions and screenshots are retained as local validation artifacts. The software renderer's frame timings are diagnostic only: these checks do not establish hardware FPS improvements. The earlier report/ending, production-path and failure-recovery browser checks below remain explicitly baseline evidence rather than newly repeated full playthroughs.
+
+### Local browser integration — 2026-09-06 (baseline before narrative chapters)
 
 Verified with actual bundled GLBs, real React routes and the existing local detective rules in isolated Chrome 152 with software WebGL. Authentication and profile storage were **in-memory fixtures**, with other API routes blocked; no production identity, profile or database writes were made. Existing UI labels mentioning Firebase/Cloudflare are not proof of a production connection in this fixture.
 

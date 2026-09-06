@@ -1,15 +1,17 @@
 /* eslint-disable react/no-unknown-property -- React Three Fiber intrinsic scene properties. */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useAnimations, useGLTF, useProgress } from '@react-three/drei';
-import { MathUtils, Mesh, Raycaster, SkinnedMesh, Vector3 } from 'three';
+import { useGLTF, useProgress } from '@react-three/drei';
+import { AnimationMixer, MathUtils, Mesh, SkinnedMesh, Vector3 } from 'three';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useLang } from '@/lib/lang.jsx';
 import {
   CHARACTER_FILES, MAX_FRAME_DELTA, SCENE_FILES, cameraRelativeMovement, interactionIntent,
-  interactionTargets, isViewportKeyTarget, movePlayer, nearestTarget, restoreSpatial,
+  interactionTargets, isViewportKeyTarget, nearestTarget, restoreSpatial,
   sceneForZone, stageNpcs, targetKey, validateTheaterManifest, withNpcColliders,
 } from '@/game/theaterWorld.js';
+import { createAvatarAnimation, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation } from '@/game/theaterMotion.js';
+import { buildCameraCollision, cameraClearance } from '@/game/theaterCamera.js';
 
 const ASSET_ROOT = `${import.meta.env.BASE_URL}assets/theater/`;
 const EMPTY_CONTROLS = { forward: false, backward: false, left: false, right: false };
@@ -68,6 +70,7 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       Object.assign(input.current.keys, EMPTY_CONTROLS);
       input.current.orbitX = 0;
       input.current.orbitY = 0;
+      input.current.stopMotion?.();
       if (controlsRef.current) {
         Object.assign(controlsRef.current, EMPTY_CONTROLS);
         controlsRef.current.orbitDelta = null;
@@ -200,25 +203,22 @@ function RendererLifecycle({ live, input, suspended }) {
   return null;
 }
 
-function RoomModel({ sceneName, meshRef, quality }) {
-  // Decoder arguments explicitly disable CDN-backed Draco/Meshopt; these GLBs are self-contained.
-  const gltf = useGLTF(`${ASSET_ROOT}${SCENE_FILES[sceneName]}`, false, false);
+function RoomModel({ gltf, quality }) {
   const scene = useMemo(() => {
     const clone = gltf.scene.clone(true);
     let meshes = 0;
     clone.traverse(node => {
       if (node instanceof Mesh) { meshes++; node.castShadow = quality.shadows; node.receiveShadow = true; }
     });
-    if (!meshes) throw new Error(`The bundled ${sceneName} room has no renderable geometry.`);
+    if (!meshes) throw new Error('The bundled room has no renderable geometry.');
     return clone;
-  }, [gltf.scene, sceneName, quality.shadows]);
-  return <primitive ref={meshRef} object={scene} dispose={null} />;
+  }, [gltf.scene, quality.shadows]);
+  return <primitive object={scene} dispose={null} />;
 }
 
-function Avatar({ role, position, rotationY = 0, player = null, talking = false, targetPosition = null, live, input, quality }) {
+function Avatar({ role, position, rotationY = 0, player = null, talking = false, targetPosition = null, locomotion, live, input, quality }) {
   const gltf = useGLTF(`${ASSET_ROOT}${CHARACTER_FILES[role]}`, false, false);
   const root = useRef(null);
-  const previousAnimation = useRef(null);
   const model = useMemo(() => {
     const cloned = cloneSkeleton(gltf.scene);
     let skinned = false;
@@ -230,23 +230,25 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
     return cloned;
   }, [gltf.scene, gltf.animations, role]);
   useEffect(() => { model.traverse(node => { if (node instanceof Mesh) node.castShadow = quality.shadows; }); }, [model, quality.shadows]);
-  const { actions, mixer } = useAnimations(gltf.animations, model);
+  const animation = useMemo(() => createAvatarAnimation(new AnimationMixer(model), gltf.animations), [gltf.animations, model]);
+  const grounding = useMemo(() => createSoleGrounding(model), [model]);
   useEffect(() => () => {
+    // Keep bindings reusable during StrictMode effect replay; the owned mixer is GC'd on unmount.
+    animation.mixer.stopAllAction();
     model.traverse(node => { if (node instanceof SkinnedMesh) node.skeleton.dispose(); });
-  }, [model]);
+  }, [animation, model]);
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, MAX_FRAME_DELTA);
     const background = live.current.suspended || !input.current.windowActive || document.hidden;
-    const walking = player?.current.walking && !live.current.paused && !background;
-    const animation = walking ? 'Walk' : talking ? 'Talk' : 'Idle';
     const reduced = live.current.reducedMotion;
-    if (previousAnimation.current !== animation) {
-      const previous = actions[previousAnimation.current];
-      if (previous) previous.fadeOut(reduced ? 0 : 0.18);
-      actions[animation]?.reset().fadeIn(reduced ? 0 : 0.18).play();
-      previousAnimation.current = animation;
-    }
-    mixer.timeScale = background || reduced || (live.current.paused && !talking) ? 0 : rawDelta > 0 ? delta / rawDelta : 1;
+    updateAvatarAnimation(animation, delta, {
+      speed: !live.current.paused ? player?.current.speed : 0,
+      authoredSpeed: locomotion.speed,
+      talking,
+      frozen: background,
+      reducedMotion: reduced,
+    });
+    if (!background) model.position.y = player && animation.walkWeight > 0.0001 ? soleGroundOffset(grounding, model) : 0;
     if (!root.current) return;
     if (player) {
       root.current.position.fromArray(player.current.position);
@@ -278,15 +280,19 @@ function World({ caseData, zoneId, manifest, selectedNpcId, controlsRef, spatial
   const spatialKey = JSON.stringify([caseData.case_id, zoneId]);
   const player = useRef(null);
   if (!player.current) player.current = { ...restoreSpatial(spatialRef.current?.rooms?.[spatialKey], movementRoom), walking: false };
-  const roomMesh = useRef(null);
+  // Local decoder-free GLB; collision broadphase is cached once per loaded scene.
+  const roomGltf = useGLTF(`${ASSET_ROOT}${SCENE_FILES[sceneName]}`, false, false);
+  const collision = useMemo(() => buildCameraCollision(roomGltf.scene), [roomGltf.scene]);
   const orbit = useRef({ yaw: player.current.yaw, pitch: player.current.pitch });
+  const intent = useMemo(() => ({ controls: { ...EMPTY_CONTROLS }, direction: [0, 0] }), []);
   const previousTarget = useRef('');
   const [nearbyKey, setNearbyKey] = useState('');
   const { camera, invalidate } = useThree();
-  const cameraState = useMemo(() => ({ target: new Vector3(), desired: new Vector3(), direction: new Vector3(), smoothTarget: new Vector3(), ray: new Raycaster(), initialized: false }), []);
+  const cameraState = useMemo(() => ({ target: new Vector3(), desired: new Vector3(), boom: new Vector3(), direction: new Vector3(), smoothTarget: new Vector3(), distance: 0, initialized: false }), []);
   const selected = staged.find(npc => npc.npcId === selectedNpcId);
 
   useEffect(() => {
+    input.current.stopMotion = () => stopLocomotion(player.current);
     if (nearbyRef.current) live.current.onNearbyChange?.(null);
     nearbyRef.current = null;
     sceneReady();
@@ -294,6 +300,7 @@ function World({ caseData, zoneId, manifest, selectedNpcId, controlsRef, spatial
     return () => {
       window.clearTimeout(timeout);
       input.current.clear?.();
+      input.current.stopMotion = null;
       if (nearbyRef.current) live.current.onNearbyChange?.(null);
       nearbyRef.current = null;
       const current = spatialRef.current || (spatialRef.current = {});
@@ -305,8 +312,7 @@ function World({ caseData, zoneId, manifest, selectedNpcId, controlsRef, spatial
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, MAX_FRAME_DELTA);
     const state = player.current;
-    const movingAllowed = !live.current.paused && input.current.windowActive && !document.hidden;
-    state.walking = false;
+    const movingAllowed = !live.current.paused && !live.current.suspended && input.current.windowActive && !document.hidden;
     if (movingAllowed) {
       const touch = controlsRef.current || EMPTY_CONTROLS;
       // Optional touch orbit uses accumulated pixel deltas: { x, y }, consumed once per frame.
@@ -317,23 +323,10 @@ function World({ caseData, zoneId, manifest, selectedNpcId, controlsRef, spatial
       orbit.current.pitch = MathUtils.clamp(orbit.current.pitch + MathUtils.clamp(dy, -160, 160) * 0.004, 0.35, 1.05);
       input.current.orbitX = 0; input.current.orbitY = 0;
       if (controlsRef.current) controlsRef.current.orbitDelta = null;
-      const movement = cameraRelativeMovement({
-        forward: touch.forward || (input.current.focused && input.current.keys.forward),
-        backward: touch.backward || (input.current.focused && input.current.keys.backward),
-        left: touch.left || (input.current.focused && input.current.keys.left),
-        right: touch.right || (input.current.focused && input.current.keys.right),
-      }, orbit.current.yaw);
-      const next = movePlayer(state.position, movement, delta, movementRoom);
-      const moveX = next[0] - state.position[0];
-      const moveZ = next[2] - state.position[2];
-      state.walking = Math.hypot(moveX, moveZ) > 0.0001;
-      if (state.walking) {
-        const angle = Math.atan2(moveX, moveZ);
-        const difference = Math.atan2(Math.sin(angle - state.rotationY), Math.cos(angle - state.rotationY));
-        state.rotationY += difference * (live.current.reducedMotion ? 1 : 1 - Math.exp(-delta * 15));
-        state.position = next;
-      }
-    }
+      for (const key in EMPTY_CONTROLS) intent.controls[key] = touch[key] || (input.current.focused && input.current.keys[key]);
+      const movement = cameraRelativeMovement(intent.controls, orbit.current.yaw, intent.direction);
+      stepLocomotion(state, movement, delta, movementRoom, { reducedMotion: live.current.reducedMotion, speed: manifest.characters.detective.locomotion.speed });
+    } else stopLocomotion(state);
     const target = nearestTarget(state.position, targets);
     const key = targetKey(target);
     nearbyRef.current = target;
@@ -358,24 +351,25 @@ function World({ caseData, zoneId, manifest, selectedNpcId, controlsRef, spatial
       pitch = 0.45;
     }
     view.desired.set(view.target.x + Math.sin(yaw) * Math.cos(pitch) * distance, view.target.y + Math.sin(pitch) * distance, view.target.z + Math.cos(yaw) * Math.cos(pitch) * distance);
-    // Keep the lens inside walls and below ceilings, then test the actual GLB for line of sight.
+    // Clamp the unconstrained boom, then conservatively protect line of sight and the lens.
     view.desired.x = MathUtils.clamp(view.desired.x, room.bounds.min[0] + 0.4, room.bounds.max[0] - 0.4);
     view.desired.z = MathUtils.clamp(view.desired.z, room.bounds.min[2] + 0.4, room.bounds.max[2] - 0.4);
     view.desired.y = MathUtils.clamp(view.desired.y, 1.9, Math.min(4.8, room.bounds.max[1] - 0.18));
     const snap = live.current.reducedMotion || !view.initialized;
-    if (snap) { camera.position.copy(view.desired); view.smoothTarget.copy(view.target); }
-    else if (!live.current.suspended && input.current.windowActive && !document.hidden) {
-      camera.position.lerp(view.desired, 1 - Math.exp(-delta * 6));
+    const cameraActive = !live.current.suspended && input.current.windowActive && !document.hidden;
+    if (snap) { view.boom.copy(view.desired); view.smoothTarget.copy(view.target); }
+    else if (cameraActive) {
+      view.boom.lerp(view.desired, 1 - Math.exp(-delta * 6));
       view.smoothTarget.lerp(view.target, 1 - Math.exp(-delta * 8));
     }
-    // Check after smoothing as well, so orbit interpolation cannot cut through a cabinet.
-    view.direction.subVectors(camera.position, view.smoothTarget);
+    view.direction.subVectors(view.boom, view.smoothTarget);
     const length = view.direction.length();
-    if (roomMesh.current && length > 0.01) {
-      view.ray.set(view.smoothTarget, view.direction.normalize());
-      view.ray.far = length + 0.2;
-      const hit = view.ray.intersectObject(roomMesh.current, true)[0];
-      if (hit && hit.distance < length + 0.2) camera.position.copy(view.smoothTarget).addScaledVector(view.direction, Math.max(0.08, hit.distance - 0.22));
+    if (length > 0.01 && (snap || cameraActive)) {
+      view.direction.divideScalar(length);
+      const clear = Math.max(0, cameraClearance(collision, view.smoothTarget, view.direction, length) - 0.03);
+      // Contract immediately; recover gently without feeding the collision into orbit smoothing.
+      view.distance = snap || clear < view.distance ? clear : MathUtils.lerp(view.distance, clear, 1 - Math.exp(-delta * 5));
+      camera.position.copy(view.smoothTarget).addScaledVector(view.direction, Math.max(0.01, view.distance));
     }
     camera.lookAt(view.smoothTarget);
     view.initialized = true;
@@ -387,9 +381,9 @@ function World({ caseData, zoneId, manifest, selectedNpcId, controlsRef, spatial
     <ambientLight intensity={0.65} />
     <hemisphereLight args={['#d0f5ff', '#394052', 1.7]} />
     <directionalLight position={[2.5, 6, 3.5]} intensity={2.4} color="#f5ebdb" castShadow={quality.shadows} shadow-mapSize-width={1024} shadow-mapSize-height={1024} shadow-camera-left={-7} shadow-camera-right={7} shadow-camera-top={6} shadow-camera-bottom={-6} shadow-normalBias={0.035} />
-    <RoomModel sceneName={sceneName} meshRef={roomMesh} quality={quality} />
-    <Avatar role="detective" position={player.current.position} rotationY={player.current.rotationY} player={player} live={live} input={input} quality={quality} />
-    {staged.map(npc => <Avatar key={npc.npcId} role={npc.role} position={npc.position} rotationY={npc.rotationY} talking={npc.npcId === selectedNpcId} targetPosition={player} live={live} input={input} quality={quality} />)}
+    <RoomModel gltf={roomGltf} quality={quality} />
+    <Avatar role="detective" position={player.current.position} rotationY={player.current.rotationY} player={player} locomotion={manifest.characters.detective.locomotion} live={live} input={input} quality={quality} />
+    {staged.map(npc => <Avatar key={npc.npcId} role={npc.role} position={npc.position} rotationY={npc.rotationY} talking={npc.npcId === selectedNpcId} targetPosition={player} locomotion={manifest.characters[npc.role].locomotion} live={live} input={input} quality={quality} />)}
     {targets.map(target => <HotspotRing key={targetKey(target)} target={target} nearby={targetKey(target) === nearbyKey} selected={target.kind === 'npc' && target.npcId === selectedNpcId} />)}
   </>;
 }
@@ -407,13 +401,13 @@ export default function TheaterScene({ caseData, zoneId, selectedNpcId, paused, 
   live.current = { paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange };
   const input = useRef({ keys: { ...EMPTY_CONTROLS }, focused: false, windowActive: !document.hidden && document.hasFocus(), orbitX: 0, orbitY: 0, clear: null });
   const interact = useCallback(() => {
-    if (live.current.paused || document.hidden || !input.current.windowActive) return;
+    if (live.current.paused || live.current.suspended || document.hidden || !input.current.windowActive) return;
     const intent = interactionIntent(nearby.current);
     if (intent) live.current.onInteract?.(intent);
   }, []);
   const ready = useCallback(() => { setReadyRoom(roomKey); live.current.onReady?.(); }, [roomKey]);
   useViewportInput(viewport, controlsRef, live, input, interact);
-  useEffect(() => { if (paused) input.current.clear?.(); }, [paused]);
+  useEffect(() => { if (paused || suspended) input.current.clear?.(); }, [paused, suspended]);
 
   // Fiber always mounts native canvas fallback content, including on working WebGL devices.
   return <div ref={viewport} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：点击聚焦，WASD 或方向键移动，拖动视角，E 交互' : '3D detective scene: click to focus, WASD or arrows to move, drag to orbit, E to interact'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>

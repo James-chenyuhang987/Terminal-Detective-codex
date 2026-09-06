@@ -112,9 +112,10 @@ def inspect_glb(path):
     for index in doc['scenes'][doc.get('scene', 0)]['nodes']:
         visit(index, identity(), set())
     assert points and triangles
-    animations = []
+    animations, durations = [], {}
     for animation in doc.get('animations', []):
         animations.append(animation['name'])
+        durations[animation['name']] = 0
         changed = False
         for channel in animation['channels']:
             assert 0 <= channel['target']['node'] < len(doc['nodes'])
@@ -123,11 +124,20 @@ def inspect_glb(path):
             times, values = arrays[sampler['input']], arrays[sampler['output']]
             assert len(times) == len(values) and len(times) >= 1
             assert all(a[0] < b[0] for a,b in zip(times,times[1:]))
+            assert times[0][0] == 0, 'Authored clips must start at zero, not contain an exporter lead-in frame'
+            durations[animation['name']] = max(durations[animation['name']], times[-1][0])
+            if channel['target']['path'] == 'rotation':
+                assert all(abs(sum(v*v for v in row)-1) < 1e-4 for row in values), 'Invalid rotation quaternion'
+                error = min(max(abs(a-b) for a,b in zip(values[0],values[-1])),
+                            max(abs(a+b) for a,b in zip(values[0],values[-1])))
+            else:
+                error = max(abs(a-b) for a,b in zip(values[0],values[-1]))
+            assert error < 1e-5, f'{path.name}/{animation["name"]}: discontinuous loop endpoint'
             if len(values)>1 and any(any(abs(a-b)>1e-5 for a,b in zip(values[0], row)) for row in values[1:]):
                 changed = True
         assert changed, f'{path.name}: {animation["name"]} is a static placeholder'
     return {'bytes':path.stat().st_size, 'triangles':triangles, 'meshes':len(doc['meshes']),
-            'materials':len(doc.get('materials', [])), 'animations':animations,'skinnedMeshes':skin_meshes,
+            'materials':len(doc.get('materials', [])), 'animations':animations,'durations':durations,'skinnedMeshes':skin_meshes,
             'bounds':{'min':[round(min(p[i] for p in points),5) for i in range(3)],
                       'max':[round(max(p[i] for p in points),5) for i in range(3)]}}
 
@@ -189,6 +199,9 @@ def validate(directory):
                 assert info['skinnedMeshes'] >= 1
                 assert set(info['animations']) == {'Idle','Walk','Talk'} and len(info['animations']) == 3
                 assert entry['animations'] == info['animations']
+                assert entry['forward'] == '+Z' and entry['feetY'] == 0
+                assert info['durations'] == {'Idle':2,'Walk':1,'Talk':2}
+                assert entry['locomotion'] == {'speed':1.4,'duration':1}
                 assert abs(entry['height']-(hi[1]-lo[1])) < .001
             print(f'{name:12} {info["bytes"]:8,d} bytes  {info["triangles"]:6,d} triangles  {", ".join(info["animations"])}')
     assert total == manifest['totalBytes'] and total < 8_000_000

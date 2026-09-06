@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { AnimationMixer, Box3 } from 'three';
+import { AnimationMixer, Box3, LoopOnce, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -85,6 +85,8 @@ for (const [name, character] of Object.entries(manifest.characters)) {
     assert.deepEqual(document.animations.map((clip) => clip.name).sort(), ['Idle', 'Talk', 'Walk']);
     assert.ok(Math.abs(character.bounds.min[1]) < 0.001);
     assert.ok(character.height > 1.68 && character.height < 1.9);
+    assert.equal(character.forward, '+Z');
+    assert.deepEqual(character.locomotion, { speed: 1.4, duration: 1 });
     for (const node of document.nodes.filter((item) => item.skin !== undefined)) {
       const skin = document.skins[node.skin];
       assert.ok(skin.joints.length >= 15);
@@ -148,6 +150,166 @@ test('all assets load in the existing Three.js GLTFLoader and cloned skins anima
     }
   }
 });
+
+function updateSkin(model) {
+  model.updateMatrixWorld(true);
+  model.traverse((object) => { if (object.isSkinnedMesh) object.skeleton.update(); });
+}
+
+function posedVertex({ mesh, index }, target = new Vector3()) {
+  return mesh.getVertexPosition(index, target).applyMatrix4(mesh.matrixWorld);
+}
+
+for (const [name, asset] of Object.entries(manifest.characters)) {
+  test(`${name} has continuous planted IK soles, exact loops and independent poses in Three.js`, async () => {
+    const { buffer } = glb(asset.file);
+    const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
+    const model = clone(gltf.scene);
+    const other = clone(gltf.scene);
+    updateSkin(model);
+    updateSkin(other);
+    const vertices = [];
+    const soles = { L: [], R: [] };
+    const jointBlends = new Set();
+    const continuousLegs = new Set();
+    model.traverse((mesh) => {
+      if (!mesh.isSkinnedMesh) return;
+      const { position, skinIndex, skinWeight } = mesh.geometry.attributes;
+      const parent = Array.from({ length: position.count }, (_, i) => i);
+      const root = (i) => {
+        while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+        return i;
+      };
+      const indices = mesh.geometry.index;
+      for (let i = 0; i < indices.count; i += 3) {
+        parent[root(indices.getX(i + 1))] = root(indices.getX(i));
+        parent[root(indices.getX(i + 2))] = root(indices.getX(i));
+      }
+      const components = new Map();
+      for (let index = 0; index < position.count; index += 1) {
+        const point = { mesh, index };
+        vertices.push(point);
+        const influences = Array.from({ length: 4 }, (_, component) => ({
+          bone: mesh.skeleton.bones[skinIndex.getComponent(index, component)].name,
+          weight: skinWeight.getComponent(index, component),
+        })).filter(({ weight }) => weight > 0.001);
+        const component = root(index);
+        if (!components.has(component)) components.set(component, new Set());
+        influences.forEach(({ bone }) => components.get(component).add(bone));
+        for (const side of ['L', 'R']) {
+          if (influences.some((i) => i.bone === `Shin${side}`) && influences.some((i) => i.bone === `Thigh${side}`)) jointBlends.add(`knee${side}`);
+          if (influences.some((i) => i.bone === `Shin${side}`) && influences.some((i) => i.bone === `Foot${side}`)) jointBlends.add(`ankle${side}`);
+          if (influences.length === 1 && influences[0].bone === `Foot${side}` && posedVertex(point).y < 0.001) soles[side].push(point);
+        }
+      }
+      for (const bones of components.values()) {
+        for (const side of ['L', 'R']) {
+          if (['Thigh', 'Shin', 'Foot'].every((joint) => bones.has(joint + side))) continuousLegs.add(side);
+        }
+      }
+    });
+    assert.deepEqual([...jointBlends].sort(), ['ankleL', 'ankleR', 'kneeL', 'kneeR']);
+    assert.deepEqual([...continuousLegs].sort(), ['L', 'R'], 'Each leg is a connected surface through hip, knee and ankle, not floating segments');
+    for (const side of ['L', 'R']) {
+      assert.ok(soles[side].length >= 8, 'Measure actual deformed sole vertices, not just bone origins');
+      const zs = soles[side].map((point) => posedVertex(point).z);
+      assert.ok(Math.max(...zs) > 0.18 && Math.min(...zs) > -0.09, 'The boot toe points +Z');
+    }
+    const otherBones = [];
+    other.traverse((bone) => { if (bone.isBone) otherBones.push([bone, bone.matrixWorld.clone()]); });
+    const mixer = new AnimationMixer(model);
+    let activeAction;
+    const sample = (time) => {
+      activeAction.paused = false;
+      mixer.setTime(time);
+      updateSkin(model);
+    };
+    for (const clip of gltf.animations) {
+      mixer.stopAllAction();
+      assert.equal(clip.duration, clip.name === 'Walk' ? asset.locomotion.duration : 2);
+      const action = mixer.clipAction(clip).setLoop(LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.play();
+      activeAction = action;
+      sample(0);
+      const start = vertices.map((point) => posedVertex(point));
+      sample(clip.duration);
+      assert.ok(vertices.every((point, i) => posedVertex(point).distanceTo(start[i]) < 0.00001), `${name}/${clip.name}: seamless true endpoint (not wrapped time)`);
+      const h = 1 / 600;
+      sample(h);
+      const nearStart = vertices.map((point) => posedVertex(point));
+      sample(clip.duration - h);
+      assert.ok(vertices.every((point, i) => {
+        const incoming = start[i].clone().sub(posedVertex(point)).divideScalar(h);
+        const outgoing = nearStart[i].clone().sub(start[i]).divideScalar(h);
+        return incoming.distanceTo(outgoing) < 0.25;
+      }), `${name}/${clip.name}: no velocity cusp at loop seam`);
+      for (let frame = 0; frame <= 120; frame += 1) {
+        sample(clip.duration * frame / 120);
+        const bounds = new Box3().setFromObject(model, true);
+        assert.ok(bounds.min.y >= -0.002 && bounds.max.y < 1.9, `${name}/${clip.name}: tight deformed ground bounds`);
+        assert.ok(bounds.min.x > -1 && bounds.max.x < 1 && Number.isFinite(bounds.max.z));
+      }
+      if (clip.name !== 'Walk') continue;
+      for (const side of ['L', 'R']) {
+        for (const boundary of (side === 'L' ? [0, 0.52] : [0.02, 0.5])) {
+          const h = 1 / 2400;
+          const values = [-h, 0, h].map((offset) => {
+            sample((boundary + offset + clip.duration) % clip.duration);
+            return posedVertex(soles[side][0]);
+          });
+          const incoming = values[1].clone().sub(values[0]).divideScalar(h);
+          const outgoing = values[2].clone().sub(values[1]).divideScalar(h);
+          assert.ok(incoming.distanceTo(outgoing) < 0.12, 'Touchdown/lift-off has no sharp foot-velocity cusp');
+        }
+      }
+      const anchors = new Map();
+      const maxLift = { L: 0, R: 0 };
+      for (let frame = 0; frame <= 480; frame += 1) {
+        const time = frame / 480;
+        sample(time);
+        for (const side of ['L', 'R']) {
+          const phase = (time / clip.duration + (side === 'R' ? 0.5 : 0)) % 1;
+          const contact = soles[side].map((point) => posedVertex(point));
+          const ys = contact.map((point) => point.y);
+          assert.ok(Math.max(...ys) - Math.min(...ys) < 0.001, 'Counter-rotated boot stays flat during stance and swing');
+          assert.ok(Math.min(...ys) > -0.002, 'Sole penetration must stay below 2mm');
+          maxLift[side] = Math.max(maxLift[side], Math.min(...ys));
+          if (phase > 0.52) {
+            anchors.delete(side);
+            continue;
+          }
+          assert.ok(ys.every((y) => Math.abs(y) < 0.002), 'Every planted sole vertex contacts the floor');
+          const translated = contact.map((point) => point.add(new Vector3(0, 0, asset.locomotion.speed * time)));
+          const prior = anchors.get(side);
+          if (!prior || phase < prior.phase) anchors.set(side, { phase, points: translated });
+          else translated.forEach((point, i) => {
+            assert.ok(point.distanceTo(prior.points[i]) < 0.002, `${name}/${side}: world-space stance sliding exceeds 2mm`);
+          });
+        }
+      }
+      assert.ok(maxLift.L > 0.10 && maxLift.R > 0.10, 'Both feet must visibly clear the floor during recovery');
+      for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+        model.rotation.y = yaw;
+        const heading = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+        let reference;
+        for (const time of [0.05, 0.15, 0.30, 0.45]) {
+          model.position.copy(heading).multiplyScalar(asset.locomotion.speed * time);
+          sample(time);
+          const contact = soles.L.map((point) => posedVertex(point));
+          reference ??= contact;
+          assert.ok(contact.every((point, i) => point.distanceTo(reference[i]) < 0.002), `Actor transformed to heading ${yaw} must retain world-space foot plants`);
+        }
+      }
+      model.position.set(0, 0, 0);
+      model.rotation.set(0, 0, 0);
+    }
+    updateSkin(other);
+    for (const [bone, matrix] of otherBones) assert.deepEqual(bone.matrixWorld.elements, matrix.elements, 'Animating one clone cannot pose another');
+    mixer.stopAllAction();
+    mixer.uncacheRoot(model);
+  });
+}
 
 for (const [name, scene] of Object.entries(manifest.scenes)) {
   test(`${name} keeps avatar spawn and every advertised interaction reachable`, () => {
