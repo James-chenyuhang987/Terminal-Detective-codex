@@ -232,8 +232,8 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
   useEffect(() => { model.traverse(node => { if (node instanceof Mesh) node.castShadow = quality.shadows; }); }, [model, quality.shadows]);
   const animation = useMemo(() => createAvatarAnimation(new AnimationMixer(model), gltf.animations), [gltf.animations, model]);
   useEffect(() => () => {
+    // Keep bindings reusable during StrictMode effect replay; the owned mixer is GC'd on unmount.
     animation.mixer.stopAllAction();
-    animation.mixer.uncacheRoot(model);
     model.traverse(node => { if (node instanceof SkinnedMesh) node.skeleton.dispose(); });
   }, [animation, model]);
   useFrame((_, rawDelta) => {

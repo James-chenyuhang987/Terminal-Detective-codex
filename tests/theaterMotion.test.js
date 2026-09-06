@@ -76,6 +76,16 @@ function animation() {
   return createAvatarAnimation(new AnimationMixer(model), clips);
 }
 
+test('owned mixer actions can restart after StrictMode effect cleanup', () => {
+  const instance = animation();
+  updateAvatarAnimation(instance, 1 / 60, { speed: WALK_SPEED });
+  instance.mixer.stopAllAction();
+  for (let frame = 0; frame < 30; frame++) updateAvatarAnimation(instance, 1 / 60, { speed: WALK_SPEED });
+  close(instance.actions.Walk.time, 0.5);
+  assert.equal(instance.mixer.stats.actions.inUse, 3);
+  assert.ok(instance.mixer.stats.bindings.inUse > 0);
+});
+
 test('walk phase follows real distance, never resets at stops, and independent clones cannot share mixer time', () => {
   const first = animation(); const second = animation();
   for (let frame = 0; frame < 30; frame++) updateAvatarAnimation(first, 1 / 60, { speed: WALK_SPEED / 2 });
