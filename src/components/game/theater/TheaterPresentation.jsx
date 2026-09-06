@@ -43,12 +43,17 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
   const [nearby, setNearby] = useState(null);
   const [panel, setPanel] = useState(() => spatialRef.current.arrived || busy || dialoguePanel || reportPanel ? null : 'arrival');
   const [reducedMotion, setReducedMotion] = useState(false);
-  const controlsRef = useRef({ forward: false, backward: false, left: false, right: false });
+  const controlsRef = useRef({ forward: false, backward: false, left: false, right: false, activate: /** @type {(() => boolean) | null} */ (null) });
   const zoneId = gameState.current_zone;
   const ready = readyZone === zoneId;
   const location = caseData.scene?.zones?.[zoneId]?.label || caseData.zone_layout?.[zoneId]?.label || zoneId;
   const movementPaused = paused || busy || !active || Boolean(panel || dialoguePanel || reportPanel);
   const closePanel = () => { spatialRef.current.arrived = true; setPanel(null); onCloseTools(); };
+  const startMovement = key => {
+    if (movementPaused || !ready || !controlsRef.current.activate?.()) return false;
+    controlsRef.current[key] = true;
+    return true;
+  };
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
     const update = () => setReducedMotion(query.matches);
@@ -56,7 +61,7 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
     return () => query.removeEventListener('change', update);
   }, []);
   useEffect(() => {
-    if (movementPaused) Object.keys(controlsRef.current).forEach(key => { controlsRef.current[key] = false; });
+    if (movementPaused) ['forward', 'backward', 'left', 'right'].forEach(key => { controlsRef.current[key] = false; });
   }, [movementPaused]);
   useEffect(() => { setNearby(null); }, [zoneId]);
   const handleReady = useCallback(() => setReadyZone(zoneId), [zoneId]);
@@ -94,9 +99,9 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
       <button type="button" className="td-theater-interact" disabled={!nearby || movementPaused || !ready} onClick={() => interact(nearby)}>{nearby ? `E · ${nearbyLabel}` : (zh ? '靠近光圈标记以交互' : 'Approach a marked contact or prop')}</button>
       <div className="td-theater-touch-pad" aria-label={zh ? '触屏移动方向' : 'Touch movement controls'}>
         {[['forward', '↑', zh ? '前进' : 'Forward'], ['left', '←', zh ? '左移' : 'Left'], ['backward', '↓', zh ? '后退' : 'Backward'], ['right', '→', zh ? '右移' : 'Right']].map(([key, symbol, label]) => <button type="button" key={key} aria-label={label} disabled={movementPaused || !ready}
-          onPointerDown={event => { if (movementPaused) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); controlsRef.current[key] = true; }}
+          onPointerDown={event => { if (event.button !== 0 || !startMovement(key)) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); }}
           onPointerUp={() => { controlsRef.current[key] = false; }} onPointerCancel={() => { controlsRef.current[key] = false; }} onLostPointerCapture={() => { controlsRef.current[key] = false; }}
-          onKeyDown={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); controlsRef.current[key] = !movementPaused; } }} onKeyUp={() => { controlsRef.current[key] = false; }} onBlur={() => { controlsRef.current[key] = false; }}>{symbol}</button>)}
+          onKeyDown={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); if (!event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) startMovement(key); } }} onKeyUp={() => { controlsRef.current[key] = false; }} onBlur={() => { controlsRef.current[key] = false; }}>{symbol}</button>)}
       </div>
     </div>}
 

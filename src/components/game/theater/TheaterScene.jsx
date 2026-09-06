@@ -76,11 +76,20 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       dragging = null;
     };
     input.current.clear = clear;
+    const activate = () => {
+      if (live.current.paused || live.current.suspended || document.hidden || !document.hasFocus()) return false;
+      if (!input.current.windowActive) clear();
+      input.current.windowActive = true;
+      input.current.invalidate?.();
+      return true;
+    };
+    controlsRef.current.activate = activate;
     const keydown = event => {
-      if (live.current.paused || !input.current.windowActive || !input.current.focused || !isViewportKeyTarget(event.target, viewport) || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (live.current.paused || live.current.suspended || document.hidden || !document.hasFocus() || !input.current.windowActive || !input.current.focused || !isViewportKeyTarget(event.target, viewport) || event.altKey || event.ctrlKey || event.metaKey) return;
       const direction = KEY_DIRECTIONS[event.code];
       if (direction) {
-        event.preventDefault(); pressed.add(event.code); input.current.keys[direction] = true;
+        event.preventDefault();
+        if (!event.repeat) { pressed.add(event.code); input.current.keys[direction] = true; }
       } else if (event.code === 'KeyE') {
         event.preventDefault(); if (!event.repeat) interact();
       }
@@ -105,24 +114,19 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       keyboardAttached = false;
     };
     const focus = event => {
-      if (!isViewportKeyTarget(event.target, viewport) || document.hidden) return;
+      if (!isViewportKeyTarget(event.target, viewport) || !activate()) return;
       input.current.focused = true;
-      input.current.windowActive = document.hasFocus();
       attachKeyboard();
-      input.current.invalidate?.();
     };
     const blur = event => {
       if (isViewportKeyTarget(event.relatedTarget, viewport)) return;
       input.current.focused = false; clear(); detachKeyboard();
     };
     const pointerdown = event => {
-      if (live.current.paused || event.button !== 0 || !isViewportKeyTarget(event.target, viewport)) return;
+      if (event.button !== 0 || !isViewportKeyTarget(event.target, viewport) || !activate()) return;
       viewport.focus({ preventScroll: true });
       input.current.focused = true;
-      input.current.windowActive = !document.hidden && document.hasFocus();
       attachKeyboard();
-      input.current.invalidate?.();
-      if (!input.current.windowActive) return;
       dragging = { id: event.pointerId, x: event.clientX, y: event.clientY };
       viewport.setPointerCapture(event.pointerId);
     };
@@ -143,7 +147,7 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       clear(); detachKeyboard();
     };
     const visibility = () => { if (document.hidden) suspend(); };
-    // Window focus alone never resumes movement: the viewport must be focused/clicked again.
+    // Window focus alone never resumes movement; scene focus or a fresh control press does.
     viewport.addEventListener('focusin', focus);
     viewport.addEventListener('focusout', blur);
     viewport.addEventListener('pointerdown', pointerdown);
@@ -156,6 +160,7 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
     return () => {
       suspend();
       input.current.clear = null;
+      if (controlsRef.current.activate === activate) controlsRef.current.activate = null;
       viewport.removeEventListener('focusin', focus);
       viewport.removeEventListener('focusout', blur);
       viewport.removeEventListener('pointerdown', pointerdown);
