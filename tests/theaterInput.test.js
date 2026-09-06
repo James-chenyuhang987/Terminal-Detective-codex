@@ -204,6 +204,24 @@ test('multi-direction touch and every release path work without clearing the act
   h.cleanup();
 });
 
+test('scene pause or Home suspension clears held controls and physical velocity before resuming', () => {
+  const effect = findNodes(scene, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect' && node.arguments[1]?.getText() === '[paused, suspended]')[0].arguments[0];
+  for (const condition of ['paused', 'suspended']) {
+    const h = harness();
+    h.viewport.focus();
+    h.viewport.dispatch('keydown', h.event({ code: 'KeyW', target: h.viewport }));
+    h.controlsRef.current.left = true;
+    const stopped = h.stopped();
+    evaluate(effect, { paused: condition === 'paused', suspended: condition === 'suspended', input: h.input })();
+    assert.equal(h.input.current.keys.forward, false);
+    assert.equal(h.controlsRef.current.left, false);
+    assert.ok(h.stopped() > stopped);
+    evaluate(effect, { paused: false, suspended: false, input: h.input })();
+    assert.equal(h.input.current.keys.forward, false, 'resuming cannot restore stale keys');
+    h.cleanup();
+  }
+});
+
 test('viewport focus and pointer activation share the live/document guard with direction controls', () => {
   for (const condition of ['hidden', 'unfocused', 'paused', 'suspended']) {
     const h = harness();
