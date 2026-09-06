@@ -34,7 +34,7 @@ function HomeModuleSkeleton({ lang }) {
   );
 }
 
-export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, suspendedCase = null, onResume = () => {} }) {
+export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, onStartInvestigation = null, suspendedCase = null, onResume = () => {} }) {
   const { lang } = useLang();
   const { settings, updateSetting } = useSettings();
   const {
@@ -188,6 +188,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, s
 
   const quickStart = () => {
     if (suspendedCase) { onResume(); return; }
+    if (onStartInvestigation) { onStartInvestigation(); return; }
     if (profile.saved_team_config) openModule('cases');
     else void enterLobby();
   };

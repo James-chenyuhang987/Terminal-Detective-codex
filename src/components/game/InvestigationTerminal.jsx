@@ -1,5 +1,10 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useReducer } from 'react';
 import RunPresentationControls from '@/components/game/theater/RunPresentationControls';
+import NarrativeOverlay from '@/components/game/theater/NarrativeOverlay';
+import {
+  canPresentTheaterNarrative, createTheaterNarrativeState, currentTheaterNarrative,
+  successfulInterviewEvent, theaterNarrativeReducer, theaterNarrativeStage,
+} from '@/game/theaterNarrative';
 import { ReAct_Enum, Legal_Actions_List, Phase_Color_Map, Case_Data_Lvl_01, localizeCase } from '@/game/caseData';
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError';
@@ -87,11 +92,12 @@ const LazyActionCinematic = React.lazy(loadActionCinematic);
 
 const PHASE_COLORS = Phase_Color_Map;
 
-export default function InvestigationTerminal({ agentStrategy, selectedCase, onGameEnd, onBackToLobby, onSettlement, onOpenHome, presentationActive = true }) {
+export default function InvestigationTerminal({ agentStrategy, selectedCase, onGameEnd, onBackToLobby, onSettlement, onOpenHome, presentationActive = true, narrativeBriefed = false }) {
   const { lang, t } = useLang();
   const { settings, setSetting } = useSettings();
   const theaterMode = settings.storyMode === 'theater';
-  const theaterSpatialRef = useRef({});
+  const theaterSpatialRef = useRef({ arrived: narrativeBriefed });
+  const dialogueSequenceRef = useRef(0);
   const [showSettings, setShowSettings] = useState(false);
   const skin = panelSkin(settings.panelLight);
   const { schedule, wait } = useManagedTimers();
@@ -119,6 +125,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     agentStrategy?.primary_agent_id,
     (agentStrategy?.team || []).map(agent => agent.agent_id),
   ));
+  const [narrativeState, dispatchNarrative] = useReducer(theaterNarrativeReducer, gameState.run_id, createTheaterNarrativeState);
+  const activeNarrative = currentTheaterNarrative(narrativeState, lang);
   const activeAgentStrategy = useMemo(() => ({
     ...configuredAgentStrategy,
     team: applyStaminaToTeam(configuredAgentStrategy.team, gameState.agent_stamina),
@@ -201,7 +209,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   activeTerminalTurnRef.current = activeTerminalTurn;
   const viewedTerminalTurnRef = useRef(viewedTerminalTurn);
   viewedTerminalTurnRef.current = viewedTerminalTurn;
-  const interactionLocked = isProcessing || isFinalizing || crisisPending;
+  const narrativeVisible = Boolean(activeNarrative && canPresentTheaterNarrative({
+    theaterMode, presentationActive, selectedNPC, reportMode, isProcessing, isFinalizing, crisisPending,
+    crisis, decisionCards, actionCinematic, cinematic, showBSoD, showGameOver, showSettings,
+    showOnboarding, showCommandConsole, mobileToolsOpen, isLinkChecking,
+  }));
+  const interactionLocked = isProcessing || isFinalizing || crisisPending || narrativeVisible;
 
   useEffect(() => () => {
     activeRunRef.current += 1;
@@ -907,6 +920,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     const primary = runtimeTeam.find(agent => agent.agent_id === configuredAgentStrategy.primary_agent_id);
     const executor = (primary && canAgentInvestigate(primary.stamina, false) ? primary : null)
       || runtimeTeam.find(agent => canAgentInvestigate(agent.stamina, false));
+    if (selectedNPC) handleNPCDialogueClose();
+    dialogueSequenceRef.current += 1;
     setSelectedNPC(npc);
     setNpcDialogue([{ role: 'system', text: `— ${npc.name} ${t.npcEnters} —\n"${npc.initial_statement}"` }]);
     setNpcQuestionPacks(null);
@@ -944,6 +959,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     if (!selectedNPC || !question?.questionId || isProcessing || abortCtrlRef.current
       || finalizingRef.current || crisisPendingRef.current) return;
     const npc = selectedNPC;
+    const dialogueId = dialogueSequenceRef.current;
+    const theaterAtQuestion = theaterMode;
     const state = gameStateRef.current;
     const staminaAgent = configuredAgentStrategy.team.find(agent => agent.agent_id === npcExecutorId);
     if (!staminaAgent || !canAgentInvestigate(state.agent_stamina?.[npcExecutorId], false)) {
@@ -1022,6 +1039,11 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       }
       setGameState(nextGameState);
       gameStateRef.current = nextGameState;
+      // Capture eligibility at submission, commit after the existing operation check, before option refresh.
+      dispatchNarrative(successfulInterviewEvent({
+        runId: state.run_id, dialogueId, theaterAtQuestion, result,
+        stage: theaterNarrativeStage(nextGameState, caseData),
+      }));
       try {
         const refreshed = await getInterrogationOptionPacks({
           gameState: nextGameState,
@@ -1051,6 +1073,15 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         setIsProcessing(false);
       }
     }
+  };
+
+  const handleNPCDialogueClose = () => {
+    handleAbort();
+    dispatchNarrative({ type: 'close', runId: gameStateRef.current.run_id, dialogueId: dialogueSequenceRef.current });
+    setSelectedNPC(null);
+    setNpcDialogue([]);
+    setNpcQuestionPacks(null);
+    setNpcQuestionError(null);
   };
 
   // ── 危机事件应对 ──────────────────────────────────────────────────────────
@@ -1303,13 +1334,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
                 setNpcQuestionError(null);
               }}
               onQuestion={handleNPCQuestion}
-              onClose={() => {
-                handleAbort();
-                setSelectedNPC(null);
-                setNpcDialogue([]);
-                setNpcQuestionPacks(null);
-                setNpcQuestionError(null);
-              }}
+              onClose={handleNPCDialogueClose}
               isProcessing={interactionLocked}
               accentColor={accentColor}
               emotion={getEmotion(npcEmotionState, selectedNPC.npc_id)}
@@ -1487,6 +1512,13 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         transition: 'background 1s ease',
       }}>
 
+      {activeNarrative && <NarrativeOverlay
+        key={activeNarrative.id} title={activeNarrative.title} text={activeNarrative.text} lang={lang} active={narrativeVisible}
+        onComplete={() => dispatchNarrative({ type: 'complete', runId: gameState.run_id, id: activeNarrative.id })}
+        restoreFocusSelector=".td-run-presentation-controls button"
+        onHome={onOpenHome} onSettings={() => setShowSettings(true)}
+        onSwitchMode={() => setSetting('storyMode', 'terminal')}
+      />}
       {!theaterMode && <GlitchOverlay intensity={gameState.confusion_score} type={gameState.confusion_score > 75 ? 'red' : 'default'} />}
       {showBSoD && (
         <BSoD agentId={agentStrategy?.agent_id || 'AXIOM'} onDismiss={() => {
@@ -1661,10 +1693,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             <span aria-hidden="true">🗺</span><span>{lang === 'zh' ? '地图' : 'MAP'}</span>
           </button>
           <button type="button" data-onboarding-target="report" onClick={() => {
-            setSelectedNPC(null);
-            setNpcDialogue([]);
-            setNpcQuestionPacks(null);
-            setNpcQuestionError(null);
+            if (selectedNPC) handleNPCDialogueClose();
             setJudgeResult(null);
             setReportMode(value => !value);
           }}
@@ -1704,7 +1733,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           team={activeAgentStrategy.team}
           active={presentationActive}
           busy={interactionLocked}
-          paused={Boolean(showSettings || showOnboarding || showCommandConsole || decisionCards || actionCinematic || cinematic || crisis || showBSoD || isFinalizing)}
+          paused={Boolean(narrativeVisible || showSettings || showOnboarding || showCommandConsole || decisionCards || actionCinematic || cinematic || crisis || showBSoD || isFinalizing)}
           selectedNpcId={selectedNPC?.npc_id}
           quality={settings.cinematicQuality}
           spatialRef={theaterSpatialRef}
@@ -1717,7 +1746,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           phase={phaseColor.label}
           canAbort={isProcessing && !isFinalizing && !crisisPending}
           onAbort={handleAbort}
-          onExecute={() => { if (interactionLocked) return; setSelectedNPC(null); setReportMode(false); runReActCycle(); }}
+          onExecute={() => { if (interactionLocked) return; if (selectedNPC) handleNPCDialogueClose(); setReportMode(false); runReActCycle(); }}
           onTalk={npc => { if (interactionLocked) return; setReportMode(false); handleNPCTalk(npc); }}
           onOpenTools={tab => { setToolTab(tab); setMobileToolsOpen(true); }}
           onCloseTools={() => setMobileToolsOpen(false)}
