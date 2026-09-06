@@ -1,4 +1,47 @@
+import { Matrix4, Vector3 } from 'three';
 import { MAX_FRAME_DELTA, PLAYER_RADIUS, WALK_SPEED, movePlayer } from './theaterWorld.js';
+
+const soleCache = new WeakMap();
+
+export function createSoleGrounding(model) {
+  const meshes = [];
+  model.traverse(mesh => {
+    if (!mesh.isSkinnedMesh) return;
+    let indices = soleCache.get(mesh.geometry);
+    if (!indices) {
+      const positions = mesh.geometry.attributes.position;
+      const joints = mesh.geometry.attributes.skinIndex;
+      const weights = mesh.geometry.attributes.skinWeight;
+      indices = [];
+      const point = new Vector3();
+      for (let index = 0; index < positions.count; index++) {
+        if (weights.getX(index) < 0.99 || !/^Foot[LR]$/.test(mesh.skeleton.bones[joints.getX(index)].name)) continue;
+        const y = point.fromBufferAttribute(positions, index).applyMatrix4(mesh.bindMatrix).y;
+        if (Math.abs(y) < 0.001) indices.push(index);
+      }
+      soleCache.set(mesh.geometry, indices);
+    }
+    if (indices.length) meshes.push({ mesh, indices });
+  });
+  return { meshes, point: new Vector3(), inverse: new Matrix4(), transform: new Matrix4() };
+}
+
+/** Skin-blend interpolation is not IK. Lift only the model when blended soles cross its floor. */
+export function soleGroundOffset(grounding, model) {
+  model.updateWorldMatrix(true, false);
+  model.updateMatrixWorld(true);
+  grounding.inverse.copy(model.matrixWorld).invert();
+  let lowest = 0;
+  for (const { mesh, indices } of grounding.meshes) {
+    mesh.skeleton.update();
+    grounding.transform.multiplyMatrices(grounding.inverse, mesh.matrixWorld);
+    for (const index of indices) {
+      mesh.getVertexPosition(index, grounding.point).applyMatrix4(grounding.transform);
+      lowest = Math.min(lowest, grounding.point.y);
+    }
+  }
+  return -lowest;
+}
 
 export function stopLocomotion(state) {
   state.velocityX = 0;

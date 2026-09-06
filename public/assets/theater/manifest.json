@@ -1257,11 +1257,15 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "locomotion": {
+        "speed": 1.4,
+        "duration": 1.0
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 442720,
-      "triangles": 6931,
+      "bytes": 460540,
+      "triangles": 7291,
       "bounds": {
         "min": [
           -0.38,
@@ -1271,7 +1275,7 @@
         "max": [
           0.38,
           1.77795,
-          0.1935
+          0.235
         ]
       },
       "meshes": 1,
@@ -1285,11 +1289,15 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "locomotion": {
+        "speed": 1.4,
+        "duration": 1.0
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 475564,
-      "triangles": 7464,
+      "bytes": 493384,
+      "triangles": 7824,
       "bounds": {
         "min": [
           -0.38,
@@ -1299,7 +1307,7 @@
         "max": [
           0.38,
           1.818,
-          0.1935
+          0.235
         ]
       },
       "meshes": 1,
@@ -1313,11 +1321,15 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "locomotion": {
+        "speed": 1.4,
+        "duration": 1.0
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 484244,
-      "triangles": 7712,
+      "bytes": 502064,
+      "triangles": 8072,
       "bounds": {
         "min": [
           -0.38,
@@ -1327,7 +1339,7 @@
         "max": [
           0.38,
           1.77795,
-          0.1935
+          0.235
         ]
       },
       "meshes": 1,
@@ -1341,11 +1353,15 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.",
+      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "locomotion": {
+        "speed": 1.4,
+        "duration": 1.0
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 485516,
-      "triangles": 7412,
+      "bytes": 503336,
+      "triangles": 7772,
       "bounds": {
         "min": [
           -0.38,
@@ -1355,7 +1371,7 @@
         "max": [
           0.38,
           1.77795,
-          0.1935
+          0.235
         ]
       },
       "meshes": 1,
@@ -1363,5 +1379,5 @@
       "height": 1.7779
     }
   },
-  "totalBytes": 6101248
+  "totalBytes": 6172528
 }

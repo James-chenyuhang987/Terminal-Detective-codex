@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AnimationClip, AnimationMixer, Group, NumberKeyframeTrack } from 'three';
-import { createAvatarAnimation, stepLocomotion, stopLocomotion, updateAvatarAnimation } from '../src/game/theaterMotion.js';
+import { readFileSync } from 'node:fs';
+import { AnimationClip, AnimationMixer, Box3, Group, NumberKeyframeTrack } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { createAvatarAnimation, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation } from '../src/game/theaterMotion.js';
 import { WALK_SPEED, isWalkable } from '../src/game/theaterWorld.js';
 
 const room = { bounds: { min: [-6, 0, -5], max: [6, 4, 5] }, spawn: [0, 0, 3], colliders: [] };
@@ -68,6 +71,43 @@ test('direction reversals decelerate before changing heading; reduced motion and
   stepLocomotion(state, [1, 0], 100, room, { reducedMotion: true });
   close(state.position[0] - before[0], WALK_SPEED * 0.05);
   close(state.rotationY, Math.PI / 2);
+});
+
+test('actual Idle/Walk crossfades stay above the floor without moving the actor root or cached geometry', async () => {
+  const bytes = readFileSync(new URL('../public/assets/theater/detective.glb', import.meta.url));
+  const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), '');
+  let worstUncorrected = 0;
+  let worstCorrected = 0;
+  for (const offset of [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]) {
+    const model = clone(gltf.scene);
+    const root = new Group(); root.add(model);
+    root.position.set(2, 0, -1);
+    root.rotation.y = offset * Math.PI * 2;
+    const instance = createAvatarAnimation(new AnimationMixer(model), gltf.animations);
+    const grounding = createSoleGrounding(model);
+    assert.equal(grounding.meshes.reduce((sum, item) => sum + item.indices.length, 0), 64);
+    instance.actions.Walk.time = offset;
+    const state = player();
+    const positions = grounding.meshes.map(({ mesh }) => mesh.geometry.attributes.position.array.slice());
+    for (let frame = 0; frame < 150; frame++) {
+      stepLocomotion(state, frame < 60 ? [0, -1] : [0, 0], 1 / 60, room);
+      updateAvatarAnimation(instance, 1 / 60, { speed: state.speed });
+      model.position.y = 0;
+      const lift = soleGroundOffset(grounding, model);
+      worstUncorrected = Math.min(worstUncorrected, -lift);
+      assert.ok(lift < 0.04, 'Correction stays narrowly limited to the measured blend penetration');
+      model.position.y = lift;
+      root.updateMatrixWorld(true);
+      model.traverse(mesh => { if (mesh.isSkinnedMesh) mesh.skeleton.update(); });
+      worstCorrected = Math.min(worstCorrected, new Box3().setFromObject(model, true).min.y);
+      close(soleGroundOffset(grounding, model), lift, 1e-6);
+      assert.deepEqual(root.position.toArray(), [2, 0, -1], 'Grounding is model-only, not spatial/game state');
+      close(root.rotation.y, offset * Math.PI * 2);
+    }
+    grounding.meshes.forEach(({ mesh }, index) => assert.deepEqual(mesh.geometry.attributes.position.array, positions[index]));
+  }
+  assert.ok(worstUncorrected < -0.02, 'Exercise the nonlinear IK crossfade regression, not just full Walk');
+  assert.ok(worstCorrected >= -0.00001, `Blended floor penetration ${worstCorrected}`);
 });
 
 function animation() {

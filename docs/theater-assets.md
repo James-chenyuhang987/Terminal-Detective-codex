@@ -16,12 +16,12 @@ cinematic or photorealistic models.
 | `lobby.glb` | Aureole penthouse surveillance feeds, seating, abstract sculpture | 719,576 | 12,644 |
 | `laboratory.glb` | Voss research lockers, specimen capsules, microscope | 766,416 | 14,064 |
 | `balcony.glb` | Roof garden, parapets/rails, weather lanterns, raised planters | 619,644 | 11,788 |
-| `detective.glb` | Warm complexion, cream split-tail coat, amber scarf | 442,720 | 6,931 |
-| `witness.glb` | Wine jacket, asymmetric bun, earrings, satchel | 475,564 | 7,464 |
-| `security.glb` | Navy protective vest, shoulder armor, headset/radio | 484,244 | 7,712 |
-| `scientist.glb` | Pale lab coat, silver hair, glasses, pocket instruments | 485,516 | 7,412 |
+| `detective.glb` | Warm complexion, cream split-tail coat, amber scarf | 460,540 | 7,291 |
+| `witness.glb` | Wine jacket, asymmetric bun, earrings, satchel | 493,384 | 7,824 |
+| `security.glb` | Navy protective vest, shoulder armor, headset/radio | 502,064 | 8,072 |
+| `scientist.glb` | Pale lab coat, silver hair, glasses, pocket instruments | 503,336 | 7,772 |
 
-Total GLB payload: **6,101,248 bytes**. Each scene is a joined architectural mesh
+Total GLB payload: **6,172,528 bytes**. Each scene is a joined architectural mesh
 with 12–14 material primitives. Each character is one skinned mesh with 10–12
 material primitives and 19 joints. Materials are matte navy/cream with amber/cyan
 accents. Flat surfaces, rounded edges, organic foliage, and detailed faces keep
@@ -29,9 +29,15 @@ the style readable without texture downloads. All scenes have a case workstation
 and evidence island plus scene-specific perimeter furnishings.
 
 `public/assets/theater/manifest.json` is the authoritative generated inventory;
-read its actual metrics rather than hardcoding the table. The single compressed
+read its actual metrics rather than hardcoding the table. The original compressed
 editable source is `art/theater/terminal-detective-library.blend` (~1.5 MB), with
 `Scene_*` and `Character_*` scenes and their corresponding `*_LIBRARY` collections.
+The motion revision does not modify it, including during regeneration. Existing
+user saves and `.blend1` backups must be preserved; baseline source/scene hashes
+for this isolated revision are recorded in its validation artifacts.
+The improved characters and gait previews have a separate editable source,
+`art/theater/terminal-detective-motion-v2.blend`. No room meshes, scene layout,
+colliders, or scene manifest records changed in the motion revision.
 Objects are joined by asset to reduce node overhead; mesh material/vertex groups
 and armatures remain editable. The generator is the source for editing individual
 procedural furnishings. Preview scenes instance the same collections, not copies
@@ -69,21 +75,105 @@ by an instance, not a shared loader cache. The four role names map generically t
 all cases; in Neon Blood, witness → Mei Lin, security → Kenji Mori, scientist →
 Dr. Voss. They are not identity-locked likenesses.
 
+### Runtime movement and camera cost
+
+The player approaches the authored speed with an analytically integrated
+exponential acceleration (12/s), and turns toward actual travel (18/s). Normal
+release, cancellation, blur, pause and Home suspension stop translation immediately;
+there is no coasting or held-key restart. Walk phase advances by collision-resolved
+distance divided by authored speed, rather than restarting on every press. A blocked
+player blends to Idle without walking in place. Walk/Idle/Talk weights blend at 18/s.
+Reduced motion disables clip playback; background/suspended frames freeze it.
+
+Nonlinear Idle/Walk skin blending temporarily sank soles by 26.086 mm before
+correction, despite the authored full-weight Walk contacts being accurate. The
+runtime caches the 64 sole vertices once, samples their deformed local height,
+and applies only the necessary upward **model-only** offset. It never changes the
+actor's navigation root, mesh buffers, clip phase or game state. The eight-phase
+start/stop regression checks the entire deformed model remains above the floor
+(with a 0.01 mm numerical tolerance), including during crossfades. This prevents
+sinking, not perfect foot locking while turning or crossfading. A local 1,200-frame
+CPU measurement took 8.6 µs median / 23.6 µs p95 for the grounding query.
+
+Camera collision builds a cached world-space triangle-bounds BVH once per loaded
+static room; exact double-sided leaf tests preserve doorway/lintel and furniture
+gaps. The center plus eight lens-perimeter rays avoid per-frame scene traversal,
+raycast-result arrays and whole-room bounding boxes. The camera boom contracts
+immediately at an obstruction and recovers at 5/s independently of orbit smoothing.
+The rendering quality presets, antialiasing and shadows are unchanged.
+
+Reproduce CPU-only measurements with `node scripts/benchmark-theater-camera.mjs`.
+A local Node run on 8,304 deterministic camera rays across five actual GLBs found
+no center-ray occlusion misses or conservative false hits; every open portal retained
+2 m clearance. Datacenter (21,908 triangles) took 72 ms to build once, then 525 µs
+per original recursive raycast versus 16.6 µs for a BVH center ray or 146 µs for all
+nine runtime lens rays (**3.6× faster with additional lens coverage**). Timings vary
+with machine/load; these are CPU costs, not browser/GPU or device-FPS claims.
+At 30/60/144 Hz, two seconds of acceleration travels 2.683333333 m, release travel
+is zero, and a held datacenter furniture collision has zero subsequent jitter.
+
 ### Animation contract
 
 Every character has exact public clip names `Idle`, `Walk`, `Talk`:
 
-- `Idle`: two-second breathing and head/arm movement.
-- `Walk`: one-second in-place opposing arms/legs, knee flex, body bob, coat sway.
-- `Talk`: two-second head motion, raised right forearm/hand gesture, animated mouth.
+- `Idle`: exactly two seconds of breathing and head/arm movement.
+- `Walk`: exactly one second, in place, authored for **1.4 m/s** forward travel.
+- `Talk`: exactly two seconds of head motion, right-arm gesture, and a small jaw
+  articulation shared by the chin, lower muzzle and lips (not floating mouth rods).
 
-Blender samples at 24 fps; the glTF exporter includes a final sample, giving clip
-durations ~2.042 s / 1.042 s / 2.042 s. Loop using the actual clip duration. Root
-translation is not locomotion: the runtime moves the avatar. All visible parts,
-including face, hands, hair, and clothes, have normalized skin weights. This is
-stylized rigid-segment skinning with articulated volumes, not a production facial
-blendshape or IK rig. A sampled walk can dip the sole by approximately 1.2 cm;
-the runtime may apply a small presentation-only ground clearance if desired.
+The Blender actions start at frame **0**, not 1, and include the matching terminal
+sample at frame 60/120 (60 fps). This removes the old exporter lead-in frame and
+~1.042/2.042-second durations. NLA evaluation is disabled while baking actions so
+Idle cannot contaminate the first Walk key. Every exported channel closes at its
+true endpoint; tests do not hide discontinuities by sampling a wrapped mixer.
+
+Walk uses a connected two-bone leg chain with an analytically solved forward knee.
+Each trouser leg is one connected ring surface with normalized blended weights
+through the knee and ankle, overlapping the foot's ankle cuff. The rest pose has
+soft knees to provide adequate reach. Stance occupies phase `[0, 0.52]` on the
+left, with the right shifted by half a cycle. Its sole travels backward at exactly
+1.4 m/s in model space; runtime forward translation cancels that movement. Swing
+uses quintic horizontal recovery matching stance velocity and acceleration at
+both contacts, and a sixth-degree 10.5 cm lift with zero velocity/acceleration at
+lift-off and touchdown. The ankle counter-rotates to keep the whole boot flat.
+Hips compress by a **constant 5.5 cm** while walking: no `abs(sin)` body bob or
+sinusoidal thigh/shin swing. Arms and coat follow the authored foot trajectory.
+
+`characters[role].locomotion = { speed: 1.4, duration: 1 }` is optional runtime
+metadata in meters/second and seconds. The runtime owns translation and heading;
+for other speeds, scale playback rate by actual speed / authored speed. Rotate
+both the actor and its travel direction together; there is no root-motion offset
+or extra 90-degree asset correction. These contacts assume flat ground and a
+fully weighted Walk clip. Crossfades, acceleration, blocked translation, abrupt
+turning, stairs and uneven terrain need runtime handling, not a blanket sole
+clearance. This remains compact stylized skinning, not cloth simulation, foot
+roll/toe articulation, runtime IK, or a production facial blendshape rig.
+
+### Measured motion revision
+
+Actual Three.js `GLTFLoader` + `SkeletonUtils.clone` + `AnimationMixer`, 481 samples
+per loop, measuring all 64 lowest sole vertices across both feet. All four models
+share the gait and produce the same results:
+
+| Metric | Original | Motion v2 |
+| --- | ---: | ---: |
+| Walk duration | 1.041666627 s | 1.000000000 s |
+| Worst deformed floor penetration | 11.686 mm | **0.229 mm** |
+| Worst stance sole height / tilt | 389.093 / 194.037 mm* | **0.501 / 0.501 mm** |
+| Worst world-space stance drift at 1.4 m/s | 1,116.870 mm* | **0.232 mm** |
+| Whole-character loop endpoint difference | — | < 0.01 mm (test bound) |
+| Total GLB payload | 6,101,248 bytes | 6,172,528 bytes (+1.17%) |
+
+\*The old sinusoidal gait had no authored stance interval; these values use the
+new left/right contact windows as a regression comparison, not a claim that the
+old feet were actually planted. The floor-penetration measurement is independent
+of that convention. Run `node scripts/benchmark-theater-motion.mjs` from the
+repository root to reproduce contacts and eight-phase blended start/stop grounding
+measurements using the existing Three.js without additional packages. The
+`comparison.json` and `source-safety.json` artifacts preserve the actual before/
+after results and protected hashes. Residual sub-millimeter errors are from 60 fps quaternion
+interpolation between baked IK poses. Tests allow at most 2 mm sinking, height,
+and whole-stance drift; flatness is checked throughout swing as well.
 
 ### Manifest schema
 
@@ -111,6 +201,7 @@ the runtime may apply a small presentation-only ground clearance if desired.
       file: 'detective.glb', animations: ['Idle', 'Walk', 'Talk'],
       bounds: { min: [x, y, z], max: [x, y, z] },
       height, feetY: 0, forward: '+Z', animationNotes,
+      locomotion: { speed: 1.4, duration: 1 }, // Optional, meters/second and seconds
       bytes, triangles, meshes, materials
     }
   }
@@ -140,40 +231,56 @@ These are presentation coordinates only, never authoritative game-state actions.
 
 ## Reproduce, inspect, validate
 
-From the repository root, choose a session artifact directory outside the repo:
+From the repository root, choose a **new** source filename and an artifact
+folder. A normal character-only rebuild is:
 
 ```sh
 BLENDER=/Applications/Blender.app/Contents/MacOS/Blender
 "$BLENDER" --background --factory-startup --python-exit-code 1 \
   --python scripts/blender/generate_theater.py -- \
-  --preview-dir /absolute/path/to/session/files/theater-previews
+  --characters-only --source-output art/theater/terminal-detective-motion-v3.blend \
+  --preview-dir .theater-motion-artifacts/previews
 python3 scripts/blender/validate_assets.py
 node --test tests/theaterAssets.test.js
 npx --no-install eslint tests/theaterAssets.test.js --quiet
 ```
 
-The generator overwrites only the owned GLBs, manifest, and compressed `.blend`
-source. It suppresses `.blend1` backups and bytecode caches. It exports only the
-active asset scene, an important distinction when a source library contains many
-scenes. Use `--skip-render` instead of `--preview-dir` for an export-only rebuild.
+`--source-output` is required. The generator refuses **every existing source
+path**, and always refuses the original library path, before changing assets.
+It never opens or closes the interactive Blender application, never loads unsaved
+GUI data, and never overwrites either editable source. Keep
+`--characters-only` to preserve all scene GLBs and scene manifest records; only
+the four characters, their manifest metadata and `totalBytes` are regenerated.
+Omitting it is an explicit full-library rebuild and should not be used for gait
+work. Source outputs are new-only even during a full rebuild. It suppresses
+`.blend1` backups and bytecode caches and exports only the active asset scene.
+Use `--skip-render` instead of `--preview-dir` for an export-only rebuild.
 Blender 5.2.1 is the tested authoring version; exporter-dependent byte ordering may
 change in another version. Node tests use the project's existing Three.js and
 Node test runner; the Python validator needs only Python's standard library.
 
-Two genuine Cycles renders are written to the requested artifact directory:
+Character-only generation writes genuine Cycles renders:
 
-- `theater-contact-sheet.png`: four characters and all five environments.
-- `neon-blood-datacenter.png`: a scene-wide set preview with the original cast.
+- `walk-contact-sheet.png`: four sampled detective walk poses over a reference floor.
+- `walk-profile-mid-swing.png`: a close side view exposing the continuous leg joints.
+- `character-cast.png`: all four preserved character identities.
 
-They are Blender renders, not fabricated browser screenshots. They are not
-committed or part of the browser payload. Open them for art inspection; use the
-Blender scene selector to inspect each set and the armatures/NLA tracks. `Idle`
-is enabled in the editable source, while `Walk` and `Talk` tracks are muted for
-preview and exported separately under their own names.
+The full-library option additionally supports the original
+`theater-contact-sheet.png` and `neon-blood-datacenter.png` room previews. These are
+Blender renders, not browser screenshots, and are not committed or part of the
+browser payload. Session artifacts contain the before/after motion JSON,
+source/scene hashes, an original-source read-only baseline render, the sampling
+script, and the revised previews. `Idle` is enabled in the editable source;
+`Walk` and `Talk` NLA tracks remain muted for preview and export separately under
+their exact public names.
 
 Validation covers GLB chunks, buffer/accessor ranges and finite values, indices,
 world bounds, mesh/triangle/material budgets, skin joints and normalized weights,
 non-static animation channels, exact filenames and metrics, and grid connectivity
 from spawn to all doors/hotspots/NPC points with inflated obstacles. The Node suite
 also loads every GLB with the project's actual `GLTFLoader`, clones skeletons,
-and samples every animation for finite, stable deformed bounds.
+and samples every animation for finite, stable deformed bounds. It verifies exact
+clip durations, real endpoint position and loop velocity continuity, connected
+leg topology with blended knee/ankle weights, normalized skin weights, visible
+swing clearance, sole flatness/ground contact, <2 mm stance drift after authored
+translation in four headings, +Z boot direction, and independent cloned poses.

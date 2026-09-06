@@ -10,7 +10,7 @@ import {
   interactionTargets, isViewportKeyTarget, nearestTarget, restoreSpatial,
   sceneForZone, stageNpcs, targetKey, validateTheaterManifest, withNpcColliders,
 } from '@/game/theaterWorld.js';
-import { createAvatarAnimation, stepLocomotion, stopLocomotion, updateAvatarAnimation } from '@/game/theaterMotion.js';
+import { createAvatarAnimation, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation } from '@/game/theaterMotion.js';
 import { buildCameraCollision, cameraClearance } from '@/game/theaterCamera.js';
 
 const ASSET_ROOT = `${import.meta.env.BASE_URL}assets/theater/`;
@@ -231,6 +231,7 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
   }, [gltf.scene, gltf.animations, role]);
   useEffect(() => { model.traverse(node => { if (node instanceof Mesh) node.castShadow = quality.shadows; }); }, [model, quality.shadows]);
   const animation = useMemo(() => createAvatarAnimation(new AnimationMixer(model), gltf.animations), [gltf.animations, model]);
+  const grounding = useMemo(() => createSoleGrounding(model), [model]);
   useEffect(() => () => {
     // Keep bindings reusable during StrictMode effect replay; the owned mixer is GC'd on unmount.
     animation.mixer.stopAllAction();
@@ -247,6 +248,7 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
       frozen: background,
       reducedMotion: reduced,
     });
+    if (!background) model.position.y = player && animation.walkWeight > 0.0001 ? soleGroundOffset(grounding, model) : 0;
     if (!root.current) return;
     if (player) {
       root.current.position.fromArray(player.current.position);

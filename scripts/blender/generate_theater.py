@@ -6,13 +6,22 @@ from pathlib import Path
 import sys
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
 args = argparse.ArgumentParser()
 args.add_argument('--preview-dir', type=Path)
 args.add_argument('--skip-render', action='store_true')
+args.add_argument('--characters-only', action='store_true', help='Preserve scene GLBs and their manifest entries')
+args.add_argument('--source-output', type=Path, required=True, help='New .blend path; existing sources are never overwritten')
 opts = args.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
+if not bpy.app.background:
+    args.error('Run in a separate --background process; interactive Blender data is protected')
+source_output = opts.source_output.resolve()
+if source_output.suffix != '.blend' or source_output.exists():
+    args.error('--source-output must be a NEW .blend file (existing editable sources are protected)')
+if source_output == ROOT / 'art/theater/terminal-detective-library.blend':
+    args.error('The original editable library is protected; choose a new source filename')
 if not opts.skip_render and opts.preview_dir is None:
     args.error('--preview-dir must point to a session artifact directory, or use --skip-render')
 sys.dont_write_bytecode = True
@@ -25,6 +34,15 @@ bpy.context.preferences.filepaths.save_version = 0
 MAT = {}
 CURRENT = None
 PARTS = []
+WALK_SPEED = 1.4
+WALK_DURATION = 1.0
+FPS = 60
+STANCE = .52
+ANKLE_Y = .145
+HIP_Y = .96
+KNEE_Y = .55
+KNEE_FORWARD = .16
+WALK_HIP_DROP = .055
 
 
 def material(name, color, metallic=0.0, rough=0.75, glow=0.0):
@@ -414,6 +432,38 @@ def body_shell(name, rings, mat, bone='Spine'):
     return panel(name, vertices, faces, mat, bone)
 
 
+def smoothstep(t):
+    t = max(0.0, min(1.0, t))
+    return t*t*t*(10+t*(-15+6*t))
+
+
+def tailored_leg(side, suffix):
+    # Shared rings, not disconnected rigid cylinders: blend through knee and ankle.
+    sections = [(.985,.092,0),(.93,.097,.012),(.82,.09,.05),(.69,.081,.105),
+                (.60,.075,.145),(.55,.075,KNEE_FORWARD),(.50,.073,.145),
+                (.43,.069,.114),(.32,.062,.070),(.22,.056,.030),(.16,.053,.006),(.115,.052,0)]
+    vertices = []
+    for y, radius, z in sections:
+        vertices.extend((side*.112+radius*math.sin(i*math.tau/16), y,
+                         z+radius*math.cos(i*math.tau/16)) for i in range(16))
+    faces = []
+    for row in range(len(sections)-1):
+        for i in range(16):
+            a, b = row*16+i, row*16+(i+1)%16
+            faces.append((a,b,b+16,a+16))
+    faces += [tuple(reversed(range(16))), tuple((len(sections)-1)*16+i for i in range(16))]
+    obj = panel('Continuous tailored leg '+suffix, vertices, faces, 'navy')
+    groups = {name:obj.vertex_groups.new(name=name+'.'+suffix) for name in ('Thigh','Shin','Foot')}
+    for row,(y,_,_) in enumerate(sections):
+        foot = 1-smoothstep((y-.125)/.10)
+        thigh = smoothstep((y-.47)/.16)
+        for name, weight in [('Thigh',thigh),('Shin',(1-thigh)*(1-foot)),('Foot',(1-thigh)*foot)]:
+            if weight:
+                groups[name].add(list(range(row*16,(row+1)*16)),weight,'REPLACE')
+    for face in obj.data.polygons:
+        face.use_smooth = True
+
+
 def make_character(role):
     scene = new_scene('Character_'+role)
     skin = {'detective':'skin-warm', 'witness':'skin-peach', 'security':'skin-olive', 'scientist':'skin-pale'}[role]
@@ -424,7 +474,8 @@ def make_character(role):
     ellipsoid('Pelvis', (0, .97, 0), (.20, .14, .125), 'navy', 'Hips')
     rod('Neck', (0, 1.37, 0), (0, 1.48, 0), .067, skin, 'Head')
     ellipsoid('Face', (0, 1.565, .012), (.145, .175, .128), skin, 'Head', segments=24, rings=12)
-    ellipsoid('Chin', (0, 1.472, .04), (.097, .064, .083), skin, 'Head')
+    ellipsoid('Chin', (0, 1.472, .04), (.097, .064, .083), skin, 'Jaw')
+    ellipsoid('Lower muzzle', (0, 1.512, .109), (.052, .023, .024), skin, 'Jaw')
     for side in (-1, 1):
         ellipsoid('Ear', (side*.143, 1.565, .003), (.028, .044, .025), skin, 'Head')
         ellipsoid('Eye white', (side*.059, 1.591, .117), (.035, .021, .016), 'white', 'Head')
@@ -457,8 +508,6 @@ def make_character(role):
         upper = 'UpperArm.'+suffix
         lower = 'Forearm.'+suffix
         hand = 'Hand.'+suffix
-        thigh = 'Thigh.'+suffix
-        shin = 'Shin.'+suffix
         foot = 'Foot.'+suffix
         ellipsoid('Shoulder '+suffix, (side*.24, 1.337, 0), (.078, .092, .10), coat, upper)
         rod('Upper sleeve '+suffix, (side*.255, 1.33, 0), (side*.308, 1.11, .012), .079, coat, upper, tip=.064)
@@ -469,9 +518,7 @@ def make_character(role):
         ellipsoid('Thumb '+suffix, (side*.29, .87, .07), (.022, .038, .025), skin, hand)
         for i in range(3):
             rod('Finger seam', (side*.313+i*.012, .833, .081), (side*.313+i*.012, .861, .084), .0018, 'lip', hand, vertices=4)
-        rod('Trouser upper '+suffix, (side*.105, .96, 0), (side*.112, .56, .012), .098, 'navy', thigh, tip=.071)
-        ellipsoid('Knee '+suffix, (side*.112, .54, .012), (.073, .075, .075), 'navy', shin)
-        rod('Trouser lower '+suffix, (side*.112, .55, .012), (side*.112, .16, .0), .069, 'navy', shin, tip=.052)
+        tailored_leg(side, suffix)
         box('Boot '+suffix, (side*.112, .073, .057), (.145, .145, .265), 'ink', .045, foot)
         box('Boot sole '+suffix, (side*.112, .013, .057), (.151, .026, .273), 'blue', .01, foot)
         box('Boot facing '+suffix, (side*.112, .105, .121), (.114, .038, .117), 'brass' if role=='detective' else 'blue', .018, foot)
@@ -525,7 +572,7 @@ def make_character(role):
     mesh = join_meshes(role+'_skinned_mesh')
     rig = make_rig(role, mesh)
     make_animations(rig)
-    scene.frame_set(1)
+    scene.frame_set(0)
     # NLA tracks deliberately preserve the public animation names across all four models.
     bpy.ops.object.select_all(action='DESELECT')
     mesh.select_set(True)
@@ -560,9 +607,11 @@ def make_rig(role, mesh):
         bone('UpperArm.'+suffix,(side*.24,1.35,0),(side*.308,1.11,.012),'Spine')
         bone('Forearm.'+suffix,(side*.308,1.11,.012),(side*.327,.923,.047),'UpperArm.'+suffix)
         bone('Hand.'+suffix,(side*.327,.923,.047),(side*.332,.83,.06),'Forearm.'+suffix)
-        bone('Thigh.'+suffix,(side*.105,.96,0),(side*.112,.55,.012),'Hips')
-        bone('Shin.'+suffix,(side*.112,.55,.012),(side*.112,.145,0),'Thigh.'+suffix)
-        bone('Foot.'+suffix,(side*.112,.145,0),(side*.112,.07,.17),'Shin.'+suffix)
+        bone('Thigh.'+suffix,(side*.112,HIP_Y,0),(side*.112,KNEE_Y,KNEE_FORWARD),'Hips')
+        shin = bone('Shin.'+suffix,(side*.112,KNEE_Y,KNEE_FORWARD),(side*.112,ANKLE_Y,0),'Thigh.'+suffix)
+        shin.use_connect = True
+        foot = bone('Foot.'+suffix,(side*.112,ANKLE_Y,0),(side*.112,.07,.17),'Shin.'+suffix)
+        foot.use_connect = True
         bone('Coat.'+suffix,(side*.11,1.04,0),(side*.13,.65,0),'Hips')
     bpy.ops.object.mode_set(mode='OBJECT')
     mesh.parent = rig
@@ -574,36 +623,79 @@ def make_rig(role, mesh):
     return rig
 
 
+def walk_target(phase):
+    stride = WALK_SPEED*WALK_DURATION
+    if phase <= STANCE:
+        return stride*(STANCE/2-phase), 0
+    u = (phase-STANCE)/(1-STANCE)
+    # Quintic recovery matches stance velocity and zero acceleration at both contacts.
+    z = -stride*STANCE/2-stride*(1-STANCE)*u+stride*smoothstep(u)
+    lift = .105*64*(u*(1-u))**3
+    return z, lift
+
+
+def solve_leg(rig, side, suffix, phase):
+    z, lift = walk_target(phase)
+    hip = Vector(xyz((side*.112,HIP_Y-WALK_HIP_DROP,0)))
+    ankle = Vector(xyz((side*.112,ANKLE_Y+lift,z)))
+    thigh, shin, foot = [rig.pose.bones[name+'.'+suffix] for name in ('Thigh','Shin','Foot')]
+    a, b = thigh.bone.length, shin.bone.length
+    delta = ankle-hip
+    distance = delta.length
+    assert distance < a+b, 'Foot target outside authored two-bone reach'
+    direction = delta.normalized()
+    forward = Vector(xyz((0,0,1)))
+    pole = (forward-direction*forward.dot(direction)).normalized()
+    projection = (a*a-b*b+distance*distance)/(2*distance)
+    knee = hip+direction*projection+pole*math.sqrt(max(0,a*a-projection*projection))
+    for bone, start, end in [(thigh,hip,knee),(shin,knee,ankle)]:
+        rest = bone.bone.matrix_local.to_quaternion()
+        rest_axis = bone.bone.tail_local-bone.bone.head_local
+        rotation = rest_axis.rotation_difference(end-start) @ rest
+        bone.matrix = Matrix.LocRotScale(start,rotation,Vector((1,1,1)))
+        bpy.context.view_layer.update()
+    # Counter-rotate the ankle: every sole vertex stays parallel to the floor.
+    foot.matrix = Matrix.LocRotScale(ankle,foot.bone.matrix_local.to_quaternion(),Vector((1,1,1)))
+    bpy.context.view_layer.update()
+
+
 def make_animations(rig):
     scene = bpy.context.scene
-    scene.render.fps = 24
+    scene.render.fps = FPS
     rig.animation_data_create()
-    for clip, end in [('Idle',49),('Walk',25),('Talk',49)]:
+    rig.animation_data.use_nla = False
+    leg_names = {name+'.'+suffix for name in ('Thigh','Shin','Foot') for suffix in ('L','R')}
+    for name in leg_names:
+        rig.pose.bones[name].rotation_mode = 'QUATERNION'
+    for clip, duration in [('Idle',2),('Walk',WALK_DURATION),('Talk',2)]:
         action = bpy.data.actions.new(clip)
         rig.animation_data.action = action
-        for frame in range(1,end+1,3):
-            phase = (frame-1)/(end-1)*math.tau
+        end = round(duration*FPS)
+        for frame in range(end+1):
+            phase = frame/end*math.tau
             for bone in rig.pose.bones:
                 bone.location = (0,0,0)
                 bone.rotation_euler = (0,0,0)
+                bone.rotation_quaternion = (1,0,0,0)
             p = rig.pose.bones
             if clip == 'Walk':
+                p['Hips'].location.y = -WALK_HIP_DROP
+                bpy.context.view_layer.update()
                 for side,suffix in [(-1,'L'),(1,'R')]:
-                    swing = math.sin(phase)*side
-                    p['Thigh.'+suffix].rotation_euler.x = swing*.42
-                    p['Shin.'+suffix].rotation_euler.x = -.45*max(0,-swing)
-                    p['UpperArm.'+suffix].rotation_euler.x = -swing*.28
-                    p['Forearm.'+suffix].rotation_euler.x = -.14
-                    p['Coat.'+suffix].rotation_euler.x = swing*.19
-                p['Hips'].location.y = abs(math.sin(phase))*.022
-                p['Spine'].rotation_euler.y = math.sin(phase)*.045
+                    cycle = (frame/end+(0 if suffix=='L' else .5)) % 1
+                    solve_leg(rig,side,suffix,cycle)
+                    z,_ = walk_target(cycle)
+                    p['UpperArm.'+suffix].rotation_euler.x = z*.55
+                    p['Forearm.'+suffix].rotation_euler.x = -.18
+                    p['Coat.'+suffix].rotation_euler.x = -z*.22
+                p['Spine'].rotation_euler.y = math.sin(phase)*.028
             elif clip == 'Talk':
                 p['Head'].rotation_euler.x = math.sin(phase)*.065
                 p['Head'].rotation_euler.y = math.sin(phase)*.06
                 p['UpperArm.R'].rotation_euler.z = -.32-.08*math.sin(phase)
                 p['Forearm.R'].rotation_euler.x = -.75-.18*math.sin(phase)
                 p['Hand.R'].rotation_euler.y = .3*math.sin(phase)
-                p['Jaw'].rotation_euler.x = .14*max(0,math.sin(phase*4))
+                p['Jaw'].rotation_euler.x = .065*(1-math.cos(phase*4))/2
                 p['UpperArm.L'].rotation_euler.x = -.08
             else:
                 p['Spine'].rotation_euler.x = math.sin(phase)*.018
@@ -611,15 +703,17 @@ def make_animations(rig):
                 p['UpperArm.L'].rotation_euler.z = math.sin(phase)*.012
                 p['UpperArm.R'].rotation_euler.z = -math.sin(phase)*.012
             for bone in rig.pose.bones:
-                bone.keyframe_insert('rotation_euler', frame=frame, group=bone.name)
+                bone.keyframe_insert('rotation_quaternion' if bone.name in leg_names else 'rotation_euler', frame=frame, group=bone.name)
                 bone.keyframe_insert('location', frame=frame, group=bone.name)
         rig.animation_data.action = None
         track = rig.animation_data.nla_tracks.new()
         track.name = clip
-        strip = track.strips.new(clip, 1, action)
+        strip = track.strips.new(clip, 0, action)
         strip.name = clip
+        strip.mute = False
         track.mute = clip != 'Idle'
-    scene.frame_start, scene.frame_end = 1,49
+    rig.animation_data.use_nla = True
+    scene.frame_start, scene.frame_end = 0,2*FPS
 
 
 def lighting(scene):
@@ -667,6 +761,63 @@ def instance_collection(scene, collection, name, offset=(0,0,0), scale=1):
     return obj
 
 
+def render_character_previews(characters):
+    directory = opts.preview_dir
+    directory.mkdir(parents=True, exist_ok=True)
+    snapshots = []
+    for phase in (0,.125,.25,.375):
+        source, mesh, rig = characters['detective']
+        bpy.context.window.scene = source
+        for track in rig.animation_data.nla_tracks:
+            track.mute = track.name != 'Walk'
+        source.frame_set(round(phase*FPS))
+        bpy.context.view_layer.update()
+        evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        data = bpy.data.meshes.new_from_object(evaluated)
+        snapshots.append((phase,data))
+    for source,_,rig in characters.values():
+        for track in rig.animation_data.nla_tracks:
+            track.mute = track.name != 'Idle'
+        source.frame_set(0)
+    sheet = new_scene('Preview_Planted_Gait')
+    for index,(phase,data) in enumerate(snapshots):
+        obj = bpy.data.objects.new('Walk phase '+str(phase),data)
+        sheet.collection.objects.link(obj)
+        obj.location = xyz(((index-1.5)*1.1,0,0))
+        text('Phase label',str(phase)+'s',((index-1.5)*1.1,-.16,.48),.10,'cream')
+    box('Contact floor',(0,-.022,0),(5.2,.04,2.2),'floor',.005)
+    for z in (-.4,0,.4):
+        box('Ground reference',(0,-.0008,z),(5.1,.001,.008),'cyan',0)
+    lighting(sheet)
+    sheet.cycles.samples = 16
+    camera(sheet,(5,2.5,8),(0,.82,0),5.5)
+    sheet.render.resolution_x,sheet.render.resolution_y = 1400,700
+    sheet.render.resolution_percentage = 100
+    sheet.render.filepath = str(directory/'walk-contact-sheet.png')
+    bpy.ops.render.render(write_still=True)
+    # A close profile exposes knee/ankle continuity and foot clearance.
+    for obj in list(sheet.objects):
+        if obj.name.startswith('Walk phase '):
+            obj.hide_render = obj.name != 'Walk phase 0.25'
+    camera(sheet,(5,.95,.9),(.55,.86,0),2.05)
+    sheet.render.resolution_x,sheet.render.resolution_y = 600,600
+    sheet.render.filepath = str(directory/'walk-profile-mid-swing.png')
+    bpy.ops.render.render(write_still=True)
+    cast = new_scene('Preview_Character_Cast')
+    for index,(role,(source,_,_)) in enumerate(characters.items()):
+        x=(index-1.5)*1.05
+        instance_collection(cast,source.collection.children[0],role,(x,0,0))
+        text('Role label',role.upper(),(x,-.18,.45),.095,'cream')
+    box('Cast floor',(0,-.022,0),(5.2,.04,2.2),'floor',.005)
+    lighting(cast)
+    cast.cycles.samples = 16
+    camera(cast,(3,2.3,9),(0,.80,0),5.0)
+    cast.render.resolution_x,cast.render.resolution_y = 1200,700
+    cast.render.resolution_percentage = 100
+    cast.render.filepath = str(directory/'character-cast.png')
+    bpy.ops.render.render(write_still=True)
+
+
 def render_previews(rooms, characters):
     directory = opts.preview_dir
     directory.mkdir(parents=True, exist_ok=True)
@@ -708,20 +859,24 @@ manifest = {
 }
 rooms={}
 characters={}
-for name in ['office','datacenter','lobby','laboratory','balcony']:
-    print('BUILD ROOM',name,flush=True)
-    rooms[name]=make_room(name)
-    manifest['scenes'][name]=rooms[name][2]
+if opts.characters_only:
+    manifest = json.loads((OUT/'manifest.json').read_text())
+else:
+    for name in ['office','datacenter','lobby','laboratory','balcony']:
+        print('BUILD ROOM',name,flush=True)
+        rooms[name]=make_room(name)
+        manifest['scenes'][name]=rooms[name][2]
 for name in ['detective','witness','security','scientist']:
     print('BUILD CHARACTER',name,flush=True)
     characters[name]=make_character(name)
     manifest['characters'][name]={'file':name+'.glb','animations':['Idle','Walk','Talk'],
-        'animationNotes':'In-place 24fps loops: 2s breathing Idle, 1s Walk, 2s Talk with right-hand gesture and moving mouth. Rigid segment skinning, 19 joints.',
+        'animationNotes':'60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.',
+        'locomotion':{'speed':WALK_SPEED,'duration':WALK_DURATION},
         'forward':'+Z','feetY':0}
 # Read actual exported data instead of estimating renderer budgets.
 sys.path.insert(0,str(Path(__file__).parent))
 from validate_assets import inspect_glb
-for group in ('scenes','characters'):
+for group in (('characters',) if opts.characters_only else ('scenes','characters')):
     for name,entry in manifest[group].items():
         info=inspect_glb(OUT/entry['file'])
         entry.update({k:info[k] for k in ('bytes','triangles','bounds','meshes','materials')})
@@ -731,7 +886,13 @@ for group in ('scenes','characters'):
 manifest['totalBytes']=sum(item['bytes'] for group in ('scenes','characters') for item in manifest[group].values())
 (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
 if not opts.skip_render:
-    render_previews(rooms,characters)
-bpy.context.window.scene=rooms['office'][0]
-bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE/'terminal-detective-library.blend'),compress=True)
+    if opts.characters_only:
+        render_character_previews(characters)
+    else:
+        render_previews(rooms,characters)
+bpy.context.window.scene=characters['detective'][0] if opts.characters_only else rooms['office'][0]
+source_output.parent.mkdir(parents=True,exist_ok=True)
+if source_output.exists():
+    raise FileExistsError('Refusing to overwrite source created during generation: '+str(source_output))
+bpy.ops.wm.save_as_mainfile(filepath=str(source_output),compress=True)
 print('THEATER GENERATION COMPLETE',manifest['totalBytes'],'bytes',flush=True)
