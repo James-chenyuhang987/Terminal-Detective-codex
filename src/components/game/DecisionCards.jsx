@@ -24,7 +24,7 @@ function CommandToggle({ active, disabled, icon, title, detail, onClick }) {
   </button>;
 }
 
-export default function DecisionCards({ cards: legacyCards = [], packs = null, onChoose, timeLimit = 40, story, language, team = [], commandState, onCommandError }) {
+export default function DecisionCards({ cards: legacyCards = [], packs = null, onChoose, timeLimit = 40, story, language, team = [], commandState, onCommandError, presentationActive = true }) {
   const { lang: currentLang } = useLang();
   const lang = language === 'en' || language === 'zh' ? language : currentLang;
   const zh = lang === 'zh';
@@ -86,13 +86,16 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
   }), [assistantId, executorId, joint, preview, recommendedId]);
 
   useEffect(() => {
-    const id = window.setInterval(() => setLeft(value => Math.max(0, value - 1)), 1000);
+    if (!presentationActive) return undefined;
+    const id = window.setInterval(() => {
+      if (!document.hidden && document.hasFocus()) setLeft(value => Math.max(0, value - 1));
+    }, 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [presentationActive]);
 
   useLayoutEffect(() => {
     const overlay = overlayRef.current;
-    if (!overlay || typeof document === 'undefined') return undefined;
+    if (!presentationActive || !overlay || typeof document === 'undefined') return undefined;
 
     previousFocusRef.current = document.activeElement;
     overlay.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -108,16 +111,17 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
         previousFocus.focus({ preventScroll: true });
       }
     };
-  }, []);
+  }, [presentationActive]);
 
   useEffect(() => {
+    if (!presentationActive) return;
     const fallbackCard = cards[0];
     if (left === 0 && noEligibleAgent) {
       chooseOnce({ rest: true });
     } else if (left === 0 && fallbackCard) {
       chooseOnce({ card: fallbackCard, executorAgentId: executorId, assistAgentId: null, commandIds: [] });
     }
-  }, [cards, chooseOnce, executorId, left, noEligibleAgent]);
+  }, [cards, chooseOnce, executorId, left, noEligibleAgent, presentationActive]);
 
   const toggleCommand = (id) => {
     const active = id === 'preview' ? preview : joint;
@@ -146,6 +150,8 @@ export default function DecisionCards({ cards: legacyCards = [], packs = null, o
     <div
       ref={overlayRef}
       className="td-decision-overlay"
+      style={presentationActive ? undefined : { display: 'none' }}
+      aria-hidden={!presentationActive || undefined}
       role="dialog"
       aria-modal="true"
       aria-labelledby="td-decision-title"

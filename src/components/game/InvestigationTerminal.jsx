@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import RunPresentationControls from '@/components/game/theater/RunPresentationControls';
 import { ReAct_Enum, Legal_Actions_List, Phase_Color_Map, Case_Data_Lvl_01, localizeCase } from '@/game/caseData';
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError';
 import MiniMap from '@/components/game/MiniMap';
+import TheaterPresentation from '@/components/game/theater/TheaterPresentation';
+import '@/components/game/theater/theater.css';
 import {
   createInitialGameState,
   generateObservationSections,
@@ -84,9 +87,11 @@ const LazyActionCinematic = React.lazy(loadActionCinematic);
 
 const PHASE_COLORS = Phase_Color_Map;
 
-export default function InvestigationTerminal({ agentStrategy, selectedCase, onGameEnd, onBackToLobby, onSettlement }) {
+export default function InvestigationTerminal({ agentStrategy, selectedCase, onGameEnd, onBackToLobby, onSettlement, onOpenHome, presentationActive = true }) {
   const { lang, t } = useLang();
-  const { settings } = useSettings();
+  const { settings, setSetting } = useSettings();
+  const theaterMode = settings.storyMode === 'theater';
+  const theaterSpatialRef = useRef({});
   const [showSettings, setShowSettings] = useState(false);
   const skin = panelSkin(settings.panelLight);
   const { schedule, wait } = useManagedTimers();
@@ -1287,6 +1292,150 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const bgColor = phaseColor.bg;
   const accentColor = phaseColor.accent;
 
+  const dialoguePanel = selectedNPC && !reportMode && (
+            <NPCDialogBox
+              npc={selectedNPC}
+              dialogue={npcDialogue}
+              packs={npcQuestionPacks}
+              executorId={npcExecutorId}
+              onExecutorChange={agentId => {
+                setNpcExecutorId(agentId);
+                setNpcQuestionError(null);
+              }}
+              onQuestion={handleNPCQuestion}
+              onClose={() => {
+                handleAbort();
+                setSelectedNPC(null);
+                setNpcDialogue([]);
+                setNpcQuestionPacks(null);
+                setNpcQuestionError(null);
+              }}
+              isProcessing={interactionLocked}
+              accentColor={accentColor}
+              emotion={getEmotion(npcEmotionState, selectedNPC.npc_id)}
+              team={activeAgentStrategy.team}
+              error={npcQuestionError}
+            />
+          );
+
+  const reportPanel = reportMode && (
+            <StructuredReportPanel
+              options={reportOptions}
+              value={structuredReport}
+              onChange={value => {
+                setStructuredReport(value);
+                setJudgeResult(null);
+                setReportError(null);
+              }}
+              onSubmit={handleSubmitReport}
+              onCancel={() => setReportMode(false)}
+              isProcessing={interactionLocked}
+              judgeResult={judgeResult}
+              error={reportError}
+            />
+          );
+
+  const toolsPanel = (
+<div className={`td-investigation-tools ${mobileToolsOpen ? 'td-tools-open' : ''} w-72 border-l flex flex-col overflow-hidden`}
+          style={{
+            borderColor: settings.panelLight ? skin.border : `${accentColor}20`,
+            backgroundColor: settings.panelLight ? skin.bg : 'rgba(0,0,0,0.4)',
+            color: settings.panelLight ? skin.text : undefined,
+          }}>
+          <ToolPanelTabs
+            active={toolTab}
+            onChange={setToolTab}
+            accentColor={accentColor}
+            badges={{
+              evidence: gameState.unlocked_clues.length,
+              link: linkedPairs.filter(p => p.valid).length,
+              log: decisionLog.filter(e => e.isKeyDecision || e.isTrap).length,
+            }}
+          />
+          <button type="button" className="td-ui-button td-mobile-only td-tools-close" onClick={() => setMobileToolsOpen(false)}>↓ {lang === 'zh' ? '收起工具' : 'CLOSE TOOLS'}</button>
+          {toolTab === 'link' ? (
+            <LinkBoard
+              clues={caseData.clue_dictionary}
+              unlockedIds={gameState.unlocked_clues}
+              linkedPairs={linkedPairs}
+              onLink={handleLink}
+              isChecking={isLinkChecking || interactionLocked}
+              accentColor={accentColor}
+            />
+          ) : toolTab === 'map' ? (
+            <CaseFlowMap
+              gameState={gameState}
+              caseData={caseData}
+              agentPath={agentPath}
+              zoneFeedback={zoneFeedback}
+              accentColor={accentColor}
+              agentStrategy={activeAgentStrategy}
+              onPriorityChange={setRuntimePriority}
+            />
+          ) : toolTab === 'log' ? (
+            <DecisionLog entries={decisionLog} accentColor={accentColor} />
+          ) : toolTab === 'board' ? (
+            <div className="flex-1 p-2">
+              <div className="text-xs mb-2 tracking-widest text-center" style={{ color: accentColor }}>{t.btnBoard}</div>
+              <div style={{ height: theaterMode ? 420 : 'calc(100% - 30px)' }}>
+                <EvidenceBoard
+                  clues={caseData.clue_dictionary}
+                  unlockedIds={gameState.unlocked_clues}
+                  validEdges={linkedPairs.filter(pair => pair.valid).map(pair => [pair.a, pair.b])}
+                  caseData={caseData}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              <div className="text-xs tracking-widest mb-3" style={{ color: accentColor }}>
+                {t.evidenceLocker} ({gameState.unlocked_clues.length})
+              </div>
+              {gameState.unlocked_clues.length === 0 ? (
+                <div className="text-xs opacity-30 text-center mt-8" style={{ color: accentColor }}>
+                  {t.noEvidence}
+                </div>
+              ) : (
+                gameState.unlocked_clues.map(id => {
+                  const clue = caseData.clue_dictionary.find(c => c.clue_id === id);
+                  return clue ? <ClueCard key={id} clue={clue} isNew={newClueIds.includes(id)} compact /> : null;
+                })
+              )}
+            </div>
+          )}
+
+          {/* Confusion Meter */}
+          <div data-onboarding-target="confusion" className="p-3 border-t" style={{ borderColor: `${accentColor}20` }}>
+            <div className="flex justify-between text-xs mb-1">
+              <span style={{ color: accentColor }}>{t.confusionLabel}</span>
+              <span style={{ color: gameState.confusion_score > 60 ? '#ff3860' : accentColor }}>
+                {gameState.confusion_score}%
+              </span>
+            </div>
+            <div className="h-2 rounded overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+              <div className="h-full transition-all duration-500 rounded"
+                style={{
+                  width: `${gameState.confusion_score}%`,
+                  background: gameState.confusion_score > 75
+                    ? 'linear-gradient(to right, #ff3860, #ff0020)'
+                    : gameState.confusion_score > 40
+                    ? 'linear-gradient(to right, #ffaa00, #ff5500)'
+                    : `linear-gradient(to right, ${accentColor}, ${accentColor}80)`,
+                  boxShadow: `0 0 8px ${gameState.confusion_score > 75 ? '#ff3860' : accentColor}`,
+                }} />
+            </div>
+          </div>
+        </div>
+  );
+
+  const presentationControls = <RunPresentationControls
+    active={presentationActive}
+    theaterMode={theaterMode}
+    onHome={onOpenHome || (() => setShowSettings(true))}
+    onSwitch={() => setSetting('storyMode', theaterMode ? 'terminal' : 'theater')}
+    onSettings={() => setShowSettings(value => !value)}
+  />;
+
   if (showGameOver) {
     const finalSettlement = finalSettlementRef.current || {
       gameState,
@@ -1296,6 +1445,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     const finalGameState = finalSettlement.gameState;
     const finalLinkedPairs = finalSettlement.linkedPairs;
     return (
+      <>
+      {presentationControls}
+      {showSettings && presentationActive && <SettingsDrawer onClose={() => setShowSettings(false)} />}
       <GameOverScreen
         judgeResult={finalJudgeResult}
         gameState={finalGameState}
@@ -1323,18 +1475,19 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         onReturnToLobby={onBackToLobby}
         onReturnToLanding={onGameEnd}
       />
+      </>
     );
   }
 
   return (
-    <div className="td-investigation td-page-shell min-h-screen flex flex-col"
+    <div className={`td-investigation td-page-shell min-h-screen flex flex-col ${theaterMode ? 'td-theater-mode' : ''}`}
       style={{
         background: `radial-gradient(ellipse at top, ${bgColor} 0%, #040810 70%)`,
         fontFamily: "'Courier New', monospace",
         transition: 'background 1s ease',
       }}>
 
-      <GlitchOverlay intensity={gameState.confusion_score} type={gameState.confusion_score > 75 ? 'red' : 'default'} />
+      {!theaterMode && <GlitchOverlay intensity={gameState.confusion_score} type={gameState.confusion_score > 75 ? 'red' : 'default'} />}
       {showBSoD && (
         <BSoD agentId={agentStrategy?.agent_id || 'AXIOM'} onDismiss={() => {
           const immune = agentStrategy?.skill_effects?.bsod_immunity === true;
@@ -1348,7 +1501,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         }} />
       )}
 
-      {showOnboarding && (
+      {showOnboarding && presentationActive && !showSettings && (
         <OnboardingGuide
           accentColor={accentColor}
           onClose={() => {
@@ -1357,13 +1510,13 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         />
       )}
 
-      {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
+      {showSettings && presentationActive && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
       {commandNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${commandNotice.type}`}>
         <span>{commandNotice.type === 'error' ? '!' : '◆'}</span><strong>{commandNotice.message}</strong>
       </div>}
 
-      {showCommandConsole && <CommandConsole
+      {showCommandConsole && presentationActive && <CommandConsole
         commandState={gameState.command_state}
         busy={interactionLocked}
         onStabilize={handleEmergencyStabilize}
@@ -1374,6 +1527,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       {decisionCards && (
         <DecisionCards
           packs={decisionCards}
+          presentationActive={presentationActive && !showSettings}
           story={decisionStory}
           language={decisionStory?.language}
           team={activeAgentStrategy.team}
@@ -1389,7 +1543,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       )}
 
       {/* 行动结算后的 3D / 2D 现场重演；独立懒加载，不增加调查终端初始包。 */}
-      {actionCinematic && (
+      {actionCinematic && presentationActive && !showSettings && (
         <CinematicErrorBoundary
           event={actionCinematic.event}
           onComplete={handleActionCinematicComplete}
@@ -1411,7 +1565,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       )}
 
       {/* 推理重演过场 */}
-      {cinematic && <LinkCinematic data={cinematic} onDone={handleCinematicDone} />}
+      {cinematic && presentationActive && !showSettings && <LinkCinematic data={cinematic} onDone={handleCinematicDone} />}
 
       {/* 凶手反制红色闪光 */}
       {redFlash > 0 && (
@@ -1438,8 +1592,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       {/* 推理突破高潮特效 */}
       <InsightFlashFX event={insightEvent} onDone={() => setInsightEvent(null)} />
 
+      {presentationControls}
+
       {/* Top HUD */}
-      <div className="td-investigation-hud flex items-center justify-between px-4 py-2 border-b sticky top-0 z-50"
+      {!theaterMode && <div className="td-investigation-hud flex items-center justify-between px-4 py-2 border-b sticky top-0 z-50"
         style={{
           borderColor: `${accentColor}30`,
           background: `linear-gradient(180deg, rgba(10,18,32,0.55) 0%, rgba(2,6,14,0.35) 100%)`,
@@ -1449,8 +1605,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           borderRadius: '0 0 16px 16px',
         }}>
         <div className="flex items-center gap-4">
-          <button onClick={onBackToLobby} disabled={interactionLocked} className="td-ui-button td-button-ghost td-button-compact text-xs opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
-            style={{ color: accentColor }}>{t.lobbyBtn}</button>
+          <button onClick={onOpenHome || onBackToLobby} className="td-ui-button td-button-ghost td-button-compact text-xs opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+            style={{ color: accentColor }}>{onOpenHome ? (lang === 'zh' ? '⌂ 主页 / 暂存' : '⌂ HOME / SUSPEND') : t.lobbyBtn}</button>
           <div className="text-xs font-bold tracking-widest" style={{ color: accentColor, textShadow: `0 0 10px ${accentColor}` }}>
             {caseData.title} · {caseData.subtitle}
           </div>
@@ -1524,10 +1680,10 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             {t.btnEnd}
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* MiniMap — floating bottom-right */}
-      {showMiniMap && <div className="td-investigation-minimap" style={{ zIndex: 30, pointerEvents: 'auto' }}>
+      {!theaterMode && showMiniMap && <div className="td-investigation-minimap" style={{ zIndex: 30, pointerEvents: 'auto' }}>
         <MiniMap
           gameState={gameState}
           caseData={caseData}
@@ -1542,8 +1698,38 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         {/* Agent Synergy FX overlay */}
         <AgentSynergyFX event={synergyEvent} />
 
+        {theaterMode && <TheaterPresentation
+          caseData={caseData}
+          gameState={gameState}
+          team={activeAgentStrategy.team}
+          active={presentationActive}
+          busy={interactionLocked}
+          paused={Boolean(showSettings || showOnboarding || showCommandConsole || decisionCards || actionCinematic || cinematic || crisis || showBSoD || isFinalizing)}
+          selectedNpcId={selectedNPC?.npc_id}
+          quality={settings.cinematicQuality}
+          spatialRef={theaterSpatialRef}
+          dialoguePanel={dialoguePanel}
+          reportPanel={reportPanel}
+          toolsPanel={toolsPanel}
+          brief={assistantBrief}
+          lines={terminalLines}
+          streamingText={streamingTerminal?.fullText}
+          phase={phaseColor.label}
+          canAbort={isProcessing && !isFinalizing && !crisisPending}
+          onAbort={handleAbort}
+          onExecute={() => { if (interactionLocked) return; setSelectedNPC(null); setReportMode(false); runReActCycle(); }}
+          onTalk={npc => { if (interactionLocked) return; setReportMode(false); handleNPCTalk(npc); }}
+          onOpenTools={tab => { setToolTab(tab); setMobileToolsOpen(true); }}
+          onCloseTools={() => setMobileToolsOpen(false)}
+          onReport={() => { setReportMode(value => !value); setJudgeResult(null); }}
+          onCommand={() => setShowCommandConsole(true)}
+          onGuide={() => setShowOnboarding(true)}
+          onEnd={() => { setFinalJudgeResult(judgeResult); setShowGameOver(true); }}
+          onTextMode={() => setSetting('storyMode', 'terminal')}
+        />}
+
         {/* Left: Terminal */}
-        <div className="td-investigation-terminal flex flex-col flex-1 min-w-0">
+        {!theaterMode && <div className="td-investigation-terminal flex flex-col flex-1 min-w-0">
           {/* Terminal output */}
           <div ref={terminalRef} className="td-terminal-surface flex-1 overflow-y-auto p-4 space-y-1"
             style={{ scrollBehavior: isProcessing ? 'auto' : 'smooth' }}>
@@ -1602,50 +1788,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             >›</button>
           </nav>
 
-          {/* NPC Dialogue Box */}
-          {selectedNPC && !reportMode && (
-            <NPCDialogBox
-              npc={selectedNPC}
-              dialogue={npcDialogue}
-              packs={npcQuestionPacks}
-              executorId={npcExecutorId}
-              onExecutorChange={agentId => {
-                setNpcExecutorId(agentId);
-                setNpcQuestionError(null);
-              }}
-              onQuestion={handleNPCQuestion}
-              onClose={() => {
-                handleAbort();
-                setSelectedNPC(null);
-                setNpcDialogue([]);
-                setNpcQuestionPacks(null);
-                setNpcQuestionError(null);
-              }}
-              isProcessing={interactionLocked}
-              accentColor={accentColor}
-              emotion={getEmotion(npcEmotionState, selectedNPC.npc_id)}
-              team={activeAgentStrategy.team}
-              error={npcQuestionError}
-            />
-          )}
-
-          {/* Report Mode */}
-          {reportMode && (
-            <StructuredReportPanel
-              options={reportOptions}
-              value={structuredReport}
-              onChange={value => {
-                setStructuredReport(value);
-                setJudgeResult(null);
-                setReportError(null);
-              }}
-              onSubmit={handleSubmitReport}
-              onCancel={() => setReportMode(false)}
-              isProcessing={interactionLocked}
-              judgeResult={judgeResult}
-              error={reportError}
-            />
-          )}
+          {dialoguePanel}
+          {reportPanel}
 
           {/* Action Bar */}
           <div className="td-investigation-actions td-action-dock p-4 border-t flex items-center gap-3 flex-wrap"
@@ -1681,99 +1825,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             </div>
             <InvestigationAssistant brief={assistantBrief} />
           </div>
-        </div>
+        </div>}
 
-        {/* Right Sidebar */}
-        <div className={`td-investigation-tools ${mobileToolsOpen ? 'td-tools-open' : ''} w-72 border-l flex flex-col overflow-hidden`}
-          style={{
-            borderColor: settings.panelLight ? skin.border : `${accentColor}20`,
-            backgroundColor: settings.panelLight ? skin.bg : 'rgba(0,0,0,0.4)',
-            color: settings.panelLight ? skin.text : undefined,
-          }}>
-          <ToolPanelTabs
-            active={toolTab}
-            onChange={setToolTab}
-            accentColor={accentColor}
-            badges={{
-              evidence: gameState.unlocked_clues.length,
-              link: linkedPairs.filter(p => p.valid).length,
-              log: decisionLog.filter(e => e.isKeyDecision || e.isTrap).length,
-            }}
-          />
-          <button type="button" className="td-ui-button td-mobile-only td-tools-close" onClick={() => setMobileToolsOpen(false)}>↓ {lang === 'zh' ? '收起工具' : 'CLOSE TOOLS'}</button>
-          {toolTab === 'link' ? (
-            <LinkBoard
-              clues={caseData.clue_dictionary}
-              unlockedIds={gameState.unlocked_clues}
-              linkedPairs={linkedPairs}
-              onLink={handleLink}
-              isChecking={isLinkChecking || interactionLocked}
-              accentColor={accentColor}
-            />
-          ) : toolTab === 'map' ? (
-            <CaseFlowMap
-              gameState={gameState}
-              caseData={caseData}
-              agentPath={agentPath}
-              zoneFeedback={zoneFeedback}
-              accentColor={accentColor}
-              agentStrategy={activeAgentStrategy}
-              onPriorityChange={setRuntimePriority}
-            />
-          ) : toolTab === 'log' ? (
-            <DecisionLog entries={decisionLog} accentColor={accentColor} />
-          ) : toolTab === 'board' ? (
-            <div className="flex-1 p-2">
-              <div className="text-xs mb-2 tracking-widest text-center" style={{ color: accentColor }}>{t.btnBoard}</div>
-              <div style={{ height: 'calc(100% - 30px)' }}>
-                <EvidenceBoard
-                  clues={caseData.clue_dictionary}
-                  unlockedIds={gameState.unlocked_clues}
-                  validEdges={linkedPairs.filter(pair => pair.valid).map(pair => [pair.a, pair.b])}
-                  caseData={caseData}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              <div className="text-xs tracking-widest mb-3" style={{ color: accentColor }}>
-                {t.evidenceLocker} ({gameState.unlocked_clues.length})
-              </div>
-              {gameState.unlocked_clues.length === 0 ? (
-                <div className="text-xs opacity-30 text-center mt-8" style={{ color: accentColor }}>
-                  {t.noEvidence}
-                </div>
-              ) : (
-                gameState.unlocked_clues.map(id => {
-                  const clue = caseData.clue_dictionary.find(c => c.clue_id === id);
-                  return clue ? <ClueCard key={id} clue={clue} isNew={newClueIds.includes(id)} compact /> : null;
-                })
-              )}
-            </div>
-          )}
-
-          {/* Confusion Meter */}
-          <div data-onboarding-target="confusion" className="p-3 border-t" style={{ borderColor: `${accentColor}20` }}>
-            <div className="flex justify-between text-xs mb-1">
-              <span style={{ color: accentColor }}>{t.confusionLabel}</span>
-              <span style={{ color: gameState.confusion_score > 60 ? '#ff3860' : accentColor }}>
-                {gameState.confusion_score}%
-              </span>
-            </div>
-            <div className="h-2 rounded overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
-              <div className="h-full transition-all duration-500 rounded"
-                style={{
-                  width: `${gameState.confusion_score}%`,
-                  background: gameState.confusion_score > 75
-                    ? 'linear-gradient(to right, #ff3860, #ff0020)'
-                    : gameState.confusion_score > 40
-                    ? 'linear-gradient(to right, #ffaa00, #ff5500)'
-                    : `linear-gradient(to right, ${accentColor}, ${accentColor}80)`,
-                  boxShadow: `0 0 8px ${gameState.confusion_score > 75 ? '#ff3860' : accentColor}`,
-                }} />
-            </div>
-          </div>
-        </div>
+        {!theaterMode && toolsPanel}
       </div>
     </div>
   );
