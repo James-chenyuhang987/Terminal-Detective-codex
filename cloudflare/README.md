@@ -52,7 +52,7 @@ Set the matching public project ID in `wrangler.jsonc` or the Cloudflare dashboa
 }
 ```
 
-The checked-in `wrangler.jsonc` contains the public production Firebase project ID, not a credential. The four public Firebase Web App values still come from the build environment and are not committed. `npm run release:check` rejects placeholders, missing Web App values, frontend/Worker project mismatches, invalid D1 IDs and unsafe CORS origins before a production build can proceed.
+The checked-in `wrangler.jsonc` contains the public production Firebase project ID, not a credential. The four public Firebase Web App values still come from the build environment and are not committed. `npm run release:check` reads the same production environment as Vite: `.env`, `.env.local`, `.env.production`, then `.env.production.local` (later files override earlier ones); existing shell/CI variables take highest priority, including empty values. It uses the browser's Firebase config validator to reject missing/placeholder values, surrounding whitespace, malformed auth hostnames and non-Web App IDs, and also rejects frontend/Worker project mismatches, invalid D1 IDs and unsafe CORS origins before a production build can proceed. A valid custom auth hostname is supported, but its Firebase authorization and hosting must be verified separately. Error messages report field names rather than supplied values.
 
 If the frontend is also hosted on another origin, such as GitHub Pages, list its exact origin in `CORS_ALLOWED_ORIGINS`:
 

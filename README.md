@@ -356,7 +356,7 @@ Callback URL: https://<FIREBASE_PROJECT_ID>.firebaseapp.com/__/auth/handler
 
 4. 将 GitHub Client ID 与 Client Secret 只填写到 Firebase Authentication 的 GitHub Provider，不写入仓库或 Cloudflare 前端变量。
 5. 在 Firebase Authorized domains 添加 Worker 域名、`localhost` 和 `127.0.0.1`；将验证邮件与重置邮件的继续地址设为 Worker 首页，并按下方“认证邮件投递”清单配置邮件模板。
-6. 将公开的 Firebase Project ID 写入 `wrangler.jsonc` 的 `FIREBASE_PROJECT_ID`，它必须与前端项目一致；运行 `npm run release:check` 确认发布配置。
+6. 将公开的 Firebase Project ID 写入 `wrangler.jsonc` 的 `FIREBASE_PROJECT_ID`，它必须与前端项目一致；运行 `npm run release:check` 确认发布配置。检查与 Vite 生产构建按相同顺序加载 `.env`、`.env.local`、`.env.production`、`.env.production.local`（后者覆盖前者），现有 shell／CI 环境变量优先级最高，空值也会覆盖文件。占位符、多余首尾空格、错误的认证域名或非 Web App ID 会被浏览器与发布检查共同拒绝；自定义认证域名仍需在 Firebase 中单独配置和验证。
 7. 仅对已确认的新空数据库，单独授权后执行完整迁移链。`0002_reset_for_firebase.sql` 是历史清空迁移；绝不能对已有玩家数据库重跑或重置迁移记录。`0003_profile_operations.sql` 创建档案账本，`0004_authoritative_state.sql` 增量创建权威运行和结果存储。已有生产数据库升级前，先备份并检查已应用迁移，单独审核只执行尚未应用的 `0004`：
 
 ```bash
