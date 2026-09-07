@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { applyRecoveryTurn, applySettlementResult, createInitialGameState } from '../src/game/gameState.js';
 import { advanceCrisisSchedule, settleRoundEvidence } from '../src/game/roundCrisis.js';
-import { acquireClues, removeEvidenceLinks } from '../src/game/clueState.js';
+import { acquireClues } from '../src/game/clueState.js';
 import { Case_Data_Lvl_01 } from '../src/game/caseData.js';
 import { stableNarrativeHash } from '../src/game/narrativeEngine.js';
 
@@ -59,69 +59,39 @@ test('scheduled crises are claimed once for either round type, including overdue
 
 const terminal = readFileSync(new URL('../src/components/game/InvestigationTerminal.jsx', import.meta.url), 'utf8');
 
-// Execute the actual UI commit closure with timer/state adapters; no React renderer is installed.
-function commitHarness({ failRoll = false, failSchedule = false } = {}) {
-  const callbacks = [];
-  const stored = { pending: false, crisis: null, pairs: [{ a: 'c_01', b: 'c_02' }, { a: 'c_02', b: 'c_03' }] };
+// Execute the actual cloud snapshot commit; evidence and crisis reducers stay server-side.
+function commitHarness() {
+  const stored = {};
   const context = {
-    gameStateRef: { current: null }, activeRunRef: { current: 7 }, finalizingRef: { current: false },
-    crisisPendingRef: { current: false }, nextCrisisTurnRef: { current: 3 },
-    setGameState: state => { stored.state = state; },
-    setLinkedPairs: update => { stored.pairs = update(stored.pairs); },
-    setCrisisPending: pending => { stored.pending = pending; },
-    setCrisis: crisis => { stored.crisis = crisis; }, setCrisisError: () => {}, addLine: () => {},
-    removeEvidenceLinks, advanceCrisisSchedule, nextCrisisIn: () => 4, caseData: Case_Data_Lvl_01,
-    publicErrorMessage: () => 'crisis unavailable',
-    rollCrisis: () => { if (failRoll) throw new Error('roll failed'); return { type: 'tracker' }; },
-    schedule: callback => { if (failSchedule) throw new Error('timer failed'); callbacks.push(callback); },
+    useCallback: fn => fn, gameStateRef: { current: null }, bsodCountRef: { current: 0 },
+    crisisPendingRef: { current: false }, finalizingRef: { current: false }, finalSettlementRef: { current: null },
   };
-  const start = terminal.indexOf('  const commitRound = ');
-  const end = terminal.indexOf('  // Confusion / crash monitoring', start);
-  const commit = runInNewContext(`${terminal.slice(start, end)}\ncommitRound;`, context);
-  return { commit, context, callbacks, stored };
+  for (const field of ['ServerRun', 'GameState', 'LinkedPairs', 'NpcEmotionState', 'TruthFragments', 'JudgeResult', 'ShowBSoD', 'CrisisPending', 'Crisis', 'IsFinalizing', 'FinalJudgeResult', 'ShowGameOver']) {
+    context[`set${field}`] = value => { stored[field] = value; };
+  }
+  const start = terminal.indexOf('  const commitServerRun = ');
+  const end = terminal.indexOf('  const executeRunCommand = ', start);
+  const commit = runInNewContext(`${terminal.slice(start, end)}\ncommitServerRun;`, context);
+  return { commit, context, stored };
 }
 
-test('both terminal round branches use the shared settlement and crisis commit', () => {
-  assert.match(terminal, /commitRound\(settleRoundEvidence\(recoveredState\), runId, runLang\)/);
-  assert.match(terminal, /settleRoundEvidence\(newState, \{ investigativeAction: true \}\)/);
-  assert.match(terminal, /commitRound\(roundEvidence, runId, runLang\)/);
+test('both terminal round branches submit intents rather than simulating evidence or crises', () => {
+  assert.match(terminal, /executeRunCommand\(\{ type: 'rest'/);
+  assert.match(terminal, /type: 'round', option_id:/);
+  assert.doesNotMatch(terminal, /settleRoundEvidence|rollCrisis|advanceCrisisSchedule/);
 });
 
-test('round commit stores the current ref, clears evidence links and locks exactly one scheduled crisis', () => {
+test('round commit displays server-destroyed clues, remaining links and crisis without a second timer or roll', () => {
   const harness = commitHarness();
   const result = settleRoundEvidence({ ...crisisState(), turn_count: 3 });
-  harness.commit(result, 7, 'en');
-  assert.equal(harness.context.gameStateRef.current, result.state);
-  assert.equal(harness.stored.state, result.state);
-  assert.deepEqual(harness.stored.pairs, [{ a: 'c_02', b: 'c_03' }]);
-  assert.equal(harness.stored.pending, true);
-  harness.commit(result, 7, 'en');
-  assert.equal(harness.callbacks.length, 1);
-  harness.callbacks[0]();
-  assert.equal(harness.stored.crisis.type, 'tracker');
-  assert.equal(harness.context.nextCrisisTurnRef.current, 7);
-});
-
-test('stale and finalizing crisis timers unlock without presenting an event', () => {
-  for (const finalize of [true, false]) {
-    const harness = commitHarness();
-    harness.commit(settleRoundEvidence({ ...crisisState(), turn_count: 3 }), 7, 'en');
-    if (finalize) harness.context.finalizingRef.current = true;
-    else harness.context.activeRunRef.current = 8;
-    harness.callbacks[0]();
-    assert.equal(harness.stored.crisis, null);
-    assert.equal(harness.stored.pending, false);
-    assert.equal(harness.context.crisisPendingRef.current, false);
-  }
-});
-
-test('crisis creation and timer failures cannot deadlock recovery or undo its committed round', () => {
-  for (const options of [{ failRoll: true }, { failSchedule: true }]) {
-    const harness = commitHarness(options);
-    harness.commit(settleRoundEvidence({ ...crisisState(), turn_count: 3 }), 7, 'en');
-    assert.equal(harness.stored.state.turn_count, 3);
-    assert.equal(harness.stored.pending, false);
-    assert.equal(harness.context.crisisPendingRef.current, false);
-    assert.equal(harness.context.nextCrisisTurnRef.current, 3);
-  }
+  const run = { state: result.state, linked_pairs: [{ a: 'c_02', b: 'c_03' }], pending_crisis: { id: 'tracker' } };
+  harness.commit(run);
+  assert.strictEqual(harness.context.gameStateRef.current, result.state);
+  assert.strictEqual(harness.stored.GameState, result.state);
+  assert.strictEqual(harness.stored.LinkedPairs, run.linked_pairs);
+  assert.equal(harness.stored.CrisisPending, true);
+  assert.strictEqual(harness.stored.Crisis, run.pending_crisis);
+  harness.commit({ ...run, pending_crisis: null });
+  assert.equal(harness.stored.CrisisPending, false);
+  assert.equal(harness.stored.Crisis, null);
 });

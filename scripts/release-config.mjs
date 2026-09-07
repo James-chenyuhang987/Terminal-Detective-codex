@@ -1,4 +1,5 @@
 import { parse, printParseErrorCode } from 'jsonc-parser';
+import { validateFirebasePublicConfig } from '../src/lib/firebaseConfig.js';
 
 const PLACEHOLDER = /^(?:REPLACE_WITH_|YOUR_|<)/i;
 const FIREBASE_PROJECT_ID = /^[a-z0-9](?:[a-z0-9-]{4,28}[a-z0-9])$/;
@@ -56,12 +57,16 @@ export function validateReleaseConfig(configSource, environment = {}) {
   } else if (frontendProjectId !== workerProjectId) {
     errors.push('Frontend and Worker Firebase project IDs must match.');
   }
-  for (const key of [
-    'VITE_FIREBASE_API_KEY',
-    'VITE_FIREBASE_AUTH_DOMAIN',
-    'VITE_FIREBASE_APP_ID',
-  ]) {
-    if (!String(environment[key] || '').trim()) errors.push(`${key} is required.`);
+  const firebaseFields = {
+    apiKey: 'VITE_FIREBASE_API_KEY', authDomain: 'VITE_FIREBASE_AUTH_DOMAIN',
+    projectId: 'VITE_FIREBASE_PROJECT_ID', appId: 'VITE_FIREBASE_APP_ID',
+  };
+  const frontend = validateFirebasePublicConfig(Object.fromEntries(Object.entries(firebaseFields)
+    .map(([field, key]) => [field, environment[key]])));
+  for (const field of frontend.fields) {
+    if (field === 'projectId' && !frontendProjectId) continue;
+    errors.push(`${firebaseFields[field]} ${frontend.reason === 'missing'
+      ? 'is required and must not be a placeholder' : 'is invalid for Firebase Web configuration'}.`);
   }
   if (!UUID.test(databaseId)) errors.push('wrangler.jsonc must contain a valid D1 database ID.');
   if (!appId || PLACEHOLDER.test(appId)) errors.push('wrangler.jsonc must contain a real APP_ID.');

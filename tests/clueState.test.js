@@ -108,17 +108,11 @@ test('links referencing either end of destroyed evidence are cleared without tou
   assert.equal(pairs.length, 3);
 });
 
-test('terminal acquisition and investigation candidate wiring use the permanent evidence gate', () => {
+test('terminal preserves cloud evidence snapshots and narrative candidates retain the permanent evidence gate', () => {
   const terminal = readFileSync(new URL('../src/components/game/InvestigationTerminal.jsx', import.meta.url), 'utf8');
   const engine = readFileSync(new URL('../src/game/investigationEngine.js', import.meta.url), 'utf8');
-  assert.match(terminal, /acquireClues\(prev, \[firstClue\]\)/);
-  assert.match(terminal, /getHiddenCluesDue\(caseData, gameStateRef.current\)/);
-  assert.match(terminal, /acquireClues\(gameStateRef.current, \[hc.clue_id\]\)/);
-  assert.match(terminal, /!newState.destroyed_clue_ids.includes\(id\)/);
-  assert.match(terminal, /acquireClues\(newState, \[bonus\]\)/);
-  assert.match(terminal, /!nextGameState.destroyed_clue_ids.includes\(clueId\)/);
-  assert.match(terminal, /acquireClues\(nextGameState, \[clueId\]\)/);
-  assert.match(terminal, /getAvailableClueIds\(caseData, gs.current_zone, gs.unlocked_clues, gs.turn_count, gs.destroyed_clue_ids\)/);
-  assert.match(terminal, /acquireClues\(prev, bonus \? \[bonus\] : \[\]\)/);
+  assert.match(terminal, /setGameState\(run.state\)/);
+  assert.match(terminal, /setLinkedPairs\(run.linked_pairs\)/);
+  assert.doesNotMatch(terminal, /acquireClues|destroyClues|getHiddenCluesDue|removeEvidenceLinks/);
   assert.match(engine, /getAvailableClueIds\([\s\S]*gameState.turn_count \+ 1,\s*gameState.destroyed_clue_ids/);
 });

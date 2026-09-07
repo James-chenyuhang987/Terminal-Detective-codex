@@ -20,8 +20,10 @@ function readyDB(indexResults = [{
 }]) {
   const schema = {
     users: ['id', 'email', 'email_verified', 'display_name', 'avatar_url'],
-    profiles: ['user_id', 'profile_json', 'profile_revision', 'active_session_id'],
-    profile_operations: ['user_id', 'operation_id', 'base_revision', 'result_revision', 'patch_hash'],
+    profiles: ['user_id', 'profile_json', 'profile_revision', 'active_session_id', 'authority_version'],
+    profile_operations: ['user_id', 'operation_id', 'base_revision', 'result_revision', 'patch_hash', 'result_json'],
+    player_runs: ['id', 'user_id', 'start_operation_id', 'run_json', 'run_revision', 'settled', 'settlement_operation_id'],
+    run_operations: ['user_id', 'run_id', 'operation_id', 'base_revision', 'result_revision', 'command_hash', 'result_json'],
   };
   return {
     prepare(sql) {
@@ -29,13 +31,13 @@ function readyDB(indexResults = [{
         bind() { return this; },
         async all() {
           if (sql.includes('d1_migrations')) {
-            return { results: [{ name: '0003_profile_operations.sql' }] };
+            return { results: [{ name: '0004_authoritative_state.sql' }] };
           }
           if (sql.includes("pragma_index_list('users')")) {
             return { results: indexResults };
           }
           if (sql.includes('pragma_foreign_key_list')) {
-            return { results: ['profiles', 'profile_operations'].map(table_name => ({
+            return { results: ['profiles', 'profile_operations', 'player_runs', 'run_operations'].map(table_name => ({
               table_name,
               parent_table: 'users',
               child_column: 'user_id',
@@ -48,9 +50,9 @@ function readyDB(indexResults = [{
               columns.map(name => ({
                 table_name,
                 name,
-                pk: table_name === 'profile_operations'
+                pk: ['profile_operations', 'run_operations'].includes(table_name)
                   ? ({ user_id: 1, operation_id: 2 }[name] || 0)
-                  : name === (table_name === 'users' ? 'id' : 'user_id') ? 1 : 0,
+                  : name === (['users', 'player_runs'].includes(table_name) ? 'id' : 'user_id') ? 1 : 0,
               }))
             )),
           };
@@ -212,6 +214,7 @@ test('profile read and write routes fail closed before database access', async (
   for (const [path, method] of [
     [`/api/apps/${APP_ID}/entities/User/me`, 'GET'],
     [`/api/apps/${APP_ID}/functions/playerProfile`, 'POST'],
+    [`/api/apps/${APP_ID}/functions/playerRun`, 'POST'],
   ]) {
     const response = await handleRequest(new Request(`https://game.example${path}`, { method }), env);
     assert.equal(response.status, 401);

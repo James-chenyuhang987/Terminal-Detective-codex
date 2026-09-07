@@ -43,7 +43,7 @@ test('decision story uses the outer dialog scroll instead of a nested story scro
 });
 
 test('investigation loop streams the complete observation then thought before opening the decision desk', () => {
-  const prefetch = terminal.indexOf('const optionPacksPromise = getDecisionOptionPacks');
+  const prefetch = terminal.indexOf('const optionPacksPromise = executeRunCommand');
   const observationStream = terminal.indexOf('await streamTerminalText');
   const thoughtStream = terminal.indexOf('await streamInvestigationThought');
   const openDecision = terminal.indexOf('setDecisionCards(packs)');
@@ -57,7 +57,7 @@ test('investigation loop streams the complete observation then thought before op
   assert.match(terminal, /addLine\(observationTerminalText,\s*'observe'\)/);
   assert.doesNotMatch(terminal, /addLine\(`◈ \$\{t\.turnLabel\}.*observationPhase.*'phase'\)/);
   assert.match(terminal, /story:\s*publicStory[\s\S]*setDecisionStory\(\{[\s\S]*\.\.\.publicStory/);
-  assert.match(terminal, /const runLang = [\s\S]*getDecisionOptionPacks\(\{[\s\S]*lang:\s*runLang[\s\S]*streamInvestigationThought\(\{[\s\S]*lang:\s*runLang[\s\S]*settleAction\(\{[\s\S]*lang:\s*runLang/);
+  assert.match(terminal, /const runLang = [\s\S]*executeRunCommand\(\{ type: 'decision_options', lang: runLang[\s\S]*streamInvestigationThought\(\{[\s\S]*lang:\s*runLang[\s\S]*type: 'round'[\s\S]*lang: runLang/);
   assert.match(component, /const lang = language === 'en' \|\| language === 'zh' \? language : currentLang/);
   assert.match(terminal, /prefers-reduced-motion: reduce/);
   assert.match(terminal, /aria-hidden="true"[\s\S]*td-sr-only/);
@@ -69,11 +69,9 @@ test('decision and interrogation layers expose stamina, costs, and depleted reco
   assert.match(component, /chooseOnce\(\{ rest: true \}\)/);
   assert.match(component, /参与者 -\$\{AGENT_STAMINA_INVESTIGATION_COST\}%/);
   assert.match(terminal, /applyStaminaToTeam\(configuredAgentStrategy\.team,\s*gameState\.agent_stamina\)/);
-  assert.match(terminal, /recoverAgentStaminaTurn\(gs\.agent_stamina,\s*teamIds\)/);
-  assert.match(terminal, /team:\s*roundAgentStrategy\.team/);
-  assert.match(terminal, /buildExecutingStrategy\(\s*roundAgentStrategy/);
-  assert.match(terminal, /spendAgentStamina/);
-  assert.match(terminal, /applyRecoveryTurn/);
+  assert.match(terminal, /executeRunCommand\(\{ type: 'rest'/);
+  assert.match(terminal, /chosenAssistId \? \{ assist_agent_id: chosenAssistId \} : \{\}/);
+  assert.doesNotMatch(terminal, /spendAgentStamina|applyRecoveryTurn|buildExecutingStrategy/);
   assert.match(styles, /\.td-agent-stamina\s*\{/);
   assert.match(styles, /\.td-stamina-warning\s*\{/);
   assert.match(styles, /\.td-npc-stamina-note\s*\{/);

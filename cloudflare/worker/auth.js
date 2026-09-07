@@ -9,10 +9,12 @@ const KEY_FETCH_ATTEMPTS = 2;
 const READINESS_CACHE_MS = 15_000;
 const REQUIRED_SCHEMA = Object.freeze({
   users: ['id', 'email', 'email_verified', 'display_name', 'avatar_url'],
-  profiles: ['user_id', 'profile_json', 'profile_revision', 'active_session_id'],
-  profile_operations: ['user_id', 'operation_id', 'base_revision', 'result_revision', 'patch_hash'],
+  profiles: ['user_id', 'profile_json', 'profile_revision', 'active_session_id', 'authority_version'],
+  profile_operations: ['user_id', 'operation_id', 'base_revision', 'result_revision', 'patch_hash', 'result_json'],
+  player_runs: ['id', 'user_id', 'start_operation_id', 'run_json', 'run_revision', 'settled', 'settlement_operation_id'],
+  run_operations: ['user_id', 'run_id', 'operation_id', 'base_revision', 'result_revision', 'command_hash', 'result_json'],
 });
-const REQUIRED_MIGRATION = '0003_profile_operations.sql';
+const REQUIRED_MIGRATION = '0004_authoritative_state.sql';
 let cachedKeys = new Map();
 let cachedKeysExpireAt = 0;
 let keyRefreshPromise = null;
@@ -182,6 +184,10 @@ async function backendReadiness(env) {
         SELECT 'profiles' AS table_name, name, pk FROM pragma_table_info('profiles')
         UNION ALL
         SELECT 'profile_operations' AS table_name, name, pk FROM pragma_table_info('profile_operations')
+        UNION ALL
+        SELECT 'player_runs' AS table_name, name, pk FROM pragma_table_info('player_runs')
+        UNION ALL
+        SELECT 'run_operations' AS table_name, name, pk FROM pragma_table_info('run_operations')
       `).all();
       const columns = new Map();
       const primaryKeys = new Map();
@@ -219,6 +225,14 @@ async function backendReadiness(env) {
             SELECT 'profile_operations' AS table_name, "table" AS parent_table,
                    "from" AS child_column, "to" AS parent_column, on_delete
             FROM pragma_foreign_key_list('profile_operations')
+            UNION ALL
+            SELECT 'player_runs' AS table_name, "table" AS parent_table,
+                   "from" AS child_column, "to" AS parent_column, on_delete
+            FROM pragma_foreign_key_list('player_runs')
+            UNION ALL
+            SELECT 'run_operations' AS table_name, "table" AS parent_table,
+                   "from" AS child_column, "to" AS parent_column, on_delete
+            FROM pragma_foreign_key_list('run_operations')
           `).all(),
         ]);
       } catch {
@@ -228,7 +242,10 @@ async function backendReadiness(env) {
       const primaryKeysReady = primaryKeys.get('users:id') === 1
         && primaryKeys.get('profiles:user_id') === 1
         && primaryKeys.get('profile_operations:user_id') === 1
-        && primaryKeys.get('profile_operations:operation_id') === 2;
+        && primaryKeys.get('profile_operations:operation_id') === 2
+        && primaryKeys.get('player_runs:id') === 1
+        && primaryKeys.get('run_operations:user_id') === 1
+        && primaryKeys.get('run_operations:operation_id') === 2;
       const migrationReady = (migrations?.results || []).some(row => row.name === REQUIRED_MIGRATION);
       const indexesByName = new Map();
       for (const row of indexes?.results || []) {
@@ -244,7 +261,7 @@ async function backendReadiness(env) {
         && Number(rows[0]?.column_position) === 0
         && rows[0]?.column_name === 'email'
       ));
-      const cascadeReady = ['profiles', 'profile_operations'].every(table => (
+      const cascadeReady = ['profiles', 'profile_operations', 'player_runs', 'run_operations'].every(table => (
         (foreignKeys?.results || []).some(row => (
           row?.table_name === table
           && row?.parent_table === 'users'

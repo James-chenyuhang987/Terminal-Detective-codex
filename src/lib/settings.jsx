@@ -1,20 +1,10 @@
 // 全局设置：主题(面板浅色) · 音效 · 视觉特效 · 数据管理
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { DEFAULT_STORY_MODE, normalizeStoryMode } from '@/game/storyMode';
+import { DEFAULT_SETTINGS, normalizeSettings } from './settingsData.js';
+export { DEFAULT_SETTINGS } from './settingsData.js';
 
 const KEY = 'td_settings_v1';
 
-export const DEFAULT_SETTINGS = {
-  storyMode: DEFAULT_STORY_MODE, // 剧情呈现方式，与行动过场独立
-  panelLight: false,      // 文字密集面板浅色化
-  sfxEnabled: true,       // 音效总开关
-  scanlines: true,        // CRT 扫描线
-  glitchLevel: 'high',    // off | low | high
-  particles: true,        // 粒子动画
-  investigationTutorialEnabled: true, // 每次进入调查显示七步教程
-  cinematicsEnabled: true,// 调查行动 3D 过场
-  cinematicQuality: 'auto', // 自动按设备能力选择质量
-};
 
 export const APP_VERSION = 'TERMINAL DETECTIVE · v2.2.0';
 
@@ -37,7 +27,7 @@ function readStored() {
     const raw = localStorage.getItem(KEY);
     const stored = raw ? JSON.parse(raw) : null;
     if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...stored, storyMode: normalizeStoryMode(stored.storyMode) };
+    return normalizeSettings(stored);
   } catch { return DEFAULT_SETTINGS; }
 }
 
@@ -56,7 +46,8 @@ export function SettingsProvider({ children }) {
   }, [settings]);
 
   const setSetting = useCallback((key, value) => {
-    setSettings(prev => ({ ...prev, [key]: key === 'storyMode' ? normalizeStoryMode(value) : value }));
+    if (!Object.hasOwn(DEFAULT_SETTINGS, key)) return;
+    setSettings(prev => normalizeSettings({ ...prev, [key]: value }));
   }, []);
 
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);

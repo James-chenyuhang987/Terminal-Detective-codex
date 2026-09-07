@@ -33,17 +33,19 @@ function events() {
   };
 }
 function harness() {
-  const document = { ...events(), hidden: false, focused: true, hasFocus() { return this.focused; } };
-  const window = events();
+  const document = { ...events(), hidden: false, focused: true, activeElement: null, modals: [], querySelectorAll() { return this.modals; }, hasFocus() { return this.focused; } };
+  const animationFrames = new Map();
+  let nextFrame = 0;
+  const window = { ...events(), requestAnimationFrame(callback) { animationFrames.set(++nextFrame, callback); return nextFrame; }, cancelAnimationFrame(id) { animationFrames.delete(id); } };
   const canvas = events();
   const captured = new Set();
   const viewport = {
-    ...events(), tagName: 'DIV', closest: () => null,
+    ...events(), tagName: 'DIV', closest: () => null, isConnected: true, getClientRects: () => [{}],
     contains(target) { return target === this; },
     hasPointerCapture: id => captured.has(id),
     setPointerCapture: id => captured.add(id),
     releasePointerCapture: id => captured.delete(id),
-    focus() { this.dispatch('focusin', { target: this }); },
+    focus() { if (document.activeElement === this) return; document.activeElement = this; this.dispatch('focusin', { target: this }); },
   };
   const empty = evaluate(declaration('EMPTY_CONTROLS'), {});
   const controlsRef = { current: { ...empty } };
@@ -83,8 +85,95 @@ function harness() {
     const effect = findNodes(presentation, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect' && node.arguments[1]?.getText() === '[movementPaused]')[0].arguments[0];
     evaluate(effect, { movementPaused: true, controlsRef })();
   }
-  return { document, window, viewport, canvas, input, live, controlsRef, handler, event, hideAndReturn, pausePresentation, frames: () => frames, stopped: () => stopped, cleanup: () => cleanups.reverse().forEach(cleanup => cleanup()) };
+  function explorationFocus(enabled = true) {
+    const fn = evaluate(findNodes(scene, node => ts.isFunctionDeclaration(node) && node.name?.text === 'useExplorationFocus')[0], bindings);
+    fn({ current: viewport }, enabled);
+  }
+  function flushFocus() {
+    const pending = [...animationFrames.values()]; animationFrames.clear(); pending.forEach(callback => callback());
+  }
+  return { document, window, viewport, canvas, input, live, controlsRef, handler, event, hideAndReturn, pausePresentation, explorationFocus, flushFocus, frames: () => frames, stopped: () => stopped, cleanup: () => cleanups.reverse().forEach(cleanup => cleanup()) };
 }
+
+test('exploration readiness and panel return hand keyboard control back after panel focus cleanup', () => {
+  const h = harness();
+  const launcher = { isConnected: true, closest: () => null, getClientRects: () => [{}] };
+  for (const boundary of ['first-ready', 'dialogue', 'tools', 'report', 'narrative', 'settings', 'Home', 'mode', 'zone']) {
+    h.document.activeElement = launcher;
+    h.viewport.dispatch('focusout', { relatedTarget: launcher });
+    h.explorationFocus();
+    assert.equal(h.document.activeElement, launcher, `${boundary}: no synchronous focus race`);
+    h.flushFocus();
+    assert.equal(h.document.activeElement, h.viewport, boundary);
+    h.viewport.dispatch('keydown', h.event({ code: 'KeyW', repeat: true, target: h.viewport }));
+    assert.equal(h.input.current.keys.forward, false, 'return never restores held keys');
+    h.viewport.dispatch('keydown', h.event({ code: 'KeyW', target: h.viewport }));
+    assert.equal(h.input.current.keys.forward, true, `${boundary}: first fresh W works without a tap`);
+  }
+  assert.match(scene.text, /useExplorationFocus\(viewport, readyRoom === roomKey && !paused && !suspended\)/);
+  h.cleanup();
+});
+
+test('automatic focus respects editing, visible modals, hidden scenes and effect cancellation', () => {
+  for (const condition of ['disabled', 'hidden', 'unfocused', 'removed', 'inert', 'invisible', 'editing', 'modal', 'cancelled']) {
+    const h = harness();
+    const initial = { isConnected: true, getClientRects: () => [{}], closest: selector => condition === 'editing' && selector.includes('textarea') ? {} : null };
+    h.document.activeElement = initial;
+    if (condition === 'hidden') h.document.hidden = true;
+    if (condition === 'unfocused') h.document.focused = false;
+    if (condition === 'removed') h.viewport.isConnected = false;
+    if (condition === 'inert') h.viewport.closest = () => ({});
+    if (condition === 'invisible') h.viewport.getClientRects = () => [];
+    if (condition === 'modal') h.document.modals = [{ getClientRects: () => [{}], closest: () => null }];
+    h.explorationFocus(condition !== 'disabled');
+    if (condition === 'cancelled') h.cleanup();
+    h.flushFocus();
+    assert.equal(h.document.activeElement, initial, condition);
+    if (condition !== 'cancelled') h.cleanup();
+  }
+  const h = harness();
+  h.document.modals = [{ getClientRects: () => [], closest: () => null }];
+  h.explorationFocus(); h.flushFocus();
+  assert.equal(h.document.activeElement, h.viewport, 'a hidden modal does not block exploration');
+  h.cleanup();
+});
+
+test('scene readiness while backgrounded defers its one-time focus handoff until foreground', () => {
+  const h = harness();
+  const launcher = { isConnected: true, closest: () => null, getClientRects: () => [{}] };
+  h.document.activeElement = launcher;
+  h.document.hidden = true;
+  h.document.focused = false;
+  h.explorationFocus(); h.flushFocus();
+  assert.equal(h.document.activeElement, launcher, 'background loading cannot steal focus');
+  h.hideAndReturn(); h.flushFocus();
+  assert.equal(h.document.activeElement, h.viewport, 'return finishes the missed ready handoff without a scene click');
+  h.viewport.dispatch('keydown', h.event({ code: 'KeyW', target: h.viewport }));
+  assert.equal(h.input.current.keys.forward, true);
+  h.document.activeElement = launcher;
+  h.viewport.dispatch('focusout', { relatedTarget: launcher });
+  h.hideAndReturn(); h.flushFocus();
+  assert.equal(h.document.activeElement, launcher, 'later tab navigation is not overridden');
+  h.cleanup();
+  assert.equal(h.window.listeners.has('focus'), false);
+  assert.equal(h.document.listeners.has('visibilitychange'), false);
+});
+
+test('fresh scene keys recover from browser blur even when DOM focus never changed', () => {
+  const h = harness();
+  h.explorationFocus(); h.flushFocus();
+  h.viewport.dispatch('keydown', h.event({ code: 'KeyW', target: h.viewport }));
+  h.hideAndReturn();
+  assert.equal(h.document.activeElement, h.viewport);
+  assert.equal(h.input.current.windowActive, false);
+  h.viewport.dispatch('keydown', h.event({ code: 'KeyW', repeat: true, target: h.viewport }));
+  assert.equal(h.input.current.windowActive, false);
+  assert.equal(h.input.current.keys.forward, false);
+  h.viewport.dispatch('keydown', h.event({ code: 'KeyW', target: h.viewport }));
+  assert.equal(h.input.current.windowActive, true);
+  assert.equal(h.input.current.keys.forward, true);
+  h.cleanup();
+});
 
 test('touch press after hide/show/focus explicitly resumes demand rendering without an extra viewport tap', () => {
   const h = harness();
@@ -158,6 +247,7 @@ test('viewport keyboard focus resumes fresh presses only, and button typing is n
   h.viewport.focus();
   h.viewport.dispatch('keydown', h.event({ code: 'KeyW', target: h.viewport }));
   h.hideAndReturn();
+  h.document.activeElement = null;
   h.viewport.focus();
   assert.equal(h.input.current.windowActive, true);
   const staleRepeat = h.event({ code: 'ArrowUp', repeat: true, target: h.viewport });

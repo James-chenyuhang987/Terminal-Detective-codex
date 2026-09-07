@@ -8,6 +8,8 @@ import * as progress from '../src/game/homeProgress.js';
 import * as market from '../src/game/agentMarket.js';
 import { applySettlementToProfile } from '../src/game/playerProfile.js';
 import { transactionErrorMessage } from '../src/game/transactionFeedback.js';
+import { profileCommand } from '../src/game/profileCommands.js';
+import { publicErrorMessage } from '../src/lib/publicError.js';
 
 function readComponent(path) {
   return ts.createSourceFile(path, readFileSync(new URL(path, import.meta.url), 'utf8'),
@@ -44,14 +46,33 @@ function handler(name, bindings) {
 
 const actionCalls = findNodes(modules, node => ts.isCallExpression(node) && node.expression.getText() === 'onApply');
 
+const actionTypes = {
+  editIdentity: 'identity', purchaseItem: 'purchase_item', claimTask: 'claim_task',
+  unlockTech: 'unlock_tech', purchaseAgent: 'purchase_agent',
+};
+
 function moduleAction(name, bindings) {
-  const call = actionCalls.find(node => {
-    const argument = node.arguments[0];
-    return ts.isArrowFunction(argument) && ts.isCallExpression(argument.body)
-      && argument.body.expression.getText() === name;
-  });
-  assert.ok(call, `${name} must be passed as a reducer, not an already computed result`);
-  return bindFunction(call.arguments[0], { ...progress, ...market, ...bindings });
+  const type = actionTypes[name] || name;
+  const call = actionCalls.find(node => node.arguments[0].getText().includes(`type: '${type}'`));
+  assert.ok(call, `${name} must send a command intent`);
+  return bindFunction(call.arguments[0], bindings);
+}
+
+// Mock server evaluation for UI feedback tests; actual D1 authorization is tested separately.
+function evaluateServerCommand(current, type, args) {
+  switch (type) {
+    case 'purchase_item': return progress.purchaseItem(current, args.item_id, args.quantity);
+    case 'claim_task': return progress.claimTask(current, args.kind, args.task_id);
+    case 'unlock_tech': return progress.unlockTech(current, args.tech_id);
+    case 'purchase_agent': return market.purchaseAgent(current, args.agent_id);
+    case 'identity': return progress.editIdentity(current, args.patch);
+    case 'checkin': return progress.applyCheckin(current);
+    case 'mail_read': return { profile: { ...current, mail_read_ids: [...new Set([...current.mail_read_ids, args.mail_id])] } };
+    case 'mail_reply': return current.mail_reply_choices.some(id => id.startsWith(`${args.mail_id}:`))
+      ? { error: 'already_claimed' }
+      : { profile: { ...current, mail_reply_choices: [...current.mail_reply_choices, args.choice_id] } };
+    default: throw new Error(`Unexpected test command ${type}`);
+  }
 }
 
 function homeQueue(initial, { pending = false, readOnly = false, failWrite = false } = {}) {
@@ -63,7 +84,7 @@ function homeQueue(initial, { pending = false, readOnly = false, failWrite = fal
     const operation = tail.then(async () => {
       const result = await reducer(current);
       if (result.error) return result;
-      if (failWrite) throw new Error('offline');
+      if (failWrite || pending) throw Object.assign(new Error('offline'), { code: 'PROFILE_COMMAND_PENDING' });
       current = result.profile;
       return { ...result, ...(pending ? { pending: true } : {}) };
     });
@@ -71,7 +92,11 @@ function homeQueue(initial, { pending = false, readOnly = false, failWrite = fal
     return operation;
   };
   const bindings = {
-    isReadOnly: readOnly, busyRef, setBusy: () => {}, mutate,
+    isReadOnly: readOnly, busyRef, setBusy: () => {}, publicErrorMessage,
+    command: (type, args) => {
+      profileCommand(type, args);
+      return mutate(current => evaluateServerCommand(current, type, args));
+    },
     notify: (message, type = 'success') => notices.push({ message, type }),
     lang: 'en', transactionErrorMessage,
   };
@@ -89,12 +114,12 @@ function caseSummary(now) {
   };
 }
 
-test('every module action is deferred and does not capture the rendered profile', () => {
+test('every module action sends intent only and does not capture the rendered profile', () => {
   assert.ok(actionCalls.length >= 15);
   for (const call of actionCalls) {
     const reducer = call.arguments[0];
-    assert.ok(ts.isArrowFunction(reducer), call.getText());
-    const staleReferences = findNodes(reducer.body, node => ts.isIdentifier(node) && node.text === 'profile'
+    assert.ok(ts.isObjectLiteralExpression(reducer), call.getText());
+    const staleReferences = findNodes(reducer, node => ts.isIdentifier(node) && node.text === 'profile'
       && !(ts.isPropertyAssignment(node.parent) && node.parent.name === node)
       && !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node));
     assert.equal(staleReferences.length, 0, reducer.getText());
@@ -188,7 +213,8 @@ test('mail reducers preserve other queued reads and reject a conflicting reply',
   const queue = homeQueue(rendered);
   const mail = { id: 'case:1' };
   const actionFor = field => {
-    const call = actionCalls.find(node => node.arguments[0].getText().includes(field));
+    const type = field === 'mail_read_ids' ? 'mail_read' : 'mail_reply';
+    const call = actionCalls.find(node => node.arguments[0].getText().includes(`type: '${type}'`));
     assert.ok(call);
     return bindFunction(call.arguments[0], { profile: rendered, mail, choiceId: `${mail.id}:0` });
   };
@@ -221,12 +247,12 @@ test('identity edits retain newer case progress and recheck the rename limit', a
   assert.equal(queue.current.detective_name, 'NEW');
 });
 
-test('check-in uses queued reward metadata, preserves settlement gold and reports pending sync', async () => {
+test('check-in celebrates confirmed server metadata and preserves prior settlement gold', async () => {
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const rendered = progress.normalizeProfile({ gold: 1000, energy: 120 });
-  const queue = homeQueue(rendered, { pending: true });
+  const queue = homeQueue(rendered);
   const celebrations = [];
   const checkin = handler('handleCheckin', {
     ...queue.bindings, applyResult: queue.applyResult, applyCheckin: progress.applyCheckin,
@@ -242,7 +268,8 @@ test('check-in uses queued reward metadata, preserves settlement gold and report
   assert.equal(queue.current.gold, 1500);
   assert.equal(celebrations[0].day, 2);
   assert.equal(celebrations[0].reward.diamonds, 10);
-  assert.match(queue.notices.at(-1).message, /cloud sync pending/);
+  assert.match(queue.notices.at(-1).message, /Check-in complete/);
+  assert.doesNotMatch(queue.notices.at(-1).message, /pending/);
   await checkin();
   assert.equal(celebrations.length, 1);
   assert.equal(queue.notices.at(-1).type, 'error');
@@ -252,7 +279,8 @@ test('home rejects precomputed snapshots, read-only writes and duplicate in-flig
   const rendered = progress.normalizeProfile({ gold: 1000, energy: 120 });
   const queue = homeQueue(rendered);
   assert.equal(await queue.applyResult(progress.purchaseItem(rendered, 'energy_cell')), false);
-  const action = current => progress.purchaseItem(current, 'energy_cell');
+  const action = { type: 'purchase_item', item_id: 'energy_cell', quantity: 1 };
+  assert.equal(await queue.applyResult(current => progress.purchaseItem(current, 'energy_cell')), false);
   const first = queue.applyResult(action);
   assert.equal(await queue.applyResult(action), false);
   await first;
@@ -276,4 +304,18 @@ test('failed check-in writes release busy state without showing a reward celebra
   assert.equal(queue.busyRef.current, false);
   assert.equal(queue.notices.at(-1).type, 'error');
   assert.strictEqual(queue.current, rendered);
+});
+
+
+test('unconfirmed check-in never celebrates or changes displayed resources', async () => {
+  const rendered = progress.normalizeProfile({ gold: 1000, energy: 120 });
+  const queue = homeQueue(rendered, { pending: true });
+  const celebrations = [];
+  await handler('handleCheckin', {
+    ...queue.bindings, applyResult: queue.applyResult,
+    setCheckinCelebration: value => celebrations.push(value),
+  })();
+  assert.equal(celebrations.length, 0);
+  assert.strictEqual(queue.current, rendered);
+  assert.match(queue.notices.at(-1).message, /not confirmed/);
 });

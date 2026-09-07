@@ -1217,8 +1217,12 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           skillLoadout={skillLoadout}
           onSkillLoadout={async next => {
             if (readOnly) return;
-            setSkillLoadout(next);
-            try { await onSkillLoadout?.(next); } catch { setSkillLoadout(profile?.skill_loadout || []); }
+            try {
+              const result = await onSkillLoadout?.(next);
+              setSkillLoadout(result.profile.skill_loadout || []);
+            } catch {
+              showNotice(lang === 'zh' ? '⚠ 技能配置尚未确认，请重试' : '⚠ SKILL LOADOUT NOT CONFIRMED. PLEASE RETRY.', 2400, 'error');
+            }
           }}
           mobileActive={mobileTab === 'agent'}
         />
@@ -1271,7 +1275,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           } : null}
           onComplete={async () => {
             try {
-              const result = await onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout, activeSupport?.id, targetCase?.case_id));
+              const result = await onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout, activeSupport?.id, targetCase?.case_id), currentConfig());
               if (result?.error) {
                 setShowSequence(false);
                 const message = result.error === 'insufficient_energy'

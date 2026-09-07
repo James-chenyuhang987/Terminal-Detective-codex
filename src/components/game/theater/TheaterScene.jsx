@@ -58,12 +58,46 @@ function useTheaterManifest(onFailure) {
   return result.manifest;
 }
 
+function useExplorationFocus(viewportRef, enabled) {
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let pending = true;
+    let frame;
+    const handoff = () => {
+      if (!pending || document.hidden || !document.hasFocus()) return;
+      pending = false;
+      const viewport = viewportRef.current;
+      if (!viewport?.isConnected || !viewport.getClientRects().length || viewport.closest('[hidden], [inert]')) return;
+      if (Array.from(document.querySelectorAll('dialog[open], [aria-modal="true"]')).some(dialog =>
+        dialog.getClientRects().length && !dialog.closest('[hidden], [inert]'))) return;
+      const focused = document.activeElement;
+      if (focused?.isConnected && focused.getClientRects().length && !focused.closest('[hidden], [inert]')
+        && focused.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="slider"]')) return;
+      viewport.focus({ preventScroll: true });
+    };
+    // Defer panel cleanup races, and finish a background-loaded scene's handoff on return.
+    const schedule = () => {
+      if (!pending) return;
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(handoff);
+    };
+    schedule();
+    window.addEventListener('focus', schedule);
+    document.addEventListener('visibilitychange', schedule);
+    return () => {
+      pending = false;
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('focus', schedule);
+      document.removeEventListener('visibilitychange', schedule);
+    };
+  }, [viewportRef, enabled]);
+}
+
 function useViewportInput(viewportRef, controlsRef, live, input, interact) {
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return undefined;
     let dragging = null;
-    let keyboardAttached = false;
     const pressed = new Set();
     const clear = () => {
       pressed.clear();
@@ -88,8 +122,13 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
     };
     controlsRef.current.activate = activate;
     const keydown = event => {
-      if (live.current.paused || live.current.suspended || document.hidden || !document.hasFocus() || !input.current.windowActive || !input.current.focused || !isViewportKeyTarget(event.target, viewport) || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (live.current.paused || live.current.suspended || document.hidden || !document.hasFocus() || !isViewportKeyTarget(event.target, viewport) || event.altKey || event.ctrlKey || event.metaKey) return;
       const direction = KEY_DIRECTIONS[event.code];
+      if (!direction && event.code !== 'KeyE') return;
+      if (!input.current.windowActive || !input.current.focused) {
+        if (event.repeat || !activate()) return;
+        input.current.focused = true;
+      }
       if (direction) {
         event.preventDefault();
         if (!event.repeat) { pressed.add(event.code); input.current.keys[direction] = true; }
@@ -104,32 +143,18 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       input.current.keys[direction] = [...pressed].some(code => KEY_DIRECTIONS[code] === direction);
       if (isViewportKeyTarget(event.target, viewport)) event.preventDefault();
     };
-    const attachKeyboard = () => {
-      if (keyboardAttached) return;
-      viewport.addEventListener('keydown', keydown);
-      viewport.addEventListener('keyup', keyup);
-      keyboardAttached = true;
-    };
-    const detachKeyboard = () => {
-      if (!keyboardAttached) return;
-      viewport.removeEventListener('keydown', keydown);
-      viewport.removeEventListener('keyup', keyup);
-      keyboardAttached = false;
-    };
     const focus = event => {
       if (!isViewportKeyTarget(event.target, viewport) || !activate()) return;
       input.current.focused = true;
-      attachKeyboard();
     };
     const blur = event => {
       if (isViewportKeyTarget(event.relatedTarget, viewport)) return;
-      input.current.focused = false; clear(); detachKeyboard();
+      input.current.focused = false; clear();
     };
     const pointerdown = event => {
       if (event.button !== 0 || !isViewportKeyTarget(event.target, viewport) || !activate()) return;
       viewport.focus({ preventScroll: true });
       input.current.focused = true;
-      attachKeyboard();
       dragging = { id: event.pointerId, x: event.clientX, y: event.clientY };
       viewport.setPointerCapture(event.pointerId);
     };
@@ -147,10 +172,12 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
     const suspend = () => {
       input.current.windowActive = false;
       input.current.focused = false;
-      clear(); detachKeyboard();
+      clear();
     };
     const visibility = () => { if (document.hidden) suspend(); };
-    // Window focus alone never resumes movement; scene focus or a fresh control press does.
+    // Keep listeners local; only fresh input, not window focus, can resume after blur.
+    viewport.addEventListener('keydown', keydown);
+    viewport.addEventListener('keyup', keyup);
     viewport.addEventListener('focusin', focus);
     viewport.addEventListener('focusout', blur);
     viewport.addEventListener('pointerdown', pointerdown);
@@ -162,6 +189,8 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
     document.addEventListener('visibilitychange', visibility);
     return () => {
       suspend();
+      viewport.removeEventListener('keydown', keydown);
+      viewport.removeEventListener('keyup', keyup);
       input.current.clear = null;
       if (controlsRef.current.activate === activate) controlsRef.current.activate = null;
       viewport.removeEventListener('focusin', focus);
@@ -408,9 +437,10 @@ export default function TheaterScene({ caseData, zoneId, selectedNpcId, paused, 
   const ready = useCallback(() => { setReadyRoom(roomKey); live.current.onReady?.(); }, [roomKey]);
   useViewportInput(viewport, controlsRef, live, input, interact);
   useEffect(() => { if (paused || suspended) input.current.clear?.(); }, [paused, suspended]);
+  useExplorationFocus(viewport, readyRoom === roomKey && !paused && !suspended);
 
   // Fiber always mounts native canvas fallback content, including on working WebGL devices.
-  return <div ref={viewport} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：点击聚焦，WASD 或方向键移动，拖动视角，E 交互' : '3D detective scene: click to focus, WASD or arrows to move, drag to orbit, E to interact'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>
+  return <div ref={viewport} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：WASD 或方向键移动，拖动视角，E 交互；关闭面板后可直接继续移动' : '3D detective scene: WASD or arrows to move, drag to orbit, E to interact; movement is ready after closing panels'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>
     {manifest && <Canvas frameloop="demand" dpr={[1, settings.dpr]} shadows={settings.shadows} gl={{ antialias: settings.antialias, alpha: false, powerPreference: 'low-power' }} camera={{ position: [0, 3.2, 6], fov: 52, near: 0.06, far: 70 }} aria-label={zh ? '以第三人称探索案件现场' : 'Explore the case scene in third person'} fallback={<p>{zh ? '此设备无法显示 3D 场景，请切换文字模式继续调查。' : 'This device cannot display the 3D scene. Continue your investigation in text mode.'}</p>}>
       <RendererLifecycle live={live} input={input} suspended={suspended} />
       <Suspense fallback={null}><World key={roomKey} caseData={caseData} zoneId={zoneId} manifest={manifest} selectedNpcId={selectedNpcId} controlsRef={controlsRef} spatialRef={spatialRef} live={live} input={input} nearbyRef={nearby} sceneReady={ready} quality={settings} /></Suspense>
