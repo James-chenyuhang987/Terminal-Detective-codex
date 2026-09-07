@@ -211,9 +211,9 @@ export default function TerminalDetective() {
       const result = await command('start_case', {
         case_id: caseData.case_id, ...(teamConfig ? { team_config: teamConfig } : {}),
       });
-      if (result?.error && result.error !== 'active_run_exists') return result;
-      resumeCloudRun(result.run);
-      return { ...result, error: null };
+      if (!result?.active_run) return { ...result, error: result?.error || 'cloud_run_unavailable' };
+      resumeCloudRun(result.active_run);
+      return { ...result, run: result.active_run, error: null };
     } finally {
       caseStartRef.current = false;
     }

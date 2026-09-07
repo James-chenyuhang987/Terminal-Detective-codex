@@ -184,7 +184,7 @@ export function ProfileProvider({ children }) {
       updatePendingCount(ownerUid, generation);
       commitError(null, ownerUid, generation);
       changeSyncStatus('online', ownerUid, generation);
-      return { ...payload.result, result: payload.result, profile: saved, pending: false };
+      return { ...payload.result, result: payload.result, profile: saved, active_run: activeRunRef.current, pending: false };
     } catch (cause) {
       if (!isCurrentOwner(ownerUid, generation)) throw cause;
       if (isRecoveryFailure(cause) || isStorageFailure(cause)

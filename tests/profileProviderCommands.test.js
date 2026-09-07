@@ -264,6 +264,21 @@ test('same-profile-revision responses retain the newest run; settlement and a ne
   app.unmount();
 });
 
+test('command results expose current active run separately from immutable original replay metadata', async () => {
+  const original = { id: 'run-original', revision: 0 };
+  for (const current of [null, { id: 'run-newer', revision: 3 }]) {
+    const app = harness(async action => action === 'command'
+      ? payload('owner-a', 4, { active_run: current, result: { run: original } }) : payload());
+    await app.flush();
+    const result = await app.value.command('start_case', { case_id: 'Lvl_01' });
+    assert.deepEqual(result.run, original);
+    assert.deepEqual(result.result.run, original);
+    assert.deepEqual(result.active_run, current);
+    assert.deepEqual(app.value.activeRun, current);
+    app.unmount();
+  }
+});
+
 test('malformed or missing authoritative active run fails closed without clearing pending intent', async () => {
   for (const active_run of [undefined, [], {}, { id: 'run-one', revision: -1 }, { id: 'run-one', revision: '4' }]) {
     const app = harness(async action => action === 'command'

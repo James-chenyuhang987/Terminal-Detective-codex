@@ -25,7 +25,7 @@ function harness({ activeRun = null, selectedCase = null, response, saved = rawC
     setAgentStrategy: value => { state.strategy = value; }, setSelectedCase: value => { state.selected = value; },
     setEntryNarrative: value => { state.narrative = value; }, setNarrativeError: () => {}, setPreferredCaseId: () => {}, setLobbyReturnScreen: () => {},
     loadInvestigationTerminal: async () => {}, loadCaseSelect: async () => {}, loadAgentLobby: async () => {},
-    command: async (type, args) => { state.calls.push({ type, args }); return response ? response(type, args) : { profile: {}, run: serverRun }; },
+    command: async (type, args) => { state.calls.push({ type, args }); return response ? response(type, args) : { profile: {}, active_run: serverRun, run: serverRun }; },
   };
   const bind = name => compileFunction(`return (${handlers.get(name)});`, Object.keys(bindings))(...Object.values(bindings));
   for (const name of ['requireConfirmed', 'resumeCloudRun', 'handleCaseSelect', 'requestCaseSelect', 'openLobbyForCase', 'openCasesWithSavedTeam']) bindings[name] = (...args) => bind(name)(...args);
@@ -65,9 +65,20 @@ test('cloud confirmation recovered after a lost start reply is resumable, includ
   await app.call('handleHomeStartInvestigation');
   assert.strictEqual(app.state.run, serverRun);
   assert.equal(app.state.calls.length, 1);
-  const race = harness({ response: async () => ({ profile: {}, error: 'active_run_exists', run: serverRun }) });
+  const race = harness({ response: async () => ({ profile: {}, error: 'active_run_exists', active_run: serverRun, run: serverRun }) });
   assert.equal((await race.call('handleCaseSelect', ALL_CASES[1])).error, null);
   assert.strictEqual(race.state.run, serverRun);
+});
+
+test('start replay routes only the current active run and never resurrects the immutable original result', async () => {
+  for (const active_run of [null, { ...serverRun, id: 'newer-paid-run', case_id: ALL_CASES[1].case_id }]) {
+    const app = harness({ response: async () => ({ profile: {}, active_run, run: serverRun, result: { run: serverRun } }) });
+    const result = await app.call('handleCaseSelect', ALL_CASES[0]);
+    assert.strictEqual(app.state.run, active_run);
+    assert.equal(app.state.screen, active_run ? 'GAME' : 'HOME');
+    assert.equal(result.error, active_run ? null : 'cloud_run_unavailable');
+    assert.equal(app.state.calls.length, 1);
+  }
 });
 
 test('concurrent starts share the guarded entry, while rejected starts never mount a free run', async () => {
