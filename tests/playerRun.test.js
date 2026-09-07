@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlayerRunClient, isAuthoritativeRun, runRecoveryMessage } from '../src/game/playerRun.js';
+import { memoryLocks } from './runClientFixtures.js';
 
 function memoryStorage() {
   const values = new Map();
@@ -16,7 +17,7 @@ const snapshot = (revision = 0, extra = {}) => ({
   linked_pairs: [], ...extra,
 });
 const response = (run = snapshot(), result = {}) => ({ data: { authority_version: 1, run, result } });
-const options = (overrides = {}) => ({ runId: 'paid-run', sessionId: 'device', storage: memoryStorage(), createId: () => 'intent-1', ...overrides });
+const options = (overrides = {}) => ({ ownerUid: 'owner', runId: 'paid-run', sessionId: 'device', storage: memoryStorage(), locks: memoryLocks(), createId: () => 'intent-1', ...overrides });
 
 test('run state requires a cloud identity and matching revisioned snapshot', () => {
   assert.equal(isAuthoritativeRun(snapshot()), true);
@@ -32,7 +33,7 @@ test('commands use confirmed revisions and persist intent only before network di
     calls.push(body);
     assert.equal(name, 'playerRun');
     if (body.action === 'command') {
-      assert.deepEqual(JSON.parse([...storage.values.values()][0]), body);
+      assert.deepEqual(JSON.parse([...storage.values.values()][0]), { owner_uid: 'owner', request: body });
       return response(snapshot(5));
     }
     return response(snapshot(4));
@@ -67,9 +68,11 @@ test('lost accepted response survives reload and replays exactly once without a 
   await client.resume();
   await assert.rejects(client.command({ type: 'question', question_id: 'q-1', npc_id: 'npc-1' }));
   await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_INTENT_PENDING' });
-  const restored = createPlayerRunClient(options({ storage, invoke, createId: () => 'must-not-be-used' }));
+  const receipt = [...storage.values.values()][0];
+  const restored = createPlayerRunClient(options({ storage, invoke, sessionId: 'newly-claimed-session', createId: () => 'must-not-be-used' }));
+  assert.equal([...storage.values.values()][0], receipt);
   const recovered = await restored.resume();
-  assert.deepEqual(calls[0], calls[1]);
+  assert.deepEqual(calls[1], { ...calls[0], session_id: 'newly-claimed-session' });
   assert.equal(charge, 1);
   assert.deepEqual(recovered.run.state.unlocked_clues, ['c_01']);
   assert.deepEqual(recovered.recovered_command, calls[0].command);
@@ -119,7 +122,7 @@ test('storage failure and missing paid run fail closed before any command is sen
   assert.equal(sent, 1);
 });
 
-test('StrictMode refresh callers share status and device sessions do not replay each other receipts', async () => {
+test('StrictMode refresh callers share status and different owners never discover each other receipts', async () => {
   const storage = memoryStorage();
   let reads = 0;
   const invoke = async (_name, body) => {
@@ -130,7 +133,7 @@ test('StrictMode refresh callers share status and device sessions do not replay 
   await Promise.all([first.resume(), first.resume()]);
   assert.equal(reads, 1);
   await assert.rejects(first.command({ type: 'rest' }));
-  const second = createPlayerRunClient(options({ storage, invoke, sessionId: 'new-device' }));
+  const second = createPlayerRunClient(options({ storage, invoke, ownerUid: 'different-owner', sessionId: 'new-device' }));
   assert.equal(second.hasPending(), false);
   await second.resume();
   assert.equal(first.hasPending(), true);
@@ -191,20 +194,145 @@ test('an older response cannot erase a newer receipt written by another runtime 
   const client = createPlayerRunClient(options({ storage, invoke: async (_name, body) => {
     if (body.action === 'status') return response();
     const [key] = storage.values.keys();
-    storage.setItem(key, JSON.stringify({ ...body, operation_id: 'newer-intent' }));
+    storage.setItem(key, JSON.stringify({ owner_uid: 'owner', request: { ...body, operation_id: 'newer-intent' } }));
     return response(snapshot(1));
   } }));
   await client.resume();
-  await client.command({ type: 'rest' });
+  await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_INTENT_CONFLICT' });
   assert.equal(client.hasPending(), true);
-  assert.equal(JSON.parse([...storage.values.values()][0]).operation_id, 'newer-intent');
+  assert.equal(JSON.parse([...storage.values.values()][0]).request.operation_id, 'newer-intent');
+  await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_INTENT_PENDING' });
+});
+
+test('silent or throwing receipt deletion cannot claim success and recovers the same accepted operation', async () => {
+  for (const failure of ['silent', 'throw']) {
+    const storage = memoryStorage();
+    const remove = storage.removeItem;
+    storage.removeItem = () => { if (failure === 'throw') throw new Error('Storage blocked'); };
+    const ledger = new Map();
+    const calls = [];
+    const invoke = async (_name, body) => {
+      if (body.action === 'status') return response();
+      calls.push(structuredClone(body));
+      if (!ledger.has(body.operation_id)) ledger.set(body.operation_id, response(snapshot(1), { response: 'Confirmed answer' }));
+      return ledger.get(body.operation_id);
+    };
+    const client = createPlayerRunClient(options({ storage, invoke }));
+    await client.resume();
+    await assert.rejects(client.command({ type: 'question', npc_id: 'npc', question_id: 'q1' }), { code: 'RUN_INTENT_CLEANUP_FAILED' });
+    const frozen = [...storage.values.values()][0];
+    assert.equal(client.hasPending(), true);
+    await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_INTENT_PENDING' });
+    const reloaded = createPlayerRunClient(options({ storage, invoke, sessionId: 'claimed-after-reload' }));
+    await assert.rejects(reloaded.resume(), { code: 'RUN_INTENT_CLEANUP_FAILED' });
+    assert.equal([...storage.values.values()][0], frozen, 'dispatch rebind must not rewrite the frozen receipt');
+    storage.removeItem = remove;
+    const recovered = await reloaded.resume();
+    assert.equal(recovered.result.response, 'Confirmed answer');
+    assert.deepEqual(recovered.recovered_command, calls[0].command);
+    assert.deepEqual(calls[1], { ...calls[0], session_id: 'claimed-after-reload' });
+    assert.deepEqual(calls[2], calls[1]);
+    assert.equal(ledger.size, 1);
+    assert.equal(reloaded.hasPending(), false);
+  }
+});
+
+test('receipt replacement during removal stays pending instead of becoming false success', async () => {
+  const storage = memoryStorage();
+  storage.removeItem = key => {
+    const current = JSON.parse(storage.getItem(key));
+    storage.setItem(key, JSON.stringify({ ...current, request: { ...current.request, operation_id: 'replacement' } }));
+  };
+  const client = createPlayerRunClient(options({ storage, invoke: async () => response() }));
+  await client.resume();
+  await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_INTENT_CONFLICT' });
+  assert.equal(JSON.parse([...storage.values.values()][0]).request.operation_id, 'replacement');
+  await assert.rejects(client.command({ type: 'abandon' }), { code: 'RUN_INTENT_PENDING' });
+});
+
+test('cross-tab lock prevents another client overwriting an unresolved owner/run receipt', async () => {
+  const storage = memoryStorage();
+  const locks = memoryLocks();
+  let resolveRequest;
+  const pending = new Promise(resolve => { resolveRequest = resolve; });
+  const calls = [];
+  const invoke = async (_name, body) => {
+    calls.push(body);
+    return body.action === 'status' ? response() : pending;
+  };
+  const first = createPlayerRunClient(options({ storage, locks, invoke }));
+  const second = createPlayerRunClient(options({ storage, locks, invoke, sessionId: 'other-tab', createId: () => 'other-intent' }));
+  await first.resume();
+  await second.resume();
+  const accepted = first.command({ type: 'rest' });
+  const frozen = [...storage.values.values()][0];
+  await assert.rejects(second.command({ type: 'abandon' }), { code: 'RUN_REQUEST_BUSY' });
+  await assert.rejects(second.resume(), { code: 'RUN_REQUEST_BUSY' });
+  assert.equal([...storage.values.values()][0], frozen);
+  assert.equal(calls.filter(body => body.action === 'command').length, 1);
+  resolveRequest(response(snapshot(1)));
+  await accepted;
+  await second.resume();
+  assert.equal(second.hasPending(), false);
+});
+
+test('missing or denied Web Locks fail closed with supported browser and secure origin guidance', async () => {
+  for (const locks of [null, { request: async () => { throw new Error('SecurityError'); } }]) {
+    let sent = 0;
+    const client = createPlayerRunClient(options({ locks, invoke: async () => { sent++; return response(); } }));
+    await assert.rejects(client.resume(), { code: 'RUN_LOCK_UNAVAILABLE' });
+    await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_LOCK_UNAVAILABLE' });
+    assert.equal(sent, 0);
+  }
+  assert.match(runRecoveryMessage({ code: 'RUN_LOCK_UNAVAILABLE' }), /Web Locks over HTTPS/);
+  assert.match(runRecoveryMessage({ code: 'RUN_INTENT_CLEANUP_FAILED' }), /paused/);
+});
+
+test('definitive rejection is not acknowledged when its receipt cannot be removed', async () => {
+  const storage = memoryStorage();
+  const remove = storage.removeItem;
+  storage.removeItem = () => {};
+  const calls = [];
+  const client = createPlayerRunClient(options({ storage, invoke: async (_name, body) => {
+    calls.push(body);
+    if (body.action === 'command') throw Object.assign(new Error('Invalid intent'), { status: 400 });
+    return response(snapshot(2));
+  } }));
+  await client.resume();
+  await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_INTENT_CLEANUP_FAILED' });
+  assert.equal(client.hasPending(), true);
+  storage.removeItem = remove;
+  await assert.rejects(client.resume(), { status: 400 });
+  assert.deepEqual(calls[1], calls[2]);
+  assert.equal(client.hasPending(), false);
+  await client.resume();
+  assert.equal(calls.at(-1).action, 'status');
+});
+
+test('a mismatched owner envelope and absent authenticated owner fail closed', async () => {
+  const storage = memoryStorage();
+  let sent = 0;
+  const invoke = async (_name, body) => {
+    sent++;
+    if (body.action === 'status') return response();
+    throw new Error('offline');
+  };
+  const client = createPlayerRunClient(options({ storage, invoke }));
+  await client.resume();
+  await assert.rejects(client.command({ type: 'rest' }));
+  const [key] = storage.values.keys();
+  const receipt = JSON.parse(storage.getItem(key));
+  storage.setItem(key, JSON.stringify({ ...receipt, owner_uid: 'another-owner' }));
+  await assert.rejects(client.resume(), { code: 'RUN_INTENT_CORRUPT' });
+  await assert.rejects(createPlayerRunClient(options({ ownerUid: undefined, storage, invoke })).resume(), { code: 'RUN_AUTHORITY_REQUIRED' });
+  assert.equal(sent, 2);
 });
 
 test('a restricted browser storage getter yields a friendly closed gate rather than crashing render', async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   try {
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('SecurityError'); } });
-    const client = createPlayerRunClient({ runId: 'paid-run', sessionId: 'device', invoke: () => { throw new Error('must not dispatch'); } });
+    const client = createPlayerRunClient({ ownerUid: 'owner', runId: 'paid-run', sessionId: 'device', locks: memoryLocks(), invoke: () => { throw new Error('must not dispatch'); } });
     await assert.rejects(client.resume(), { code: 'RUN_INTENT_STORAGE_UNAVAILABLE' });
   } finally {
     if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);

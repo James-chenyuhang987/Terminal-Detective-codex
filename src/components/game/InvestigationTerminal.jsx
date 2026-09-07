@@ -63,15 +63,15 @@ const PHASE_COLORS = Phase_Color_Map;
 
 export default function InvestigationTerminal({ agentStrategy, authoritativeRun = null, selectedCase, onGameEnd, onBackToLobby, onSettlement, onOpenHome, presentationActive = true, narrativeBriefed = false }) {
   const { lang, t } = useLang();
-  const { sessionId } = useProfile();
+  const { sessionId, account } = useProfile();
   const [serverRun, setServerRun] = useState(authoritativeRun);
   const [authorityReady, setAuthorityReady] = useState(false);
   const [authorityError, setAuthorityError] = useState(null);
   const [authorityLoading, setAuthorityLoading] = useState(false);
   const commandInFlightRef = useRef(false);
   const runClient = useMemo(() => createPlayerRunClient({
-    runId: authoritativeRun?.id, sessionId, invoke: cloudflareApi.functions.invoke,
-  }), [authoritativeRun?.id, sessionId]);
+    ownerUid: account?.id, runId: authoritativeRun?.id, sessionId, invoke: cloudflareApi.functions.invoke,
+  }), [account?.id, authoritativeRun?.id, sessionId]);
   const runViewRef = useRef(null);
   useLayoutEffect(() => {
     const view = { client: runClient, active: true };

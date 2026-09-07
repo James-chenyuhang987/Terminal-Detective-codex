@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { compileFunction } from 'node:vm';
 import ts from 'typescript';
 import { createPlayerRunClient } from '../src/game/playerRun.js';
+import { memoryLocks } from './runClientFixtures.js';
 import { Case_Data_Lvl_01 } from '../src/game/caseData.js';
 import { PRIORITY_ACTIONS } from '../src/game/teamConfig.js';
 import { canAgentInvestigate } from '../src/game/agentStamina.js';
@@ -169,7 +170,11 @@ async function interviewRuntime({ lost = false, deferredAnswer = false } = {}) {
   let cloud = { id: 'paid-interview', revision: 0, status: 'active', linked_pairs: [], state: { run_id: 'paid-interview', turn_count: 0, unlocked_clues: [], agent_stamina: { 'NEXUS-01': 100 } } };
   const answer = { response: 'The answer from the cloud ledger.', npc_name: npc.name, cooperationChange: 1, packs: { refreshed: true } };
   let sequence = 0;
-  const options = { runId: cloud.id, sessionId: 'device', storage, createId: () => `intent-${++sequence}`, invoke: async (_name, body) => {
+  const calls = [];
+  let activeSession = 'device';
+  const options = { ownerUid: 'fixture-owner', runId: cloud.id, sessionId: activeSession, storage, locks: memoryLocks(), createId: () => `intent-${++sequence}`, invoke: async (_name, body) => {
+    calls.push(structuredClone(body));
+    if (body.session_id !== activeSession) throw Object.assign(new Error('Session taken'), { code: 'SESSION_TAKEN' });
     if (body.action === 'status') return { data: { authority_version: 1, run: cloud } };
     if (!ledger.has(body.operation_id)) {
       stored.charges++;
@@ -201,12 +206,13 @@ async function interviewRuntime({ lost = false, deferredAnswer = false } = {}) {
   for (const name of ['beginAbortableOperation', 'isOperationCurrent', 'executeRunCommand', 'handleAbort']) bindings[name] = handler(name, bindings);
   const refreshRecovery = () => { bindings.recoveryPresentationRef.current = handler('presentRecoveredResponse', bindings); };
   refreshRecovery();
-  return { stored, bindings, client, pending,
+  return { stored, bindings, client, pending, calls,
     ask: () => handler('handleNPCQuestion', bindings)({ questionId: 'question-1', text: 'Question?' }),
     close: () => handler('handleNPCDialogueClose', bindings)(),
     resume: () => { refreshRecovery(); return handler('resumeRun', bindings)(); },
     reload: () => {
-      bindings.runClient = createPlayerRunClient(options);
+      activeSession = 'newly-claimed-device';
+      bindings.runClient = createPlayerRunClient({ ...options, sessionId: activeSession });
       bindings.runViewRef.current = { client: bindings.runClient, active: true };
       bindings.executeRunCommand = handler('executeRunCommand', bindings);
       bindings.pendingQuestionPresentationRef.current = null;
@@ -231,6 +237,9 @@ test('actual lost-answer receipt replay restores dialogue and fresh options with
     assert.equal(h.stored.dialogue.filter(line => line.role === 'npc').length, 1);
     assert.deepEqual(h.stored.packs, { refreshed: true });
     assert.equal(h.client.hasPending(), false);
+    const requests = h.calls.filter(body => body.action === 'command');
+    assert.equal(requests.length, 2);
+    assert.deepEqual(requests[1], { ...requests[0], session_id: reload ? 'newly-claimed-device' : 'device' });
     h.close();
     if (!reload) assert.equal(currentTheaterNarrative(h.stored.narrative).stage, 'opening');
   }

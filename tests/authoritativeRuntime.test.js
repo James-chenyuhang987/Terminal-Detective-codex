@@ -38,6 +38,21 @@ const run = (extra = {}) => ({
   npc_emotions: { npc_1: { level: 'broken' } }, truth_fragments: 3, pending_crisis: { id: 'purge' }, ...extra,
 });
 
+test('runtime journal identity and memo invalidation include the authenticated profile owner', () => {
+  const account = { id: 'firebase-owner' };
+  const authoritativeRun = { id: 'paid-run' };
+  const invoke = () => {};
+  let dependencies;
+  const result = handler('runClient', {
+    account, authoritativeRun, sessionId: 'claimed-session', cloudflareApi: { functions: { invoke } },
+    createPlayerRunClient: options => options,
+    useMemo: (factory, deps) => { dependencies = deps; return factory(); },
+  });
+  assert.deepEqual(result, { ownerUid: account.id, runId: authoritativeRun.id, sessionId: 'claimed-session', invoke });
+  assert.deepEqual(dependencies, [account.id, authoritativeRun.id, 'claimed-session']);
+  assert.match(text, /const \{ sessionId, account \} = useProfile\(\)/);
+});
+
 test('actual commit stores exact server state and dependent crisis, links, emotion, crash values without local re-rolls', () => {
   const h = commitHarness();
   const snapshot = run();

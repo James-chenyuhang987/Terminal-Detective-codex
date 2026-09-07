@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { compileFunction } from 'node:vm';
 import ts from 'typescript';
 import { createPlayerRunClient } from '../src/game/playerRun.js';
+import { memoryLocks } from './runClientFixtures.js';
 import { Case_Data_Lvl_01, ReAct_Enum } from '../src/game/caseData.js';
 import { buildTeamConfig, PRIORITY_ACTIONS } from '../src/game/teamConfig.js';
 import { applyStaminaToTeam, canAgentInvestigate } from '../src/game/agentStamina.js';
@@ -40,11 +41,13 @@ async function runtimeFixture({ lostQuestion = false, seedRun = () => {}, jointR
   const calls = [];
   const stored = { errors: [], dialogue: [], packs: null, lines: [], ready: true };
   let sequence = 0;
-  const client = createPlayerRunClient({
-    runId: run.id, sessionId: 'fixture-device', createId: () => `intent-${++sequence}`,
+  let activeSession = 'fixture-device';
+  const clientOptions = {
+    ownerUid: 'fixture-owner', runId: run.id, sessionId: activeSession, locks: memoryLocks(), createId: () => `intent-${++sequence}`,
     storage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     invoke: async (_name, body) => {
       calls.push(body);
+      if (body.session_id !== activeSession) throw Object.assign(new Error('Session taken'), { code: 'SESSION_TAKEN' });
       if (body.action === 'status') return { data: { authority_version: 1, run: authority.publicRun(run) } };
       if (ledger.has(body.operation_id)) return ledger.get(body.operation_id);
       assert.equal(body.expected_revision, run.revision);
@@ -55,7 +58,8 @@ async function runtimeFixture({ lostQuestion = false, seedRun = () => {}, jointR
       if (lostQuestion && body.command.type === 'question') throw new Error('Accepted answer lost');
       return response;
     },
-  });
+  };
+  const client = createPlayerRunClient(clientOptions);
   const bindings = {
     useCallback: fn => fn, runClient: client, runViewRef: { current: { active: true, client } }, lang: 'en', t: {},
     commandInFlightRef: { current: false }, gameStateRef: { current: null }, bsodCountRef: { current: 0 },
@@ -95,6 +99,15 @@ async function runtimeFixture({ lostQuestion = false, seedRun = () => {}, jointR
   for (const name of ['commitServerRun', 'executeRunCommand', 'beginAbortableOperation', 'isOperationCurrent']) bindings[name] = handler(name, bindings);
   bindings.commitServerRun((await client.resume()).run);
   return { bindings, stored, calls, client, cloud: () => run, perform: name => handler(name, bindings),
+    reload: () => {
+      activeSession = 'newly-claimed-device';
+      bindings.runClient = createPlayerRunClient({ ...clientOptions, sessionId: activeSession });
+      bindings.runViewRef.current = { active: true, client: bindings.runClient };
+      bindings.executeRunCommand = handler('executeRunCommand', bindings);
+      bindings.pendingQuestionPresentationRef.current = null;
+      bindings.selectedNPC = null;
+      stored.dialogue = [];
+    },
     resume: () => { bindings.recoveryPresentationRef.current = handler('presentRecoveredResponse', bindings); return handler('resumeRun', bindings)(); },
   };
 }
@@ -205,6 +218,7 @@ test('lost real reducer question response replays its answer and options without
   const chargedStamina = h.cloud().state.agent_stamina[executorId];
   assert.equal(h.stored.ready, false);
   assert.equal(h.client.hasPending(), true);
+  h.reload();
   await h.resume();
   assert.equal(h.stored.ready, true);
   assert.equal(h.client.hasPending(), false);
@@ -213,5 +227,5 @@ test('lost real reducer question response replays its answer and options without
   assert.deepEqual(h.stored.packs, h.cloud().interrogation_options[npc.npc_id].packs);
   const requests = h.calls.filter(body => body.command?.type === 'question');
   assert.equal(requests.length, 2);
-  assert.deepEqual(requests[0], requests[1]);
+  assert.deepEqual(requests[1], { ...requests[0], session_id: 'newly-claimed-device' });
 });
