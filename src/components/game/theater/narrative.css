@@ -1,4 +1,6 @@
 .td-narrative {
+  --narrative-gold: #d8be88;
+  --narrative-serif: 'Times New Roman', 'Songti SC', 'Noto Serif CJK SC', SimSun, serif;
   position: fixed;
   inset: max(8px, env(safe-area-inset-top, 0px)) 12px auto;
   margin: 0 auto;
@@ -6,45 +8,61 @@
   max-width: none;
   height: calc(50dvh - max(8px, env(safe-area-inset-top, 0px)));
   max-height: calc(100dvh - 24px);
-  padding: clamp(12px, 2vw, 22px);
-  border: 1px solid #68cbd5;
-  border-radius: 12px;
-  background: #06131bf5;
-  color: #ddf6f4;
-  box-shadow: 0 8px 48px #0009, inset 0 0 32px #20778c18;
-  font-family: 'Courier New', monospace;
+  padding: clamp(14px, 2.4vw, 28px);
+  border: 1px solid #8d815b;
+  border-radius: 4px 18px 4px 18px;
+  background: radial-gradient(ellipse at 100% 0, #23404b66, transparent 60%), linear-gradient(125deg, #101e28, #08121b);
+  color: #eee8db;
+  box-shadow: 0 20px 70px #000b, 0 0 0 4px #09151cc9, inset 0 0 0 5px #bdab7820;
+  font-family: var(--narrative-serif);
   overflow: hidden;
 }
-.td-narrative[open] { display: flex; flex-direction: column; gap: 10px; }
-.td-narrative::backdrop { background: #01081033; }
-.td-narrative header { flex: 0 0 auto; }
-.td-narrative header small { color: #85d6da; font-size: 11px; letter-spacing: .12em; }
-.td-narrative h2 { margin: 5px 0 0; font-size: clamp(16px, 2vw, 22px); line-height: 1.35; overflow-wrap: anywhere; }
-.td-narrative-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.td-narrative-copy { white-space: pre-wrap; overflow-wrap: anywhere; font-size: clamp(14px, 1.3vw, 17px); line-height: 1.65; margin: 0; }
+.td-narrative::before, .td-narrative::after { content: ''; position: absolute; width: 25px; height: 25px; pointer-events: none; color: var(--narrative-gold); opacity: .75; }
+.td-narrative::before { top: 7px; left: 7px; border-top: 1px solid; border-left: 1px solid; }
+.td-narrative::after { bottom: 7px; right: 7px; border-bottom: 1px solid; border-right: 1px solid; }
+.td-narrative[open] { display: flex; flex-direction: column; gap: 12px; }
+.td-narrative::backdrop { background: #0208106b; }
+.td-narrative header { flex: 0 0 auto; padding-bottom: 12px; border-bottom: 1px solid #b7a47a40; }
+.td-narrative header small { display: block; color: #92b9bd; font-family: 'Courier New', monospace; font-size: 10px; letter-spacing: .2em; }
+.td-narrative h2 { margin: 7px 0 0; color: var(--narrative-gold); font-family: var(--narrative-serif); font-size: clamp(20px, 2.25vw, 28px); font-weight: 400; letter-spacing: .045em; line-height: 1.25; overflow-wrap: anywhere; }
+.td-narrative-scroll { flex: 1 1 auto; min-height: 0; padding: 6px 12px; border-left: 2px solid #b8a17350; border-radius: 2px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #887950 #0a1822; }
+.td-narrative-copy { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--narrative-serif); font-size: clamp(16px, 1.5vw, 20px); font-weight: 400; line-height: 1.8; letter-spacing: .015em; margin: 0; }
 .td-narrative-unrevealed { visibility: hidden; }
-.td-narrative footer { flex: 0 0 auto; }
-.td-narrative-actions, .td-narrative nav { display: flex; flex-wrap: wrap; gap: 6px; }
-.td-narrative nav { margin-top: 6px; }
+.td-narrative footer { flex: 0 0 auto; padding-top: 10px; border-top: 1px solid #b7a47a30; }
+.td-narrative-actions, .td-narrative nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.td-narrative nav { margin-top: 8px; }
 .td-narrative button {
   min-height: 44px;
   min-width: 44px;
-  padding: 8px 12px;
-  border: 1px solid #5196a2;
-  border-radius: 6px;
-  background: #0b2632;
-  color: #e6ffff;
+  padding: 8px 16px;
+  border: 1px solid #637b805e;
+  border-radius: 4px;
+  background: #152936;
+  color: #e8e5da;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
-.td-narrative button:disabled { opacity: .5; cursor: default; }
-.td-narrative :focus-visible { outline: 2px solid #f4d99f; outline-offset: 2px; }
-.td-narrative-error { margin: 0; color: #ffb4b4; font-size: 13px; max-height: 3em; overflow: auto; }
+.td-narrative button:hover:not(:disabled) { background: #263c45; border-color: var(--narrative-gold); }
+.td-narrative button.is-primary { background: #d8be88; border-color: #eed8aa; color: #13212b; font-weight: 700; }
+.td-narrative button.is-primary:hover:not(:disabled) { background: #ead4a7; }
+.td-narrative nav button { background: transparent; color: #a8c1c3; font-size: 13px; }
+.td-narrative button:disabled { opacity: .45; cursor: default; }
+.td-narrative :focus-visible { outline: 2px solid var(--narrative-gold); outline-offset: 2px; }
+.td-narrative .td-narrative-scroll:focus { outline: none; }
+.td-narrative .td-narrative-scroll:focus-visible { box-shadow: inset 0 0 0 1px #d8be8880; background: #d8be8808; }
+.td-narrative-error { margin: 0; color: #ffb4b4; font-size: 14px; max-height: 3em; overflow: auto; }
 .td-narrative-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: pre-wrap; border: 0; }
 @media (max-width: 480px) {
-  .td-narrative { inset-inline: 8px; width: calc(100% - 16px); gap: 8px; }
-  .td-narrative button { padding-inline: 8px; font-size: 12px; }
-  .td-narrative nav button { flex: 1; }
+  .td-narrative { inset-inline: 8px; width: calc(100% - 16px); }
+  .td-narrative[open] { gap: 8px; }
+  .td-narrative header { padding-bottom: 8px; }
+  .td-narrative header small { font-size: 9px; letter-spacing: .1em; }
+  .td-narrative-scroll { padding: 4px 8px; }
+  .td-narrative-copy { line-height: 1.7; }
+  .td-narrative-actions, .td-narrative nav { gap: 6px; }
+  .td-narrative button { padding-inline: 8px; font-size: 13px; }
+  .td-narrative nav button { flex: 1; font-size: 12px; }
 }
-@media (prefers-reduced-motion: reduce) { .td-narrative { scroll-behavior: auto; } }
+@media (prefers-reduced-motion: reduce) { .td-narrative { scroll-behavior: auto; } .td-narrative button { transition: none; } }
