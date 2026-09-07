@@ -11,7 +11,7 @@ Health check: `https://terminal-detective-codex.terminal-detective.workers.dev/a
 - The browser sends a short-lived Firebase ID token in the `Authorization: Bearer` header.
 - The Worker uses `jose` to verify the RS256 signature, Google certificate `kid`, issuer, audience, `exp`, `iat`, `auth_time`, UID and verified-email claim.
 - Cloudflare D1 stores profiles and game progress under the Firebase UID.
-- Profile mutations use one browser WAL v2 record per UID, operation ID and lineage plus a D1 operation ledger, so retries remain ordered and idempotent while cross-tab forks fail closed instead of overwriting progress.
+- D1 is authoritative for resources, progression and paid investigation runs. Browsers submit allowlisted intents, never economic patches or run snapshots. Profile and run operation ledgers bind each intent to an owner, revision, hash and persisted result for idempotent retries.
 - Protected detective rules execute inside the Worker and never enter the browser bundle.
 - The previous `td_session` cookie and Worker-hosted GitHub OAuth callback are no longer used.
 
@@ -25,8 +25,9 @@ Runtime baseline: Node.js 22+ for tooling, React 18.3.1, Firebase Web SDK 12.18.
 | `GET /api/cloudflare/status` | Public | Aggregate readiness; returns `503` until all checks pass. |
 | `GET /api/auth/session` | Firebase ID token | Return the normalized `firebase-cloudflare` account. |
 | `GET /api/apps/:appId/entities/User/me` | Firebase ID token | Read the current token owner's account and profile. |
-| `POST /api/apps/:appId/functions/playerProfile` | Firebase ID token | Claim a device session, read status or apply an idempotent patch for the verified token UID. |
-| `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID token | Run allowlisted deterministic game rules. |
+| `POST /api/apps/:appId/functions/playerProfile` | Firebase ID token | Claim a device session, read status or execute an authoritative profile intent for the verified token UID. |
+| `POST /api/apps/:appId/functions/playerRun` | Firebase ID token | Read or advance an owned, paid, persisted investigation using intent commands. |
+| `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID token | Informational deterministic rules only; these results cannot authorize rewards. |
 
 The browser cannot select a profile owner through a request header or payload; the Worker derives it only from the verified Firebase token. Unknown `/api/*` paths return JSON 404 and never fall through to the SPA.
 
@@ -90,20 +91,22 @@ Worker deployment also requires a repository Actions secret named `CLOUDFLARE_AP
 
 `cloudflare/migrations/0002_reset_for_firebase.sql` intentionally removed the old users, OAuth accounts, sessions and profiles for the original Firebase UID rollout. That destructive initialization is historical, not part of ongoing releases. **Never rerun `0002` against a live database with player data.** Do not reset migration history or apply its SQL manually to make a readiness check pass.
 
-`0003_profile_operations.sql` adds the idempotency ledger required by profile writes. Production has applied migrations `0001` through `0003`. Any future schema change needs a separately reviewed migration and backup/recovery plan; a new empty environment also requires explicit review before initialization. Building, testing, deploying and smoke-checking code never apply D1 migrations automatically.
+`0003_profile_operations.sql` adds the historical profile ledger. **This authority release requires the additive `0004_authoritative_state.sql` migration before readiness can pass.** It adds initialization versioning, persisted operation results, owned paid runs and their command ledger; it does not delete or reset player data. Applying it to a live environment requires separate approval and a backup/recovery plan. Do not rerun historical migrations or reset migration history. Building, testing, deploying and smoke-checking code never apply D1 migrations automatically.
 
-`/api/auth/config` verifies the Firebase project ID, D1 binding, required columns, migration `0003_profile_operations.sql`, table primary keys, one complete non-partial unique `users.email` index, and the profile cascade foreign keys. `/api/cloudflare/status` returns HTTP `503` until those checks pass; the frontend also confirms that its Firebase project ID matches the Worker before starting authentication.
+`/api/auth/config` verifies the Firebase project ID, D1 binding, required authority columns/tables, migration `0004_authoritative_state.sql`, table primary keys, one complete non-partial unique `users.email` index, and owner cascade foreign keys. `/api/cloudflare/status` returns HTTP `503` until those checks pass; the frontend also confirms that its Firebase project ID matches the Worker before starting authentication.
 
 ## Profile durability model
 
-1. Before changing the optimistic profile, the browser writes an individual WAL v2 record to `localStorage`.
-2. Records are isolated by full Firebase UID, operation ID and tab lineage, and include a checksum, base revision, timestamp and attempt count.
-3. A single lineage replays in persisted order. The next base revision advances only after the prior operation is confirmed at exactly `base + 1`; new mutations remain blocked for the complete replay.
-4. D1 applies a patch only when both `profile_revision` and `active_session_id` still match.
-5. `profile_operations` binds an operation ID to its patch SHA-256 and result revision. A retry returns the committed result; reuse with different content is rejected.
-6. Every write requires a non-negative safe-integer `expected_revision` and a non-empty patch. Both the patch and the resulting complete profile are capped at 512 KiB.
-7. Temporary network/platform failures leave the WAL pending for login, online-event and 20-second polling replay. True stale revisions, damaged WAL data and multiple lineages enter explicit recovery instead of silently rebasing absolute values.
-8. Case settlements also keep one UID/run outbox intent until the corresponding profile operation commits.
+1. All economic and reward-affecting operations require online server confirmation. `action: 'patch'`, imports, resets and client-supplied settlement summaries are rejected.
+2. Profile commands include `session_id`, `operation_id`, a nonnegative safe-integer `expected_revision`, and an allowlisted `command` object. The authenticated UID is never caller-selectable.
+3. D1 applies an intent only when both the profile/run revision and active device session match. A takeover makes old-device commands and replays fail closed.
+4. Each ledger binds the operation ID to the canonical command SHA-256, base/result revisions and result JSON. Lost-response retries return the identical stored `result` alongside current authoritative state; different content cannot reuse the ID.
+5. Business rejections return HTTP 200 with `result.error`, are recorded once and advance the revision. Invalid command fields and forged snapshots return HTTP 400 without an economic write.
+6. Requests are limited to 32 KiB; stored profiles, runs and results to 512 KiB. No client clock, resource total, XP, rank or completion assertion is trusted.
+7. `start_case` atomically charges canonical energy/items and creates one owned run. A second unsettled run cannot start. Run commands update only the server reducer state; `settle_case` derives rewards exclusively from that persisted terminal run.
+8. Empty profiles receive initial resources once. Existing D1 snapshots are preserved as the migration baseline; no browser migration patch is required or accepted. Previously forged data cannot be distinguished retroactively from legitimate snapshots.
+
+See [the backend authority protocol](../docs/backend-authority.md) for intent envelopes, replay semantics and rollout constraints.
 
 This protects against refreshes and temporary outages, not deletion of browser site data or an indefinitely unavailable D1 database. A device takeover makes the previous device read-only and preserves its local pending records for an explicit recovery decision.
 
@@ -115,7 +118,7 @@ This protects against refreshes and temporary outages, not deletion of browser s
 4. Require the Worker post-deploy smoke gate to pass. Only then can the dependent Pages job verify, build and publish its mirror.
 5. After `actions/deploy-pages`, require the same strict smoke gate against its actual `page_url`, including the Pages subpath, critical assets and the configured Worker API origin. A failed postcheck fails the job; it does not undo a deployment already published.
 
-For an explicitly approved manual code deployment, `npm run cloudflare:deploy` retains the same full gate; run both applicable site postchecks below afterwards. Database administration is a separate operation, never a prerequisite for an ordinary code release.
+For an explicitly approved manual code deployment, `npm run cloudflare:deploy` retains the same full gate; run both applicable site postchecks below afterwards. Database administration is a separate operation. Unlike an ordinary code-only release, this authority release requires the separately approved additive `0004` schema prerequisite; deploying without it intentionally leaves readiness unavailable. Publish the coordinating authority-capable client and Worker together: old patch-based clients intentionally cannot spend or settle through this API.
 
 ## Read-only release smoke gate
 

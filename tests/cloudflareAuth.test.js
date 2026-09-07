@@ -346,10 +346,8 @@ test('Firebase user bootstrap distinguishes identity conflicts from database out
   }
 });
 
-test('profile patches reject metadata and accept only progress fields', () => {
-  assert.deepEqual(profileInternals.cleanPatch({ gold: 500, detective_name: 'Nova' }), {
-    gold: 500, detective_name: 'Nova',
-  });
+test('legacy profile patches fail closed for all fields', () => {
+  assert.equal(profileInternals.cleanPatch({ gold: 500, detective_name: 'Nova' }), null);
   assert.equal(profileInternals.cleanPatch({ id: 'forged', gold: 500 }), null);
   assert.equal(profileInternals.cleanPatch([]), null);
   assert.equal(profileInternals.cleanPatch({ gold: Number.POSITIVE_INFINITY }), null);

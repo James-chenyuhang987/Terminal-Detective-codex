@@ -8,6 +8,7 @@ import {
   handleCurrentUser,
   handleProfileFunction,
 } from './profile.js';
+import { handleRunFunction } from './run.js';
 import { readBodyBytes } from './body.js';
 import { validateRuleEnvelope } from './requestSecurity.js';
 
@@ -20,6 +21,7 @@ const KNOWN_SERVER_ERRORS = new Set([
   'FIREBASE_NOT_CONFIGURED',
   'FIREBASE_PROFILE_CONFLICT',
   'PROFILE_DATA_CORRUPT',
+  'RUN_DATA_CORRUPT',
 ]);
 const PUBLIC_RULE_ERRORS = new Set([
   'INVALID_CLUES',
@@ -177,6 +179,7 @@ async function routeRequest(request, env) {
   const rulesPath = `${appPrefix}/functions/detectiveRules`;
   const currentUserPath = `${appPrefix}/entities/User/me`;
   const profilePath = `${appPrefix}/functions/playerProfile`;
+  const runPath = `${appPrefix}/functions/playerRun`;
   if (url.pathname === rulesPath) {
     if (request.method !== 'POST') return methodNotAllowed('POST');
     const session = await readFirebaseSession(request, env);
@@ -189,6 +192,11 @@ async function routeRequest(request, env) {
       return session
         ? handleCurrentUser(request, env, session)
         : errorResponse('UNAUTHENTICATED', 401);
+    }
+    if (url.pathname === runPath) {
+      if (request.method !== 'POST') return methodNotAllowed('POST');
+      const session = await readFirebaseSession(request, env);
+      return session ? handleRunFunction(request, env, session) : errorResponse('UNAUTHENTICATED', 401);
     }
     if (url.pathname === profilePath) {
       if (request.method !== 'POST') return methodNotAllowed('POST');
