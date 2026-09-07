@@ -6,11 +6,7 @@ import { DETECTIVE_LEVEL_CAP, XP_PER_LEVEL, normalizeAgentProgression } from '@/
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import LevelUpModal from '@/components/game/LevelUpModal';
 import { useLang } from '@/lib/lang.jsx';
-import {
-  calculateCaseXP,
-  isPassingCaseScore,
-  normalizeCaseScore,
-} from '@/game/caseEvaluation';
+import { normalizeCaseScore } from '@/game/caseEvaluation';
 
 // ── XP formula ────────────────────────────────────────────────────────────────
 const SCORE_TITLES = {
@@ -247,11 +243,11 @@ const AGENT_NAMES  = ['隼目', '破心', '幽灵'];
 const AGENT_ICONS  = ['👁️', '🔥', '💻'];
 const AGENT_COLORS = ['#00e5ff', '#ff6b6b', '#a78bfa'];
 
-export default function GameOverScreen({ judgeResult, gameState, caseData, rewardEligible = false, onReturnToLobby, onReturnToLanding, onSettlement }) {
+export default function GameOverScreen({ judgeResult, gameState, caseData, onReturnToLobby, onReturnToLanding, onSettlement }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const { profile } = useProfile();
-  const xpGain = calculateCaseXP(judgeResult, gameState, caseData, rewardEligible);
+  const [xpGain, setXpGain] = useState(null);
   const [oldProg] = useState(() => normalizeAgentProgression(profile?.agent_progression));
   const [oldDetective] = useState(() => ({ level: profile?.level || 1, xp: profile?.xp || 0 }));
   const [newProg, setNewProg] = useState(null);
@@ -276,21 +272,22 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
     settlementSentRef.current = true;
     setSettlementStatus('saving');
     try {
-      const result = await onSettlement?.({
-        xpGain: xpGain.total,
-      });
-      if (result?.error) throw new Error(result.error);
-      setNewProg(normalizeAgentProgression(result?.profile?.agent_progression || oldProg));
+      const result = await onSettlement?.();
+      const breakdown = result?.result?.xp_breakdown || result?.xp_breakdown;
+      if (result?.error || result?.result?.error || result?.pending || !result?.profile
+        || !breakdown || !Number.isFinite(breakdown.total)) throw new Error('UNCONFIRMED_SETTLEMENT');
+      setXpGain(breakdown);
+      setNewProg(normalizeAgentProgression(result.profile.agent_progression));
       setSettledDetective(result?.profile ? {
         level: result.profile.level,
         xp: result.profile.xp,
       } : null);
-      setSettlementStatus(result?.pending ? 'queued' : 'saved');
+      setSettlementStatus('saved');
     } catch {
       settlementSentRef.current = false;
       setSettlementStatus('error');
     }
-  }, [oldProg, onSettlement, xpGain.total]);
+  }, [onSettlement]);
 
   useEffect(() => { void syncSettlement(); }, [syncSettlement]);
 
@@ -311,19 +308,19 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
   }, []);
 
   const score = normalizeCaseScore(judgeResult?.score);
-  const isPassed = isPassingCaseScore(score);
+  const isPassed = judgeResult?.is_passed === true;
   const scoreTitle = zh ? (SCORE_TITLES[score] || '见习侦探') : (SCORE_TITLES_EN[score] || 'DETECTIVE TRAINEE');
   const mainColor = isPassed ? '#00ff88' : '#ff3860';
-  const settlementCanLeave = ['saved', 'queued'].includes(settlementStatus);
+  const settlementCanLeave = settlementStatus === 'saved';
 
-  const BONUS_ROWS = [
+  const BONUS_ROWS = xpGain ? [
     { label: zh ? `案件评分 · ${score} 级` : `CASE RANK · ${score}`, sublabel: scoreTitle, val: xpGain.base, color: { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' }[score] || '#888', icon: { S: '🏆', A: '⭐', B: '🔰', C: '📋', D: '📝' }[score] || '📋' },
     { label: `${zh ? '线索收集' : 'CLUES COLLECTED'} · ${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, sublabel: `${zh ? '完成度' : 'COMPLETION'} ${Math.round(((gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1)) * 100)}%${isPassed ? '' : (zh ? ' · 过程经验减半' : ' · PROCESS XP AT 50%')}`, val: xpGain.clueBonus, color: '#a78bfa', icon: '🔍' },
     { label: `${zh ? 'AP 效率 · 剩余' : 'AP EFFICIENCY · REMAINING'} ${gameState.action_points_left || 0}${zh ? ' 点' : ''}`, sublabel: zh ? '结合调查完成度计算，上限 60 XP' : 'Weighted by investigation progress, maximum 60 XP', val: xpGain.apBonus, color: '#ffaa00', icon: '⚡' },
     { label: `${zh ? '混乱控制 · 最终' : 'CONFUSION CONTROL · FINAL'} ${gameState.confusion_score || 0}%`, sublabel: zh ? '结合调查完成度计算（满分 45 XP）' : 'Weighted by investigation progress (maximum 45 XP)', val: xpGain.confusionBonus, color: '#00ff88', icon: '🧠' },
-    { label: zh ? '无系统崩溃' : 'NO SYSTEM CRASH', sublabel: gameState.confusion_score < 100 ? (zh ? '全程稳定运行' : 'Stable throughout the case') : (zh ? '触发过 BSoD' : 'BSoD triggered'), val: xpGain.noBSoD, color: '#ff3aff', icon: '🛡️' },
+    { label: zh ? '无系统崩溃' : 'NO SYSTEM CRASH', sublabel: zh ? '按云端记录的崩溃次数结算' : 'Based on the cloud-recorded crash count', val: xpGain.noBSoD, color: '#ff3aff', icon: '🛡️' },
     ...(xpGain.outcomeAdjustment < 0 ? [{ label: zh ? '未结案经验调整' : 'UNSOLVED CASE ADJUSTMENT', sublabel: zh ? '报告未通过，但已保留调查过程经验' : 'The report was rejected, but process XP is retained', val: xpGain.outcomeAdjustment, color: '#ff3860', icon: '📝' }] : []),
-  ];
+  ] : [];
 
   return (
     <div className="td-game-over td-page-shell" style={{
@@ -384,7 +381,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>{zh ? '本局总计获得' : 'TOTAL EARNED'}</span>
             <span style={{ color: '#00ff88', fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', textShadow: '0 0 16px #00ff88' }}>
-              {phase !== 'summary' ? <Counter target={xpGain.total} suffix=" XP" color="#00ff88" duration={1200} /> : `+${xpGain.total} XP`}
+              {!xpGain ? (zh ? '等待云端确认' : 'AWAITING CLOUD') : phase !== 'summary' ? <Counter target={xpGain.total} suffix=" XP" color="#00ff88" duration={1200} /> : `+${xpGain.total} XP`}
             </span>
           </div>
         </div>
@@ -451,10 +448,8 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, rewar
         }}>
           {settlementStatus === 'saved'
             ? (zh ? '✓ 调查档案已同步至 Cloudflare' : '✓ INVESTIGATION SYNCED TO CLOUDFLARE')
-            : settlementStatus === 'queued'
-              ? (zh ? '◌ 奖励已安全保存在本机，网络恢复后自动同步' : '◌ REWARDS SAVED LOCALLY AND QUEUED FOR CLOUD SYNC')
             : settlementStatus === 'error'
-              ? (zh ? '⚠ 云端结算失败，奖励尚未写入' : '⚠ CLOUD SETTLEMENT FAILED. REWARDS NOT SAVED.')
+              ? (zh ? '⚠ 云端结算尚未确认；重试会核对同一案件，不会重复发奖。' : '⚠ CLOUD SETTLEMENT UNCONFIRMED. RETRY CHECKS THE SAME RUN WITHOUT DUPLICATE REWARDS.')
               : (zh ? '⟳ 正在同步调查结算…' : '⟳ SYNCING CASE SETTLEMENT…')}
           {settlementStatus === 'error' && <button className="td-ui-button td-button-danger td-button-compact" onClick={() => void syncSettlement()} style={{ marginLeft: 9 }}>{zh ? '重试' : 'RETRY'}</button>}
         </div>

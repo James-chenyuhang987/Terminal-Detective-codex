@@ -5,38 +5,22 @@ import {
   canPresentTheaterNarrative, createTheaterNarrativeState, currentTheaterNarrative,
   successfulInterviewEvent, theaterNarrativeReducer, theaterNarrativeStage,
 } from '@/game/theaterNarrative';
-import { ReAct_Enum, Legal_Actions_List, Phase_Color_Map, Case_Data_Lvl_01, localizeCase } from '@/game/caseData';
+import { ReAct_Enum, Phase_Color_Map, Case_Data_Lvl_01, localizeCase } from '@/game/caseData';
+import { useProfile } from '@/lib/ProfileContext.jsx';
+import { cloudflareApi } from '@/api/cloudflareClient';
+import { createPlayerRunClient, isAuthoritativeRun, runRecoveryMessage } from '@/game/playerRun';
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError';
 import MiniMap from '@/components/game/MiniMap';
 import TheaterPresentation from '@/components/game/theater/TheaterPresentation';
 import '@/components/game/theater/theater.css';
-import {
-  createInitialGameState,
-  generateObservationSections,
-  applySettlementResult,
-  applyRecoveryTurn,
-  buildLastActionContext,
-  pushCheckpoint,
-  checkConflictClues,
-} from '@/game/gameState';
-import { getAvailableClueIds, getInitialZone } from '@/game/caseRuntime';
-import { acquireClues, destroyClues, getHiddenCluesDue, removeEvidenceLinks } from '@/game/clueState';
-import { advanceCrisisSchedule, settleRoundEvidence } from '@/game/roundCrisis';
-import { streamInvestigationThought, streamTerminalText, settleAction, linkCheck, setInvestigationLang } from '@/game/investigationEngine';
-import {
-  getDecisionOptionPacks,
-  getInterrogationOptionPacks,
-  getStructuredReportOptions,
-  judgeStructuredReport,
-  resolveInterrogationOption,
-  setRulesLang,
-} from '@/game/detectiveRulesClient';
+import { generateObservationSections } from '@/game/gameState';
+import { getInitialZone } from '@/game/caseRuntime';
+import { streamInvestigationThought, streamTerminalText, setInvestigationLang } from '@/game/investigationEngine';
 import DecisionCards from '@/components/game/DecisionCards';
 import LinkCinematic from '@/components/game/LinkCinematic';
 import { EmotionBadge } from '@/components/game/InterrogationHints';
-import { getEmotion, shiftEmotion } from '@/game/npcEmotion';
-import { nextCrisisIn, rollCrisis, applyCrisisChoice } from '@/game/crisisEvents';
+import { getEmotion } from '@/game/npcEmotion';
 import CrisisAlert from '@/components/game/CrisisAlert';
 import InsightFlashFX from '@/components/game/InsightFlashFX';
 import LinkBoard from '@/components/game/LinkBoard';
@@ -67,64 +51,73 @@ import {
   shouldPlayActionCinematic,
 } from '@/game/actionCinematic';
 import {
-  applyCommandContingency,
-  applyDecisionCommandCost,
-  applyEmergencyStabilize,
-  awardCommandMilestone,
-  buildExecutingStrategy,
-  recommendExecutor,
-} from '@/game/commandSystem';
-import {
   getTerminalLinesForTurn,
   getTerminalTurns,
   stepTerminalTurn,
 } from '@/game/turnArchive';
-import { getRejectedReportPenalty } from '@/game/caseEvaluation';
-import { stableNarrativeHash } from '@/game/narrativeEngine';
-import {
-  applyStaminaToTeam,
-  canAgentInvestigate,
-  recoverAgentStaminaTurn,
-  spendAgentStamina,
-} from '@/game/agentStamina';
+import { applyStaminaToTeam, canAgentInvestigate } from '@/game/agentStamina';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
 const PHASE_COLORS = Phase_Color_Map;
 
-export default function InvestigationTerminal({ agentStrategy, selectedCase, onGameEnd, onBackToLobby, onSettlement, onOpenHome, presentationActive = true, narrativeBriefed = false }) {
+export default function InvestigationTerminal({ agentStrategy, authoritativeRun = null, selectedCase, onGameEnd, onBackToLobby, onSettlement, onOpenHome, presentationActive = true, narrativeBriefed = false }) {
   const { lang, t } = useLang();
+  const { sessionId } = useProfile();
+  const [serverRun, setServerRun] = useState(authoritativeRun);
+  const [authorityReady, setAuthorityReady] = useState(false);
+  const [authorityError, setAuthorityError] = useState(null);
+  const [authorityLoading, setAuthorityLoading] = useState(false);
+  const commandInFlightRef = useRef(false);
+  const runClient = useMemo(() => createPlayerRunClient({
+    runId: authoritativeRun?.id, sessionId, invoke: cloudflareApi.functions.invoke,
+  }), [authoritativeRun?.id, sessionId]);
+  const runViewRef = useRef(null);
+  useLayoutEffect(() => {
+    const view = { client: runClient, active: true };
+    runViewRef.current = view;
+    commandInFlightRef.current = false;
+    return () => { view.active = false; };
+  }, [runClient]);
   const { settings, setSetting } = useSettings();
   const theaterMode = settings.storyMode === 'theater';
   const theaterSpatialRef = useRef({ arrived: narrativeBriefed });
   const dialogueSequenceRef = useRef(0);
+  const closedDialogueRef = useRef(0);
+  const recoveryPresentationRef = useRef(null);
+  const pendingQuestionPresentationRef = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
   const skin = panelSkin(settings.panelLight);
   const { schedule, wait } = useManagedTimers();
   const caseDataResolved = selectedCase || Case_Data_Lvl_01;
-  const [runtimePriority, setRuntimePriority] = useState(() => agentStrategy?.priority_list || []);
-  const configuredAgentStrategy = useMemo(() => ({
-    ...(agentStrategy || {}),
-    priority_list: runtimePriority,
-    team: (agentStrategy?.team || []).map(agent => agent.agent_id === agentStrategy?.primary_agent_id
-      ? { ...agent, priority_list: runtimePriority }
-      : agent),
-  }), [agentStrategy, runtimePriority]);
+  const configuredAgentStrategy = serverRun?.agent_strategy || agentStrategy || { team: [] };
 
-  const caseData = useMemo(
-    () => localizeCase(caseDataResolved, lang),
-    [caseDataResolved, lang],
-  );
+  const caseData = useMemo(() => {
+    const localized = localizeCase(caseDataResolved, lang);
+    const revealed = new Map((serverRun?.state?.revealed_clues || []).map(clue => [clue.clue_id, clue]));
+    return {
+      ...localized,
+      clue_dictionary: localized.clue_dictionary.map(clue => {
+        const confirmed = revealed.get(clue.clue_id);
+        if (!confirmed) return clue;
+        return {
+          ...clue,
+          keyword: lang === 'en' ? confirmed.en?.keyword || confirmed.keyword : confirmed.keyword,
+          description: lang === 'en' ? confirmed.en?.description || confirmed.description : confirmed.description,
+          visual_icon: confirmed.visual_icon,
+        };
+      }),
+    };
+  }, [caseDataResolved, lang, serverRun]);
   // 本地表达库与确定性规则的语言跟随界面语言。
-  useEffect(() => { setInvestigationLang(lang); setRulesLang(lang); }, [lang]);
+  useEffect(() => { setInvestigationLang(lang); }, [lang]);
 
-  const [gameState, setGameState] = useState(() => createInitialGameState(
-    caseDataResolved,
-    agentStrategy?.home_effects,
-    agentStrategy?.command_plan,
-    agentStrategy?.primary_agent_id,
-    (agentStrategy?.team || []).map(agent => agent.agent_id),
-  ));
+  // This inert shell only lets an invalid/legacy save render recovery controls.
+  // It is never playable, uploaded, or used to create a run.
+  const [gameState, setGameState] = useState(() => isAuthoritativeRun(authoritativeRun)
+    ? authoritativeRun.state
+    : { run_id: '', action_points_left: 0, turn_count: 0, unlocked_clues: [], destroyed_clue_ids: [],
+      agent_stamina: {}, confusion_score: 0, chat_history: [], visited_zones: [], current_zone: getInitialZone(caseDataResolved) });
   const [narrativeState, dispatchNarrative] = useReducer(theaterNarrativeReducer, gameState.run_id, createTheaterNarrativeState);
   const activeNarrative = currentTheaterNarrative(narrativeState, lang);
   const activeAgentStrategy = useMemo(() => ({
@@ -149,7 +142,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const [npcQuestionPacks, setNpcQuestionPacks] = useState(null);
   const [npcQuestionError, setNpcQuestionError] = useState(null);
   const [npcExecutorId, setNpcExecutorId] = useState(() => agentStrategy?.primary_agent_id || agentStrategy?.team?.[0]?.agent_id || '');
-  const [askedQuestionIds, setAskedQuestionIds] = useState({});
   const [toolTab, setToolTab] = useState('evidence');
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [showMiniMap, setShowMiniMap] = useState(true);
@@ -181,7 +173,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   const decisionResolveRef = useRef(null);
   const abortCtrlRef = useRef(null);
   const activeRunRef = useRef(0);
-  const nextCrisisTurnRef = useRef(nextCrisisIn());
   const bsodCountRef = useRef(0);
   const commandNoticeTimerRef = useRef(null);
   const actionCinematicResolveRef = useRef(null);
@@ -214,7 +205,73 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     crisis, decisionCards, actionCinematic, cinematic, showBSoD, showGameOver, showSettings,
     showOnboarding, showCommandConsole, mobileToolsOpen, isLinkChecking,
   }));
-  const interactionLocked = isProcessing || isFinalizing || crisisPending || narrativeVisible;
+  const interactionLocked = !authorityReady || authorityLoading || isProcessing || isFinalizing || crisisPending || showBSoD || narrativeVisible;
+
+  const commitServerRun = useCallback((run) => {
+    setServerRun(run);
+    gameStateRef.current = run.state;
+    setGameState(run.state);
+    setLinkedPairs(run.linked_pairs);
+    bsodCountRef.current = run.bsod_count || 0;
+    setNpcEmotionState(run.npc_emotions || {});
+    setTruthFragments(run.truth_fragments || 0);
+    setJudgeResult(run.judge_result || null);
+    setShowBSoD(run.state.is_crashed === true);
+    crisisPendingRef.current = Boolean(run.pending_crisis);
+    setCrisisPending(Boolean(run.pending_crisis));
+    setCrisis(run.pending_crisis || null);
+    if (['completed', 'failed', 'abandoned', 'settled'].includes(run.status)) {
+      finalSettlementRef.current = { gameState: run.state, linkedPairs: run.linked_pairs, bsodCount: run.bsod_count };
+      finalizingRef.current = true;
+      setIsFinalizing(true);
+      setFinalJudgeResult(run.judge_result || null);
+      setShowGameOver(true);
+    }
+  }, []);
+
+  const executeRunCommand = useCallback(async (command) => {
+    const view = runViewRef.current;
+    const isCurrent = () => view?.active && view.client === runClient && runViewRef.current === view;
+    if (!isCurrent()) throw new DOMException('Run view changed', 'AbortError');
+    if (commandInFlightRef.current) throw Object.assign(new Error('RUN_REQUEST_BUSY'), { code: 'RUN_REQUEST_BUSY' });
+    commandInFlightRef.current = true;
+    try {
+      const response = await runClient.command({ lang, ...command });
+      if (!isCurrent()) throw new DOMException('Run view changed', 'AbortError');
+      commitServerRun(response.run);
+      if (response.result?.error) throw Object.assign(new Error(response.result.error), { code: response.result.error, confirmed: true });
+      return response;
+    } catch (error) {
+      if (isCurrent() && !error.confirmed) {
+        setAuthorityReady(false);
+        setAuthorityError(error);
+      }
+      throw error;
+    } finally {
+      if (isCurrent()) commandInFlightRef.current = false;
+    }
+  }, [commitServerRun, lang, runClient]);
+
+  const resumeRun = useCallback(async () => {
+    const view = runViewRef.current;
+    const isCurrent = () => view?.active && view.client === runClient && runViewRef.current === view;
+    setAuthorityLoading(true);
+    setAuthorityReady(false);
+    setAuthorityError(null);
+    try {
+      const response = await runClient.resume();
+      if (!isCurrent()) return;
+      commitServerRun(response.run);
+      await recoveryPresentationRef.current?.(response);
+      if (isCurrent()) setAuthorityReady(true);
+    } catch (error) {
+      if (isCurrent()) setAuthorityError(error);
+    } finally {
+      if (isCurrent()) setAuthorityLoading(false);
+    }
+  }, [commitServerRun, runClient]);
+
+  useEffect(() => { void resumeRun(); }, [resumeRun]);
 
   useEffect(() => () => {
     activeRunRef.current += 1;
@@ -232,12 +289,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   }, []);
 
   useEffect(() => {
-    if (!reportMode) return undefined;
-    const ctrl = new AbortController();
+    if (!reportMode || !authorityReady || authorityLoading || isFinalizing) return undefined;
     let cancelled = false;
     setReportOptions(null);
     setReportError(null);
-    getStructuredReportOptions({ gameState: gameStateRef.current, caseData, signal: ctrl.signal })
+    executeRunCommand({ type: 'report_options' })
+      .then(response => response.result)
       .then(options => {
         if (!cancelled) setReportOptions(options);
       })
@@ -248,24 +305,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             : 'REPORT OPTIONS ARE TEMPORARILY UNAVAILABLE. CLOSE AND RETRY.');
         }
       });
-    return () => {
-      cancelled = true;
-      ctrl.abort();
-    };
-  }, [caseData, gameState.unlocked_clues, lang, reportMode]);
-
-  // Apply the opening passive once; the state guard prevents language changes
-  // or React development remounts from awarding the clue twice.
-  useEffect(() => {
-    if (!agentStrategy?.skill_effects?.auto_unlock_first) return;
-    setGameState(prev => {
-      if (prev.unlocked_clues.length > 0) return prev;
-      const firstClue = caseData.zone_clue_map?.[prev.current_zone]?.[0]
-        || caseData.clue_dictionary?.[0]?.clue_id;
-      if (!firstClue) return prev;
-      return acquireClues(prev, [firstClue]);
-    });
-  }, [agentStrategy, caseData]);
+    return () => { cancelled = true; };
+  }, [authorityLoading, authorityReady, executeRunCommand, isFinalizing, lang, reportMode]);
 
   const phaseColor = PHASE_COLORS[reactState] || PHASE_COLORS.IDLE;
   const terminalTurns = useMemo(
@@ -353,108 +394,20 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     });
   }, [finishActionCinematic, settings.cinematicQuality, settings.cinematicsEnabled]);
 
-  useEffect(() => {
-    const result = applyCommandContingency(gameState);
-    if (!result.event || result.gameState === gameState) return;
-    setGameState(result.gameState);
-    if (result.event.type === 'error') {
-      const message = lang === 'zh' ? '应急预案未执行：指挥点不足' : 'CONTINGENCY MISSED: INSUFFICIENT COMMAND POINTS';
-      notifyCommand(message, 'error');
-      addLine(`\n⚠ ${message}`, 'error');
-      return;
-    }
-    const messages = {
-      cognitive_stabilizer: lang === 'zh' ? '认知稳压已执行 · 混乱 -12' : 'COGNITIVE STABILIZER EXECUTED · CONFUSION -12',
-      emergency_throttle: lang === 'zh' ? '紧急节流已待命 · 下一行动 AP -2' : 'EMERGENCY THROTTLE ARMED · NEXT ACTION AP -2',
-      evidence_lockdown: lang === 'zh' ? '证据封存已执行 · 销毁期限 +1 回合' : 'EVIDENCE LOCKDOWN EXECUTED · DEADLINE +1 TURN',
-    };
-    const message = messages[result.event.id] || (lang === 'zh' ? '应急预案已执行' : 'CONTINGENCY EXECUTED');
-    notifyCommand(message);
-    addLine(`\n◆ ${message}`, 'success');
-  }, [addLine, gameState, lang, notifyCommand]);
-
-  const handleEmergencyStabilize = useCallback(() => {
-    if (isProcessing || finalizingRef.current || crisisPendingRef.current) return;
-    const result = applyEmergencyStabilize(gameStateRef.current);
-    if (result.error) {
-      const message = result.error === 'insufficient_command_points'
-        ? (lang === 'zh' ? '指挥点不足' : 'INSUFFICIENT COMMAND POINTS')
-        : (lang === 'zh' ? '紧急稳态本案已使用' : 'EMERGENCY STABILIZE ALREADY USED');
-      notifyCommand(message, 'error');
-      return;
-    }
-    setGameState(result.gameState);
-    const message = lang === 'zh' ? '紧急稳态执行成功 · 混乱 -12' : 'EMERGENCY STABILIZE EXECUTED · CONFUSION -12';
-    notifyCommand(message);
-    addLine(`\n◇ ${message}`, 'success');
-  }, [addLine, isProcessing, lang, notifyCommand]);
-
-  // Check for auto-released hidden clues on turn change
-  useEffect(() => {
-    const hidden = getHiddenCluesDue(caseData, gameStateRef.current);
-    hidden.forEach(hc => {
-      addLine(`\n${t.encryptedMessage} "${hc.text}"`, 'system');
-      addLine(`${t.newEvidenceSecured} ${hc.clue_id}`, 'success');
-      const next = acquireClues(gameStateRef.current, [hc.clue_id]);
-      gameStateRef.current = next;
-      setGameState(next);
-      setNewClueIds(prev => [...prev, hc.clue_id]);
-      schedule(() => setNewClueIds(prev => prev.filter(id => id !== hc.clue_id)), 3000);
-    });
-  }, [gameState.turn_count]);
-
-  const commitRound = (result, runId, runLang) => {
-    const { state, evidence, outcome } = result;
-    gameStateRef.current = state;
-    setGameState(state);
-    if (outcome === 'destroyed') {
-      setLinkedPairs(prev => removeEvidenceLinks(prev, [evidence.clue_id]));
-      addLine(runLang === 'zh'
-        ? `\n💀 证据「${evidence.keyword}」已被销毁，永久丢失！`
-        : `\n💀 Evidence “${evidence.keyword}” was destroyed and is permanently lost.`, 'error');
-    } else if (outcome === 'secured') {
-      addLine(runLang === 'zh'
-        ? `\n🛡️ 本轮行动的余波顺带加密封存了证据「${evidence.keyword}」！威胁解除。`
-        : `\n🛡️ This action also encrypted and secured “${evidence.keyword}”. Threat cleared.`, 'success');
-    } else if (outcome === 'pending') {
-      addLine(runLang === 'zh'
-        ? `\n⏳ 证据「${evidence.keyword}」仍处于销毁倒计时（第 ${evidence.deadline} 轮前需保全）`
-        : `\n⏳ Evidence “${evidence.keyword}” remains on a purge timer (secure it before turn ${evidence.deadline}).`, 'warning');
-    }
-
-    if (crisisPendingRef.current) return;
-    const timing = advanceCrisisSchedule(state.turn_count, nextCrisisTurnRef.current, nextCrisisIn);
-    if (!timing.due) return;
+  const handleEmergencyStabilize = useCallback(async () => {
+    if (!authorityReady || isProcessing || finalizingRef.current || crisisPendingRef.current) return;
+    setIsProcessing(true);
     try {
-      const event = rollCrisis(state, caseData, runLang);
-      crisisPendingRef.current = true;
-      setCrisisPending(true);
-      setCrisisError(null);
-      schedule(() => {
-        if (activeRunRef.current !== runId || finalizingRef.current) {
-          crisisPendingRef.current = false;
-          setCrisisPending(false);
-          return;
-        }
-        setCrisis(event);
-      }, 900);
-      nextCrisisTurnRef.current = timing.nextTurn;
-      addLine(`\n🚨 ${runLang === 'zh' ? '危机信号已锁定，等待应急响应。' : 'CRISIS SIGNAL LOCKED. EMERGENCY RESPONSE REQUIRED.'}`, 'warning');
+      await executeRunCommand({ type: 'command', command_id: 'emergency_stabilize' });
+      const message = lang === 'zh' ? '紧急稳态已由云端确认' : 'EMERGENCY STABILIZE CONFIRMED BY CLOUD';
+      notifyCommand(message);
+      addLine(`\n◇ ${message}`, 'success');
     } catch (error) {
-      crisisPendingRef.current = false;
-      setCrisisPending(false);
-      setCrisis(null);
-      addLine(publicErrorMessage(error, runLang), 'error');
+      notifyCommand(error.confirmed ? publicErrorMessage(error, lang) : runRecoveryMessage(error, lang), 'error');
+    } finally {
+      setIsProcessing(false);
     }
-  };
-
-  // Confusion / crash monitoring
-  useEffect(() => {
-    if (gameState.confusion_score >= 100 && !showBSoD) {
-      bsodCountRef.current += 1;
-      setShowBSoD(true);
-    }
-  }, [gameState.confusion_score]);
+  }, [addLine, authorityReady, executeRunCommand, isProcessing, lang, notifyCommand]);
 
   const startStressTimer = () => {
     clearInterval(stressTimerRef.current);
@@ -483,21 +436,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
 
   // ── Main ReAct Loop ───────────────────────────────────────────────────────
   const runReActCycle = async () => {
-    if (isProcessing || abortCtrlRef.current || finalizingRef.current || crisisPendingRef.current) return;
+    if (!authorityReady || isProcessing || abortCtrlRef.current || finalizingRef.current || crisisPendingRef.current || showBSoD) return;
     const runLang = lang === 'en' ? 'en' : 'zh';
     const gs = gameStateRef.current;
     if (gs.action_points_left <= 0) {
       addLine(`\n${t.apDepleted}`, 'error');
       return;
     }
-    const teamIds = configuredAgentStrategy.team.map(agent => agent.agent_id);
-    const roundAgentStrategy = {
-      ...configuredAgentStrategy,
-      team: applyStaminaToTeam(
-        configuredAgentStrategy.team,
-        recoverAgentStaminaTurn(gs.agent_stamina, teamIds),
-      ),
-    };
+    const roundAgentStrategy = activeAgentStrategy;
 
     const nextTurn = Math.max(1, (Number(gs.turn_count) || 0) + 1);
     activeTerminalTurnRef.current = nextTurn;
@@ -518,13 +464,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         observationTerminalText,
       } = generateObservationSections(gs, caseData, runLang);
       const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-      const optionPacksPromise = getDecisionOptionPacks({
-        gameState: gs,
-        caseData,
-        team: roundAgentStrategy.team,
-        signal: ctrl.signal,
-        lang: runLang,
-      }).then(
+      const optionPacksPromise = executeRunCommand({ type: 'decision_options', lang: runLang }).then(response => response.result).then(
         value => ({ ok: true, value, error: null }),
         error => ({ ok: false, value: null, error }),
       );
@@ -585,15 +525,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       setReactState(ReAct_Enum.ACT);
       addLine('\n' + t.actionSynthesis, 'phase');
       let actionTag = null;
-      let cardStyle = null;
-      let cardRisk = 'low';
-      let hiddenBranch = false;
-      let executorAgentId = gameStateRef.current.command_state?.active_agent_id
-        || roundAgentStrategy.primary_agent_id
-        || recommendExecutor(roundAgentStrategy.team, 'search_area');
-      let assistAgentId = null;
-      let commandIds = [];
-
+      let chosenResponse = null;
+      let chosenExecutorId = null;
+      let chosenAssistId = null;
       // ── 关键决策节点：挂起自动执行，玩家 30 秒内选择 ──────────────────
       // 每一轮都交由架构师决策 —— 玩家始终掌握剧情走向
       const isKeyNode = true;
@@ -630,162 +564,35 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         decisionResolveRef.current = null;
         if (!choice || isCancelled()) return;
         if (choice.rest) {
-          const recoveredState = applyRecoveryTurn(gs, teamIds);
-          recoveredState.chat_history = [
-            ...gs.chat_history,
-            {
-              role: 'assistant',
-              actionTag: 'recover_team',
-              content: runLang === 'zh' ? '[ACTION] 探员小队进行战术整备。' : '[ACTION] Agent team performs tactical recovery.',
-            },
-          ].slice(-12);
-          commitRound(settleRoundEvidence(recoveredState), runId, runLang);
+          await executeRunCommand({ type: 'rest', lang: runLang });
           addLine(runLang === 'zh'
-            ? '\n↻ 小队完成一回合整备 · 全员体力 +4%'
-            : '\n↻ RECOVERY TURN COMPLETE · ALL AGENTS +4% STAMINA', 'success');
-          setReactState(ReAct_Enum.IDLE);
+            ? '\n↻ 小队整备已由云端确认'
+            : '\n↻ RECOVERY TURN CONFIRMED BY CLOUD', 'success');
           return;
         }
-
-        executorAgentId = choice.executorAgentId || executorAgentId;
-        assistAgentId = choice.assistAgentId || null;
-        commandIds = Array.isArray(choice.commandIds) ? choice.commandIds : [];
-        const chosenExecutor = roundAgentStrategy.team.find(agent => agent.agent_id === executorAgentId);
-        const chosenAssistant = roundAgentStrategy.team.find(agent => agent.agent_id === assistAgentId);
-        if (!chosenExecutor || !canAgentInvestigate(chosenExecutor.stamina, false)
-          || (assistAgentId && (!chosenAssistant || !canAgentInvestigate(chosenAssistant.stamina, false)))) {
-          throw new Error(runLang === 'zh' ? '所选探员体力不足，请重新开始本回合。' : 'SELECTED AGENT STAMINA IS TOO LOW. RESTART THIS TURN.');
-        }
-
-        const card = choice.card;
-        actionTag = card.action_tag;
-        cardStyle = card.style;
-        cardRisk = card.risk_level || 'low';
-        // High-risk branches use a stable roll so retries cannot redraw the outcome.
-        if (cardRisk === 'high') {
-          const branchSeed = `${gs.run_id}:${gs.turn_count + 1}:${executorAgentId}:${actionTag}:hidden-branch`;
-          hiddenBranch = (stableNarrativeHash(branchSeed) % 100) < 35;
-        }
-        addLine(`\n${t.architectConfirm}[${String(actionTag).toUpperCase()}] · ${card.label}`, 'action');
+        actionTag = choice.card.actionTag || choice.card.action_tag;
+        chosenExecutorId = choice.executorAgentId;
+        chosenAssistId = choice.assistAgentId || null;
+        addLine(`\n${t.architectConfirm}[${String(actionTag).toUpperCase()}] · ${choice.card.label}`, 'action');
+        chosenResponse = await executeRunCommand({
+          type: 'round', option_id: choice.card.option_id || choice.card.optionId || choice.card.id,
+          ...(chosenAssistId ? { assist_agent_id: chosenAssistId } : {}),
+          command_ids: choice.commandIds || [], lang: runLang,
+        });
       }
-
-      const isLegal = actionTag && Legal_Actions_List.includes(actionTag);
-      const executingStrategy = buildExecutingStrategy(
-        roundAgentStrategy,
-        actionTag || 'search_area',
-        executorAgentId,
-        assistAgentId,
-        commandIds.includes('joint_action'),
-      );
-
-      if (actionTag) {
-        const actionMsg = lang === 'zh' ? `▶ 行动已下达：[${actionTag.toUpperCase()}]` : `▶ ACTION ISSUED: [${actionTag.toUpperCase()}]`;
-        addLine(`\n${actionMsg}`, isLegal ? 'action' : 'error');
-        const executorMessage = lang === 'zh'
-          ? `执行探员 ${executingStrategy.executing_agent_id}${executingStrategy.assisting_agent_id ? ` · 协助 ${executingStrategy.assisting_agent_id}` : ''}`
-          : `EXECUTOR ${executingStrategy.executing_agent_id}${executingStrategy.assisting_agent_id ? ` · ASSIST ${executingStrategy.assisting_agent_id}` : ''}`;
-        addLine(`   └─ ${executorMessage}`, 'system');
-      }
-
-      // ── Settlement ────────────────────────────────────────────────────
-      addLine(t.resolvingAction, 'system');
-      const settlement = await settleAction({
-        actionName: cardStyle
-          ? `${actionTag} (${cardStyle} approach)`
-          : actionTag || 'search_area',
-        gameState: gs,
-        caseData,
-        agentStrategy: executingStrategy,
-        actionTag: actionTag || 'search_area',
-        riskLevel: cardRisk,
-        isIllegal: !isLegal,
-        signal: ctrl.signal,
-        lang: runLang,
-      });
-      if (isCancelled()) return;
-
-      // Apply results — pass agentStrategy for resistance/discount/skill modifiers
-      settlement.action_name = actionTag || 'search_area';
-      let { newState, newClues } = applySettlementResult(gs, settlement, executingStrategy, caseData);
-      const deferredOutcomeLines = [];
-      const deferredNotices = [];
-      const staminaSummary = activeAgentStrategy.team
-        .map(agent => `${agent.agent_id} ${Math.round(agent.stamina)}→${newState.agent_stamina?.[agent.agent_id] ?? Math.round(agent.stamina)}`)
-        .join(' · ');
-      deferredOutcomeLines.push([
-        `\n${runLang === 'zh' ? '⚡ 回合体力结算' : '⚡ TURN STAMINA SETTLEMENT'} · ${staminaSummary}`,
-        'system',
-      ]);
-      newState.lastAction = actionTag;
-      newState.last_action = actionTag;
-      const committedCommand = applyDecisionCommandCost(newState, commandIds);
-      if (committedCommand.error) {
-        throw new Error(lang === 'zh' ? '指挥命令结算失败：指挥点不足。' : 'COMMAND SETTLEMENT FAILED: INSUFFICIENT COMMAND POINTS.');
-      }
-      newState = {
-        ...committedCommand.gameState,
-        command_state: {
-          ...committedCommand.gameState.command_state,
-          active_agent_id: executingStrategy.executing_agent_id,
-        },
+      if (!chosenResponse || isCancelled()) return;
+      const newState = chosenResponse.run.state;
+      actionTag = chosenResponse.result.action_tag || actionTag;
+      chosenExecutorId = chosenResponse.result.executor_agent_id || chosenExecutorId;
+      chosenAssistId = chosenResponse.result.assist_agent_id || null;
+      const settlement = chosenResponse.result.settlement || {
+        action_narration: chosenResponse.result.narration,
+        is_trap: chosenResponse.result.is_trap,
       };
-      if (commandIds.length) {
-        const commandMessage = lang === 'zh'
-          ? `指挥命令生效 · 消耗 ${committedCommand.cost} 点`
-          : `COMMANDS COMMITTED · ${committedCommand.cost} POINTS SPENT`;
-        addLine(`\n◆ ${commandMessage}`, 'success');
-        notifyCommand(commandMessage);
-      }
-
-      // 高风险策略卡：撬开隐藏分支，额外保全一条线索
-      if (hiddenBranch) {
-        const locked = (caseData.clue_dictionary || [])
-          .map(c => c.clue_id)
-          .filter(id => !newState.unlocked_clues.includes(id) && !newState.destroyed_clue_ids.includes(id));
-        if (locked.length) {
-          const bonusSeed = `${newState.run_id}:${newState.turn_count}:${actionTag}:hidden-clue`;
-          const bonus = locked[stableNarrativeHash(bonusSeed) % locked.length];
-          newState = acquireClues(newState, [bonus]);
-          newClues.push(bonus);
-          deferredOutcomeLines.push([`\n${lang === 'zh' ? '🩸 高风险策略撬开了隐藏分支 — 一条本不该出现的证据浮出水面。' : '🩸 THE HIGH-RISK PLAY CRACKED A HIDDEN BRANCH — evidence surfaces that never should have.'}`, 'trap']);
-        }
-      }
-
-      // Conflict dictionary check — extra confusion for mutually exclusive clues
-      if (checkConflictClues(newState.unlocked_clues, caseData.conflict_dictionary)) {
-        newState.confusion_score = Math.min(100, newState.confusion_score + 15);
-        deferredOutcomeLines.push([`\n${t.logicConflict}`, 'warning']);
-      }
+      const newClues = newState.unlocked_clues.filter(id => !gs.unlocked_clues.includes(id));
 
       const actualTrapTriggered = (Number(newState.traps_triggered) || 0) > (Number(gs.traps_triggered) || 0);
       const cinematicSettlement = { ...settlement, is_trap: actualTrapTriggered };
-      newState.last_action_context = buildLastActionContext(gs, newState, cinematicSettlement, caseData, {
-        actionTag: actionTag || 'search_area',
-        executorAgentId: executingStrategy.executing_agent_id,
-        assistAgentId: executingStrategy.assisting_agent_id,
-        actualTrapTriggered,
-      });
-
-      // Push checkpoint at key zones
-      if (newState.current_zone !== gs.current_zone && caseData.checkpoints?.includes(newState.current_zone)) {
-        const milestone = awardCommandMilestone(newState.command_state, `checkpoint:${newState.current_zone}`);
-        newState.command_state = milestone.state;
-        if (milestone.awarded) {
-          const message = lang === 'zh' ? `检查点抵达 · 指挥点 +${milestone.awarded}` : `CHECKPOINT REACHED · COMMAND +${milestone.awarded}`;
-          deferredOutcomeLines.push([`\n◇ ${message}`, 'success']);
-          deferredNotices.push(message);
-        }
-        newState.checkpoint_stack = pushCheckpoint(newState);
-      }
-      newState.chat_history = [
-        ...gs.chat_history,
-        { role: 'assistant', actionTag, content: `[THINK] ${fullThought}\n[ACTION] ${actionTag}` },
-        { role: 'user', actionTag, content: `[RESULT] ${settlement.action_narration}` }
-      ].slice(-12);
-
-      const roundEvidence = settleRoundEvidence(newState, { investigativeAction: true });
-      newState = roundEvidence.state;
-
       if (shouldPlayActionCinematic(gs, newState, cinematicSettlement, caseData)) {
         const event = buildCinematicEvent({
           previousState: gs,
@@ -793,16 +600,12 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           settlement: cinematicSettlement,
           caseData,
           actionTag: actionTag || 'search_area',
-          executorAgentId: executingStrategy.executing_agent_id,
-          assistAgentId: executingStrategy.assisting_agent_id,
+          executorAgentId: chosenExecutorId,
+          assistAgentId: chosenAssistId,
         });
         await playActionCinematic(event);
         if (isCancelled()) return;
       }
-
-      commitRound(roundEvidence, runId, runLang);
-      deferredOutcomeLines.forEach(([message, type]) => addLine(message, type));
-      deferredNotices.forEach(message => notifyCommand(message));
 
       // ── Build decision log entry ──────────────────────────────────────
       const isKeyDecision = newClues.length > 0
@@ -895,7 +698,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleAbort = () => {
-    if (finalizingRef.current) return;
+    if (finalizingRef.current || commandInFlightRef.current) return;
     if (abortCtrlRef.current) {
       activeRunRef.current += 1;
       abortCtrlRef.current.abort();
@@ -914,7 +717,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleNPCTalk = async (npc) => {
-    if (finalizingRef.current || crisisPendingRef.current || isProcessing || abortCtrlRef.current) return;
+    if (!authorityReady || finalizingRef.current || crisisPendingRef.current || isProcessing || abortCtrlRef.current || showBSoD) return;
     const state = gameStateRef.current;
     const runtimeTeam = applyStaminaToTeam(configuredAgentStrategy.team, state.agent_stamina);
     const primary = runtimeTeam.find(agent => agent.agent_id === configuredAgentStrategy.primary_agent_id);
@@ -932,15 +735,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     const { ctrl, operationId } = beginAbortableOperation();
     setIsProcessing(true);
     try {
-      const result = await getInterrogationOptionPacks({
-        gameState: state,
-        caseData,
-        npcId: npc.npc_id,
-        team: runtimeTeam,
-        emotionLevel: getEmotion(npcEmotionState, npc.npc_id).level,
-        askedQuestionIds: askedQuestionIds[npc.npc_id] || [],
-        signal: ctrl.signal,
-      });
+      const { result } = await executeRunCommand({ type: 'interrogation_options', npc_id: npc.npc_id });
       if (!isOperationCurrent(ctrl, operationId)) return;
       setNpcQuestionPacks(result.packs || {});
     } catch (error) {
@@ -956,7 +751,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleNPCQuestion = async (question) => {
-    if (!selectedNPC || !question?.questionId || isProcessing || abortCtrlRef.current
+    if (!authorityReady || !selectedNPC || !question?.questionId || isProcessing || abortCtrlRef.current
       || finalizingRef.current || crisisPendingRef.current) return;
     const npc = selectedNPC;
     const dialogueId = dialogueSequenceRef.current;
@@ -970,91 +765,50 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       return;
     }
     setNpcQuestionError(null);
-    const runtimeTeam = applyStaminaToTeam(configuredAgentStrategy.team, state.agent_stamina);
-    const previousAsked = askedQuestionIds[npc.npc_id] || [];
     const { ctrl, operationId } = beginAbortableOperation();
     setNpcDialogue(prev => [...prev, { role: 'agent', text: question.text }]);
+    pendingQuestionPresentationRef.current = { dialogueId, theaterAtQuestion };
     setIsProcessing(true);
-    const emo = getEmotion(npcEmotionState, npc.npc_id);
     try {
-      const result = await resolveInterrogationOption({
-        questionId: question.questionId,
-        executorAgentId: npcExecutorId,
-        npcId: npc.npc_id,
-        gameState: state,
-        caseData,
-        team: runtimeTeam,
-        emotionLevel: emo.level,
-        askedQuestionIds: previousAsked,
-        signal: ctrl.signal,
+      const response = await executeRunCommand({
+        type: 'question', question_id: question.questionId,
+        executor_agent_id: npcExecutorId, npc_id: npc.npc_id,
       });
       if (!isOperationCurrent(ctrl, operationId)) return;
-      setNpcDialogue(prev => [...prev, { role: 'npc', text: result.response, name: result.npc_name }]);
-      const shift = Number(result.emotionShift ?? result.emotion_shift) || 0;
-      const nextLevel = result.nextEmotion || shiftEmotion(emo.level, shift);
-      setNpcEmotionState(prev => ({
-        ...prev,
-        [npc.npc_id]: {
-          ...emo, level: nextLevel,
-          history_count: (emo.history_count || 0) + 1,
-          cooperation: (emo.cooperation || 0) + (Number(result.cooperationChange) || 0),
-        },
-      }));
-      const nextAsked = [...new Set([...previousAsked, question.questionId])];
-      setAskedQuestionIds(prev => ({ ...prev, [npc.npc_id]: nextAsked }));
-      const staminaResult = spendAgentStamina(
-        state.agent_stamina,
-        npcExecutorId,
-        configuredAgentStrategy.team.map(agent => agent.agent_id),
-      );
-      let nextGameState = {
-        ...state,
-        agent_stamina: staminaResult.stamina,
-      };
-      if (nextLevel !== emo.level) {
-        setNpcDialogue(prev => [...prev, {
-          role: 'system',
-          text: lang === 'zh'
-            ? `◈ ${npc.name} 的情绪状态变化：${nextLevel === 'broken' ? '崩溃' : nextLevel === 'shaken' ? '动摇' : '警惕'}`
-            : `◈ ${npc.name}'s emotional state shifts: ${nextLevel.toUpperCase()}`,
-        }]);
+      const { result, run } = response;
+      pendingQuestionPresentationRef.current = null;
+      const nextGameState = run.state;
+      if (closedDialogueRef.current < dialogueId) {
+        setNpcDialogue(prev => [...prev, { role: 'npc', text: result.response, name: result.npc_name }]);
+      } else {
+        addLine(`\n${result.npc_name || npc.name}: ${result.response}`, 'narration');
       }
-      const confusionIncrease = Number(result.consequence?.confusionIncrease) || 0;
-      if (confusionIncrease > 0) {
-        nextGameState.confusion_score = Math.min(100, nextGameState.confusion_score + confusionIncrease);
-        addLine(`\n${lang === 'zh' ? `⚠ 无效施压使混乱增加 ${confusionIncrease}` : `⚠ INEFFECTIVE PRESSURE RAISED CONFUSION BY ${confusionIncrease}`}`, 'warning');
+      for (const clueId of nextGameState.unlocked_clues.filter(id => !state.unlocked_clues.includes(id))) {
+        const clue = caseData.clue_dictionary.find(c => c.clue_id === clueId);
+        if (!clue) continue;
+        setNewClueIds(prev => [...prev, clueId]);
+        schedule(() => setNewClueIds(prev => prev.filter(id => id !== clueId)), 3000);
+        addLine(lang === 'zh'
+          ? `\n🔍 审讯揭示新线索：${clue.visual_icon || '🔍'} ${clue.keyword}`
+          : `\n🔍 INTERROGATION REVEALED: ${clue.visual_icon || '🔍'} ${clue.keyword}`, 'success');
+        triggerSynergy('clue_converge', clue);
       }
-      for (const clueId of result.revealedClueIds || []) {
-        if (!nextGameState.unlocked_clues.includes(clueId) && !nextGameState.destroyed_clue_ids.includes(clueId)) {
-          const clue = caseData.clue_dictionary.find(c => c.clue_id === clueId);
-          if (!clue) continue;
-          nextGameState = acquireClues(nextGameState, [clueId]);
-          setNewClueIds(prev => [...prev, clueId]);
-          schedule(() => setNewClueIds(prev => prev.filter(id => id !== clueId)), 3000);
-          addLine(lang === 'zh'
-            ? `\n🔍 审讯揭示新线索：${clue.visual_icon || '🔍'} ${clue.keyword}`
-            : `\n🔍 INTERROGATION REVEALED: ${clue.visual_icon || '🔍'} ${clue.keyword}`, 'success');
-          triggerSynergy('clue_converge', clue);
-        }
-      }
-      setGameState(nextGameState);
-      gameStateRef.current = nextGameState;
       // Capture eligibility at submission, commit after the existing operation check, before option refresh.
       dispatchNarrative(successfulInterviewEvent({
         runId: state.run_id, dialogueId, theaterAtQuestion, result,
         stage: theaterNarrativeStage(nextGameState, caseData),
       }));
+      if (closedDialogueRef.current >= dialogueId) {
+        dispatchNarrative({ type: 'close', runId: state.run_id, dialogueId });
+        return;
+      }
+      if (result.packs) {
+        setNpcQuestionPacks(result.packs);
+        return;
+      }
       try {
-        const refreshed = await getInterrogationOptionPacks({
-          gameState: nextGameState,
-          caseData,
-          npcId: npc.npc_id,
-          team: applyStaminaToTeam(configuredAgentStrategy.team, nextGameState.agent_stamina),
-          emotionLevel: nextLevel,
-          askedQuestionIds: nextAsked,
-          signal: ctrl.signal,
-        });
-        if (isOperationCurrent(ctrl, operationId)) setNpcQuestionPacks(refreshed.packs || {});
+        const { result: refreshed } = await executeRunCommand({ type: 'interrogation_options', npc_id: npc.npc_id });
+        if (isOperationCurrent(ctrl, operationId) && closedDialogueRef.current < dialogueId) setNpcQuestionPacks(refreshed.packs || {});
       } catch (refreshError) {
         if (refreshError?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
           setNpcQuestionPacks({});
@@ -1064,6 +818,9 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         }
       }
     } catch (err) {
+      if (err.confirmed || err.status === 400 || ['STALE_RUN', 'RUN_SETTLED'].includes(err.code)) {
+        pendingQuestionPresentationRef.current = null;
+      }
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
         setNpcQuestionError(lang === 'zh' ? '问题选项已过期或规则服务不可用，请关闭后重试。' : 'QUESTION OPTIONS EXPIRED OR RULE SERVICE UNAVAILABLE.');
       }
@@ -1076,6 +833,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
   };
 
   const handleNPCDialogueClose = () => {
+    closedDialogueRef.current = dialogueSequenceRef.current;
     handleAbort();
     dispatchNarrative({ type: 'close', runId: gameStateRef.current.run_id, dialogueId: dialogueSequenceRef.current });
     setSelectedNPC(null);
@@ -1084,126 +842,96 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
     setNpcQuestionError(null);
   };
 
-  // ── 危机事件应对 ──────────────────────────────────────────────────────────
-  const handleCrisisChoice = (choiceId) => {
-    const evt = crisis;
-    if (!evt || !crisisPendingRef.current) return;
-    const outcome = applyCrisisChoice(evt, choiceId, gameStateRef.current, activeAgentStrategy, lang);
-    if (outcome.error) {
-      setCrisisError(outcome.error === 'insufficient_ap'
-        ? (lang === 'zh' ? `行动点不足，需要 ${outcome.requiredAp} AP。请选择其他应对方案。` : `Insufficient AP. This response requires ${outcome.requiredAp} AP. Choose another option.`)
-        : (lang === 'zh' ? '该应对方案已失效，请重新选择。' : 'That response is no longer valid. Choose again.'));
+  const presentRecoveredResponse = async (response) => {
+    const command = response.recovered_command;
+    if (!command) return;
+    const result = response.result || {};
+    setNpcQuestionPacks(null);
+    setNpcQuestionError(null);
+    if (result.error) {
+      if (command.type === 'question') pendingQuestionPresentationRef.current = null;
+      addLine(publicErrorMessage({ code: result.error }, lang), 'error');
       return;
     }
-    crisisPendingRef.current = false;
-    setCrisisPending(false);
-    setCrisisError(null);
-    setCrisis(null);
-    const { changes, resultText } = outcome;
-    addLine(`\n🚨 ${resultText}`, changes.confusion_delta > 0 ? 'warning' : 'success');
-    const next = { ...gameStateRef.current };
-    if (changes.confusion_delta) next.confusion_score = Math.max(0, Math.min(100, next.confusion_score + changes.confusion_delta));
-    if (changes.ap_delta) next.action_points_left = Math.max(0, next.action_points_left + changes.ap_delta);
-    if (changes.reputation_delta) next.reputation = Math.max(0, next.reputation + changes.reputation_delta);
-    if (changes.defer_evidence) next.evidence_crisis = changes.defer_evidence;
-    gameStateRef.current = next;
-    setGameState(next);
-    if (changes.reopen_npc) {
-      const npc = caseData.npcs.find(n => n.npc_id === changes.reopen_npc);
-      if (npc) handleNPCTalk(npc);
-    }
-  };
-
-  // ── 流程 D：错误连线 → 凶手反制事件 ───────────────────────────────────────
-  const triggerVillainCounter = () => {
-    const zh = lang === 'zh';
-    const gs = gameStateRef.current;
-    setGameState(prev => ({ ...prev, confusion_score: Math.min(100, prev.confusion_score + 8) }));
-
-    if (Math.random() < 0.5 && gs.unlocked_clues.length > 0) {
-      const lost = gs.unlocked_clues[Math.floor(Math.random() * gs.unlocked_clues.length)];
-      const lostClue = caseData.clue_dictionary.find(c => c.clue_id === lost);
-      setGameState(prev => destroyClues(prev, [lost]));
-      setLinkedPairs(prev => removeEvidenceLinks(prev, [lost]));
-      setRedFlash(Date.now());
-      addLine(`\n${zh
-        ? `🔥 凶手反制：你的错误推演暴露了调查方向。证据「${lostClue?.keyword || lost}」已被彻底销毁。`
-        : `🔥 KILLER'S COUNTERSTRIKE: your flawed deduction exposed the trail. Evidence "${lostClue?.keyword || lost}" has been destroyed.`}`, 'trap');
-    } else {
-      const npcs = caseData.npcs || [];
-      const npc = npcs[Math.floor(Math.random() * npcs.length)];
-      const topicClue = gs.unlocked_clues.length
-        ? caseData.clue_dictionary.find(c => c.clue_id === gs.unlocked_clues[0])
-        : null;
-      if (npc) {
-        setNpcEmotionState(prev => ({
-          ...prev,
-          [npc.npc_id]: {
-            ...getEmotion(prev, npc.npc_id),
-            level: 'calm',
-            refuses_topic: topicClue?.keyword || (zh ? '案发当晚的行踪' : 'their whereabouts that night'),
-          },
-        }));
-        setRedFlash(Date.now());
-        addLine(`\n${zh
-          ? `📵 凶手反制：${npc.name} 接到一条神秘警告 — 下次审讯将拒绝谈论「${topicClue?.keyword || '案发当晚'}」。`
-          : `📵 KILLER'S COUNTERSTRIKE: ${npc.name} received a mysterious warning — they will refuse to discuss "${topicClue?.keyword || 'that night'}".`}`, 'trap');
+    if (command.type === 'question') {
+      const npc = caseData.npcs.find(item => item.npc_id === command.npc_id);
+      if (!npc) return;
+      const pending = pendingQuestionPresentationRef.current;
+      pendingQuestionPresentationRef.current = null;
+      const wasClosed = pending && closedDialogueRef.current >= pending.dialogueId;
+      const sameDialogue = selectedNPC?.npc_id === npc.npc_id && !wasClosed;
+      if (!pending && !sameDialogue) dialogueSequenceRef.current += 1;
+      const dialogueId = pending?.dialogueId || dialogueSequenceRef.current;
+      if (wasClosed) {
+        addLine(`\n${result.npc_name || npc.name}: ${result.response}`, 'narration');
+      } else {
+        setSelectedNPC(npc);
+        setNpcExecutorId(command.executor_agent_id);
+        setNpcDialogue(previous => [...(sameDialogue ? previous : []), { role: 'npc', text: result.response, name: result.npc_name }]);
       }
+      dispatchNarrative(successfulInterviewEvent({
+        runId: response.run.id, dialogueId, theaterAtQuestion: pending?.theaterAtQuestion === true, result,
+        stage: theaterNarrativeStage(response.run.state, caseData),
+      }));
+      if (wasClosed) {
+        dispatchNarrative({ type: 'close', runId: response.run.id, dialogueId });
+        return;
+      }
+      if (result.packs) {
+        setNpcQuestionPacks(result.packs);
+        return;
+      }
+      const refreshed = await executeRunCommand({ type: 'interrogation_options', npc_id: npc.npc_id });
+      if (closedDialogueRef.current < dialogueId) setNpcQuestionPacks(refreshed.result.packs || {});
+    } else if (command.type === 'interrogation_options') {
+      if (selectedNPC?.npc_id === command.npc_id) setNpcQuestionPacks(result.packs || {});
+    } else if (command.type === 'report_options') {
+      if (reportMode) setReportOptions(result);
+    } else {
+      const text = result.settlement?.action_narration || result.reveal || result.resultText;
+      if (text) addLine(text, 'narration');
+    }
+  };
+  useLayoutEffect(() => { recoveryPresentationRef.current = presentRecoveredResponse; });
+
+  const handleCrisisChoice = async (choiceId) => {
+    if (!authorityReady || !crisis || !crisisPendingRef.current || commandInFlightRef.current) return;
+    setCrisisError(null);
+    try {
+      const { result } = await executeRunCommand({ type: 'crisis', option_id: choiceId });
+      if (result.resultText) addLine(`\n🚨 ${result.resultText}`, 'system');
+      if (result.changes?.reopen_npc) {
+        const npc = caseData.npcs.find(n => n.npc_id === result.changes.reopen_npc);
+        if (npc) await handleNPCTalk(npc);
+      }
+    } catch (error) {
+      setCrisisError(error.confirmed ? publicErrorMessage(error, lang) : runRecoveryMessage(error, lang));
     }
   };
 
-  // ── 流程 C：过场结束 → 注入不可逆状态 ────────────────────────────────────
+  // A cinematic acknowledges an already committed outcome; it never awards clues.
   const handleCinematicDone = () => {
     const c = cinematic;
     setCinematic(null);
     if (!c) return;
-    const zh = lang === 'zh';
-    setTruthFragments(c.hidden_ending_progress || truthFragments + 1);
     addLine(`   └─ ${c.narrative}`, 'narration');
-    if (c.villain_memory) addLine(`\n▚ ${zh ? '凶手视角回忆' : "KILLER'S MEMORY"}\n${c.villain_memory}`, 'thought');
-
-    if (c.is_core_link) {
-      const gs = gameStateRef.current;
-      const locked = getAvailableClueIds(caseData, gs.current_zone, gs.unlocked_clues, gs.turn_count, gs.destroyed_clue_ids);
-      const bonus = locked.length ? locked[Math.floor(Math.random() * locked.length)] : null;
-      setGameState(prev => ({
-        ...acquireClues(prev, bonus ? [bonus] : []),
-        linked_core_pairs: [...(prev.linked_core_pairs || []), c.pairKey],
-      }));
-      if (bonus) {
-        const bc = caseData.clue_dictionary.find(x => x.clue_id === bonus);
-        setNewClueIds(ids => [...ids, bonus]);
-        schedule(() => setNewClueIds(ids => ids.filter(id => id !== bonus)), 3000);
-        addLine(`\n${zh ? '🧩 不可逆线索已写入证物库：' : '🧩 IRREVERSIBLE CLUE FILED: '}${bc?.visual_icon || '🔍'} ${bc?.keyword || c.new_clue_hint || bonus}`, 'success');
-      }
-    }
+    if (c.villain_memory) addLine(`\n▚ ${lang === 'zh' ? '凶手视角回忆' : "KILLER'S MEMORY"}\n${c.villain_memory}`, 'thought');
   };
 
   // ── 推理连线：受保护的确定性规则判定 ─────────────────────────────────────
   const handleLink = async (aId, bId) => {
     const clueA = caseData.clue_dictionary.find(c => c.clue_id === aId);
     const clueB = caseData.clue_dictionary.find(c => c.clue_id === bId);
-    if (!clueA || !clueB || isLinkChecking || isProcessing || abortCtrlRef.current
+    if (!authorityReady || !clueA || !clueB || isLinkChecking || isProcessing || abortCtrlRef.current
       || finalizingRef.current || crisisPendingRef.current) return;
     const { ctrl, operationId } = beginAbortableOperation();
     setIsLinkChecking(true);
     setIsProcessing(true);
     try {
-      const synergyActive = (agentStrategy?.synergy_skills || []).includes('cross_validation');
-      const result = await linkCheck({ clueA, clueB, caseData, synergyActive, signal: ctrl.signal });
+      const { result, run } = await executeRunCommand({ type: 'link', clue_ids: [aId, bId] });
       if (!isOperationCurrent(ctrl, operationId)) return;
-      setLinkedPairs(prev => [...prev, { a: aId, b: bId, valid: result.is_valid }]);
       if (result.is_valid) {
         addLine(`\n${t.insightBreak}${clueA.visual_icon} ${clueA.keyword} ⟺ ${clueB.visual_icon} ${clueB.keyword}`, 'success');
-        if (gameStateRef.current.command_state?.doctrine_id === 'evidence_control') {
-          const milestone = awardCommandMilestone(gameStateRef.current.command_state, 'doctrine:first-valid-link');
-          if (milestone.awarded) {
-            setGameState(prev => ({ ...prev, command_state: milestone.state }));
-            const message = lang === 'zh' ? '精准取证触发 · 指挥点 +1' : 'EVIDENCE CONTROL TRIGGERED · COMMAND +1';
-            addLine(`\n◇ ${message}`, 'success');
-            notifyCommand(message);
-          }
-        }
         // 规则响应已经包含安全的双语过场，不再发起第二次重复请求。
         const data = {
           ...(result.cinematic || {}),
@@ -1211,7 +939,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           is_core_link: result.is_core_link === true || result.isCoreLink === true,
           hidden_ending_progress: result.hidden_ending_progress
             ?? result.hiddenEndingProgress
-            ?? (truthFragments + 1),
+            ?? run.truth_fragments
+            ?? truthFragments,
         };
         setCinematic({
           ...data,
@@ -1223,7 +952,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       } else {
         addLine(`\n${t.logicInvalid}${clueA.keyword} ⟷ ${clueB.keyword}`, 'error');
         addLine(`   └─ ${result.reveal}`, 'clue-desc');
-        triggerVillainCounter();
+        setRedFlash(Date.now());
       }
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
@@ -1245,58 +974,26 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       && structuredReport.motiveId
       && structuredReport.timelineId
       && evidenceCount >= 1;
-    if (!isComplete || isProcessing || abortCtrlRef.current
+    if (!authorityReady || !isComplete || isProcessing || abortCtrlRef.current
       || finalizingRef.current || crisisPendingRef.current) return;
     const { ctrl, operationId } = beginAbortableOperation();
     setIsProcessing(true);
     setReportError(null);
     setReactState(ReAct_Enum.REPORTING);
     try {
-      const result = await judgeStructuredReport({
-        gameState: gameStateRef.current,
-        caseData,
-        report: structuredReport,
-        signal: ctrl.signal,
+      const { result, run } = await executeRunCommand({
+        type: 'report', conclusion_id: structuredReport.conclusionId,
+        method_id: structuredReport.methodId, motive_id: structuredReport.motiveId,
+        timeline_id: structuredReport.timelineId, evidence_ids: structuredReport.evidenceIds,
       });
       if (!isOperationCurrent(ctrl, operationId)) return;
-      setJudgeResult(result);
-      if (result.is_passed) {
-        addLine(`\n${t.caseSolved}`, 'success');
-        addLine(`\n${t.judgeVerdict} [${result.score}]: ${result.critique}`, 'success');
-        const settledState = gameStateRef.current;
-        finalSettlementRef.current = {
-          gameState: {
-            ...settledState,
-            unlocked_clues: [...settledState.unlocked_clues],
-            agent_stamina: { ...(settledState.agent_stamina || {}) },
-            command_state: { ...(settledState.command_state || {}) },
-          },
-          linkedPairs: linkedPairs.map(pair => ({ ...pair })),
-          bsodCount: bsodCountRef.current,
-        };
-        finalizingRef.current = true;
-        setIsFinalizing(true);
-        setFinalJudgeResult(result);
-        schedule(() => setShowGameOver(true), 1800);
-      } else {
-        if (result.branch?.narrative) {
-          addLine(`\n${t.narrativeCollapse}${result.branch.narrative}`, 'trap');
-        }
-        const penalty = getRejectedReportPenalty(gameStateRef.current);
-        setGameState(prev => ({
-          ...prev,
-          action_points_left: Math.max(0, prev.action_points_left - penalty.apLoss),
-          reputation: Math.max(0, prev.reputation - penalty.reputationLoss),
-          confusion_score: Math.min(100, prev.confusion_score + penalty.confusionIncrease),
-        }));
-        addLine(`\n${t.reportRejected} [${result.score}]. AP -${penalty.apLoss}. ${lang === 'zh' ? `声望 -${penalty.reputationLoss}，混乱 +${penalty.confusionIncrease}。` : `Reputation -${penalty.reputationLoss}, confusion +${penalty.confusionIncrease}.`}`, 'error');
-        addLine(`\n${t.judgeLabel}${result.critique}`, 'warning');
-      }
+      const judgment = run.judge_result || result;
+      setJudgeResult(judgment);
+      addLine(`\n${t.judgeVerdict} [${judgment.score}]: ${judgment.critique}`, judgment.is_passed ? 'success' : 'warning');
+      if (judgment.branch?.narrative) addLine(`\n${t.narrativeCollapse}${judgment.branch.narrative}`, 'trap');
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
-        setReportError(lang === 'zh'
-          ? '结案规则暂时无法校验，请检查连接后重试；本次没有扣除资源。'
-          : 'REPORT VALIDATION IS TEMPORARILY UNAVAILABLE. NO RESOURCES WERE SPENT.');
+        setReportError(err.confirmed ? publicErrorMessage(err, lang) : runRecoveryMessage(err, lang));
         addLine(`\n${t.systemError}${publicErrorMessage(err, lang)}`, 'error');
       }
     } finally {
@@ -1306,6 +1003,14 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         setReactState(ReAct_Enum.IDLE);
       }
     }
+  };
+
+  const handleRunIntent = async (command) => {
+    if (!authorityReady || isProcessing || commandInFlightRef.current || finalizingRef.current) return;
+    setIsProcessing(true);
+    try { await executeRunCommand(command); }
+    catch (error) { notifyCommand(error.confirmed ? publicErrorMessage(error, lang) : runRecoveryMessage(error, lang), 'error'); }
+    finally { setIsProcessing(false); }
   };
 
   const assistantBrief = useMemo(() => buildInvestigationBrief({
@@ -1395,7 +1100,8 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
               zoneFeedback={zoneFeedback}
               accentColor={accentColor}
               agentStrategy={activeAgentStrategy}
-              onPriorityChange={setRuntimePriority}
+              onPriorityChange={priority_list => void handleRunIntent({ type: 'priority', priority_list })}
+              priorityDisabled={interactionLocked}
             />
           ) : toolTab === 'log' ? (
             <DecisionLog entries={decisionLog} accentColor={accentColor} />
@@ -1468,7 +1174,6 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       bsodCount: bsodCountRef.current,
     };
     const finalGameState = finalSettlement.gameState;
-    const finalLinkedPairs = finalSettlement.linkedPairs;
     return (
       <>
       {presentationControls}
@@ -1477,26 +1182,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         judgeResult={finalJudgeResult}
         gameState={finalGameState}
         caseData={caseData}
-        rewardEligible={Boolean(finalJudgeResult?.score)}
-        onSettlement={({ xpGain }) => onSettlement?.({
-          run_id: finalGameState.run_id,
-          case_id: caseDataResolved.case_id,
-          difficulty: caseDataResolved.difficulty,
-          score: finalJudgeResult?.score || 'D',
-          is_passed: finalJudgeResult?.is_passed === true,
-          clues: finalGameState.unlocked_clues,
-          valid_links: finalLinkedPairs.filter(pair => pair.valid).map(pair => [pair.a, pair.b]),
-          valid_link_count: finalLinkedPairs.filter(pair => pair.valid).length,
-          invalid_link_count: finalLinkedPairs.filter(pair => !pair.valid).length,
-          turns: finalGameState.turn_count,
-          ap_left: finalGameState.action_points_left,
-          confusion: finalGameState.confusion_score,
-          bsod_count: finalSettlement.bsodCount,
-          traps_triggered: finalGameState.traps_triggered || 0,
-          clue_ratio: finalGameState.unlocked_clues.length / Math.max(1, caseDataResolved.clue_dictionary.length),
-          all_hidden_clues: (caseDataResolved.hidden_clues || []).every(clue => finalGameState.unlocked_clues.includes(clue.clue_id)),
-          xp_gain: xpGain,
-        })}
+        onSettlement={() => onSettlement?.({ run_id: finalGameState.run_id })}
         onReturnToLobby={onBackToLobby}
         onReturnToLanding={onGameEnd}
       />
@@ -1512,6 +1198,13 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
         transition: 'background 1s ease',
       }}>
 
+      {(!authorityReady || authorityError) && <div role="alert" className="td-ui-card" style={{ position: 'fixed', top: 58, left: '5%', right: '5%', zIndex: 10001, background: '#091321', color: '#ffd18a', padding: 16 }}>
+        <p>{authorityLoading
+          ? (lang === 'zh' ? '正在核对云端调查记录…' : 'CHECKING CLOUD INVESTIGATION…')
+          : runRecoveryMessage(authorityError, lang)}</p>
+        <button type="button" className="td-ui-button" disabled={authorityLoading} onClick={() => void resumeRun()}>{lang === 'zh' ? '云端重试' : 'RETRY CLOUD'}</button>
+        <button type="button" className="td-ui-button" onClick={onOpenHome || onBackToLobby}>{lang === 'zh' ? '返回主页' : 'HOME'}</button>
+      </div>}
       {activeNarrative && <NarrativeOverlay
         key={activeNarrative.id} title={activeNarrative.title} text={activeNarrative.text} lang={lang} active={narrativeVisible}
         onComplete={() => dispatchNarrative({ type: 'complete', runId: gameState.run_id, id: activeNarrative.id })}
@@ -1521,16 +1214,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
       />}
       {!theaterMode && <GlitchOverlay intensity={gameState.confusion_score} type={gameState.confusion_score > 75 ? 'red' : 'default'} />}
       {showBSoD && (
-        <BSoD agentId={agentStrategy?.agent_id || 'AXIOM'} onDismiss={() => {
-          const immune = agentStrategy?.skill_effects?.bsod_immunity === true;
-          setShowBSoD(false);
-          setGameState(prev => ({
-            ...prev,
-            confusion_score: 0,
-            action_points_left: immune ? prev.action_points_left : Math.max(0, prev.action_points_left - 5),
-          }));
-          addLine(`\n${t.agentRebooted}`, 'system');
-        }} />
+        <BSoD agentId={agentStrategy?.agent_id || 'AXIOM'} onDismiss={() => void handleRunIntent({ type: 'recover' })} />
       )}
 
       {showOnboarding && presentationActive && !showSettings && (
@@ -1702,7 +1386,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
             style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
             {t.btnReport}
           </button>
-          <button type="button" onClick={() => { setFinalJudgeResult(judgeResult); setShowGameOver(true); }}
+          <button type="button" onClick={() => void handleRunIntent({ type: 'abandon' })}
             disabled={interactionLocked}
             className="td-ui-button td-button-danger text-xs px-3 py-1 rounded border transition-all disabled:opacity-30"
             style={{ borderColor: '#ff386050', color: '#ff3860', backgroundColor: 'transparent' }}>
@@ -1753,7 +1437,7 @@ export default function InvestigationTerminal({ agentStrategy, selectedCase, onG
           onReport={() => { setReportMode(value => !value); setJudgeResult(null); }}
           onCommand={() => setShowCommandConsole(true)}
           onGuide={() => setShowOnboarding(true)}
-          onEnd={() => { setFinalJudgeResult(judgeResult); setShowGameOver(true); }}
+          onEnd={() => void handleRunIntent({ type: 'abandon' })}
           onTextMode={() => setSetting('storyMode', 'terminal')}
         />}
 

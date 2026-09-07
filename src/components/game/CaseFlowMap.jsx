@@ -228,6 +228,7 @@ export default function CaseFlowMap({
   accentColor,
   agentStrategy,
   onPriorityChange, // callback(reorderedPriorityList)
+  priorityDisabled = false,
 }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
@@ -243,13 +244,12 @@ export default function CaseFlowMap({
   const [positions, setPositions] = useState(makePositions);
 
   const [dragging, setDragging]   = useState(null); // { key, ox, oy }
-  const [priority, setPriority] = useState(() => normalizePriorityList(agentStrategy?.priority_list));
+  const priority = normalizePriorityList(agentStrategy?.priority_list);
 
   useEffect(() => {
     setPositions(makePositions());
-    setPriority(normalizePriorityList(agentStrategy?.priority_list));
     setDragging(null);
-  }, [agentStrategy?.priority_list, caseData?.case_id, makePositions, zoneLayout]);
+  }, [caseData?.case_id, makePositions, zoneLayout]);
 
   // ── Build derived data ────────────────────────────────────────────────────
   const visitCounts = {};
@@ -259,7 +259,7 @@ export default function CaseFlowMap({
     if (i > 0) traveledEdges.push([agentPath[i - 1], z]);
   });
 
-  const currentZone = agentPath[agentPath.length - 1] || null;
+  const currentZone = gameState.current_zone || agentPath[agentPath.length - 1] || null;
 
   // Clues per zone (map clue zones from current_zone metadata or fallback heuristics)
   const zoneClues = {};
@@ -309,13 +309,12 @@ export default function CaseFlowMap({
   const [dragOverPri, setDragOverPri] = useState(null);
 
   const handlePriDrop = (targetKey) => {
-    if (!dragPri || dragPri === targetKey) return;
+    if (priorityDisabled || !dragPri || dragPri === targetKey) return;
     const next = [...priority];
     const from = next.indexOf(dragPri);
     const to   = next.indexOf(targetKey);
     next.splice(from, 1);
     next.splice(to, 0, dragPri);
-    setPriority(next);
     onPriorityChange?.(next);
     setDragPri(null);
     setDragOverPri(null);
@@ -323,10 +322,9 @@ export default function CaseFlowMap({
 
   const movePriority = (index, delta) => {
     const target = index + delta;
-    if (target < 0 || target >= priority.length) return;
+    if (priorityDisabled || target < 0 || target >= priority.length) return;
     const next = [...priority];
     [next[index], next[target]] = [next[target], next[index]];
-    setPriority(next);
     onPriorityChange?.(next);
   };
 
@@ -400,8 +398,9 @@ export default function CaseFlowMap({
             return (
               <div
                 key={actionId}
-                draggable
-                onDragStart={() => setDragPri(actionId)}
+                draggable={!priorityDisabled}
+                aria-disabled={priorityDisabled}
+                onDragStart={() => { if (!priorityDisabled) setDragPri(actionId); }}
                 onDragOver={e => { e.preventDefault(); setDragOverPri(actionId); }}
                 onDragLeave={() => setDragOverPri(null)}
                 onDrop={() => handlePriDrop(actionId)}
@@ -421,8 +420,8 @@ export default function CaseFlowMap({
                 <span>{action.icon}</span>
                 <span style={{ color: action.color }}>{zh ? action.label : action.labelEn}</span>
                 <span className="td-priority-mobile-buttons" style={{ display: 'none', gap: 2 }}>
-                  <button type="button" aria-label={zh ? '上移' : 'Move up'} disabled={idx === 0} onClick={() => movePriority(idx, -1)}>↑</button>
-                  <button type="button" aria-label={zh ? '下移' : 'Move down'} disabled={idx === priority.length - 1} onClick={() => movePriority(idx, 1)}>↓</button>
+                  <button type="button" aria-label={zh ? '上移' : 'Move up'} disabled={priorityDisabled || idx === 0} onClick={() => movePriority(idx, -1)}>↑</button>
+                  <button type="button" aria-label={zh ? '下移' : 'Move down'} disabled={priorityDisabled || idx === priority.length - 1} onClick={() => movePriority(idx, 1)}>↓</button>
                 </span>
               </div>
             );

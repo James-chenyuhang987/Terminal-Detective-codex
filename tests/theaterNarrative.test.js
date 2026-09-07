@@ -223,7 +223,8 @@ function interviewHarness({ theater = true, failRefresh = false } = {}) {
   let resolveAnswer, rejectAnswer;
   const team = [{ agent_id: 'NEXUS-01', stamina: 100 }];
   const bindings = {
-    selectedNPC: Case_Data_Lvl_01.npcs[0], theaterMode: theater, dialogueSequenceRef: { current: 1 },
+    authorityReady: true, selectedNPC: Case_Data_Lvl_01.npcs[0], theaterMode: theater, dialogueSequenceRef: { current: 1 },
+    closedDialogueRef: { current: 0 }, pendingQuestionPresentationRef: { current: null },
     gameStateRef: { current: initial }, activeRunRef: { current: 0 }, abortCtrlRef: { current: null },
     finalizingRef: { current: false }, crisisPendingRef: { current: false }, isProcessing: false,
     configuredAgentStrategy: { team }, npcExecutorId: 'NEXUS-01', askedQuestionIds: {}, npcEmotionState: {}, caseData: Case_Data_Lvl_01, lang: 'en',
@@ -239,7 +240,9 @@ function interviewHarness({ theater = true, failRefresh = false } = {}) {
     setNpcQuestionPacks: value => { stored.packs = value; }, setNpcQuestionError: value => { stored.error = value; },
     setSelectedNPC: value => { bindings.selectedNPC = value; },
     setNewClueIds: () => {}, schedule: () => {}, addLine: () => {}, triggerSynergy: () => {},
-    resolveInterrogationOption: () => new Promise((resolve, reject) => { resolveAnswer = resolve; rejectAnswer = reject; }),
+    executeRunCommand: command => command.type === 'interrogation_options'
+      ? bindings.getInterrogationOptionPacks().then(result => ({ result }))
+      : new Promise((resolve, reject) => { resolveAnswer = resolve; rejectAnswer = reject; }),
     getInterrogationOptionPacks: async () => { if (failRefresh) throw new Error('refresh offline'); return { packs: {} }; },
   };
   bindings.beginAbortableOperation = handler(owner, 'beginAbortableOperation', bindings);
@@ -253,7 +256,15 @@ function interviewHarness({ theater = true, failRefresh = false } = {}) {
   };
   const ask = (...args) => handler(owner, 'handleNPCQuestion', bindings)(...args);
   const close = handler(owner, 'handleNPCDialogueClose', bindings);
-  return { stored, bindings, ask: () => ask({ questionId: 'q-1', text: 'Question' }), close, resolve: value => resolveAnswer(value), reject: e => rejectAnswer(e) };
+  return { stored, bindings, ask: () => ask({ questionId: 'q-1', text: 'Question' }), close, resolve: value => {
+    // Fixture stands in for the server transition, not a client-side award.
+    stored.charges++;
+    const next = { ...stored.gameState, agent_stamina: { 'NEXUS-01': 90 }, unlocked_clues: value.revealedClueIds || [] };
+    stored.gameState = next;
+    bindings.gameStateRef.current = next;
+    stored.asked[Case_Data_Lvl_01.npcs[0].npc_id] = ['q-1'];
+    resolveAnswer({ result: value, run: { state: next } });
+  }, reject: e => rejectAnswer(e) };
 }
 
 test('actual question commits once across Home and mode switches; refresh failure does not lose interlude', async () => {
@@ -304,7 +315,7 @@ test('closing during option refresh preserves a committed answer and releases it
   assert.equal(h.stored.narrative.queue.length, 1);
 });
 
-test('actual rejected, aborted and stale responses never commit effects or enqueue; weak answers do not narrate', async () => {
+test('rejected, aborted and stale presentation responses never enqueue; acknowledged server state remains authoritative', async () => {
   for (const outcome of ['rejected', 'aborted', 'stale', 'weak', 'repeated', 'terminal']) {
     const h = interviewHarness({ theater: outcome !== 'terminal' });
     const pending = h.ask();
@@ -314,7 +325,7 @@ test('actual rejected, aborted and stale responses never commit effects or enque
     else h.resolve({ ...goodResult, cooperationChange: outcome === 'weak' ? 0 : 1, repeated: outcome === 'repeated' });
     await pending;
     assert.equal(h.stored.narrative.queue.length, 0, outcome);
-    assert.equal(h.stored.charges, ['weak', 'repeated', 'terminal'].includes(outcome) ? 1 : 0, outcome);
+    assert.equal(h.stored.charges, outcome === 'rejected' ? 0 : 1, outcome);
   }
 });
 

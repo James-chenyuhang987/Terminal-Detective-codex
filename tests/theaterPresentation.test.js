@@ -71,7 +71,8 @@ test('modal, busy, hidden-route and background pause rejects all scene intents',
 });
 
 test('theater is a lazy presentation child of the single authoritative investigation owner', () => {
-  assert.equal((owner.match(/createInitialGameState\(/g) || []).length, 1);
+  assert.doesNotMatch(owner, /createInitialGameState\(/);
+  assert.equal((owner.match(/setGameState\(run.state\)/g) || []).length, 1);
   assert.match(owner, /theaterMode && <TheaterPresentation/);
   assert.match(owner, /onSwitch=\{\(\) => setSetting\('storyMode', theaterMode \? 'terminal' : 'theater'\)\}/);
   assert.match(owner, /onTextMode=\{\(\) => setSetting\('storyMode', 'terminal'\)\}/);
