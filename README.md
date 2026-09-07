@@ -357,13 +357,13 @@ Callback URL: https://<FIREBASE_PROJECT_ID>.firebaseapp.com/__/auth/handler
 4. 将 GitHub Client ID 与 Client Secret 只填写到 Firebase Authentication 的 GitHub Provider，不写入仓库或 Cloudflare 前端变量。
 5. 在 Firebase Authorized domains 添加 Worker 域名、`localhost` 和 `127.0.0.1`；将验证邮件与重置邮件的继续地址设为 Worker 首页，并按下方“认证邮件投递”清单配置邮件模板。
 6. 将公开的 Firebase Project ID 写入 `wrangler.jsonc` 的 `FIREBASE_PROJECT_ID`，它必须与前端项目一致；运行 `npm run release:check` 确认发布配置。
-7. 安排维护窗口并审核 D1 目标后再执行迁移。`0002_reset_for_firebase.sql` 会按已确认的方案清空旧用户、旧 OAuth 会话和旧档案；`0003_profile_operations.sql` 创建档案幂等操作账本：
+7. 仅对已确认的新空数据库，单独授权后执行完整迁移链。`0002_reset_for_firebase.sql` 是历史清空迁移；绝不能对已有玩家数据库重跑或重置迁移记录。`0003_profile_operations.sql` 创建档案账本，`0004_authoritative_state.sql` 增量创建权威运行和结果存储。已有生产数据库升级前，先备份并检查已应用迁移，单独审核只执行尚未应用的 `0004`：
 
 ```bash
 npm run cloudflare:d1:remote
 ```
 
-8. 迁移成功后立即运行 `npm run cloudflare:deploy`，再访问 `/api/cloudflare/status` 和 `/api/auth/config` 检查服务。当前生产 D1 已应用 `0001`–`0003`，包含 `profile_operations` 幂等账本；不要在迁移完成而新 Worker 尚未发布时重新开放游戏。
+8. 获得发布授权且目标 schema 就绪后运行 `npm run cloudflare:deploy`，再访问 `/api/cloudflare/status` 和 `/api/auth/config` 检查服务。已知生产基线为 `0001`–`0003`；本次代码修改没有应用生产 `0004`。新版本要求 `0004`，不能仅凭旧版本健康状态确认升级完成；维护期间不要在配套 Worker 和数据库尚未全部就绪时重新开放游戏。
 
 新数据库从空档案开始，不会自动导入旧平台或旧 Cloudflare 账号中的玩家。
 
@@ -491,7 +491,7 @@ tests/                      规则、档案、界面行为和安全测试
 5. 已使用至少 Gmail、Outlook/Hotmail、QQ 邮箱和 163 邮箱完成验证与重置邮件的投递抽查。
 6. 若启用 GitHub Pages，Actions variables 已提供四个必需的 `VITE_FIREBASE_*` 值，Pages 主机名已加入 Firebase Authorized Domains，Pages 来源已加入 Worker 的 `CORS_ALLOWED_ORIGINS`。
 7. Terminal Detective 专用 GitHub OAuth App 的 callback 指向 Firebase 官方 handler，Client Secret 只保存在 Firebase 控制台。
-8. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用；readiness 已确认 `0003_profile_operations.sql`、必要主键、完整邮箱唯一索引及级联外键。
+8. Cloudflare Worker 的 `DB` binding 指向正确的生产 D1，并且目标迁移已经人工审核和应用；本权威版本 readiness 要求 `0004_authoritative_state.sql`、必要主键、完整邮箱唯一索引、级联外键和唯一未结算案件约束；本次本地验证不代表生产已应用该迁移。
 9. `/api/cloudflare/status` 与 `/api/auth/config` 在生产环境返回正常状态，页面源码中的 `td-build` 与本次发布 Git SHA 一致。
 10. 实际完成一次完整冒烟测试：注册 → 验证邮箱 → 登录 → 开始案件 → 产生进度 → 刷新 → 退出 → 重新登录，并确认货币、探员和案件进度均仍存在。
 11. 分别测试 GitHub 登录、错误密码、未验证邮箱、密码重置、网络中断和多设备接管。

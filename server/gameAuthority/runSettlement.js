@@ -1,7 +1,7 @@
 import { getAvailableClueIds, getZoneClueIds, resolveNextZone } from '../../src/game/caseRuntime.js';
 import { applySettlementResult } from '../../src/game/gameState.js';
 import { agentExpertise } from '../../src/game/commandSystem.js';
-import { renderNarrative, stableNarrativeHash } from '../../src/game/narrativeEngine.js';
+import { renderNarrative, resolvePublicZoneName, stableNarrativeHash } from '../../src/game/narrativeEngine.js';
 import { normalizeSettlementResult } from '../../src/game/settlementResult.js';
 
 export function runRoll(seed, label, size = 100) {
@@ -31,11 +31,12 @@ export function settleRunAction(state, caseData, strategy, card, lang) {
   const clueId = !trap && available.length && roll < clueChance
     ? available[runRoll(seed, 'clue', available.length)] : null;
   const confusion = trap ? 6 + runRoll(seed, 'confusion', 7) : runRoll(seed, 'confusion', 6);
-  const clue = caseData.clue_dictionary.find(item => item.clue_id === clueId);
+  const clue = (lang === 'en' ? caseData.en?.clue_dictionary : null)?.find(item => item.clue_id === clueId)
+    || caseData.clue_dictionary.find(item => item.clue_id === clueId);
   const outcome = trap ? 'trap' : clueId ? 'clue' : roll < 920 ? 'progress' : 'no_yield';
   const narrative = renderNarrative({
     runId: state.run_id, caseId: caseData.case_id, zoneId: nextZone,
-    zoneName: caseData.scene?.zones?.[nextZone]?.label || caseData.zone_layout?.[nextZone]?.label,
+    zoneName: resolvePublicZoneName(caseData, nextZone, lang),
     turn: state.turn_count + 1, actionTag: action, outcome,
     agentId: strategy.executing_agent_id, clueIds: clueId ? [clueId] : [],
     clueName: clue?.keyword, lang, seed,

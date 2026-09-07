@@ -315,8 +315,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
               </h2>
               <p style={{ fontSize: '.7rem', lineHeight: 1.7, color: '#d5c7ae' }}>
                 {lang === 'zh'
-                  ? '当前页面保留案件与编队。切换模式后可继续同一调查；案件和编队入口也会返回当前调查，不再扣费。刷新或关闭页面将离开本次现场。'
-                  : 'Your case and squad remain in this page. Resume after switching modes; case and squad entry also resume this run without another charge. Reloading or closing the page leaves this live session.'}
+                  ? '案件与编队已由云端保存。切换模式、刷新页面或重新登录后均可继续同一调查，不再扣费。镜头位置和未提交的草稿仅在当前页面保留。'
+                  : 'Your case and squad are saved in the cloud. Resume the same investigation after switching modes, reloading, or signing in again without another charge. Camera position and unsent drafts remain only in this page.'}
               </p>
               <button ref={resumeRef} type="button" className="td-ui-button td-button-gold" onClick={onResume} style={{
                 minHeight: 44, padding: '10px 16px', borderRadius: 8, border: '1px solid #e8c98a',

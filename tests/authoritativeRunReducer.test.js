@@ -168,6 +168,25 @@ test('canonical settlement retains AP credits, trap shield, confusion, bans and 
   assert.deepEqual(result.newClues, expected.newClues);
 });
 
+test('server round narratives localize zone and clue names without changing gameplay outcomes', () => {
+  const outcomes = new Set();
+  for (let i = 0; i < 20; i += 1) {
+    const run = fresh(`localized-round-${i}`);
+    const strategy = buildExecutingStrategy(run.team_config, 'analyze_forensics', 'AURORA-09');
+    const card = { actionTag: 'analyze_forensics', risk_level: 'low' };
+    const english = settleRunAction(run.state, run.case_data, strategy, card, 'en');
+    const chinese = settleRunAction(run.state, run.case_data, strategy, card, 'zh');
+    assert.doesNotMatch(english.settlement.action_narration, /\p{Script=Han}/u);
+    assert.match(chinese.settlement.action_narration, /\p{Script=Han}/u);
+    for (const field of ['outcome', 'new_clues_unlocked', 'confusion_increase', 'time_cost', 'health_change', 'is_trap', 'next_zone']) {
+      assert.deepEqual(english.settlement[field], chinese.settlement[field], field);
+    }
+    outcomes.add(english.settlement.outcome);
+  }
+  assert.ok(outcomes.has('clue'), 'localized clue labels must be exercised');
+  assert.ok(outcomes.has('progress'), 'localized zone labels must be exercised');
+});
+
 test('team abilities, extra evidence, crises and choices never use ambient randomness', (t) => {
   const teamConfig = buildTeamConfig();
   teamConfig.skill_effects = { bonus_clue_chance: 1, passive_scan_chance: 1 };

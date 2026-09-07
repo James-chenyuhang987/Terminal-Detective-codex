@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { compileFunction } from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
-import { DEFAULT_STORY_MODE, normalizeStoryMode, STORY_MODES } from '../src/game/storyMode.js';
+import { normalizeStoryMode, STORY_MODES } from '../src/game/storyMode.js';
+import { DEFAULT_SETTINGS, normalizeSettings } from '../src/lib/settingsData.js';
 
 function source(path) {
   return ts.createSourceFile(path, readFileSync(new URL(path, import.meta.url), 'utf8'),
@@ -41,12 +42,11 @@ function handler(root, name, bindings = {}) {
   return bind(variable(root, name), bindings);
 }
 
-const DEFAULT_SETTINGS = bind(variable(settings, 'DEFAULT_SETTINGS'), { DEFAULT_STORY_MODE });
 const readStoredNode = findNodes(settings, node => ts.isFunctionDeclaration(node) && node.name?.text === 'readStored')[0];
 
 function readStored(raw, throws = false) {
   return bind(readStoredNode, {
-    KEY: 'td_settings_v1', DEFAULT_SETTINGS, normalizeStoryMode,
+    KEY: 'td_settings_v1', DEFAULT_SETTINGS, normalizeSettings,
     localStorage: { getItem(key) { assert.equal(key, 'td_settings_v1'); if (throws) throw new Error('unavailable'); return raw; } },
   })();
 }
@@ -71,7 +71,7 @@ test('story mode validates exact values and defaults legacy or corrupt preferenc
 test('setting updates, including imports, validate story mode and persist without touching cinematic preferences', () => {
   let current = { ...DEFAULT_SETTINGS, cinematicQuality: 'low', cinematicsEnabled: false };
   const setSetting = bind(variable(settings, 'setSetting').arguments[0], {
-    normalizeStoryMode, setSettings: reducer => { current = reducer(current); },
+    DEFAULT_SETTINGS, normalizeSettings, setSettings: reducer => { current = reducer(current); },
   });
   const persistence = findNodes(settings, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect'
     && node.arguments[0]?.getText().includes('localStorage.setItem'))[0];
@@ -251,6 +251,14 @@ test('HOME and mode switching never key, replace, or conditionally unmount the a
   assert.match(page.text, /screen !== 'GAME' \? \{ inert: '' \} : \{\}/);
 });
 
+test('Home distinguishes durable cloud investigation from local presentation drafts in both languages', () => {
+  assert.match(home.text, /案件与编队已由云端保存/);
+  assert.match(home.text, /镜头位置和未提交的草稿仅在当前页面保留/);
+  assert.match(home.text, /Your case and squad are saved in the cloud/);
+  assert.match(home.text, /Camera position and unsent drafts remain only in this page/);
+  assert.doesNotMatch(home.text, /刷新或关闭页面将离开本次现场|Reloading or closing the page leaves this live session/);
+});
+
 test('suspending a run focuses the visible resume control without rerouting or mutating the run', () => {
   const effect = findNodes(home, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect'
     && node.arguments[0]?.getText().includes('resumeRef.current?.focus'))[0];
@@ -272,6 +280,7 @@ test('HOME and resume change only visibility; explicit exit clears selection for
   const bindings = {
     selectedCase, setScreen: value => { screen = value; },
     setSelectedCase: value => { selection = value; }, setPreferredCaseId: value => { preferred = value; },
+    setAuthoritativeRun: () => {}, refresh: async () => {},
   };
   handler(page, 'handleOpenHome', bindings)();
   assert.equal(screen, 'HOME');
@@ -344,10 +353,13 @@ test('starting a case is single-flight and successful starts retain the selected
   const strategy = { skill_effects: { insight: 2 } };
   let savedStrategy;
   const bindings = {
-    selectedCase: null, caseStartRef, agentStrategy: strategy,
+    selectedCase: null, activeRun: null, caseStartRef, teamIntentRef: { current: null }, profile: {},
     loadInvestigationTerminal: () => { loads += 1; return new Promise(resolve => { resolveLoad = resolve; }); },
-    startCase: (profile, caseData) => { assert.strictEqual(caseData, selected); return profile; },
-    mutate: async reducer => { charges += 1; reducer({}); return { effects: { skill_effects: { insight: 1 }, initial_ap_bonus: 1, ignore_first_trap: false } }; },
+    command: async (type, args) => {
+      assert.equal(type, 'start_case'); assert.equal(args.case_id, selected.case_id); charges += 1;
+      return { profile: {}, active_run: { id: 'paid-run', case_id: selected.case_id, agent_strategy: strategy } };
+    },
+    resumeCloudRun: run => { selection = selected; savedStrategy = run.agent_strategy; },
     setAgentStrategy: value => { savedStrategy = value; },
     setSelectedCase: value => { selection = value; }, setScreen: screen => assert.equal(screen, 'GAME'),
   };
@@ -360,7 +372,7 @@ test('starting a case is single-flight and successful starts retain the selected
   await first;
   assert.equal(charges, 1);
   assert.strictEqual(selection, selected);
-  assert.equal(savedStrategy.skill_effects.insight, 3);
+  assert.strictEqual(savedStrategy, strategy);
   assert.equal(caseStartRef.current, false);
 });
 
