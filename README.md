@@ -127,32 +127,34 @@ Worker 不接受客户端提交的 UID。它从 ID Token 读取用户身份，�
 }
 ```
 
-### 档案一致性与离线恢复
+### 服务端权威档案与断线恢复
 
-档案保存不是简单的“最后一次整份覆盖”，而是浏览器 WAL、D1 revision CAS 和服务端幂等账本三层协作：
+货币、体力、奖励、调查状态和结算只由服务端计算。浏览器只能提交购买、签到、开局等白名单指令，不能上传资源快照、证据列表或自报分数来覆盖云端。开局和影响奖励的调查操作必须联网确认；尚未确认的操作不显示为已成功。
 
 | 层 | 机制 |
 | --- | --- |
-| 浏览器 WAL v2 | 每个 Firebase UID、operation ID 保存一个独立 `localStorage` 记录；包含 lineage、patch、base revision、时间、尝试次数和 checksum。 |
-| 顺序重放 | 同一 lineage 按持久化顺序提交；只有前一项明确提交为 `base + 1` 时才推进后一项 revision。重放期间阻止新的档案 mutation 插入固定快照。 |
-| 标签页隔离 | 新标签页可以重放旧 lineage，但旧 lineage 排空前不能创建新 mutation；检测到多个 lineage 分叉时停止自动写入，避免静默覆盖。 |
-| D1 CAS | `profiles.profile_revision` 与 `active_session_id` 同时参与条件更新；保存过程中被另一设备接管会返回 `SESSION_TAKEN`。 |
-| 幂等账本 | `profile_operations` 以 `(user_id, operation_id)` 为主键并记录 patch SHA-256、base/result revision；重试不会重复结算。 |
-| 输入边界 | `expected_revision` 必须是非负安全整数，patch 不能为空；单次 patch 和合并后的完整档案均不得超过 512 KiB。 |
-| 案件结算 outbox | 结算意图按 UID 与 `run_id` 独立保存，只有对应 WAL 真正提交后才删除，便于版本冲突后重新应用。 |
+| 浏览器指令回执 | 每个 Firebase UID 最多持久化一条未确认指令，包含 operation ID、lineage、原始 revision、指令参数与损坏检测 checksum；先写入并读回校验，再发请求。 |
+| 重试 | 断线重试保留原 operation ID、revision 和指令，不重新计算或改写快照；只有服务器确认后才移除回执。 |
+| 标签页隔离 | 新设备接管后可重放同一回执；出现多条冲突回执时停止自动写入。旧设备继续被游戏会话校验拒绝。 |
+| D1 CAS | `profiles.profile_revision` 与 `active_session_id` 同时参与写入校验；开局扣费、运行状态和账本在事务内一起提交。 |
+| 幂等账本 | `profile_operations` / `run_operations` 绑定 owner、operation ID、原始 revision 和规范化指令。重放返回当前云端状态与原始业务结果，避免重复扣费或回滚档案。 |
+| 输入边界 | 仅接受白名单意图和合法参数；身份编辑只允许外观字段。旧 `patch`、客户端经济迁移及自报结算 summary 不再被接受。 |
+| 权威调查 | `player_runs` 保存已付费调查。一个账号最多存在一个未结算运行；刷新、切设备或丢响应后恢复它，不重新扣费。结算只提交 `run_id`。 |
 
-真正的跨设备 `STALE_PROFILE` 不会自动把绝对值 patch 重基到新档案，因为这可能覆盖另一设备的货币、购买或奖励。此类冲突会进入显式恢复；断网、超时、`429` 和临时 `5xx` 则保留乐观状态，并在登录、恢复联网和每 20 秒轮询时自动重放。
+断网、超时、`429` 和临时 `5xx` 保留指令回执，在登录、恢复联网和每 20 秒轮询时重试，但不乐观增加资源或宣布奖励到账。真实 `STALE_PROFILE`、回执损坏或跨标签页分叉进入显式恢复，不自动重基或改写已提交意图。
 
 | 同步状态 | 行为 |
 | --- | --- |
-| `online` | 云端已同步，可正常修改。 |
-| `syncing` | 正在按顺序重放，暂时阻止新 mutation。 |
-| `pending` | 临时故障，WAL 保留并等待自动重试。 |
-| `readonly` | 账号已被另一设备接管；当前设备保留未同步操作但停止写云端。 |
-| `storage_unavailable` | 浏览器本地持久化不可用，为防止丢档停止修改。 |
-| `recovery` | WAL 损坏、lineage 分叉或真实版本冲突，停止自动写入；可恢复的结算意图会保留，其余待同步 patch 需要玩家确认后舍弃。 |
+| `online` | 已收到有效云端档案，可提交下一条操作。 |
+| `syncing` | 正在等待服务器确认；新指令按队列处理。 |
+| `pending` | 操作未确认，回执保留并等待自动重试。 |
+| `readonly` | 账号已被另一设备接管；当前设备保留回执但停止写云端。 |
+| `storage_unavailable` | 浏览器本地持久化不可用，为防止丢失幂等回执停止操作。 |
+| `recovery` | 旧快照、回执损坏、lineage 分叉或版本冲突，停止自动写入；允许恢复的情况必须由玩家确认采用云端档案。 |
 
-`localStorage` WAL 只能防御暂时断网、刷新和短期服务故障。玩家主动清除站点数据、浏览器禁用存储、磁盘故障或 D1 长期不可用时，仍不能承诺本地待同步操作永久存在。
+现有 D1 档案保留为升级基线，不能追溯识别历史非法收益。旧本地 WAL 和结算 summary 不再重放；备份导入仅恢复设置，不能导入经济、经验、奖励或旧案件进度。导出的云端档案仅供查看。
+
+浏览器清除站点数据会丢失未确认回执；服务端已提交的档案和已付费运行仍以 D1 为准。浏览器禁用存储、磁盘故障或长期服务不可用时，无法保证尚未确认的意图最终提交。部署前须单独审查并应用 additive `0004` 迁移，绝不能重跑历史清空数据的 `0002`。详见 [服务端权威协议](docs/backend-authority.md)。
 
 ### Worker API 契约
 
@@ -162,7 +164,8 @@ Worker 不接受客户端提交的 UID。它从 ID Token 读取用户身份，�
 | `GET /api/cloudflare/status` | 无 | 聚合服务状态；未就绪时返回 `503`。 |
 | `GET /api/auth/session` | Firebase ID Token | 返回统一的 `firebase-cloudflare` 账户结构。 |
 | `GET /api/apps/:appId/entities/User/me` | Firebase ID Token | 读取当前 Token UID 对应的账户和档案。 |
-| `POST /api/apps/:appId/functions/playerProfile` | Firebase ID Token | `claim_session`、`status` 和幂等 `patch`；档案 owner 只取自服务端验证后的 Token UID。 |
+| `POST /api/apps/:appId/functions/playerProfile` | Firebase ID Token | `claim_session`、`status` 和幂等 `command`；档案 owner 只取自服务端验证后的 Token UID。 |
+| `POST /api/apps/:appId/functions/playerRun` | Firebase ID Token | 已付费案件的 `status` 与白名单 `command`；服务端验证会话、运行 owner、revision 和业务状态。 |
 | `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID Token | 执行白名单内的确定性案件规则。 |
 
 所有 `/api/*` 未知路径直接返回 JSON 404，不会回退到 SPA。未知服务端故障只向玩家返回匿名 `TD-XXXXXXXXXX` 故障编号；原始异常只写入 Worker 日志。
@@ -386,7 +389,7 @@ Firebase 默认认证邮件的共享发件基础设施、发送信誉和收件�
 - Token 的 `iat` 与 `auth_time` 必须是合理的正整数时间，`exp` 必须晚于当前时间和 `iat`；时钟偏差容忍上限为 5 分钟。
 - 案件真相、真实事实贴近度和正确报告答案不进入浏览器构建产物。
 - 玩家档案使用字段白名单、嵌套结构限制、档案版本和活跃设备会话校验；读写目标只能来自已验证 Token 的 Firebase UID。
-- 每次档案修改先写入按完整 Firebase UID、operation ID 和 lineage 隔离的 WAL v2 记录，再通过 D1 操作账本和档案版本 CAS 更新；跨标签页分叉会失败关闭，重复请求不会重复结算。
+- 每次档案操作先写入按完整 Firebase UID、operation ID 和 lineage 隔离的指令回执，服务端再验证并计算结果，通过 D1 操作账本和版本 CAS 原子更新；跨标签页分叉会失败关闭，重复请求不会重复结算。
 - GitHub 优先使用 Firebase 弹窗授权，受限浏览器自动降级到 Firebase redirect；游戏页面不再承担 OAuth callback。
 - 登录前会核对前后端 Firebase Project ID、D1 binding 和必要表字段；`/api/cloudflare/status` 未就绪时返回 `503`，不会伪报成功。
 - 规则与档案接口均要求有效 Firebase Bearer Token；规则接口拒绝客户端身份字段、原型污染键和异常深层数据；401 只强制刷新并重试一次，未知 API 路由不会代理到旧后端。
@@ -402,7 +405,8 @@ cloudflare/migrations/      D1 数据库迁移
 server/detectiveRules/      服务端案件秘密与确定性规则
 src/components/game/        首页、大厅、调查终端、结算和功能模块
 src/game/                   游戏状态、经济、探员、案件与表达引擎
-src/game/profileWal.js      按 UID/operation/lineage 隔离的浏览器 WAL v2
+src/game/profileCommands.js 按 UID/operation/lineage 隔离的权威指令回执
+src/game/playerRun.js       权威调查传输与运行回执
 src/lib/AuthContext.jsx     Firebase 登录、验证、绑定、重认证和 Token 提供器
 src/lib/ProfileContext.jsx  档案 claim、乐观状态、顺序重放与冲突恢复
 src/lib/authSession.js      10 秒会话 deadline、有限重试和 401 单次刷新
@@ -470,7 +474,7 @@ tests/                      规则、档案、界面行为和安全测试
 | OAuth 回调 404 | GitHub 优先使用 Firebase 弹窗；降级回调使用 Firebase 官方 handler；应用启动时只清除遗留认证错误 query/hash | Firebase Authorized Domains、GitHub Callback URL 或生产域名配置错误时仍会拒绝授权，但界面会提供恢复提示 |
 | 原始 `error` 或空白页 | 已知 Firebase、Worker 和 D1 错误统一映射为中英文提示；未知顶层故障只展示匿名故障编号 | 未知代码缺陷、浏览器扩展拦截或第三方服务整体故障仍可能中断当前操作 |
 | 登录失败 | 登录前检查前后端 Firebase 项目、D1 binding、必要 migration、主键、邮箱唯一索引和级联外键；Firebase 公钥下载包含响应体读取在内最多等待 3.5 秒，并对网络错误及有限的临时状态重试一次；会话初始化总计最多等待 10 秒，网络及 `429/502/503/504` 最多重试两次，`401` 只刷新 Token 一次 | 密码错误、邮箱未验证、授权取消、网络中断、Provider 未开启或真实生产配置缺失时仍会拒绝登录 |
-| 玩家数据未保存 | 所有档案写入先进入按 Firebase UID、operation ID 与 lineage 隔离的 WAL v2，再以 D1 幂等账本和 revision CAS 写入；断网及临时服务故障会保留乐观结果，并在登录、联网和定时轮询时顺序重放 | 浏览器禁用或清除本地存储、D1 长期不可用、免费额度耗尽、真实版本冲突或另一设备接管时不能保证立即写入云端；界面会明确显示“待同步”“只读”或“需要恢复” |
+| 玩家操作未确认 | 档案与调查只发送意图，先持久化幂等回执，再由服务端计算并写入 D1；断线保留回执并自动重试，不显示虚假的本地奖励 | 浏览器禁用或清除本地存储、D1 长期不可用、额度耗尽、版本冲突或另一设备接管时，未确认操作不能视为成功；界面会显示待确认、只读或需要恢复 |
 
 `404limited` 不是 Firebase 或 Cloudflare 的标准错误名称。认证回调地址错误可能产生 404，限流通常产生 Firebase 限流错误、HTTP `429` 或 Cloudflare `1027`，排查时应分别处理。
 

@@ -1,4 +1,6 @@
 const DISCARDABLE_RECOVERY_CODES = new Set([
+  'PROFILE_LEGACY_WRITES',
+  'INVALID_COMMAND',
   'PROFILE_WAL_CORRUPT',
   'PROFILE_WAL_FULL',
   'PROFILE_WAL_DIVERGED',
@@ -8,6 +10,18 @@ const DISCARDABLE_RECOVERY_CODES = new Set([
 ]);
 
 const RECOVERY_MESSAGES = Object.freeze({
+  PROFILE_LEGACY_WRITES: [
+    '发现旧版未同步快照。新版只接受服务器核算的操作，不能重放旧快照；请选择恢复云端档案。',
+    'Legacy unsynced snapshots were found. Only server-calculated commands are supported now; restore the cloud profile to continue.',
+  ],
+  PROFILE_AUTHORITY_REQUIRED: [
+    '服务端版本尚未支持安全档案操作，请联系管理员更新。',
+    'The server does not support authoritative profiles yet. Contact the administrator to update it.',
+  ],
+  INVALID_COMMAND: [
+    '待同步操作与当前服务版本不兼容。请更新页面或恢复云端档案后重试。',
+    'A pending command is incompatible with this server. Update the page or restore the cloud profile before retrying.',
+  ],
   PROFILE_WAL_CORRUPT: [
     '浏览器中的待同步档案数据已损坏，无法安全重放。档案修改已暂停。',
     'Pending profile data in this browser is damaged and cannot be replayed safely. Profile changes are paused.',

@@ -1,31 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useLang } from '@/lib/lang.jsx';
+import { clearPendingSettlements, invokePlayerProfile, normalizeProfile } from '@/game/playerProfile';
+import { clearProfileOperations } from '@/game/profileWal';
 import {
-  applySettlementToProfile,
-  clearPendingSettlements,
-  diffProfileWrite,
-  enqueuePendingSettlement,
-  invokePlayerProfile,
-  migrateProfileV2,
-  readPendingSettlements,
-  removePendingSettlement,
-} from '@/game/playerProfile';
-import {
-  applyPendingProfileOperations,
-  appendProfileOperation,
-  clearProfileOperations,
-  createProfileOperationId,
-  readProfileOperations,
-  removeProfileOperation,
-  replaceProfileOperationId,
-  updateProfileOperation,
-} from '@/game/profileWal';
+  appendProfileCommand, clearProfileCommands, hasLegacyProfileWrites,
+  profileCommand, readProfileCommands, removeProfileCommand,
+} from '@/game/profileCommands';
 import { profileRecoveryDetails } from '@/lib/profileRecovery.js';
 import { createSingleFlight } from '@/lib/singleFlight.js';
 
 const POLL_MS = 20_000;
-const LEGACY_PROFILE_MIGRATION_OPERATION_ID = 'profile-migration-v2';
 const TRANSIENT_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);
 const ProfileContext = createContext(null);
 
@@ -35,12 +20,8 @@ function createSessionId() {
   return `web-${random}`;
 }
 
-function isSameProfile(a, b) {
-  return Object.keys(diffProfileWrite(a, b)).length === 0;
-}
-
 function normalizeRemote(remote) {
-  return migrateProfileV2(remote || {});
+  return normalizeProfile(remote || {}, undefined, { regenerateEnergy: false });
 }
 
 function profileError(code, message = code) {
@@ -50,7 +31,7 @@ function profileError(code, message = code) {
 }
 
 function isTransient(cause) {
-  return TRANSIENT_STATUSES.has(Number(cause?.status) || 0)
+  return (cause?.status !== undefined && TRANSIENT_STATUSES.has(Number(cause.status)))
     || ['PROFILE_NETWORK', 'PROFILE_TIMEOUT', 'DATABASE_UNAVAILABLE', 'FIREBASE_KEYS_UNAVAILABLE']
       .includes(cause?.code);
 }
@@ -60,7 +41,10 @@ function isStorageFailure(cause) {
 }
 
 function isRecoveryFailure(cause) {
-  return cause?.code === 'PROFILE_WAL_CORRUPT'
+  return cause?.code === 'PROFILE_LEGACY_WRITES'
+    || cause?.code === 'PROFILE_AUTHORITY_REQUIRED'
+    || cause?.code === 'INVALID_COMMAND'
+    || cause?.code === 'PROFILE_WAL_CORRUPT'
     || cause?.code === 'PROFILE_WAL_FULL'
     || cause?.code === 'PROFILE_WAL_DIVERGED'
     || cause?.code === 'PROFILE_WAL_OPERATION_REUSED'
@@ -74,14 +58,16 @@ export function ProfileProvider({ children }) {
   const sessionIdRef = useRef(createSessionId());
   const ownerRef = useRef('');
   const profileRef = useRef(null);
+  const activeRunRef = useRef(null);
   const queueRef = useRef(Promise.resolve());
   const lifecycleRef = useRef(0);
   const requestControllersRef = useRef(new Set());
-  const replayingRef = useRef(null);
+  const replayFlightRef = useRef(createSingleFlight());
   const claimFlightRef = useRef(createSingleFlight());
   const mountedRef = useRef(true);
   const syncStatusRef = useRef('loading');
   const [profile, setProfile] = useState(null);
+  const [activeRun, setActiveRun] = useState(null);
   const [account, setAccount] = useState(user || null);
   const [syncStatus, setSyncStatus] = useState('loading');
   const [pendingCount, setPendingCount] = useState(0);
@@ -112,7 +98,8 @@ export function ProfileProvider({ children }) {
 
   const updatePendingCount = useCallback((ownerUid, generation) => {
     if (!isCurrentOwner(ownerUid, generation)) return [];
-    const entries = readProfileOperations(ownerUid);
+    if (hasLegacyProfileWrites(ownerUid)) throw profileError('PROFILE_LEGACY_WRITES');
+    const entries = readProfileCommands(ownerUid);
     setPendingCount(entries.length);
     return entries;
   }, [isCurrentOwner]);
@@ -132,19 +119,39 @@ export function ProfileProvider({ children }) {
     }
   }, [isCurrentOwner]);
 
-  const acceptPayload = useCallback((payload, ownerUid, generation, pendingEntries = []) => {
+  const acceptPayload = useCallback((payload, ownerUid, generation) => {
+    if (payload?.authority_version !== 1) throw profileError('PROFILE_AUTHORITY_REQUIRED');
     if (payload?.account?.id && payload.account.id !== ownerUid) {
       throw profileError('PROFILE_OWNER_MISMATCH', 'The profile response belongs to another account.');
     }
-    const next = normalizeRemote(applyPendingProfileOperations(payload?.profile, pendingEntries));
+    if (!payload?.profile || typeof payload.profile !== 'object' || Array.isArray(payload.profile)
+      || !Number.isSafeInteger(payload.profile.profile_revision) || payload.profile.profile_revision < 0) {
+      throw profileError('PROFILE_DATA_CORRUPT');
+    }
+    if (!Object.hasOwn(payload, 'active_run') || (payload.active_run !== null
+      && (typeof payload.active_run !== 'object' || Array.isArray(payload.active_run)
+        || typeof payload.active_run.id !== 'string' || !payload.active_run.id
+        || !Number.isSafeInteger(payload.active_run.revision) || payload.active_run.revision < 0))) {
+      throw profileError('PROFILE_DATA_CORRUPT');
+    }
+    if (!isCurrentOwner(ownerUid, generation)) throw profileError('PROFILE_REQUEST_CANCELLED');
+    if (payload.profile.profile_revision < (profileRef.current?.profile_revision ?? 0)) return profileRef.current;
+    const next = normalizeRemote(payload.profile);
     if (!commitProfile(next, ownerUid, generation)) {
       throw profileError('PROFILE_REQUEST_CANCELLED', 'The active account changed.');
     }
     if (payload?.account) setAccount(payload.account);
+    // Investigation commands advance the run revision independently of the profile.
+    const currentRun = activeRunRef.current;
+    if (!currentRun || currentRun.id !== payload.active_run?.id || currentRun.revision <= payload.active_run.revision) {
+      activeRunRef.current = payload.active_run;
+      setActiveRun(payload.active_run);
+    }
     return next;
-  }, [commitProfile]);
+  }, [commitProfile, isCurrentOwner]);
 
   const setFailureState = useCallback((cause, ownerUid, generation) => {
+    if (['PROFILE_SYNC_BLOCKED', 'PROFILE_REQUEST_CANCELLED'].includes(cause?.code)) return;
     commitError(cause, ownerUid, generation);
     if (cause?.code === 'SESSION_TAKEN' || cause?.code === 'PROFILE_OWNER_MISMATCH') {
       changeSyncStatus('readonly', ownerUid, generation);
@@ -152,197 +159,79 @@ export function ProfileProvider({ children }) {
       changeSyncStatus('storage_unavailable', ownerUid, generation);
     } else if (isRecoveryFailure(cause)) {
       changeSyncStatus('recovery', ownerUid, generation);
-    } else {
+    } else if (!['readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
       changeSyncStatus('error', ownerUid, generation);
     }
   }, [changeSyncStatus, commitError]);
 
   const transmitEntry = useCallback(async (entry, ownerUid, generation) => {
-    if (!isCurrentOwner(ownerUid, generation)) {
-      throw profileError('PROFILE_REQUEST_CANCELLED', 'The active account changed.');
-    }
-    let pendingEntry;
+    if (!isCurrentOwner(ownerUid, generation)) throw profileError('PROFILE_REQUEST_CANCELLED');
     try {
-      pendingEntry = updateProfileOperation(ownerUid, entry.operationId, { incrementAttempts: true });
-      updatePendingCount(ownerUid, generation);
-    } catch (cause) {
-      setFailureState(cause, ownerUid, generation);
-      throw cause;
-    }
-
-    try {
-      let payload;
-      try {
-        payload = await invokeOwned('patch', {
-          session_id: sessionIdRef.current,
-          operation_id: pendingEntry.operationId,
-          expected_revision: pendingEntry.baseRevision,
-          patch: pendingEntry.patch,
-        }, ownerUid, generation);
-      } catch (cause) {
-        if (cause?.code !== 'OPERATION_ID_REUSED'
-          || pendingEntry.operationId !== LEGACY_PROFILE_MIGRATION_OPERATION_ID) {
-          throw cause;
-        }
-        pendingEntry = replaceProfileOperationId(
-          ownerUid,
-          pendingEntry.operationId,
-          createProfileOperationId(),
-        );
-        pendingEntry = updateProfileOperation(
-          ownerUid,
-          pendingEntry.operationId,
-          { incrementAttempts: true },
-        );
-        updatePendingCount(ownerUid, generation);
-        payload = await invokeOwned('patch', {
-          session_id: sessionIdRef.current,
-          operation_id: pendingEntry.operationId,
-          expected_revision: pendingEntry.baseRevision,
-          patch: pendingEntry.patch,
-        }, ownerUid, generation);
+      const payload = await invokeOwned('command', {
+        session_id: sessionIdRef.current,
+        operation_id: entry.operationId,
+        expected_revision: entry.baseRevision,
+        command: entry.command,
+      }, ownerUid, generation);
+      if (!payload?.result || typeof payload.result !== 'object' || Array.isArray(payload.result)) {
+        throw profileError('PROFILE_DATA_CORRUPT');
       }
-      removeProfileOperation(ownerUid, pendingEntry.operationId);
-      const remaining = updatePendingCount(ownerUid, generation);
-      const saved = acceptPayload(payload, ownerUid, generation, remaining);
+      if (['readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
+        throw profileError('PROFILE_SYNC_BLOCKED');
+      }
+      const saved = acceptPayload(payload, ownerUid, generation);
+      removeProfileCommand(ownerUid, entry.operationId);
+      updatePendingCount(ownerUid, generation);
       commitError(null, ownerUid, generation);
-      changeSyncStatus(remaining.length ? 'syncing' : 'online', ownerUid, generation);
-      return { profile: saved, pending: false };
+      changeSyncStatus('online', ownerUid, generation);
+      return { ...payload.result, result: payload.result, profile: saved, pending: false };
     } catch (cause) {
       if (!isCurrentOwner(ownerUid, generation)) throw cause;
-      if (cause?.code === 'STALE_PROFILE' && cause?.payload?.profile) {
-        const fresh = normalizeRemote(cause.payload.profile);
-        const remaining = updatePendingCount(ownerUid, generation);
-        commitProfile(
-          normalizeRemote(applyPendingProfileOperations(fresh, remaining)),
-          ownerUid,
-          generation,
-        );
-        setFailureState(cause, ownerUid, generation);
-        throw cause;
-      }
-      if (isRecoveryFailure(cause)) {
+      if (isRecoveryFailure(cause) || isStorageFailure(cause)
+        || cause?.code === 'SESSION_TAKEN' || cause?.code === 'PROFILE_OWNER_MISMATCH') {
         setFailureState(cause, ownerUid, generation);
         throw cause;
       }
       if (isTransient(cause)) {
         commitError(cause, ownerUid, generation);
         changeSyncStatus('pending', ownerUid, generation);
-        updatePendingCount(ownerUid, generation);
-        return { profile: profileRef.current, pending: true };
+        throw profileError('PROFILE_COMMAND_PENDING');
       }
       setFailureState(cause, ownerUid, generation);
       throw cause;
     }
-  }, [
-    acceptPayload,
-    changeSyncStatus,
-    commitError,
-    commitProfile,
-    invokeOwned,
-    isCurrentOwner,
-    setFailureState,
-    updatePendingCount,
-  ]);
+  }, [acceptPayload, changeSyncStatus, commitError, invokeOwned, isCurrentOwner, setFailureState, updatePendingCount]);
 
-  const replayWal = useCallback(async (ownerUid = ownerRef.current, generation = lifecycleRef.current) => {
-    const replayKey = `${generation}:${ownerUid}`;
-    if (!isCurrentOwner(ownerUid, generation)
-      || replayingRef.current
-      || ['readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
-      return profileRef.current;
-    }
-    replayingRef.current = replayKey;
-    try {
-      const entries = updatePendingCount(ownerUid, generation);
-      if (!entries.length) return profileRef.current;
-      const lineages = new Set(entries.map(entry => entry.lineageId));
-      if (lineages.size !== 1) {
-        throw profileError('PROFILE_WAL_DIVERGED', 'Pending profile changes came from concurrent sessions.');
+  const replayWal = useCallback((ownerUid = ownerRef.current, generation = lifecycleRef.current) => (
+    replayFlightRef.current.run(`${generation}:${ownerUid}`, async () => {
+      if (!isCurrentOwner(ownerUid, generation)) throw profileError('PROFILE_REQUEST_CANCELLED');
+      if (['readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
+        throw profileError(syncStatusRef.current === 'readonly' ? 'SESSION_TAKEN' : 'PROFILE_SYNC_BLOCKED');
       }
-      changeSyncStatus('syncing', ownerUid, generation);
-      let confirmedRevision = null;
-      for (let index = 0; index < entries.length; index += 1) {
-        let entry = entries[index];
-        if (!isCurrentOwner(ownerUid, generation)) break;
-        if (confirmedRevision !== null) {
-          entry = updateProfileOperation(ownerUid, entry.operationId, {
-            baseRevision: confirmedRevision,
-          });
+      try {
+        const entries = updatePendingCount(ownerUid, generation);
+        if (!entries.length) return null;
+        changeSyncStatus('syncing', ownerUid, generation);
+        return await transmitEntry(entries[0], ownerUid, generation);
+      } catch (cause) {
+        if (cause?.code !== 'PROFILE_COMMAND_PENDING' && isCurrentOwner(ownerUid, generation)) {
+          setFailureState(cause, ownerUid, generation);
         }
-        const optimistic = normalizeRemote({ ...(profileRef.current || {}), ...entry.patch });
-        commitProfile(optimistic, ownerUid, generation);
-        const result = await transmitEntry(entry, ownerUid, generation);
-        if (result.pending) {
-          const completeOptimistic = normalizeRemote(applyPendingProfileOperations(
-            profileRef.current,
-            entries.slice(index + 1),
-          ));
-          commitProfile(completeOptimistic, ownerUid, generation);
-          break;
-        }
-        const savedRevision = Number(result.profile?.profile_revision);
-        confirmedRevision = Number.isInteger(savedRevision)
-          && savedRevision === entry.baseRevision + 1
-          ? savedRevision
-          : null;
+        throw cause;
       }
-      updatePendingCount(ownerUid, generation);
-      return profileRef.current;
-    } catch (cause) {
-      if (isCurrentOwner(ownerUid, generation)) setFailureState(cause, ownerUid, generation);
-      throw cause;
-    } finally {
-      if (replayingRef.current === replayKey) replayingRef.current = null;
-    }
-  }, [
-    changeSyncStatus,
-    commitProfile,
-    isCurrentOwner,
-    setFailureState,
-    transmitEntry,
-    updatePendingCount,
-  ]);
+    })
+  ), [changeSyncStatus, isCurrentOwner, setFailureState, transmitEntry, updatePendingCount]);
 
   const performClaim = useCallback(async (ownerUid, generation) => {
     if (!ownerUid) throw profileError('PROFILE_OWNER_MISSING', 'No authenticated profile owner.');
     changeSyncStatus('syncing', ownerUid, generation);
     commitError(null, ownerUid, generation);
     try {
-      const pendingEntries = updatePendingCount(ownerUid, generation);
-      const lineages = new Set(pendingEntries.map(entry => entry.lineageId));
-      if (lineages.size > 1) {
-        throw profileError('PROFILE_WAL_DIVERGED', 'Pending profile changes came from concurrent sessions.');
-      }
       const payload = await invokeOwned('claim_session', {
         session_id: sessionIdRef.current,
       }, ownerUid, generation);
-      const remote = normalizeRemote(payload.profile);
-      const migrationPatch = payload.compatibility_mode || isSameProfile(remote, payload.profile)
-        ? {}
-        : diffProfileWrite(payload.profile, remote);
-      if (Object.keys(migrationPatch).length) {
-        const hasPendingMigration = pendingEntries.some(entry => (
-          Object.entries(migrationPatch).every(([key, value]) => (
-            JSON.stringify(entry.patch?.[key]) === JSON.stringify(value)
-          ))
-        ));
-        if (!hasPendingMigration) {
-          const firstCreatedAt = pendingEntries[0]?.createdAt;
-          appendProfileOperation({
-            ownerUid,
-            operationId: createProfileOperationId(),
-            lineageId: pendingEntries[0]?.lineageId || sessionIdRef.current,
-            patch: migrationPatch,
-            baseRevision: Number(payload.profile?.profile_revision) || 0,
-            ...(firstCreatedAt
-              ? { createdAt: new Date(Date.parse(firstCreatedAt) - 1).toISOString() }
-              : {}),
-          });
-        }
-      }
+      acceptPayload(payload, ownerUid, generation);
       const remaining = updatePendingCount(ownerUid, generation);
-      acceptPayload(payload, ownerUid, generation, remaining);
       changeSyncStatus(remaining.length ? 'pending' : 'online', ownerUid, generation);
       return profileRef.current;
     } catch (cause) {
@@ -356,7 +245,6 @@ export function ProfileProvider({ children }) {
     invokeOwned,
     isCurrentOwner,
     setFailureState,
-    transmitEntry,
     updatePendingCount,
   ]);
 
@@ -377,26 +265,28 @@ export function ProfileProvider({ children }) {
     const ownerUid = ownerRef.current;
     const generation = lifecycleRef.current;
     try {
+      if (['readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
+        throw profileError('PROFILE_SYNC_BLOCKED');
+      }
       const pending = updatePendingCount(ownerUid, generation);
-      if (pending.length) return await replayWal(ownerUid, generation);
+      if (pending.length) {
+        await replayWal(ownerUid, generation);
+        return profileRef.current;
+      }
       const payload = await invokeOwned('status', {
         session_id: sessionIdRef.current,
       }, ownerUid, generation);
-      const currentPending = updatePendingCount(ownerUid, generation);
-      const remoteRevision = Number(payload.profile?.profile_revision) || 0;
-      const currentRevision = Number(profileRef.current?.profile_revision) || 0;
-      if (remoteRevision < currentRevision) {
-        changeSyncStatus(currentPending.length ? 'pending' : 'online', ownerUid, generation);
-        commitError(null, ownerUid, generation);
-        return profileRef.current;
+      if (['readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
+        throw profileError('PROFILE_SYNC_BLOCKED');
       }
-      const next = acceptPayload(payload, ownerUid, generation, currentPending);
+      const currentPending = updatePendingCount(ownerUid, generation);
+      const next = acceptPayload(payload, ownerUid, generation);
       changeSyncStatus(currentPending.length ? 'pending' : 'online', ownerUid, generation);
       commitError(null, ownerUid, generation);
       return next;
     } catch (cause) {
       if (isCurrentOwner(ownerUid, generation)) {
-        if (isTransient(cause) && pendingCount > 0) changeSyncStatus('pending', ownerUid, generation);
+        if (cause?.code === 'PROFILE_COMMAND_PENDING' || (isTransient(cause) && pendingCount > 0)) changeSyncStatus('pending', ownerUid, generation);
         else setFailureState(cause, ownerUid, generation);
       }
       throw cause;
@@ -413,100 +303,50 @@ export function ProfileProvider({ children }) {
     updatePendingCount,
   ]);
 
-  const runMutation = useCallback(async (reducer) => {
-    const ownerUid = ownerRef.current;
-    const generation = lifecycleRef.current;
-    if (['loading', 'syncing', 'readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
-      throw profileError(
-        syncStatusRef.current === 'readonly' ? 'SESSION_TAKEN' : 'PROFILE_SYNC_BLOCKED',
-        'Profile changes are currently blocked.',
-      );
+  const runCommand = useCallback(async (intent, ownerUid, generation) => {
+    if (!isCurrentOwner(ownerUid, generation)) throw profileError('PROFILE_REQUEST_CANCELLED');
+    if (['loading', 'readonly', 'storage_unavailable', 'recovery'].includes(syncStatusRef.current)) {
+      throw profileError(syncStatusRef.current === 'readonly' ? 'SESSION_TAKEN' : 'PROFILE_SYNC_BLOCKED');
     }
-    const before = profileRef.current;
-    if (!ownerUid || !before) throw profileError('PROFILE_NOT_LOADED', 'Profile is not loaded.');
-    const existing = updatePendingCount(ownerUid, generation);
-    if (existing.some(entry => entry.lineageId !== sessionIdRef.current)) {
-      throw profileError(
-        'PROFILE_FOREIGN_WAL_PENDING',
-        'Pending changes from the previous session must sync before new changes can be saved.',
-      );
-    }
-    const reduced = await reducer(before);
-    if (!isCurrentOwner(ownerUid, generation)) {
-      throw profileError('PROFILE_REQUEST_CANCELLED', 'The active account changed.');
-    }
-    if (reduced?.error) return reduced;
-    const candidate = normalizeRemote(reduced?.profile || reduced || before);
-    const patch = diffProfileWrite(before, candidate);
-    if (!Object.keys(patch).length) {
-      const remaining = updatePendingCount(ownerUid, generation);
-      return {
-        ...reduced,
-        profile: before,
-        unchanged: true,
-        ...(remaining.length ? { pending: true } : {}),
-      };
-    }
-
+    if (!ownerUid || !profileRef.current) throw profileError('PROFILE_NOT_LOADED');
     try {
-      appendProfileOperation({
-        ownerUid,
-        lineageId: sessionIdRef.current,
-        patch,
-        baseRevision: Number(before.profile_revision) || 0,
+      const existing = updatePendingCount(ownerUid, generation);
+      if (existing.length) {
+        const retryingSameIntent = JSON.stringify(existing[0].command) === JSON.stringify(intent);
+        const recovered = await replayWal(ownerUid, generation);
+        if (retryingSameIntent && recovered) return recovered;
+      }
+      if (!isCurrentOwner(ownerUid, generation)) throw profileError('PROFILE_REQUEST_CANCELLED');
+      appendProfileCommand({
+        ownerUid, lineageId: sessionIdRef.current, command: intent,
+        baseRevision: Number(profileRef.current.profile_revision) || 0,
       });
       updatePendingCount(ownerUid, generation);
+      changeSyncStatus('pending', ownerUid, generation);
+      let confirmed = await replayWal(ownerUid, generation);
+      // A poll may have inspected an empty journal just before this append.
+      if (!confirmed) confirmed = await replayWal(ownerUid, generation);
+      if (!confirmed) throw profileError('PROFILE_COMMAND_PENDING');
+      return confirmed;
     } catch (cause) {
-      setFailureState(cause, ownerUid, generation);
+      if (cause?.code !== 'PROFILE_COMMAND_PENDING' && isCurrentOwner(ownerUid, generation)) {
+        setFailureState(cause, ownerUid, generation);
+      }
       throw cause;
     }
-    commitProfile(candidate, ownerUid, generation);
-    changeSyncStatus('syncing', ownerUid, generation);
-    await replayWal(ownerUid, generation);
-    const remaining = updatePendingCount(ownerUid, generation);
-    return {
-      ...(reduced?.profile ? reduced : {}),
-      profile: profileRef.current,
-      ...(remaining.length ? { pending: true } : {}),
-    };
-  }, [
-    changeSyncStatus,
-    commitProfile,
-    isCurrentOwner,
-    replayWal,
-    setFailureState,
-    updatePendingCount,
-  ]);
+  }, [changeSyncStatus, isCurrentOwner, replayWal, setFailureState, updatePendingCount]);
 
-  const mutate = useCallback((reducer) => {
-    const work = () => runMutation(typeof reducer === 'function' ? reducer : () => reducer);
-    const pending = queueRef.current.catch(() => {}).then(work);
-    queueRef.current = pending;
-    return pending;
-  }, [runMutation]);
-
-  const settle = useCallback(async (summary) => {
-    const ownerUid = ownerRef.current;
-    enqueuePendingSettlement(summary, undefined, ownerUid);
-    const result = await mutate(current => applySettlementToProfile(current, summary));
-    if (!result?.pending) removePendingSettlement(summary.run_id, undefined, ownerUid);
-    return result;
-  }, [mutate]);
-
-  const replayPending = useCallback(async () => {
+  const command = useCallback((type, args = {}) => {
     const ownerUid = ownerRef.current;
     const generation = lifecycleRef.current;
-    await replayWal(ownerUid, generation);
-    if (!isCurrentOwner(ownerUid, generation) || syncStatusRef.current === 'readonly') return;
-    if (updatePendingCount(ownerUid, generation).length) return;
-    for (const summary of readPendingSettlements(undefined, ownerUid)) {
-      try {
-        const result = await mutate(current => applySettlementToProfile(current, summary));
-        if (!result?.pending) removePendingSettlement(summary.run_id, undefined, ownerUid);
-        if (result?.pending) break;
-      } catch { break; }
-    }
-  }, [isCurrentOwner, mutate, replayWal, updatePendingCount]);
+    const intent = profileCommand(type, args);
+    const pending = queueRef.current.catch(() => {}).then(() => runCommand(intent, ownerUid, generation));
+    queueRef.current = pending;
+    return pending;
+  }, [runCommand]);
+
+  const settle = useCallback((summary) => command('settle_case', { run_id: summary?.run_id }), [command]);
+  const replayPending = useCallback(() => replayWal(), [replayWal]);
 
   const takeOver = useCallback(async () => {
     const ownerUid = ownerRef.current;
@@ -528,15 +368,15 @@ export function ProfileProvider({ children }) {
     const ownerUid = ownerRef.current;
     const generation = lifecycleRef.current;
     try {
-      clearProfileOperations(ownerUid);
-      clearPendingSettlements(undefined, ownerUid);
-      setPendingCount(0);
-      commitError(null, ownerUid, generation);
-      changeSyncStatus('syncing', ownerUid, generation);
       const payload = await invokeOwned('status', {
         session_id: sessionIdRef.current,
       }, ownerUid, generation);
       const next = acceptPayload(payload, ownerUid, generation);
+      clearProfileOperations(ownerUid);
+      clearProfileCommands(ownerUid);
+      clearPendingSettlements(undefined, ownerUid);
+      setPendingCount(0);
+      commitError(null, ownerUid, generation);
       changeSyncStatus('online', ownerUid, generation);
       return next;
     } catch (cause) {
@@ -561,13 +401,15 @@ export function ProfileProvider({ children }) {
     for (const controller of requestControllersRef.current) controller.abort();
     requestControllersRef.current.clear();
     queueRef.current = Promise.resolve();
-    replayingRef.current = null;
+    replayFlightRef.current.clear();
     claimFlightRef.current.clear();
     const ownerUid = isAuthenticated && user?.id ? user.id : '';
     ownerRef.current = ownerUid;
     profileRef.current = null;
+    activeRunRef.current = null;
     syncStatusRef.current = ownerUid ? 'loading' : 'offline';
     setProfile(null);
+    setActiveRun(null);
     setAccount(user || null);
     setError(null);
     setPendingCount(0);
@@ -602,11 +444,13 @@ export function ProfileProvider({ children }) {
 
   const value = useMemo(() => ({
     profile,
+    activeRun,
+    sessionId: sessionIdRef.current,
     account,
     syncStatus,
     pendingCount,
     error,
-    mutate,
+    command,
     refresh,
     loadProfile,
     takeOver,
@@ -615,9 +459,10 @@ export function ProfileProvider({ children }) {
     isReadOnly: ['readonly', 'storage_unavailable', 'recovery'].includes(syncStatus),
   }), [
     account,
+    activeRun,
     discardPendingChanges,
     error,
-    mutate,
+    command,
     pendingCount,
     profile,
     refresh,
@@ -664,8 +509,8 @@ export function SessionReadOnlyBanner() {
       : 'Browser storage is unavailable. Profile changes are paused to prevent data loss.',
     recovery: recovery.message,
     pending: lang === 'zh'
-      ? `有 ${pendingCount} 项改动等待同步；联网后会自动重试。`
-      : `${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to sync. Retrying automatically.`,
+      ? `有 ${pendingCount} 项操作尚未获服务器确认；联网后会自动重试，不代表奖励已到账。`
+      : `${pendingCount} action${pendingCount === 1 ? '' : 's'} not confirmed by the server. Retrying automatically; rewards are not yet confirmed.`,
   };
 
   const restoreCloudProfile = async () => {

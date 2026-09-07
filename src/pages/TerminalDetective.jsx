@@ -1,10 +1,9 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import GameLanding from '@/components/game/GameLanding';
 import DetectiveRegistration from '@/components/game/DetectiveRegistration';
-import { markActivity, startCase } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { buildTeamConfig } from '@/game/teamConfig';
-import { getActiveSupportAgentId, getSelectedCoreAgentIds, purchaseAgent } from '@/game/agentMarket';
+import { getActiveSupportAgentId, getSelectedCoreAgentIds } from '@/game/agentMarket';
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError.js';
 import { ALL_CASES } from '@/game/caseData';
@@ -34,7 +33,7 @@ function ScreenFallback() {
 
 export default function TerminalDetective() {
   const { lang } = useLang();
-  const { profile, mutate, refresh, loadProfile, settle, isReadOnly } = useProfile();
+  const { profile, activeRun, command, refresh, loadProfile, settle, isReadOnly } = useProfile();
   const { settings, updateSetting } = useSettings();
   const [screen, setScreen] = useState('LANDING');
   const [showModeChooser, setShowModeChooser] = useState(false);
@@ -45,6 +44,8 @@ export default function TerminalDetective() {
   const startRef = useRef(false);
   const [agentStrategy, setAgentStrategy] = useState(null);
   const [selectedCase, setSelectedCase] = useState(null);
+  const [authoritativeRun, setAuthoritativeRun] = useState(null);
+  const teamIntentRef = useRef(null);
   const [regBusy, setRegBusy] = useState(false);
   const registrationRef = useRef(false);
   const [regError, setRegError] = useState('');
@@ -137,8 +138,8 @@ export default function TerminalDetective() {
     setRegBusy(true);
     setRegError('');
     try {
-      const result = await mutate(current => ({ profile: { ...current, ...identity } }));
-      if (!result?.profile?.detective_name) throw new Error('Identity was not persisted.');
+      const result = await command('identity', { patch: identity });
+      if (result?.error || result?.pending || !result?.profile?.detective_name) throw new Error('Identity was not persisted.');
       const verified = await refresh();
       if (verified?.detective_name !== identity.detective_name) {
         throw new Error('Identity did not survive cloud verification.');
@@ -154,37 +155,46 @@ export default function TerminalDetective() {
     }
   };
 
-  const handleDeploy = async (strategy) => {
+  const handleDeploy = async (strategy, teamConfig) => {
     if (selectedCase) {
       setScreen('GAME');
       return { error: null };
     }
+    if (activeRun) { resumeCloudRun(activeRun); return { run: activeRun }; }
+    teamIntentRef.current = teamConfig;
     setAgentStrategy(strategy);
     if (preferredCaseId) {
       const targetCase = ALL_CASES.find(item => item.case_id === preferredCaseId);
-      if (targetCase) return requestCaseSelect(targetCase, strategy);
+      if (targetCase) return requestCaseSelect(targetCase);
     }
     void loadCaseSelect();
     setScreen('CASE_SELECT');
     return { error: null };
   };
 
-  const handleTeamSave = async (teamConfig) => {
-    return mutate(current => ({
-      profile: {
-        ...markActivity(current, 'team_saved'),
-        saved_team_config: teamConfig,
-      },
-    }));
+  const requireConfirmed = (result) => {
+    if (!result?.profile || result.error || result.pending) {
+      throw Object.assign(new Error('The server did not accept this action.'), { code: 'PROFILE_ACTION_REJECTED' });
+    }
+    return result;
   };
 
-  const handleSkillLoadout = async (skillLoadout) => {
-    return mutate(current => ({ profile: { ...current, skill_loadout: skillLoadout } }));
+  const handleTeamSave = async (teamConfig) => requireConfirmed(await command('save_team', { team_config: teamConfig }));
+
+  const handleSkillLoadout = async (skillLoadout) => requireConfirmed(await command('skill_loadout', { skill_loadout: skillLoadout }));
+
+  const handleAgentPurchase = async (agentId) => command('purchase_agent', { agent_id: agentId });
+
+  const resumeCloudRun = (run) => {
+    const caseData = ALL_CASES.find(item => item.case_id === (run?.case_id || run?.state?.case_id));
+    if (!run?.id || !caseData) throw new Error('The cloud run is unavailable.');
+    setAuthoritativeRun(run);
+    setAgentStrategy(run.agent_strategy || run.team_config);
+    setSelectedCase(caseData);
+    setScreen('GAME');
   };
 
-  const handleAgentPurchase = async (agentId) => mutate(current => purchaseAgent(current, agentId));
-
-  const handleCaseSelect = async (caseData, strategyOverride = null) => {
+  const handleCaseSelect = async (caseData) => {
     if (selectedCase) {
       setScreen('GAME');
       return { error: null };
@@ -193,39 +203,32 @@ export default function TerminalDetective() {
     caseStartRef.current = true;
     try {
       await loadInvestigationTerminal();
-      const currentStrategy = strategyOverride || agentStrategy;
-      const result = await mutate(current => startCase(current, caseData));
-      if (result?.error) return result;
-      const currentSkills = currentStrategy?.skill_effects || {};
-      const extraSkills = result.effects.skill_effects || {};
-      const skillEffects = { ...currentSkills };
-      Object.entries(extraSkills).forEach(([key, value]) => {
-        skillEffects[key] = typeof value === 'number' ? (Number(skillEffects[key]) || 0) + value : value || skillEffects[key];
+      if (activeRun) {
+        resumeCloudRun(activeRun);
+        return { run: activeRun };
+      }
+      const teamConfig = teamIntentRef.current || profile?.saved_team_config;
+      const result = await command('start_case', {
+        case_id: caseData.case_id, ...(teamConfig ? { team_config: teamConfig } : {}),
       });
-      setAgentStrategy({
-        ...(currentStrategy || {}), skill_effects: skillEffects,
-        home_effects: {
-          initial_ap_bonus: result.effects.initial_ap_bonus + Math.max(0, Number(currentStrategy?.support_effects?.initial_ap_bonus) || 0),
-          ignore_first_trap: result.effects.ignore_first_trap,
-        },
-      });
-      setSelectedCase(caseData);
-      setScreen('GAME');
-      return result;
+      if (result?.error && result.error !== 'active_run_exists') return result;
+      resumeCloudRun(result.run);
+      return { ...result, error: null };
     } finally {
       caseStartRef.current = false;
     }
   };
 
-  const requestCaseSelect = (caseData, strategyOverride = null) => {
+  const requestCaseSelect = (caseData) => {
     if (selectedCase) { setScreen('GAME'); return Promise.resolve({ error: null }); }
+    if (activeRun) { resumeCloudRun(activeRun); return Promise.resolve({ run: activeRun }); }
     if (briefingRequestRef.current || caseStartRef.current) return Promise.resolve({ error: 'busy' });
     briefedRunRef.current = false;
-    if (settings.storyMode !== 'theater') return handleCaseSelect(caseData, strategyOverride);
+    if (settings.storyMode !== 'theater') return handleCaseSelect(caseData);
     setNarrativeError('');
     setEntryNarrative({ kind: 'briefing', caseData });
     return new Promise(resolve => {
-      briefingRequestRef.current = { caseData, strategyOverride, resolve, confirming: false };
+      briefingRequestRef.current = { caseData, resolve, confirming: false };
     });
   };
 
@@ -254,7 +257,7 @@ export default function TerminalDetective() {
     try {
       // Set before selecting the run: its stable owner consumes this only at initialization.
       briefedRunRef.current = true;
-      const result = await handleCaseSelect(request.caseData, request.strategyOverride);
+      const result = await handleCaseSelect(request.caseData);
       if (result?.error) {
         briefedRunRef.current = false;
         setNarrativeError(lang === 'en' ? 'Unable to enter. Check your energy and profile sync, then retry or return home.' : '暂时无法进入，请检查体力与档案同步后重试，或返回主页。');
@@ -274,6 +277,7 @@ export default function TerminalDetective() {
 
   const handleHomeStartInvestigation = () => {
     if (selectedCase) { setScreen('GAME'); return; }
+    if (activeRun) { resumeCloudRun(activeRun); return; }
     setNarrativeError('');
     setEntryNarrative({ kind: 'prologue' });
   };
@@ -283,9 +287,14 @@ export default function TerminalDetective() {
   };
 
   const handleOpenHome = () => setScreen('HOME');
-  const handleResume = () => { if (selectedCase) setScreen('GAME'); };
+  const handleResume = () => {
+    if (selectedCase) setScreen('GAME');
+    else if (activeRun) resumeCloudRun(activeRun);
+  };
   const leaveRun = (nextScreen) => {
     setSelectedCase(null);
+    setAuthoritativeRun(null);
+    void refresh().catch(() => {});
     setPreferredCaseId(null);
     setScreen(nextScreen);
   };
@@ -295,6 +304,7 @@ export default function TerminalDetective() {
       setScreen('GAME');
       return;
     }
+    if (activeRun) { resumeCloudRun(activeRun); return; }
     void loadAgentLobby();
     setPreferredCaseId(caseId);
     setLobbyReturnScreen(returnScreen);
@@ -306,14 +316,16 @@ export default function TerminalDetective() {
       setScreen('GAME');
       return;
     }
+    if (activeRun) { resumeCloudRun(activeRun); return; }
     void loadCaseSelect();
     const saved = profile?.saved_team_config;
     if (!saved) {
       openLobbyForCase(caseId);
       return;
     }
+    teamIntentRef.current = { ...saved, core_agent_ids: getSelectedCoreAgentIds(profile) };
     setAgentStrategy(buildTeamConfig(
-      { ...saved, core_agent_ids: getSelectedCoreAgentIds(profile) },
+      teamIntentRef.current,
       saved.primary_agent_index,
       profile?.skill_loadout,
       getActiveSupportAgentId(profile),
@@ -341,7 +353,7 @@ export default function TerminalDetective() {
         onOpenCases={openCasesWithSavedTeam}
         onStartInvestigation={settings.storyMode === 'theater' ? handleHomeStartInvestigation : null}
         onRegister={() => setScreen('REGISTRATION')}
-        suspendedCase={selectedCase}
+        suspendedCase={selectedCase || ALL_CASES.find(item => item.case_id === activeRun?.case_id)}
         onResume={handleResume}
       />
     );
@@ -385,6 +397,7 @@ export default function TerminalDetective() {
           {selectedCase && (
             <InvestigationTerminal
               agentStrategy={agentStrategy}
+              authoritativeRun={authoritativeRun}
               selectedCase={selectedCase}
               onSettlement={handleSettlement}
               presentationActive={screen === 'GAME'}

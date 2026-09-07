@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { applyCheckin, canCheckin, ACHIEVEMENT_TOTAL, knownAchievementCount, markActivity } from '@/game/playerProfile';
+import { canCheckin, ACHIEVEMENT_TOTAL, knownAchievementCount } from '@/game/playerProfile';
+import { publicErrorMessage } from '@/lib/publicError.js';
 import { useProfile } from '@/lib/ProfileContext.jsx';
 import { useLang } from '@/lib/lang.jsx';
 import NameInputDialog from '@/components/game/home/NameInputDialog';
@@ -39,7 +40,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
   const { settings, updateSetting } = useSettings();
   const {
     profile,
-    mutate,
+    command,
     pendingCount,
     refresh,
     syncStatus,
@@ -99,13 +100,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
     toastTimerRef.current = setTimeout(() => setToast(null), 3200);
   };
 
-  const notifySaved = (message, result) => {
-    if (message) notify(result?.pending
-      ? `${message} · ${lang === 'zh' ? '已保存在本机，等待云端同步' : 'saved locally; cloud sync pending'}`
-      : message);
+  const notifySaved = (message) => {
+    if (message) notify(message);
   };
 
-  const applyResult = async (reducer, message = '') => {
+  const applyResult = async (intent, message = '') => {
     if (isReadOnly) {
       notify(lang === 'zh' ? '当前设备为只读模式，请先接管此设备' : 'This device is read-only. Take over this device before making changes.', 'error');
       return false;
@@ -129,18 +128,17 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
       notify(transactionErrorMessage(failedResult?.error, lang) || errors[failedResult?.error] || (lang === 'zh' ? '操作无法完成' : 'Unable to complete action'), 'error');
       return false;
     };
-    // Evaluate every action inside the queue so background settlements cannot
-    // be overwritten by a profile captured during rendering.
-    if (typeof reducer !== 'function') return rejectResult(null);
+    if (!intent || typeof intent.type !== 'string') return rejectResult(null);
     busyRef.current = true;
     setBusy(true);
     try {
-      const evaluated = await mutate(reducer);
-      if (!evaluated?.profile || evaluated.error) return rejectResult(evaluated);
-      notifySaved(message, evaluated);
+      const { type, ...args } = intent;
+      const evaluated = await command(type, args);
+      if (!evaluated?.profile || evaluated.error || evaluated.pending) return rejectResult(evaluated);
+      notifySaved(message);
       return evaluated;
-    } catch {
-      notify(lang === 'zh' ? '云端同步失败，请重试' : 'Cloud sync failed. Please retry.', 'error');
+    } catch (cause) {
+      notify(publicErrorMessage(cause, lang), 'error');
       return false;
     } finally {
       busyRef.current = false;
@@ -149,15 +147,15 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
   };
 
   const handleName = async (name) => {
-    await applyResult(current => ({ profile: { ...current, detective_name: name } }));
+    await applyResult({ type: 'identity', patch: { detective_name: name } });
   };
 
   const handleCheckin = async () => {
-    const saved = await applyResult(current => applyCheckin(current));
+    const saved = await applyResult({ type: 'checkin' });
     if (!saved?.reward) return;
     const { reward, day } = saved;
     const parts = [reward.energy ? `⚡+${reward.energy}` : '', reward.gold ? `🪙+${reward.gold}` : '', reward.diamonds ? `💎+${reward.diamonds}` : ''].filter(Boolean).join(' · ');
-    notifySaved(`${lang === 'zh' ? '签到成功' : 'Check-in complete'} · ${parts || '🎁'}`, saved);
+    notifySaved(`${lang === 'zh' ? '签到成功' : 'Check-in complete'} · ${parts || '🎁'}`);
     setCheckinCelebration({ reward, day });
   };
 
@@ -165,7 +163,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
     if (suspendedCase) { onResume(); return; }
     onEnterLobby(targetCaseId);
     if (!isReadOnly) {
-      void mutate(current => ({ profile: markActivity(current, 'lobby_visits') })).catch(() => {});
+      void command('visit_lobby').catch(cause => notify(publicErrorMessage(cause, lang), 'error'));
     }
   };
 
