@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import NarrativeText from './NarrativeText';
 import './narrative.css';
 
 export default function NarrativeOverlay({ title, text, lang, active = true, busy = false, error = '', onComplete,
@@ -7,12 +8,13 @@ export default function NarrativeOverlay({ title, text, lang, active = true, bus
   const titleId = useId();
   const textId = useId();
   const dialogRef = useRef(null);
-  const [reveal, setReveal] = useState({ count: 0, complete: false });
+  const [reveal, setReveal] = useState({ count: 0, complete: false, instant: false });
   const [foreground, setForeground] = useState(() => !document.hidden && document.hasFocus());
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true);
   const characters = Array.from(text);
   const complete = reveal.complete || reducedMotion;
   const visibleCount = complete ? characters.length : Math.min(reveal.count, characters.length);
+  const instant = reducedMotion || reveal.instant === true;
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -38,7 +40,7 @@ export default function NarrativeOverlay({ title, text, lang, active = true, bus
       if (document.hidden || !document.hasFocus()) return;
       setReveal(current => {
         const count = Math.min(characters.length, current.count + 2);
-        return { count, complete: count >= characters.length };
+        return { ...current, count, complete: count >= characters.length };
       });
     }, 28);
     return () => window.clearInterval(id);
@@ -62,18 +64,22 @@ export default function NarrativeOverlay({ title, text, lang, active = true, bus
   }, [active, restoreFocusSelector]);
 
   return <dialog ref={dialogRef} className="td-narrative" aria-modal="true" aria-labelledby={titleId} aria-describedby={textId}
+    data-text-paused={!active || !foreground || busy} data-text-instant={instant}
     onCancel={event => { event.preventDefault(); if (!busy) (onCancel || onComplete)(); }}
     onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()}>
-    <header><small aria-hidden="true">{zh ? '◈ 终端侦探 / 叙事档案' : '◈ TERMINAL DETECTIVE / NARRATIVE ARCHIVE'}</small><h2 id={titleId}>{title}</h2></header>
+    <header><small aria-hidden="true">{zh ? '◈ 终端侦探 / 叙事档案' : '◈ TERMINAL DETECTIVE / NARRATIVE ARCHIVE'}</small><h2 id={titleId}>
+      <NarrativeText text={title} lang={lang} variant="title" paused={!active || !foreground || busy} instant={instant} />
+      <span className="td-narrative-sr">{title}</span>
+    </h2></header>
     <div className="td-narrative-scroll" tabIndex={0}>
-      {/* The invisible suffix reserves exact wrapping; assistive technology receives one static passage. */}
-      <p className="td-narrative-copy" aria-hidden="true"><span>{characters.slice(0, visibleCount).join('')}</span><span className="td-narrative-unrevealed">{characters.slice(visibleCount).join('')}</span></p>
+      {/* All words reserve their wrapping; assistive technology receives one static passage. */}
+      <p className="td-narrative-copy" aria-hidden="true"><NarrativeText text={text} lang={lang} visibleCount={visibleCount} paused={!active || !foreground || busy} instant={instant} /></p>
       <p id={textId} className="td-narrative-sr">{text}</p>
     </div>
     {error && <p className="td-narrative-error" role="alert">{error}</p>}
     <footer>
       <div className="td-narrative-actions">
-        <button type="button" autoFocus onClick={() => setReveal({ count: characters.length, complete: true })} disabled={complete || busy}>{zh ? '显示全文' : 'Show all'}</button>
+        <button type="button" autoFocus onClick={() => setReveal({ count: characters.length, complete: true, instant: true })} disabled={instant || busy}>{zh ? '显示全文' : 'Show all'}</button>
         <button type="button" className="is-primary" onClick={onComplete} disabled={!complete || busy}>{busy ? (zh ? '正在进入…' : 'Entering…') : (zh ? '继续' : 'Continue')}</button>
         <button type="button" onClick={onComplete} disabled={busy}>{zh ? '跳过' : 'Skip'}</button>
         {onCancel && <button type="button" onClick={onCancel} disabled={busy}>{zh ? '返回主页' : 'Back home'}</button>}
