@@ -1030,6 +1030,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
 
   const dialoguePanel = selectedNPC && !reportMode && (
             <NPCDialogBox
+              key={selectedNPC.npc_id}
+              storyMotion={theaterMode}
+              presentationActive={presentationActive && !showSettings}
               npc={selectedNPC}
               dialogue={npcDialogue}
               packs={npcQuestionPacks}

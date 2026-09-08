@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import NPCStatement from '@/components/game/theater/NPCStatement';
 import { useLang } from '@/lib/lang.jsx';
 import { EmotionBadge } from '@/components/game/InterrogationHints';
 import AgentStaminaMeter from '@/components/game/AgentStaminaMeter';
@@ -17,10 +18,12 @@ export function TerminalLine({ line, accentColor }) {
   );
 }
 
-export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChange, onQuestion, onClose, isProcessing, accentColor, emotion, team = [], error = null }) {
+export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChange, onQuestion, onClose, isProcessing, accentColor, emotion, team = [], error = null, storyMotion = false, presentationActive = true }) {
   const { t, lang } = useLang();
   const zh = lang === 'zh';
   const ref = useRef(null);
+  const initialDialogueLength = useRef(dialogue.length);
+  const [revealedThrough, setRevealedThrough] = useState({ npcId: '', index: -1 });
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [dialogue]);
@@ -30,7 +33,7 @@ export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChang
   const canQuestion = Boolean(activeAgent) && canAgentInvestigate(activeAgent.stamina, false);
 
   return (
-    <div className="border-t p-3" style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.6)' }}>
+    <div className={`border-t p-3${storyMotion ? ' td-npc-story' : ''}`} style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-bold flex items-center gap-2" style={{ color: accentColor }}>
           <span>{npc.avatar} {t.interrogating}: {npc.name} · {npc.role}</span>
@@ -40,14 +43,22 @@ export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChang
       </div>
       <div ref={ref} className="max-h-32 overflow-y-auto space-y-1 mb-2">
         {dialogue.map((entry, index) => (
-          <div key={`${entry.role}-${index}`} className="text-xs" style={{
+          <div key={`${npc.npc_id}-${entry.role}-${index}`} className="text-xs" style={{
             color: entry.role === 'agent' ? '#00ff88' : entry.role === 'npc' ? '#ffaa00' : '#8888aa',
             fontStyle: entry.role === 'system' ? 'italic' : 'normal',
           }}>
-            {entry.role === 'agent' ? '> AGENT: ' : entry.role === 'npc' ? `${npc.avatar} ${entry.name}: ` : ''}{entry.text}
+            {entry.role === 'agent' ? '> AGENT: ' : entry.role === 'npc' ? `${npc.avatar} ${entry.name}: ` : ''}
+            {storyMotion && entry.role !== 'agent'
+              ? <NPCStatement text={entry.text} lang={lang} animate={entry.role === 'npc' && index >= initialDialogueLength.current} active={presentationActive}
+                showAll={revealedThrough.npcId === npc.npc_id && index <= revealedThrough.index} />
+              : entry.text}
           </div>
         ))}
       </div>
+      {storyMotion && <button type="button" className="td-npc-reveal"
+        onClick={() => setRevealedThrough({ npcId: npc.npc_id, index: dialogue.length - 1 })}>
+        {zh ? '显示全文' : 'Show all'}
+      </button>}
       <div className="td-interrogation-agent-tabs">
         {team.slice(0, 3).map(agent => {
           const pack = packs?.[agent.agent_id];

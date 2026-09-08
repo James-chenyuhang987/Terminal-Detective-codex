@@ -21,7 +21,8 @@ const owner = source('components/game/InvestigationTerminal.jsx');
 const page = source('pages/TerminalDetective.jsx');
 const home = source('components/game/DetectiveHome.jsx');
 const overlay = source('components/game/theater/NarrativeOverlay.jsx');
-const css = readFileSync(new URL('../src/components/game/theater/narrative.css', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../src/components/game/theater/narrative.css', import.meta.url), 'utf8')
+  + readFileSync(new URL('../src/components/game/theater/narrativeText.css', import.meta.url), 'utf8');
 function nodes(root, predicate) {
   const found = [];
   const visit = node => { if (predicate(node)) found.push(node); ts.forEachChild(node, visit); };

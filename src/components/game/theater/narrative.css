@@ -27,7 +27,6 @@
 .td-narrative h2 { margin: 7px 0 0; color: var(--narrative-gold); font-family: var(--narrative-serif); font-size: clamp(20px, 2.25vw, 28px); font-weight: 400; letter-spacing: .045em; line-height: 1.25; overflow-wrap: anywhere; }
 .td-narrative-scroll { flex: 1 1 auto; min-height: 0; padding: 6px 12px; border-left: 2px solid #b8a17350; border-radius: 2px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #887950 #0a1822; }
 .td-narrative-copy { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--narrative-serif); font-size: clamp(16px, 1.5vw, 20px); font-weight: 400; line-height: 1.8; letter-spacing: .015em; margin: 0; }
-.td-narrative-unrevealed { visibility: hidden; }
 .td-narrative footer { flex: 0 0 auto; padding-top: 10px; border-top: 1px solid #b7a47a30; }
 .td-narrative-actions, .td-narrative nav { display: flex; flex-wrap: wrap; gap: 8px; }
 .td-narrative nav { margin-top: 8px; }

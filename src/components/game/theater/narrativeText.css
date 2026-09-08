@@ -1,0 +1,14 @@
+.td-narrative-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.td-narrative-text--title { display: block; }
+.td-narrative-token { visibility: hidden; }
+.td-narrative-token.is-visible { visibility: visible; }
+[data-text-instant="true"] .td-narrative-token.is-visible { opacity: 1 !important; }
+[data-text-instant="true"] .td-narrative-text--title { transform: none !important; clip-path: none !important; }
+.td-npc-story .td-npc-statement { font-family: 'Times New Roman', 'Songti SC', 'Noto Serif CJK SC', SimSun, serif; font-size: 16px; line-height: 1.65; }
+.td-npc-story .td-npc-reveal { min-width: 44px; min-height: 44px; margin-block: 4px; padding: 4px 10px; border: 1px solid #d8be8870; border-radius: 4px; color: #d8be88; font-size: 12px; }
+.td-npc-story .td-npc-reveal:focus-visible { outline: 2px solid #d8be88; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .td-narrative-token.is-visible { opacity: 1 !important; }
+  .td-narrative-text--title { transform: none !important; clip-path: none !important; }
+  .td-npc-reveal { display: none; }
+}
