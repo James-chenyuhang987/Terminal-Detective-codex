@@ -9,7 +9,7 @@ import { ICON_PATHS, LEGACY_ICON_NAMES, resolveIconName, iconTextParts } from '.
 import { drawIcon } from '../src/components/ui/iconCanvas.js';
 import { NOIR, noirColor } from '../src/components/ui/palette.js';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/lib/settingsData.js';
-import { LEVEL_XP_TABLE, MAX_LEVEL, getLevelFromXP, getXPToNextLevel } from '../src/game/agentProgression.js';
+import { SKILL_TREES, LEVEL_XP_TABLE, MAX_LEVEL, getLevelFromXP, getXPToNextLevel } from '../src/game/agentProgression.js';
 import { ALL_CASES } from '../src/game/caseData.js';
 import { CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS } from '../src/game/playerProfile.js';
 import { AUTH_EMAIL_LANGUAGE_KEY } from '../src/lib/authEmail.js';
@@ -128,6 +128,149 @@ function eventTarget() {
   return { listeners, addEventListener: (name, callback) => listeners.set(name, callback), removeEventListener: name => listeners.delete(name), fire: name => listeners.get(name)?.() };
 }
 
+function descendants(root, predicate) {
+  const found = [];
+  const visit = node => {
+    if (!React.isValidElement(node)) return;
+    if (predicate(node)) found.push(node);
+    React.Children.forEach(node.props.children, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function cssPixels(value, width) {
+  if (typeof value === 'number') return value;
+  const percent = /^(\d+(?:\.\d+)?)%$/.exec(value);
+  if (percent) return Number(percent[1]) * width / 100;
+  const calc = /^calc\((\d+(?:\.\d+)?)% ([+-]) (\d+)px\)$/.exec(value);
+  assert.ok(calc, `Unsupported dimension ${value}`);
+  return Number(calc[1]) * width / 100 + (calc[2] === '+' ? 1 : -1) * Number(calc[3]);
+}
+
+function skillTreeHarness(lang) {
+  const h = hooks();
+  const api = { ...h.api, useCallback: fn => fn, useId: () => 'skill-tooltip-test' };
+  const { default: Panel } = load('components/game/SkillTreePanel.jsx', {
+    react: api, '@/components/ui/Icon': icons,
+    '@/game/agentProgression': { SKILL_TREES, getLevelFromXP },
+    '@/lib/lang.jsx': { useLang: () => ({ lang }) },
+    '@/components/ui/usePresentationMotion': { usePresentationMotion: () => ({ motionEnabled: false, foreground: true }) },
+  });
+  return { render: props => h.render(Panel, props) };
+}
+
+const leveledAgents = SKILL_TREES.map(() => ({ xp: LEVEL_XP_TABLE.at(-1) }));
+
+test('skill trees fit narrow parents with readable bilingual labels and aligned 56px targets', () => {
+  for (const lang of ['zh', 'en']) {
+    for (let agentIdx = 0; agentIdx < SKILL_TREES.length; agentIdx++) {
+      const root = skillTreeHarness(lang).render({ agentIdx, progression: leveledAgents });
+      const tree = descendants(root, node => node.props.className === 'td-skill-tree')[0];
+      const labels = descendants(tree, node => node.props.className === 'td-skill-label');
+      const nodes = descendants(tree, node => node.type.name === 'SkillNode');
+      const connector = descendants(tree, node => node.type.name === 'SkillConnectorCanvas')[0];
+      const canvas = connector.type(connector.props);
+      assert.equal(labels.length, SKILL_TREES[agentIdx].length);
+      assert.equal(tree.props.style.width, '100%');
+      assert.equal(tree.props.style.overflow, 'visible', 'do not mask overflow with clipping');
+      assert.equal(canvas.props.style.width, '100%');
+      assert.equal(canvas.props.style.height, '100%');
+      for (const parentWidth of [250, 314, 360]) {
+        const width = Math.min(cssPixels(tree.props.style.width, parentWidth), tree.props.style.maxWidth);
+        assert.ok(width <= parentWidth);
+        assert.equal(tree.props.style.height, canvas.props.height);
+        for (let i = 0; i < nodes.length; i++) {
+          const button = nodes[i].type(nodes[i].props);
+          const style = button.props.style;
+          assert.equal(style.width, 56); assert.equal(style.height, 56);
+          assert.equal(style.boxSizing, 'border-box');
+          const left = cssPixels(style.left, width);
+          const center = left + style.width / 2;
+          assert.ok(left >= 0 && left + style.width <= width);
+          assert.equal(center, connector.props.positions[i].x * width / canvas.props.width);
+          assert.equal(style.top + style.height / 2, connector.props.positions[i].y);
+          const label = labels[i];
+          const start = cssPixels(label.props.style.left, width);
+          const end = width - cssPixels(label.props.style.right, width);
+          assert.ok(start >= 8 && end <= width - 8 && end - start >= 100);
+          assert.ok(end <= left - 8 || start >= left + style.width + 8, 'label does not cover its node');
+          assert.equal(label.props.style.whiteSpace, 'normal');
+          assert.equal(label.props.style.overflowWrap, 'anywhere');
+          assert.ok(!label.props.style.overflow && !label.props.style.textOverflow);
+          assert.equal(label.props.children[0].props.children, lang === 'zh' ? SKILL_TREES[agentIdx][i].name : SKILL_TREES[agentIdx][i].nameEn);
+          const markup = renderToStaticMarkup(label);
+          assert.ok(markup.includes(button.props['aria-label']), 'full localized skill name remains visible');
+        }
+      }
+    }
+  }
+});
+
+test('skill focus tooltips stay bounded, retain full copy and survive pointer leave without changing loadout', () => {
+  for (const lang of ['zh', 'en']) {
+    for (let agentIdx = 0; agentIdx < SKILL_TREES.length; agentIdx++) {
+      const h = skillTreeHarness(lang);
+      const changes = [];
+      const props = { agentIdx, progression: leveledAgents, onChange: next => changes.push(next) };
+      const nodes = root => descendants(root, node => node.type.name === 'SkillNode');
+      const tooltip = root => descendants(root, node => node.type.name === 'SkillTooltip')[0];
+      let root = h.render(props);
+      const ids = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
+      for (let i = 0; i < SKILL_TREES[agentIdx].length; i++) {
+        let node = nodes(root)[i];
+        let button = node.type(node.props);
+        assert.equal(button.props.disabled, false);
+        button.props.onFocus(); root = h.render(props);
+        let tip = tooltip(root);
+        assert.equal(tip.props.skill.id, node.props.skill.id);
+        assert.equal(nodes(root)[i].props.tooltipId, tip.props.id);
+        button.props.onMouseEnter(); button.props.onMouseLeave(); root = h.render(props);
+        assert.equal(tooltip(root).props.skill.id, node.props.skill.id, 'pointer leave must not dismiss focused tooltip');
+        nodes(root)[(i + 1) % SKILL_TREES[agentIdx].length].props.onHover(SKILL_TREES[agentIdx][(i + 1) % SKILL_TREES[agentIdx].length].id);
+        root = h.render(props);
+        assert.equal(tooltip(root).props.skill.id, node.props.skill.id, 'keyboard focus takes precedence over another hover');
+        node.props.onHover(null);
+        const info = tip.type(tip.props);
+        assert.equal(info.props.role, 'tooltip');
+        const markup = renderToStaticMarkup(info);
+        assert.ok(markup.includes(lang === 'zh' ? tip.props.skill.name : tip.props.skill.nameEn));
+        assert.ok(markup.includes(lang === 'zh' ? tip.props.skill.desc : tip.props.skill.descEn));
+        assert.equal(info.props.style.overflowWrap, 'anywhere');
+        assert.equal(info.props.style.boxSizing, 'border-box');
+        for (const parentWidth of [250, 314, 360]) {
+          const width = Math.min(parentWidth, 320);
+          const style = info.props.style;
+          const tipWidth = Math.min(cssPixels(style.width, width), style.maxWidth);
+          assert.ok(style.left + tipWidth + style.right <= width);
+          assert.ok(tipWidth >= 230, 'tooltip has room for complete multiline copy');
+          if (style.top !== undefined) assert.ok(style.top > tip.props.position.y + 28);
+          else assert.ok(360 - style.bottom < tip.props.position.y - 28);
+        }
+        button.props.onKeyDown({ key: 'Escape' }); root = h.render(props);
+        assert.equal(tooltip(root), undefined);
+        button.props.onMouseLeave(); root = h.render(props);
+        assert.equal(tooltip(root), undefined, 'dismissal remains stable while focus stays');
+        button.props.onBlur(); root = h.render(props);
+        button.props.onFocus(); root = h.render(props);
+        assert.ok(tooltip(root), 'new focus can reopen the tooltip');
+        assert.equal(changes.length, i, 'focus and hover must not equip skills');
+        button.props.onClick();
+        assert.equal(changes.length, i + 1);
+        assert.deepEqual(changes.at(-1)[agentIdx], { agent_id: ids[agentIdx], skill_ids: SKILL_TREES[agentIdx].slice(0, i + 1).map(skill => skill.id) });
+        props.loadout = changes.at(-1);
+        root = h.render(props);
+        node = nodes(root)[i]; button = node.type(node.props);
+        assert.equal(button.props['aria-pressed'], true);
+        assert.equal(tooltip(root).props.state, 'equipped');
+        assert.match(renderToStaticMarkup(tooltip(root).type(tooltip(root).props)), lang === 'zh' ? /本局效果/ : /ACTIVE EFFECT/);
+        button.props.onBlur(); root = h.render(props);
+        assert.equal(tooltip(root), undefined);
+      }
+    }
+  }
+});
+
 test('motion combines game/system preferences and foreground state with listener cleanup', () => {
   const h = hooks();
   const query = { ...eventTarget(), matches: false };
@@ -159,6 +302,38 @@ test('sliced headings preserve one accessible complete title and never require a
   assert.match(reveal, /transform:/); assert.match(reveal, /opacity:/);
   assert.doesNotMatch(reveal, /width:|letter-spacing:|infinite|will-change/);
   assert.match(css, /data-td-motion="paused"/);
+});
+
+test('game and system reduced motion disable transitions without removing animation completion events', () => {
+  const css = read('index.css');
+  const game = css.slice(css.indexOf('html[data-td-motion="reduced"] *')).split('}')[0];
+  const system = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)')).split('}')[0];
+  for (const rule of [game, system]) {
+    assert.match(rule, /transition:\s*none !important;/);
+    assert.doesNotMatch(rule, /transition-duration:/);
+    assert.match(rule, /animation-duration:\s*\.001ms !important;/);
+    assert.match(rule, /animation-iteration-count:\s*1 !important;/);
+  }
+});
+
+test('settings light-mode small accent text meets 4.5 contrast on opaque and translucent paper', () => {
+  const source = ts.createSourceFile('SettingsDrawer.jsx', read('components/game/settings/SettingsDrawer.jsx'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  let skinExpression;
+  const visit = node => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(source) === 'skin') skinExpression = node.initializer.getText(source);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  assert.ok(skinExpression);
+  const skin = compileFunction(`return (${skinExpression});`, ['settings', 'panelSkin', 'noirColor'])({ panelLight: true }, () => ({}), noirColor);
+  const channels = skin.accent.slice(1).match(/../g).map(value => parseInt(value, 16));
+  const paper = skin.bg.match(/[\d.]+/g).map(Number);
+  const luminance = rgb => rgb.map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
+  for (const bg of [paper.slice(0, 3), paper.slice(0, 3).map(value => Math.floor(value * paper[3]))]) {
+    const ratio = (luminance(bg) + 0.05) / (luminance(channels) + 0.05);
+    assert.ok(ratio >= 4.5, `Small accent text contrast is ${ratio.toFixed(3)}:1 against ${bg}`);
+  }
 });
 
 test('reduced/background result counters finish and XP level notifications remain exactly once', () => {

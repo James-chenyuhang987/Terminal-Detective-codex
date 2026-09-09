@@ -1,5 +1,5 @@
 import Icon from '@/components/ui/Icon';
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useId } from 'react';
 import { SKILL_TREES, getLevelFromXP } from '@/game/agentProgression';
 import { useLang } from '@/lib/lang.jsx';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
@@ -12,8 +12,7 @@ const AGENT_NAMES  = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
 const AGENT_COLORS = ['#709f9a', '#9b9aae', '#c19a63'];
 const AGENT_ICONS  = ['👁️', '🔬', '💻'];
 
-// Node layout — 5 nodes arranged in a branching diagonal chain
-// We'll compute positions in a zig-zag pattern inside the canvas
+// Canvas coordinates scale horizontally; node centers share that scale, not their 56px hit areas.
 const NODE_RADIUS = 28;
 const CANVAS_W = 320;
 const CANVAS_H = 360;
@@ -94,7 +93,7 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
 }
 
 // ── Single skill node ─────────────────────────────────────────────────────────
-function SkillNode({ skill, position, color, state, onClick, onHover }) {
+function SkillNode({ skill, position, color, state, onClick, onHover, onFocus, onDismiss, tooltipId }) {
   const { lang } = useLang();
   // state: 'locked' | 'available' | 'equipped'
   const stateConfig = {
@@ -108,16 +107,19 @@ function SkillNode({ skill, position, color, state, onClick, onHover }) {
     <button type="button" className="td-skill-node" disabled={state === 'locked'}
       aria-label={lang === 'zh' ? skill.name : (skill.nameEn || skill.name)}
       aria-pressed={state === 'equipped'}
+      aria-describedby={tooltipId}
       onClick={() => onClick(skill)}
-      onFocus={() => onHover(skill.id)} onBlur={() => onHover(null)}
+      onFocus={() => onFocus(skill.id)} onBlur={() => onFocus(null)}
       onMouseEnter={() => onHover(skill.id)}
       onMouseLeave={() => onHover(null)}
+      onKeyDown={event => { if (event.key === 'Escape') onDismiss(skill.id); }}
       style={{
         position: 'absolute',
-        left: position.x - NODE_RADIUS,
+        left: `calc(${position.x / CANVAS_W * 100}% - ${NODE_RADIUS}px)`,
         top:  position.y - NODE_RADIUS,
         width: NODE_RADIUS * 2,
         height: NODE_RADIUS * 2,
+        boxSizing: 'border-box',
         borderRadius: '50%',
         border: `2px solid ${cfg.border}`,
         background: cfg.bg,
@@ -151,19 +153,24 @@ function SkillNode({ skill, position, color, state, onClick, onHover }) {
 }
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
-function SkillTooltip({ skill, position, color, state, canvasW }) {
+function SkillTooltip({ id, skill, position, color, state }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   if (!skill) return null;
   const name = zh ? skill.name : (skill.nameEn || skill.name);
   const desc = zh ? skill.desc : (skill.descEn || skill.desc);
-  const isLeft = position.x > canvasW / 2;
+  const belowNode = position.y < CANVAS_H / 2;
   return (
-    <div style={{
+    <div id={id} role="tooltip" className="td-skill-tooltip" style={{
       position: 'absolute',
-      top: position.y - 50,
-      [isLeft ? 'right' : 'left']: canvasW - position.x + 16,
-      width: 160,
+      [belowNode ? 'top' : 'bottom']: belowNode ? position.y + NODE_RADIUS + 8 : CANVAS_H - position.y + NODE_RADIUS + 8,
+      left: 8,
+      right: 8,
+      width: 'calc(100% - 16px)',
+      maxWidth: 280,
+      boxSizing: 'border-box',
+      margin: '0 auto',
+      overflowWrap: 'anywhere',
       background: 'rgba(2,6,20,0.97)',
       border: `1px solid ${color}60`,
       borderRadius: 10,
@@ -175,8 +182,8 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
       animation: 'tt-in 0.15s ease both',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-        <span style={{ fontSize: 18 }}><Icon name={skill.icon} /></span>
-        <div>
+        <span style={{ fontSize: 18, flexShrink: 0 }}><Icon name={skill.icon} /></span>
+        <div style={{ minWidth: 0 }}>
           <div style={{ color, fontSize: '0.65rem', fontWeight: 900, letterSpacing: '0.04em' }}>{name}</div>
           <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.45rem' }}>{zh ? '需要' : 'REQUIRES'} Lv.{skill.unlock_level}</div>
         </div>
@@ -221,6 +228,9 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
     return loadout.find(row => row?.agent_id === agentId)?.skill_ids || loadout[index] || [];
   });
   const [hoveredId, setHoveredId] = useState(null);
+  const [focusedId, setFocusedId] = useState(null);
+  const [dismissedId, setDismissedId] = useState(null);
+  const tooltipId = useId();
 
   const xp = progression[agentIdx]?.xp || 0;
   const level = getLevelFromXP(xp);
@@ -258,12 +268,13 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
     return 'available'; // show as available but equip blocked by prereq check
   };
 
-  const hoveredSkill = skills.find(s => s.id === hoveredId);
-  const hoveredPos   = hoveredSkill ? positions[skills.indexOf(hoveredSkill)] : null;
-  const hoveredState = hoveredSkill ? getNodeState(hoveredSkill, skills.indexOf(hoveredSkill)) : null;
+  const activeId = focusedId || hoveredId;
+  const activeSkill = activeId !== dismissedId ? skills.find(s => s.id === activeId) : null;
+  const activePos = activeSkill ? positions[skills.indexOf(activeSkill)] : null;
+  const activeState = activeSkill ? getNodeState(activeSkill, skills.indexOf(activeSkill)) : null;
 
   return (
-    <div style={{ fontFamily: 'monospace', position: 'relative' }}>
+    <div style={{ fontFamily: 'monospace', position: 'relative', minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <div>
@@ -290,9 +301,9 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
       </div>
 
       {/* Tree canvas area */}
-      <div style={{
-        position: 'relative', width: CANVAS_W, height: CANVAS_H,
-        border: `1px solid ${color}18`, borderRadius: 12,
+      <div className="td-skill-tree" style={{
+        position: 'relative', width: '100%', maxWidth: CANVAS_W, height: CANVAS_H,
+        borderRadius: 12, boxShadow: `inset 0 0 0 1px ${color}18`,
         background: `radial-gradient(ellipse at 50% 30%, ${color}06 0%, transparent 70%)`,
         overflow: 'visible',
         margin: '0 auto',
@@ -309,13 +320,16 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
           const pos = positions[i];
           const isLeft = i % 2 === 0;
           return (
-            <div key={`lv-${i}`} style={{
+            <div key={`lv-${i}`} className="td-skill-label" style={{
               position: 'absolute',
-              top: pos.y - 10,
-              [isLeft ? 'right' : 'left']: isLeft ? CANVAS_W - pos.x + NODE_RADIUS + 6 : pos.x + NODE_RADIUS + 6,
-              fontSize: '0.5rem', fontFamily: 'monospace',
+              top: pos.y,
+              left: isLeft ? `calc(${pos.x / CANVAS_W * 100}% + ${NODE_RADIUS + 8}px)` : 8,
+              right: isLeft ? 8 : `calc(${100 - pos.x / CANVAS_W * 100}% + ${NODE_RADIUS + 8}px)`,
+              transform: 'translateY(-50%)',
+              fontSize: '0.5rem', fontFamily: 'monospace', lineHeight: 1.4,
               color: unlockedByLevel.includes(skill.id) ? color + 'cc' : 'rgba(255,255,255,0.2)',
-              whiteSpace: 'nowrap',
+              textAlign: isLeft ? 'left' : 'right',
+              whiteSpace: 'normal', overflowWrap: 'anywhere',
               pointerEvents: 'none',
             }}>
               <div style={{ fontWeight: 700, fontSize: '0.6rem' }}>{zh ? skill.name : (skill.nameEn || skill.name)}</div>
@@ -331,16 +345,18 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
             position={positions[i]} color={color}
             state={getNodeState(skill, i)}
             onClick={handleSkillClick}
-            onHover={setHoveredId}
+            onHover={id => { setHoveredId(id); if (id) setDismissedId(null); }}
+            onFocus={id => { setFocusedId(id); if (id) setDismissedId(null); }}
+            onDismiss={setDismissedId}
+            tooltipId={activeSkill?.id === skill.id ? tooltipId : undefined}
           />
         ))}
 
         {/* Tooltip */}
-        {hoveredSkill && hoveredPos && (
+        {activeSkill && activePos && (
           <SkillTooltip
-            skill={hoveredSkill} position={hoveredPos}
-            color={color} state={hoveredState}
-            canvasW={CANVAS_W}
+            id={tooltipId} skill={activeSkill} position={activePos}
+            color={color} state={activeState}
           />
         )}
       </div>
@@ -360,7 +376,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
                 animation: 'skill-row-in 0.3s ease both',
               }}>
                 <span style={{ fontSize: 12 }}><Icon name={s.icon} /></span>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: '0.58rem', color, fontWeight: 700 }}>{zh ? s.name : (s.nameEn || s.name)}</span>
                   <span style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>{zh ? s.desc : (s.descEn || s.desc)}</span>
                 </div>

@@ -97,7 +97,7 @@ export default function SettingsDrawer({ onClose }) {
     ...Object.fromEntries(Object.entries(panelSkin(settings.panelLight)).map(([key, value]) => [key, noirColor(value)])),
     ...(settings.panelLight ? {
       bg: 'rgba(230,223,207,.98)', panel: 'rgba(245,240,229,.9)', text: '#182733',
-      subText: '#4c5b5b', border: 'rgba(81,99,99,.3)', accent: '#476d68',
+      subText: '#4c5b5b', border: 'rgba(81,99,99,.3)', accent: '#426762',
     } : {}),
   };
   const { motionEnabled } = usePresentationMotion();
