@@ -1,13 +1,15 @@
+import Icon from '@/components/ui/Icon';
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { SKILL_TREES, getLevelFromXP } from '@/game/agentProgression';
 import { useLang } from '@/lib/lang.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 // ── 每个探员的技能链定义（线性解锁关系）─────────────────────────────────────
 // skills[0] → skills[1] → skills[2] → ...
 // prerequisite: 每个技能需要前一个技能已解锁才能装备
 
 const AGENT_NAMES  = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
-const AGENT_COLORS = ['#00e5ff', '#a78bfa', '#ff6b35'];
+const AGENT_COLORS = ['#709f9a', '#9b9aae', '#c19a63'];
 const AGENT_ICONS  = ['👁️', '🔬', '💻'];
 
 // Node layout — 5 nodes arranged in a branching diagonal chain
@@ -30,13 +32,15 @@ function getNodePositions(count) {
 
 // ── Animated connector canvas ─────────────────────────────────────────────────
 function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions, color }) {
+  const { motionEnabled, foreground } = usePresentationMotion();
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !foreground) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     canvas.width = CANVAS_W;
     canvas.height = CANVAS_H;
 
@@ -61,7 +65,7 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
         ctx.setLineDash([]);
 
         // Animated energy packet along unlocked edges
-        if (fromUnlocked && toUnlocked) {
+        if (motionEnabled && t < 89 && fromUnlocked && toUnlocked) {
           const progress = ((t * 0.012) + i * 0.4) % 1;
           const px = from.x + (to.x - from.x) * progress;
           const py = from.y + (to.y - from.y) * progress;
@@ -76,12 +80,12 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
       }
 
       t++;
-      frameRef.current = requestAnimationFrame(draw);
+      if (motionEnabled && t < 90) frameRef.current = requestAnimationFrame(draw);
     };
 
-    frameRef.current = requestAnimationFrame(draw);
+    draw();
     return () => cancelAnimationFrame(frameRef.current);
-  }, [skills, equippedIds, unlockedByLevel, color, positions]);
+  }, [skills, equippedIds, unlockedByLevel, color, positions, motionEnabled, foreground]);
 
   return (
     <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
@@ -90,7 +94,8 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
 }
 
 // ── Single skill node ─────────────────────────────────────────────────────────
-function SkillNode({ skill, position, color, state, onClick, isHovered, onHover }) {
+function SkillNode({ skill, position, color, state, onClick, onHover }) {
+  const { lang } = useLang();
   // state: 'locked' | 'available' | 'equipped'
   const stateConfig = {
     locked:    { border: 'rgba(255,255,255,0.12)', bg: 'rgba(255,255,255,0.03)', opacity: 0.45, glow: 0 },
@@ -100,8 +105,11 @@ function SkillNode({ skill, position, color, state, onClick, isHovered, onHover 
   const cfg = stateConfig[state];
 
   return (
-    <div
-      onClick={() => state !== 'locked' && onClick(skill)}
+    <button type="button" className="td-skill-node" disabled={state === 'locked'}
+      aria-label={lang === 'zh' ? skill.name : (skill.nameEn || skill.name)}
+      aria-pressed={state === 'equipped'}
+      onClick={() => onClick(skill)}
+      onFocus={() => onHover(skill.id)} onBlur={() => onHover(null)}
       onMouseEnter={() => onHover(skill.id)}
       onMouseLeave={() => onHover(null)}
       style={{
@@ -113,19 +121,17 @@ function SkillNode({ skill, position, color, state, onClick, isHovered, onHover 
         borderRadius: '50%',
         border: `2px solid ${cfg.border}`,
         background: cfg.bg,
+        color, padding: 0,
         opacity: cfg.opacity,
         cursor: state === 'locked' ? 'not-allowed' : 'pointer',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         transition: 'all 0.25s ease',
-        boxShadow: state !== 'locked' && isHovered
-          ? `0 0 ${cfg.glow + 12}px ${color}, 0 0 ${cfg.glow * 2}px ${color}60`
-          : `0 0 ${cfg.glow}px ${color}80`,
-        transform: isHovered && state !== 'locked' ? 'scale(1.12)' : 'scale(1)',
+        boxShadow: state === 'equipped' ? `inset 0 0 0 3px ${color}20` : 'none',
         zIndex: 5,
       }}
     >
-      <span style={{ fontSize: 16, lineHeight: 1 }}>{skill.icon}</span>
+      <span style={{ fontSize: 16, lineHeight: 1 }}><Icon name={skill.icon} /></span>
       {state === 'equipped' && (
         <div style={{
           position: 'absolute', top: -6, right: -6,
@@ -140,7 +146,7 @@ function SkillNode({ skill, position, color, state, onClick, isHovered, onHover 
           Lv{skill.unlock_level}
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -169,7 +175,7 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
       animation: 'tt-in 0.15s ease both',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-        <span style={{ fontSize: 18 }}>{skill.icon}</span>
+        <span style={{ fontSize: 18 }}><Icon name={skill.icon} /></span>
         <div>
           <div style={{ color, fontSize: '0.65rem', fontWeight: 900, letterSpacing: '0.04em' }}>{name}</div>
           <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.45rem' }}>{zh ? '需要' : 'REQUIRES'} Lv.{skill.unlock_level}</div>
@@ -179,10 +185,10 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
       {state === 'equipped' && (
         <div style={{
           marginTop: 6, padding: '4px 7px', borderRadius: 4,
-          border: '1px solid #00ff8840', background: '#00ff8810',
+          border: '1px solid #8aaa9140', background: '#8aaa9110',
         }}>
-          <span style={{ color: '#00ff88', fontSize: '0.44rem', fontWeight: 900 }}>◉ {zh ? '本局效果' : 'ACTIVE EFFECT'}</span>
-          <div style={{ color: '#00ff88cc', fontSize: '0.46rem', marginTop: 2, lineHeight: 1.5 }}>
+          <span style={{ color: '#8aaa91', fontSize: '0.44rem', fontWeight: 900 }}>◉ {zh ? '本局效果' : 'ACTIVE EFFECT'}</span>
+          <div style={{ color: '#8aaa91cc', fontSize: '0.46rem', marginTop: 2, lineHeight: 1.5 }}>
             {zh ? '部署后真实生效：' : 'Applies after deployment: '}{desc}
           </div>
         </div>
@@ -193,7 +199,7 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
         </div>
       )}
       {state === 'equipped' && (
-        <div style={{ marginTop: 6, color: '#ff3860', fontSize: '0.48rem', background: '#ff386015', borderRadius: 4, padding: '3px 6px', textAlign: 'center' }}>
+        <div style={{ marginTop: 6, color: '#c77c78', fontSize: '0.48rem', background: '#c77c7815', borderRadius: 4, padding: '3px 6px', textAlign: 'center' }}>
           {zh ? '点击卸下' : 'CLICK TO UNEQUIP'}
         </div>
       )}
@@ -262,7 +268,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: '0.52rem', color, fontWeight: 700, letterSpacing: '0.12em' }}>
-            {AGENT_ICONS[agentIdx]} {AGENT_NAMES[agentIdx]} · SKILL TREE
+            <Icon name={AGENT_ICONS[agentIdx]} /> {AGENT_NAMES[agentIdx]} · SKILL TREE
           </div>
           <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
             Lv.{level} · {zh ? `已装备 ${equippedIds.length}/${skills.length} 技能` : `${equippedIds.length}/${skills.length} EQUIPPED`}
@@ -325,7 +331,6 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
             position={positions[i]} color={color}
             state={getNodeState(skill, i)}
             onClick={handleSkillClick}
-            isHovered={hoveredId === skill.id}
             onHover={setHoveredId}
           />
         ))}
@@ -354,7 +359,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
                 border: `1px solid ${color}30`, background: `${color}08`,
                 animation: 'skill-row-in 0.3s ease both',
               }}>
-                <span style={{ fontSize: 12 }}>{s.icon}</span>
+                <span style={{ fontSize: 12 }}><Icon name={s.icon} /></span>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '0.58rem', color, fontWeight: 700 }}>{zh ? s.name : (s.nameEn || s.name)}</span>
                   <span style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>{zh ? s.desc : (s.descEn || s.desc)}</span>

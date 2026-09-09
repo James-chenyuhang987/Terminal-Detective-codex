@@ -1,11 +1,14 @@
+import Icon from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 import React from 'react';
 import { useLang } from '@/lib/lang.jsx';
 
 // 轻量探员档案 Tooltip — position:fixed，避免被父容器裁切
-export default function AgentLoreTooltip({ lore, color, icon, roleZh, x, y }) {
+export default function AgentLoreTooltip({ lore, color: legacyColor, icon, roleZh, x, y }) {
+  const color = noirColor(legacyColor);
   const { lang } = useLang();
   if (!lore) return null;
-  const left = Math.min(x + 16, window.innerWidth - 280);
+  const left = Math.max(12, Math.min(x + 16, window.innerWidth - 280));
   const top = Math.min(Math.max(y - 40, 12), window.innerHeight - 200);
 
   return (
@@ -14,14 +17,14 @@ export default function AgentLoreTooltip({ lore, color, icon, roleZh, x, y }) {
       pointerEvents: 'none', fontFamily: 'monospace',
       border: `1px solid ${color}70`, borderRadius: 12,
       background: 'rgba(2,8,20,0.82)', backdropFilter: 'blur(14px)',
-      boxShadow: `0 0 26px ${color}30, inset 0 0 24px ${color}08`,
+      boxShadow: '0 12px 32px #0006',
       padding: '11px 13px',
       animation: 'lore-tip-in 0.16s ease both',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-        <span style={{ fontSize: 15 }}>{icon}</span>
+        <span style={{ fontSize: 15 }}><Icon name={icon} /></span>
         <div>
-          <div style={{ fontSize: '0.64rem', fontWeight: 900, color, letterSpacing: '0.06em', textShadow: `0 0 10px ${color}80` }}>
+          <div style={{ fontSize: '0.64rem', fontWeight: 900, color, letterSpacing: '0.06em', textShadow: 'none' }}>
             {lore.id}
           </div>
           <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)' }}>{roleZh}</div>

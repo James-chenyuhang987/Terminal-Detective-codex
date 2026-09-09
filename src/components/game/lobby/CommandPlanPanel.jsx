@@ -1,3 +1,4 @@
+import Icon from '@/components/ui/Icon';
 import React from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import {
@@ -16,7 +17,7 @@ function PlanOption({ item, selected, onClick, lang }) {
       style={/** @type {React.CSSProperties & {'--command-color': string}} */ ({ '--command-color': item.color })}
       aria-pressed={selected}
     >
-      <span>{item.icon}</span>
+      <span><Icon name={item.icon} /></span>
       <strong>{zh ? item.name : item.nameEn}</strong>
       <small>{zh ? item.desc : item.descEn}</small>
       {selected && <i>✓</i>}

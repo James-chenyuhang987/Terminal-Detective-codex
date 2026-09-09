@@ -1,5 +1,7 @@
 import React from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import Icon from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 // 右侧工具面板分类标签 —— 调查工具统一收纳，玩家一目了然
 export const TOOL_TABS = [
@@ -10,8 +12,9 @@ export const TOOL_TABS = [
   { id: 'log',      icon: '📜', zh: '决策日志', en: 'LOG' },
 ];
 
-export default function ToolPanelTabs({ active, onChange, accentColor, badges = {} }) {
+export default function ToolPanelTabs({ active, onChange, accentColor: legacyAccentColor, badges = {} }) {
   const { lang } = useLang();
+  const accentColor = noirColor(legacyAccentColor);
   const zh = lang === 'zh';
 
   return (
@@ -27,7 +30,7 @@ export default function ToolPanelTabs({ active, onChange, accentColor, badges = 
           const on = active === tab.id;
           const badge = badges[tab.id];
           return (
-            <button key={tab.id} onClick={() => onChange(tab.id)}
+            <button type="button" key={tab.id} onClick={() => onChange(tab.id)} aria-pressed={on}
               style={{
                 position: 'relative', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 5,
@@ -38,7 +41,7 @@ export default function ToolPanelTabs({ active, onChange, accentColor, badges = 
                 color: on ? accentColor : `${accentColor}99`,
                 transition: 'all 0.2s',
               }}>
-              <span>{tab.icon}</span>
+              <Icon name={tab.icon} size={15} />
               <span>{zh ? tab.zh : tab.en}</span>
               {badge > 0 && (
                 <span style={{

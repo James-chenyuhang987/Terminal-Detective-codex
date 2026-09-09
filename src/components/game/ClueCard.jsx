@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import Icon from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 const weightColors = {
-  CRITICAL: { color: '#ff3860', glow: '#ff386040' },
-  HIGH:     { color: '#ffaa00', glow: '#ffaa0040' },
-  MEDIUM:   { color: '#00ffff', glow: '#00ffff40' },
-  LOW:      { color: '#8888aa', glow: '#8888aa40' },
+  CRITICAL: { color: '#c77c78', glow: '#c77c7840' },
+  HIGH:     { color: '#c19a63', glow: '#c19a6340' },
+  MEDIUM:   { color: '#709f9a', glow: '#709f9a40' },
+  LOW:      { color: '#9b9aae', glow: '#9b9aae40' },
 };
 
 export default function ClueCard({ clue, isNew = false, compact = false }) {
   const [flash, setFlash] = useState(isNew);
-  const wc = weightColors[clue.weight] || weightColors.MEDIUM;
+  const weightStyle = weightColors[clue.weight] || weightColors.MEDIUM;
+  const wc = { color: noirColor(weightStyle.color), glow: noirColor(weightStyle.glow) };
 
   useEffect(() => {
     if (isNew) {
@@ -25,10 +28,10 @@ export default function ClueCard({ clue, isNew = false, compact = false }) {
         style={{
           backgroundColor: flash ? `${wc.glow}` : 'rgba(255,255,255,0.03)',
           border: `1px solid ${wc.color}30`,
-          boxShadow: flash ? `0 0 12px ${wc.color}60` : 'none',
+          boxShadow: flash ? `inset 3px 0 0 ${wc.color}` : 'none',
         }}
       >
-        <span className="text-base">{clue.visual_icon}</span>
+        <Icon name={clue.visual_icon} size={18} style={{ color: wc.color }} />
         <div>
           <div className="font-bold" style={{ color: wc.color }}>{clue.keyword}</div>
         </div>
@@ -42,12 +45,11 @@ export default function ClueCard({ clue, isNew = false, compact = false }) {
       style={{
         backgroundColor: flash ? `${wc.glow}` : 'rgba(10,15,30,0.8)',
         borderColor: flash ? wc.color : `${wc.color}50`,
-        boxShadow: flash ? `0 0 20px ${wc.color}80, inset 0 0 20px ${wc.glow}` : `0 0 8px ${wc.glow}`,
-        transform: flash ? 'scale(1.02)' : 'scale(1)',
+        boxShadow: flash ? `inset 3px 0 0 ${wc.color}` : '0 4px 12px rgba(0,0,0,0.18)',
       }}
     >
       <div className="flex items-start gap-2">
-        <span className="text-xl">{clue.visual_icon}</span>
+        <Icon name={clue.visual_icon} size={22} style={{ color: wc.color }} />
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold tracking-widest" style={{ color: wc.color }}>

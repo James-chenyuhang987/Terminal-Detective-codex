@@ -1,10 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import Icon, { IconText } from '@/components/ui/Icon';
+import SlicedTitle from '@/components/ui/SlicedTitle';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
-const GOLD = '#e3b85b';
+const GOLD = '#c5a66f';
 
 function MatrixRain({ color = GOLD }) {
   const canvasRef = useRef(null);
+  const { motionEnabled } = usePresentationMotion();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -14,11 +18,11 @@ function MatrixRain({ color = GOLD }) {
     if (!ctx) return undefined;
 
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ΑΒΓΔΨΩαβγδψω∑∞§#@!'.split('');
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const fontSize = 14;
     let drops = [];
     let frameId = 0;
     let lastFrame = 0;
+    let frames = 0;
 
     const resize = () => {
       const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -46,20 +50,21 @@ function MatrixRain({ color = GOLD }) {
       if (timestamp - lastFrame >= 66) {
         draw();
         lastFrame = timestamp;
+        frames += 1;
       }
-      frameId = requestAnimationFrame(animate);
+      if (frames < 36) frameId = requestAnimationFrame(animate);
     };
 
     resize();
     draw();
     window.addEventListener('resize', resize);
-    if (!reducedMotion) frameId = requestAnimationFrame(animate);
+    if (motionEnabled) frameId = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(frameId);
       window.removeEventListener('resize', resize);
     };
-  }, [color]);
+  }, [color, motionEnabled]);
 
   return <canvas ref={canvasRef} className="td-landing-matrix" aria-hidden="true" />;
 }
@@ -72,7 +77,7 @@ function FeatureCard({ icon, title, desc, delay }) {
   return (
     <article className="td-ui-card td-feature-card td-landing-feature" style={{ animationDelay: `${delay}s` }}>
       <span className="td-landing-feature-corner" aria-hidden="true" />
-      <div className="td-landing-feature-icon" aria-hidden="true">{icon}</div>
+      <div className="td-landing-feature-icon"><Icon name={icon} size={22} /></div>
       <strong className="td-gold-flow-text">{title}</strong>
       <p>{desc}</p>
     </article>
@@ -87,11 +92,11 @@ function TitleLogo({ t, lang }) {
   return (
     <header className="td-landing-title">
       <div className="td-landing-eyebrow td-gold-flow-text">{copy.eyebrow}</div>
-      <div className="td-landing-title-words" aria-label="Terminal Detective">
-        <h1 className="td-gold-flow-text">TERMINAL</h1>
-        <h1 className="td-gold-flow-text is-second">DETECTIVE</h1>
-      </div>
-      <p>{t.subtitle}</p>
+      <h1 className="td-landing-title-words" aria-label="Terminal Detective">
+        <SlicedTitle as="span">TERMINAL</SlicedTitle>
+        <SlicedTitle as="span" className="is-second">DETECTIVE</SlicedTitle>
+      </h1>
+      <p><IconText text={t.subtitle} /></p>
       <div className="td-landing-motto"><span />{copy.motto}<span /></div>
     </header>
   );
@@ -109,8 +114,8 @@ function DetectiveFigure({ lang }) {
       <svg viewBox="0 0 480 620" role="img" aria-label={copy.role}>
         <defs>
           <linearGradient id="detective-gold" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#fff2b0" />
-            <stop offset="0.42" stopColor="#d7a542" />
+            <stop offset="0" stopColor="#e1d0ac" />
+            <stop offset="0.42" stopColor="#c5a66f" />
             <stop offset="1" stopColor="#6d4412" />
           </linearGradient>
           <linearGradient id="detective-coat" x1="0" y1="0" x2="1" y2="1">
@@ -119,7 +124,7 @@ function DetectiveFigure({ lang }) {
             <stop offset="1" stopColor="#1b1208" />
           </linearGradient>
           <radialGradient id="detective-aura">
-            <stop offset="0" stopColor="#f5c967" stopOpacity=".34" />
+            <stop offset="0" stopColor="#c5a66f" stopOpacity=".34" />
             <stop offset=".55" stopColor="#a9741b" stopOpacity=".1" />
             <stop offset="1" stopColor="#000" stopOpacity="0" />
           </radialGradient>
@@ -128,14 +133,14 @@ function DetectiveFigure({ lang }) {
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
           <pattern id="detective-lines" width="8" height="8" patternUnits="userSpaceOnUse">
-            <path d="M0 7.5H8" stroke="#f0c96c" strokeOpacity=".08" />
+            <path d="M0 7.5H8" stroke="#c5a66f" strokeOpacity=".08" />
           </pattern>
         </defs>
 
         <ellipse cx="245" cy="326" rx="222" ry="276" fill="url(#detective-aura)" />
-        <path d="M58 522H421" stroke="#d8aa50" strokeOpacity=".22" />
-        <path d="M104 550H379" stroke="#d8aa50" strokeOpacity=".1" />
-        <g opacity=".36" fill="none" stroke="#dcb45c">
+        <path d="M58 522H421" stroke="#c5a66f" strokeOpacity=".22" />
+        <path d="M104 550H379" stroke="#c5a66f" strokeOpacity=".1" />
+        <g opacity=".36" fill="none" stroke="#c5a66f">
           <path d="M78 117V70h48M402 117V70h-48M78 472v48h48M402 472v48h-48" />
           <circle cx="240" cy="286" r="193" strokeDasharray="2 13" />
         </g>
@@ -143,23 +148,23 @@ function DetectiveFigure({ lang }) {
         <g className="td-detective-silhouette">
           <path d="M194 186c6-47 86-52 100-4 9 33-7 75-30 91-13 9-33 7-45-4-25-22-31-56-25-83Z" fill="#090a0b" stroke="url(#detective-gold)" strokeWidth="3" />
           <path d="M147 173c19-11 49-15 81-16l25-47 34 45c33 2 59 7 76 17-26 17-65 25-109 25-46 0-84-8-107-24Z" fill="url(#detective-coat)" stroke="url(#detective-gold)" strokeWidth="4" />
-          <path d="M191 155l18-55h91l18 57c-41 12-84 12-127-2Z" fill="#090a0c" stroke="#d7a64a" strokeWidth="3" />
-          <path d="M214 126h88" stroke="#f1ce75" strokeWidth="7" strokeOpacity=".78" />
-          <path d="M212 212c14 6 31 8 49 6M214 237c17-6 35-6 52 0" fill="none" stroke="#e9bc5b" strokeWidth="2" strokeOpacity=".42" />
+          <path d="M191 155l18-55h91l18 57c-41 12-84 12-127-2Z" fill="#090a0c" stroke="#c5a66f" strokeWidth="3" />
+          <path d="M214 126h88" stroke="#c5a66f" strokeWidth="7" strokeOpacity=".78" />
+          <path d="M212 212c14 6 31 8 49 6M214 237c17-6 35-6 52 0" fill="none" stroke="#c5a66f" strokeWidth="2" strokeOpacity=".42" />
           <path d="M166 305c23-29 51-42 82-42 38 0 67 15 91 45l47 205H98l68-208Z" fill="url(#detective-coat)" stroke="url(#detective-gold)" strokeWidth="4" />
           <path d="m191 286 58 102 56-103M249 388v129" fill="none" stroke="#c28c31" strokeWidth="3" strokeOpacity=".72" />
-          <path d="m221 275 28 113 30-114-30-18-28 19Z" fill="#d3a344" fillOpacity=".16" stroke="#e8c46b" strokeWidth="2" />
+          <path d="m221 275 28 113 30-114-30-18-28 19Z" fill="#c5a66f" fillOpacity=".16" stroke="#c5a66f" strokeWidth="2" />
           <path d="M148 322 90 489l50 17 58-129M337 323l53 167-46 18-58-132" fill="#11100e" stroke="#b87d25" strokeWidth="3" />
-          <path d="M101 492c-18 4-28 15-29 30 21 9 45 7 66-8l2-8-39-14ZM381 492c20 3 31 13 34 28-20 12-46 10-69-5l-2-7 37-16Z" fill="#080909" stroke="#d6a546" strokeWidth="3" />
-          <path d="M176 313 144 516M313 311l31 205" stroke="#f0cf7e" strokeOpacity=".16" strokeWidth="8" />
-          <path d="M101 513h286l-21 48H120l-19-48Z" fill="url(#detective-lines)" stroke="#d3a045" strokeWidth="2" />
+          <path d="M101 492c-18 4-28 15-29 30 21 9 45 7 66-8l2-8-39-14ZM381 492c20 3 31 13 34 28-20 12-46 10-69-5l-2-7 37-16Z" fill="#080909" stroke="#c5a66f" strokeWidth="3" />
+          <path d="M176 313 144 516M313 311l31 205" stroke="#e1d0ac" strokeOpacity=".16" strokeWidth="8" />
+          <path d="M101 513h286l-21 48H120l-19-48Z" fill="url(#detective-lines)" stroke="#c5a66f" strokeWidth="2" />
         </g>
 
         <g className="td-detective-lens" filter="url(#detective-glow)">
-          <circle cx="335" cy="310" r="38" fill="#0a1012" fillOpacity=".68" stroke="#f3d47d" strokeWidth="4" />
-          <circle cx="335" cy="310" r="25" fill="#b77b22" fillOpacity=".1" stroke="#dba846" strokeWidth="2" />
-          <path d="m309 340-34 44" stroke="#ebc96f" strokeWidth="9" strokeLinecap="round" />
-          <path d="m312 338-35 45" stroke="#fff1ad" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="335" cy="310" r="38" fill="#0a1012" fillOpacity=".68" stroke="#e1d0ac" strokeWidth="4" />
+          <circle cx="335" cy="310" r="25" fill="#b77b22" fillOpacity=".1" stroke="#c5a66f" strokeWidth="2" />
+          <path d="m309 340-34 44" stroke="#c5a66f" strokeWidth="9" strokeLinecap="round" />
+          <path d="m312 338-35 45" stroke="#e1d0ac" strokeWidth="2" strokeLinecap="round" />
         </g>
       </svg>
       <div className="td-detective-identity">
@@ -210,42 +215,18 @@ const PREVIEW_LINES_EN = [
 function TerminalPreview({ lang }) {
   const lines = lang === 'zh' ? PREVIEW_LINES_ZH : PREVIEW_LINES_EN;
   const [visibleLines, setVisibleLines] = useState(0);
+  const { reducedMotion, motionEnabled } = usePresentationMotion();
 
   useEffect(() => {
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reducedMotion) {
-      setVisibleLines(lines.length);
-      return undefined;
-    }
-
-    setVisibleLines(0);
-    let index = 0;
-    let timer;
-    let cancelled = false;
-    const tick = () => {
-      if (cancelled) return;
-      index += 1;
-      setVisibleLines(index);
-      timer = setTimeout(() => {
-        if (index < lines.length) tick();
-        else {
-          index = 0;
-          setVisibleLines(0);
-          timer = setTimeout(tick, 650);
-        }
-      }, index < lines.length ? 620 : 1700);
-    };
-    timer = setTimeout(tick, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [lang, lines.length]);
+    if (!motionEnabled || visibleLines >= lines.length) return undefined;
+    const timer = setTimeout(() => setVisibleLines(index => index + 1), 360);
+    return () => clearTimeout(timer);
+  }, [motionEnabled, visibleLines, lines.length]);
 
   return (
     <div className="td-terminal-preview td-landing-terminal">
       <div><span /> CASE TERMINAL · LIVE</div>
-      {lines.slice(0, visibleLines).map((line) => <p key={line}>{line}</p>)}
+      {lines.slice(0, reducedMotion ? lines.length : visibleLines).map((line) => <p key={line}>{line}</p>)}
       <i aria-hidden="true">▊</i>
     </div>
   );
@@ -268,8 +249,8 @@ function StartButton({ busy, error, onClick, t, lang }) {
     <div className="td-landing-start-wrap">
       <div className="td-landing-case-seal" aria-hidden="true"><span>TD</span><small>Ω</small></div>
       <small>{copy.label}</small>
-      <h2 className="td-gold-flow-text">{t.startBtn}</h2>
-      <p>{t.startHint}</p>
+      <h2 className="td-gold-flow-text"><IconText text={t.startBtn} /></h2>
+      <p><IconText text={t.startHint} /></p>
       <button
         aria-busy={busy}
         aria-describedby={error ? 'td-landing-start-error' : undefined}
@@ -282,7 +263,7 @@ function StartButton({ busy, error, onClick, t, lang }) {
         <strong>{copy.action}</strong>
         <small>{copy.hint}</small>
       </button>
-      {error && <div className="td-landing-start-error" id="td-landing-start-error" role="alert">⚠ {error}</div>}
+      {error && <div className="td-landing-start-error" id="td-landing-start-error" role="alert"><Icon name="warning" /> {error}</div>}
     </div>
   );
 }
@@ -291,7 +272,7 @@ function LangToggle() {
   const { lang, t, setLang } = useLang();
   return (
     <button className="td-landing-lang" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}>
-      {t.langBtn}
+      <IconText text={t.langBtn} />
     </button>
   );
 }
@@ -311,7 +292,7 @@ function CaseLaunchPanel({ busy, error, lang, t, onStart }) {
         <span><i />{copy.state}</span>
       </header>
       <div className="td-landing-case-meta">
-        <span>{t.caseBadge}</span>
+        <span><IconText text={t.caseBadge} /></span>
         <b>{copy.danger}</b>
       </div>
       <StatRow t={t} />
@@ -334,10 +315,10 @@ export default function GameLanding({ busy = false, error = '', onStart }) {
       <div className="td-landing-frame" aria-hidden="true" />
 
       <div className="td-landing-topbar">
-        <div className="td-gold-flow-text">{t.systemVersion}</div>
+        <div className="td-gold-flow-text"><IconText text={t.systemVersion} /></div>
         <div className="td-landing-statuses">
           {[t.online, t.secure, t.ready].map((status, index) => (
-            <span key={status} className={index === 0 ? 'is-online' : ''}>{index === 0 ? '●' : index === 1 ? '◆' : '⚡'} {status}</span>
+            <span key={status} className={index === 0 ? 'is-online' : ''}><Icon name={['signal', 'shield', 'bolt'][index]} /> <IconText text={status} /></span>
           ))}
           <LangToggle />
         </div>
@@ -359,7 +340,7 @@ export default function GameLanding({ busy = false, error = '', onStart }) {
         </section>
       </main>
 
-      <footer className="td-landing-footer">{t.bottomBar}</footer>
+      <footer className="td-landing-footer"><IconText text={t.bottomBar} /></footer>
     </div>
   );
 }

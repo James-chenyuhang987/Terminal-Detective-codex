@@ -1,6 +1,9 @@
+import { noirColor } from '@/components/ui/palette';
+import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { useSettings } from '@/lib/settings.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import { getLevelFromXP, getXPToNextLevel } from '@/game/agentProgression';
 import SkillTreePanel from '@/components/game/SkillTreePanel';
@@ -79,11 +82,14 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
   const canvasRef = useRef(null);
   const particles = useRef([]);
   const frameRef = useRef(null);
+  const { motionEnabled } = usePresentationMotion();
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !motionEnabled || !settings.particles) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const startedAt = performance.now();
 
     const resize = () => {
       canvas.width = canvas.offsetWidth;
@@ -100,16 +106,16 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
       vy: (Math.random() - 0.5) * 0.4,
       r: 1 + Math.random() * 2,
       opacity: 0.2 + Math.random() * 0.5,
-      color: agentDefs[Math.floor(Math.random() * 3)].color,
+      color: noirColor(agentDefs[Math.floor(Math.random() * 3)].color),
     }));
 
     // Agent node positions (roughly center positions of holo figures)
     const getNodePositions = () => {
       const w = canvas.width, h = canvas.height;
       return [
-        { x: w * 0.25, y: h * 0.55, color: agentDefs[0].color },
-        { x: w * 0.5,  y: h * 0.45, color: agentDefs[1].color },
-        { x: w * 0.75, y: h * 0.55, color: agentDefs[2].color },
+        { x: w * 0.25, y: h * 0.55, color: noirColor(agentDefs[0].color) },
+        { x: w * 0.5,  y: h * 0.45, color: noirColor(agentDefs[1].color) },
+        { x: w * 0.75, y: h * 0.55, color: noirColor(agentDefs[2].color) },
       ];
     };
 
@@ -117,8 +123,8 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
       const nodes = getNodePositions();
-      const commandNode = { x: w * 0.5, y: h * 0.9, color: '#e8c98a' };
-      const targetNode = { x: w * 0.5, y: h * 0.16, color: hasTarget ? '#ff6685' : '#00e5ff' };
+      const commandNode = { x: w * 0.5, y: h * 0.9, color: '#c5a66f' };
+      const targetNode = { x: w * 0.5, y: h * 0.16, color: hasTarget ? '#dda29a' : '#709f9a' };
 
       // The player is a real fourth node in the command network. Target-case
       // links are public tactical telemetry only; no hidden case data is used.
@@ -175,9 +181,9 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
           const ty = a.y + (b.y - a.y) * t;
           ctx.beginPath();
           ctx.arc(tx, ty, 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = a.color;
+          ctx.fillStyle = noirColor(a.color);
           ctx.shadowBlur = 8;
-          ctx.shadowColor = a.color;
+          ctx.shadowColor = noirColor(a.color);
           ctx.fill();
           ctx.shadowBlur = 0;
         }
@@ -231,7 +237,7 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
         ctx.stroke();
       }
 
-      frameRef.current = requestAnimationFrame(draw);
+      if (performance.now() - startedAt < 2400) frameRef.current = requestAnimationFrame(draw);
     };
 
     frameRef.current = requestAnimationFrame(draw);
@@ -239,9 +245,9 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(frameRef.current);
     };
-  }, [agentDefs, hasTarget, selectedIdx, settings.particles]);
+  }, [agentDefs, hasTarget, selectedIdx, settings.particles, motionEnabled]);
 
-  if (!settings.particles) return null;
+  if (!settings.particles || !motionEnabled) return null;
 
   return (
     <canvas ref={canvasRef} style={{
@@ -256,13 +262,18 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
   const { lang } = useLang();
   return (
     <div className={`td-holo-figure ${isSelected ? 'td-holo-selected' : ''}`} onClick={onClick}
+      role="button" tabIndex={0} aria-pressed={isSelected}
+      aria-label={`${agentDef.id} · ${lang === 'zh' ? agentDef.roleZh : agentDef.role}`}
+      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick(); } }}
+      onFocus={event => { const box = event.currentTarget.getBoundingClientRect(); onHover?.(index, box.x + box.width / 2, box.y); }}
+      onBlur={() => onHover?.(null)}
       onMouseEnter={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseMove={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseLeave={() => onHover?.(null)}
       style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       cursor: 'pointer', position: 'relative', zIndex: 3,
-      transform: isSelected ? 'scale(1.12) translateY(-10px)' : 'scale(1)',
+      transform: isSelected ? 'translateY(-4px)' : 'none',
       transition: 'transform 0.35s cubic-bezier(.22,1,.36,1)',
     }}>
       {/* Selected glow aura */}
@@ -270,23 +281,23 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
         <div style={{
           position: 'absolute', inset: -18,
           borderRadius: '50%',
-          background: `radial-gradient(circle, ${agentDef.color}25 0%, transparent 70%)`,
-          animation: 'aura-pulse 1.8s ease-in-out infinite',
+          background: `radial-gradient(circle, ${noirColor(agentDef.color)}25 0%, transparent 70%)`,
+          animation: 'none',
           pointerEvents: 'none',
         }}/>
       )}
 
       {/* SVG figure */}
       <div style={{
-        width: isSelected ? 86 : 66, height: isSelected ? 134 : 112,
-        filter: `drop-shadow(0 0 ${isSelected ? 24 : 10}px ${agentDef.color})`,
-        transition: 'all 0.35s ease', position: 'relative', overflow: 'hidden',
+        width: 76, height: 124,
+        opacity: isSelected ? 1 : 0.72,
+        transition: 'opacity 0.25s ease', position: 'relative', overflow: 'hidden',
       }}>
         <svg viewBox="0 0 64 110" width="100%" height="100%">
           <defs>
             <linearGradient id={`hg-${index}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={agentDef.color} stopOpacity="0.95"/>
-              <stop offset="100%" stopColor={agentDef.color} stopOpacity="0.08"/>
+              <stop offset="0%" stopColor={noirColor(agentDef.color)} stopOpacity="0.95"/>
+              <stop offset="100%" stopColor={noirColor(agentDef.color)} stopOpacity="0.08"/>
             </linearGradient>
             <clipPath id={`clip-${index}`}><rect x="0" y="0" width="64" height="110"/></clipPath>
           </defs>
@@ -300,38 +311,25 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
           {/* Static scan lines */}
           {[18, 32, 46, 60, 74, 88].map((y, i) => (
             <line key={i} x1="6" y1={y} x2="58" y2={y}
-              stroke={agentDef.color} strokeWidth="0.5" opacity="0.18"/>
+              stroke={noirColor(agentDef.color)} strokeWidth="0.5" opacity="0.18"/>
           ))}
-          {/* Animated scan beam */}
-          <rect x="0" y="-3" width="64" height="3"
-            fill={agentDef.color} opacity="0.35" clipPath={`url(#clip-${index})`}
-            style={{ filter: `blur(1px)` }}>
-            <animate
-              attributeName="y"
-              from="-3"
-              to="110"
-              dur="3.52s"
-              begin={`${index * -0.55}s`}
-              repeatCount="indefinite"
-            />
-          </rect>
           {/* Grid overlay */}
-          <path d="M0 0 L64 0 M0 55 L64 55 M32 0 L32 110" stroke={agentDef.color} strokeWidth="0.3" opacity="0.12"/>
+          <path d="M0 0 L64 0 M0 55 L64 55 M32 0 L32 110" stroke={noirColor(agentDef.color)} strokeWidth="0.3" opacity="0.12"/>
         </svg>
       </div>
 
       {/* Name plate */}
       <div style={{ marginTop: 8, textAlign: 'center', fontFamily: 'monospace' }}>
         <div style={{
-          fontSize: '0.62rem', fontWeight: 900, color: agentDef.color,
-          letterSpacing: '0.08em', textShadow: `0 0 10px ${agentDef.color}`,
+          fontSize: '0.62rem', fontWeight: 900, color: noirColor(agentDef.color),
+          letterSpacing: '0.08em', textShadow: 'none',
         }}>{agentDef.id}</div>
         <div style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>{lang === 'zh' ? agentDef.roleZh : agentDef.role}</div>
         <div style={{
           display: 'inline-block', marginTop: 4,
-          fontSize: '0.42rem', color: agentDef.color,
-          border: `1px solid ${agentDef.color}50`, borderRadius: 3,
-          padding: '1px 7px', background: `${agentDef.color}12`,
+          fontSize: '0.42rem', color: noirColor(agentDef.color),
+          border: `1px solid ${noirColor(agentDef.color)}50`, borderRadius: 3,
+          padding: '1px 7px', background: `${noirColor(agentDef.color)}12`,
         }}>Lv.{level} · {agentDef.traitEn}</div>
       </div>
 
@@ -400,11 +398,11 @@ function PriorityList({ priorityList, onChange }) {
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '6px 10px', marginBottom: 4, borderRadius: 8,
-              border: `1px solid ${isOver ? action.color : action.color + '25'}`,
-              background: isOver ? `${action.color}20` : dragging === id ? `${action.color}10` : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${isOver ? noirColor(action.color) : noirColor(action.color) + '25'}`,
+              background: isOver ? `${noirColor(action.color)}20` : dragging === id ? `${noirColor(action.color)}10` : 'rgba(255,255,255,0.03)',
               cursor: 'grab', transition: 'all 0.15s',
               transform: isOver ? 'translateX(4px)' : 'none',
-              boxShadow: isOver ? `0 0 10px ${action.color}40` : 'none',
+              boxShadow: isOver ? `0 0 10px ${noirColor(action.color)}40` : 'none',
               opacity: dragging === id ? 0.5 : 1,
             }}
           >
@@ -412,8 +410,8 @@ function PriorityList({ priorityList, onChange }) {
               fontSize: '0.48rem', color: 'rgba(255,255,255,0.25)',
               fontFamily: 'monospace', width: 16, textAlign: 'center',
             }}>#{idx + 1}</div>
-            <span style={{ fontSize: 14 }}>{action.icon}</span>
-            <span style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: action.color, fontWeight: 700, flex: 1 }}>
+            <span style={{ fontSize: 14 }}><Icon name={action.icon} /></span>
+            <span style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: noirColor(action.color), fontWeight: 700, flex: 1 }}>
               {zh ? action.label : action.labelEn}
             </span>
             <span style={{ fontSize: '0.4rem', color: 'rgba(255,255,255,0.2)' }}>⠿⠿</span>
@@ -444,13 +442,13 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
     }}>
       {/* Roster card */}
       <div className="td-lobby-panel td-lobby-roster-card" style={{
-        border: '1px solid rgba(0,229,255,0.2)', borderRadius: 12, overflow: 'hidden',
+        border: '1px solid rgba(112, 159, 154,0.2)', borderRadius: 12, overflow: 'hidden',
         background: 'rgba(0,8,24,0.85)', backdropFilter: 'blur(10px)',
       }}>
         <div style={{
-          padding: '7px 12px', borderBottom: '1px solid rgba(0,229,255,0.12)',
-          background: 'rgba(0,229,255,0.05)',
-          fontSize: '0.52rem', color: '#00e5ff', fontWeight: 700,
+          padding: '7px 12px', borderBottom: '1px solid rgba(112, 159, 154,0.12)',
+          background: 'rgba(112, 159, 154,0.05)',
+          fontSize: '0.52rem', color: '#709f9a', fontWeight: 700,
           letterSpacing: '0.12em', fontFamily: 'monospace',
         }}>
           {lang === 'zh' ? '探员编组' : 'TEAM ROSTER'}
@@ -466,28 +464,28 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
               style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '10px 12px', cursor: 'pointer',
-              borderLeft: `3px solid ${isSelected ? def.color : 'transparent'}`,
-              background: isSelected ? `${def.color}12` : 'transparent',
+              borderLeft: `3px solid ${isSelected ? noirColor(def.color) : 'transparent'}`,
+              background: isSelected ? `${noirColor(def.color)}12` : 'transparent',
               borderBottom: '1px solid rgba(255,255,255,0.05)',
               transition: 'all 0.2s',
             }}>
               <div style={{
                 width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                border: `1.5px solid ${def.color}70`,
-                background: isSelected ? `${def.color}30` : 'transparent',
+                border: `1.5px solid ${noirColor(def.color)}70`,
+                background: isSelected ? `${noirColor(def.color)}30` : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.52rem', color: def.color, fontWeight: 900, fontFamily: 'monospace',
-                boxShadow: isSelected ? `0 0 10px ${def.color}80` : 'none',
+                fontSize: '0.52rem', color: noirColor(def.color), fontWeight: 900, fontFamily: 'monospace',
+                boxShadow: isSelected ? `0 0 10px ${noirColor(def.color)}80` : 'none',
               }}>{lvls[i]}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 11 }}>{def.icon}</span>
-                  <span style={{ fontSize: '0.58rem', fontWeight: 700, color: def.color, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{def.id}</span>
+                  <span style={{ fontSize: 11 }}><Icon name={def.icon} /></span>
+                  <span style={{ fontSize: '0.58rem', fontWeight: 700, color: noirColor(def.color), fontFamily: 'monospace', letterSpacing: '0.04em' }}>{def.id}</span>
                 </div>
                 <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{lang === 'zh' ? def.roleZh : def.role}</div>
                 {/* XP mini bar */}
                 <div style={{ marginTop: 3, height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1 }}>
-                  <div style={{ width: `${xpInfo.pct}%`, height: '100%', background: def.color, borderRadius: 1, transition: 'width 0.5s ease' }}/>
+                  <div style={{ width: `${xpInfo.pct}%`, height: '100%', background: noirColor(def.color), borderRadius: 1, transition: 'width 0.5s ease' }}/>
                 </div>
               </div>
             </div>
@@ -495,14 +493,14 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
         })}
         <button type="button" onClick={() => onOpenCoreMarket?.(selectedIdx)} style={{
           width: 'calc(100% - 20px)', margin: '8px 10px 10px', minHeight: 34, borderRadius: 8,
-          border: '1px solid rgba(232,201,138,.48)', background: 'rgba(232,201,138,.08)',
-          color: '#f0d28b', fontFamily: 'monospace', fontSize: '.5rem', fontWeight: 900, cursor: 'pointer',
+          border: '1px solid rgba(197, 166, 111,.48)', background: 'rgba(197, 166, 111,.08)',
+          color: '#e1d0ac', fontFamily: 'monospace', fontSize: '.5rem', fontWeight: 900, cursor: 'pointer',
         }}>♛ {lang === 'zh' ? '核心签约 / 替换' : 'CORE RECRUIT / REPLACE'}</button>
       </div>
 
       {/* Priority list card */}
       <div className="td-lobby-panel td-lobby-priority-card" style={{
-        border: '1px solid rgba(167,139,250,0.2)', borderRadius: 12,
+        border: '1px solid rgba(155, 154, 174,0.2)', borderRadius: 12,
         background: 'rgba(0,4,20,0.85)', backdropFilter: 'blur(10px)',
         padding: '10px 12px', flex: 1,
       }}>
@@ -535,7 +533,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
 
       <div className="td-stage-focus">
         <span>{targetCase ? 'MISSION COMMAND UPLINK' : 'AGENT CONFIGURATION'}</span>
-        <strong style={{ color: agentDefs[selectedIdx].color }}>{agentDefs[selectedIdx].icon} {agentDefs[selectedIdx].id}</strong>
+        <strong style={{ color: noirColor(agentDefs[selectedIdx].color) }}><Icon name={agentDefs[selectedIdx].icon} /> {agentDefs[selectedIdx].id}</strong>
         <small>{synergy.active.length
           ? (lang === 'zh' ? `${synergy.active.length} 项协同已激活` : `${synergy.active.length} SYNERGIES ACTIVE`)
           : (lang === 'zh' ? '选择探员并调整专长' : 'SELECT AN AGENT AND TUNE SPECIALTIES')}</small>
@@ -548,8 +546,8 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
       </div>
 
       {activeSupport && (
-        <div className="td-support-node" style={/** @type {React.CSSProperties & {'--support-color': string}} */ ({ '--support-color': activeSupport.color || '#e8c98a' })}>
-          <span>{activeSupport.icon}</span><div><small>{lang === 'zh' ? `支援链路 · 后备 ${Math.max(0, supportCount - 1)}` : `SUPPORT LINK · ${Math.max(0, supportCount - 1)} RESERVE`}</small><strong>{activeSupport.id}</strong></div>
+        <div className="td-support-node" style={/** @type {React.CSSProperties & {'--support-color': string}} */ ({ '--support-color': activeSupport.color || '#c5a66f' })}>
+          <span><Icon name={activeSupport.icon} /></span><div><small>{lang === 'zh' ? `支援链路 · 后备 ${Math.max(0, supportCount - 1)}` : `SUPPORT LINK · ${Math.max(0, supportCount - 1)} RESERVE`}</small><strong>{activeSupport.id}</strong></div>
         </div>
       )}
 
@@ -579,11 +577,11 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
           <ellipse cx="200" cy="14" rx="198" ry="16" fill="url(#plat-g)" opacity="0.85"/>
           <ellipse cx="200" cy="14" rx="198" ry="16" fill="none" stroke={accentColor} strokeWidth="1.2" opacity="0.6"/>
           <ellipse cx="200" cy="14" rx="148" ry="12" fill="none" stroke={accentColor} strokeWidth="0.6" strokeDasharray="6 5" opacity="0.3"
-            style={{ animation: 'spin-ring 10s linear infinite', transformOrigin: '200px 14px' }}/>
+            style={{ animation: 'none', transformOrigin: '200px 14px' }}/>
           {[0, 72, 144, 216, 288].map((angle, i) => {
             const r = (angle * Math.PI) / 180;
             return <circle key={i} cx={200 + 180 * Math.cos(r)} cy={14 + 14 * Math.sin(r)} r="3"
-              fill={accentColor} opacity="0.8" style={{ animation: `plat-dot 2.5s ${i * 0.5}s ease-in-out infinite` }}/>;
+              fill={accentColor} opacity="0.8" style={{ animation: 'none' }}/>;
           })}
           <text x="200" y="38" textAnchor="middle" fill={accentColor} fontSize="6"
             fontFamily="monospace" opacity="0.4" letterSpacing="4">
@@ -622,16 +620,16 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <div className="td-lobby-panel td-lobby-attribute-card" style={{
-        border: `1px solid ${agentDef.color}35`, borderRadius: 12, overflow: 'hidden',
+        border: `1px solid ${noirColor(agentDef.color)}35`, borderRadius: 12, overflow: 'hidden',
         background: 'rgba(0,8,24,0.85)', backdropFilter: 'blur(10px)',
         flex: 1, display: 'flex', flexDirection: 'column',
       }}>
         {/* Agent identity header */}
-        <div style={{ padding: '7px 12px', borderBottom: `1px solid ${agentDef.color}20`, background: `${agentDef.color}07` }}>
+        <div style={{ padding: '7px 12px', borderBottom: `1px solid ${noirColor(agentDef.color)}20`, background: `${noirColor(agentDef.color)}07` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-            <span style={{ fontSize: 16 }}>{agentDef.icon}</span>
+            <span style={{ fontSize: 16 }}><Icon name={agentDef.icon} /></span>
             <div>
-              <div style={{ fontSize: '0.6rem', color: agentDef.color, fontWeight: 900, fontFamily: 'monospace' }}>{agentDef.id}</div>
+              <div style={{ fontSize: '0.6rem', color: noirColor(agentDef.color), fontWeight: 900, fontFamily: 'monospace' }}>{agentDef.id}</div>
               <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{lang === 'zh' ? agentDef.roleZh : agentDef.role}</div>
             </div>
           </div>
@@ -641,12 +639,12 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
               <button key={t.key} onClick={() => setTab(t.key)} style={{
                 flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
                 fontFamily: 'monospace', fontSize: '0.5rem', fontWeight: 700,
-                background: tab === t.key ? agentDef.color + '22' : 'rgba(255,255,255,0.04)',
-                color: tab === t.key ? agentDef.color : 'rgba(255,255,255,0.35)',
-                borderBottom: `2px solid ${tab === t.key ? agentDef.color : 'transparent'}`,
+                background: tab === t.key ? noirColor(agentDef.color) + '22' : 'rgba(255,255,255,0.04)',
+                color: tab === t.key ? noirColor(agentDef.color) : 'rgba(255,255,255,0.35)',
+                borderBottom: `2px solid ${tab === t.key ? noirColor(agentDef.color) : 'transparent'}`,
                 transition: 'all 0.2s',
               }}>
-                {t.icon} {t.label}
+                <Icon name={t.icon} /> <IconText text={t.label} />
               </button>
             ))}
           </div>
@@ -660,11 +658,11 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
               <div style={{
                 display: 'flex', justifyContent: 'center',
                 padding: '8px 0 4px', marginBottom: 6,
-                borderBottom: `1px solid ${agentDef.color}20`,
+                borderBottom: `1px solid ${noirColor(agentDef.color)}20`,
               }}>
                 <AgentRadarChart
                   agent={agent}
-                  agentColor={agentDef.color}
+                  agentColor={noirColor(agentDef.color)}
                   allAgents={allAgents}
                   size={150}
                 />
@@ -673,11 +671,11 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
                 agentIdx={agentIdx}
                 spec={spec}
                 onSpecChange={onSpecChange}
-                agentColor={agentDef.color}
+                agentColor={noirColor(agentDef.color)}
                 attributeBonus={agentDef.attribute_bonus}
               />
-              <div style={{ marginTop: 8, padding: '8px 10px', border: `1px solid ${agentDef.color}25`, borderRadius: 8, background: `${agentDef.color}07` }}>
-                <div style={{ fontSize: '0.48rem', color: agentDef.color, fontWeight: 700, fontFamily: 'monospace', marginBottom: 4 }}>◎ AGENT TRAIT</div>
+              <div style={{ marginTop: 8, padding: '8px 10px', border: `1px solid ${noirColor(agentDef.color)}25`, borderRadius: 8, background: `${noirColor(agentDef.color)}07` }}>
+                <div style={{ fontSize: '0.48rem', color: noirColor(agentDef.color), fontWeight: 700, fontFamily: 'monospace', marginBottom: 4 }}>◎ AGENT TRAIT</div>
                 <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', lineHeight: 1.55 }}>{lang === 'zh' ? agentDef.desc : agentDef.descEn}</div>
               </div>
             </>
@@ -688,7 +686,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
           {tab === 'dossier' && (
             <AgentDossierPanel
               agentIdx={agentIdx}
-              color={agentDef.color}
+              color={noirColor(agentDef.color)}
               icon={agentDef.icon}
               roleZh={agentDef.roleZh}
               lore={getDisplayLore(agentDef, agentIdx, lang)}
@@ -708,42 +706,42 @@ function StatusBar({ onBack, onOpenSettings, profile, readOnly, lighting }) {
   return (
     <div className="td-lobby-status" style={{
       height: 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 16px', borderBottom: '1px solid rgba(0,229,255,0.15)',
+      padding: '0 16px', borderBottom: '1px solid rgba(112, 159, 154,0.15)',
       background: 'rgba(0,0,0,0.65)', fontFamily: 'monospace', fontSize: '0.5rem', flexShrink: 0,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {onBack && (
           <button onClick={onBack} style={{
             padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
-            border: '1px solid rgba(0,229,255,0.45)', background: 'rgba(0,229,255,0.1)',
-            color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.5rem', letterSpacing: '0.12em',
+            border: '1px solid rgba(112, 159, 154,0.45)', background: 'rgba(112, 159, 154,0.1)',
+            color: '#709f9a', fontFamily: 'monospace', fontSize: '0.5rem', letterSpacing: '0.12em',
             whiteSpace: 'nowrap',
           }}>◄ {lang === 'zh' ? '侦探之家' : 'HOME'}</button>
         )}
         <span className="td-lobby-brand">TD<span>//</span>07</span>
         <span className="td-lobby-user">
-          {profile?.avatar || '🕵️'} <strong>{profile?.detective_name || (lang === 'zh' ? '未命名侦探' : 'UNNAMED')}</strong>
+          <Icon name={profile?.avatar || '🕵️'} /> <strong>{profile?.detective_name || (lang === 'zh' ? '未命名侦探' : 'UNNAMED')}</strong>
           <em>LV.{profile?.level || 1}</em>
         </span>
       </div>
       <div className="td-lobby-status-right" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <span className="td-lobby-light-state" title={lang === 'zh' ? `大厅亮度会随本地时间自动变化 · 当前 ${Math.round(lighting.brightness * 100)}%` : `Lobby lighting follows local time · ${Math.round(lighting.brightness * 100)}%`}>
-          {lighting.phase === 'day' ? '☀' : lighting.phase === 'dawn' ? '🌤' : lighting.phase === 'evening' ? '🌆' : '🌙'}
+          <IconText text={lighting.phase === 'day' ? '☀' : lighting.phase === 'dawn' ? '🌤' : lighting.phase === 'evening' ? '🌆' : '🌙'} />
           <b>{lang === 'zh' ? ({ dawn: '清晨', day: '日间', evening: '傍晚', night: '夜间' }[lighting.phase]) : lighting.phase.toUpperCase()}</b>
         </span>
-        <span className="td-lobby-wallet-pill td-lobby-wallet-energy">⚡ <b>{profile?.energy || 0}</b></span>
-        <span className="td-lobby-wallet-pill td-lobby-wallet-diamonds">💎 <b>{(profile?.diamonds || 0).toLocaleString('en-US')}</b></span>
-        <span className="td-lobby-wallet-pill td-lobby-wallet-gold">🪙 <b>{(profile?.gold || 0).toLocaleString('en-US')}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-energy"><IconText text={"⚡ "} /><b>{profile?.energy || 0}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-diamonds"><IconText text={"💎 "} /><b>{(profile?.diamonds || 0).toLocaleString('en-US')}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-gold"><IconText text={"🪙 "} /><b>{(profile?.gold || 0).toLocaleString('en-US')}</b></span>
         <span className={`td-lobby-link-state ${readOnly ? 'is-readonly' : ''}`}>● {readOnly ? (lang === 'zh' ? '只读' : 'READ ONLY') : (lang === 'zh' ? '云端在线' : 'CLOUD ONLINE')}</span>
-        <span style={{ color: '#00e5ff', fontWeight: 700 }}>
+        <span style={{ color: '#709f9a', fontWeight: 700 }}>
           {time.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
         <button type="button" className="td-lobby-settings-button" onClick={onOpenSettings}
           aria-label={lang === 'zh' ? '打开设置' : 'Open settings'}
           title={lang === 'zh' ? '设置' : 'Settings'} style={{
           padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
-          border: '1px solid rgba(0,229,255,0.4)', background: 'rgba(0,229,255,0.1)', color: '#00e5ff',
-        }}><span aria-hidden="true">⚙️</span><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span></button>
+          border: '1px solid rgba(112, 159, 154,0.4)', background: 'rgba(112, 159, 154,0.1)', color: '#709f9a',
+        }}><span aria-hidden="true"><IconText text={"⚙️"} /></span><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span></button>
       </div>
     </div>
   );
@@ -781,19 +779,19 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
     try { await onSave(); } catch { /* parent displays the sync failure */ } finally { setSaving(false); }
   };
 
-  const c = synergyOver ? '#ff3860' : '#00e5ff';
+  const c = synergyOver ? '#c77c78' : '#709f9a';
   const barPct = Math.min(synergy, 100);
 
   const btns = [
-    { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#00e5ff', disabled: saving || disabled },
-    { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#a78bfa' },
+    { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#709f9a', disabled: saving || disabled },
+    { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#9b9aae' },
     { label: zh ? '大厅教程' : 'HALL GUIDE', icon: '❓', onClick: () => { onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)' },
   ];
 
   return (
     <div className="td-lobby-controls" style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
-      borderTop: `1px solid ${synergyOver ? '#ff386040' : 'rgba(0,229,255,0.15)'}`,
+      borderTop: `1px solid ${synergyOver ? '#c77c7840' : 'rgba(112, 159, 154,0.15)'}`,
       background: synergyOver ? 'rgba(30,0,8,0.85)' : 'rgba(0,0,0,0.75)',
       flexShrink: 0, transition: 'background 0.4s, border-color 0.4s',
     }}>
@@ -802,13 +800,13 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
           <span>☰</span><span>{zh ? '编队工具' : 'SQUAD TOOLS'}</span><small>{toolsOpen ? (zh ? '收起' : 'CLOSE') : (zh ? '预设 / 保存' : 'PRESETS / SAVE')}</small>
         </button>
         {toolsOpen && <div className="td-lobby-tools-popover">
-          <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: button.color, borderColor: `${button.color}45`, background: `${button.color}0d` }}><span>{button.icon}</span>{button.label}</button>)}</div>
+          <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: noirColor(button.color), borderColor: `${noirColor(button.color)}45`, background: `${noirColor(button.color)}0d` }}><span><Icon name={button.icon} /></span>{button.label}</button>)}</div>
           <PresetChips onApply={preset => { onApplyPreset(preset); setToolsOpen(false); }} />
         </div>}
       </div>
 
       <div className="td-lobby-synergy-compact" style={/** @type {React.CSSProperties & {'--synergy-color': string}} */ ({ '--synergy-color': c })}>
-        <span>{synergyOver ? (zh ? '⚠ 专长过载' : '⚠ SPECIALTY OVERLOAD') : (zh ? '队伍协同' : 'TEAM SYNERGY')}</span>
+        <span><IconText text={synergyOver ? (zh ? '⚠ 专长过载' : '⚠ SPECIALTY OVERLOAD') : (zh ? '队伍协同' : 'TEAM SYNERGY')} /></span>
         <strong style={{ transform: flash ? 'scale(1.08)' : 'scale(1)' }}>{synergy}<small>%</small></strong>
         <i><b style={{ width: `${barPct}%` }} /></i>
       </div>
@@ -825,33 +823,33 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
         style={{
           flex: 1, maxWidth: 330, marginLeft: 'auto',
           padding: '11px 24px', borderRadius: 10,
-          border: `2px solid ${synergyOver ? '#ff386070' : deploying ? 'rgba(0,229,255,0.3)' : '#00e5ffaa'}`,
+          border: `2px solid ${synergyOver ? '#c77c7870' : deploying ? 'rgba(112, 159, 154,0.3)' : '#709f9aaa'}`,
           background: synergyOver
-            ? 'rgba(255,56,96,0.12)'
+            ? 'rgba(199, 124, 120,0.12)'
             : deploying
-            ? 'rgba(0,229,255,0.15)'
-            : 'linear-gradient(135deg, rgba(0,80,160,0.7) 0%, rgba(0,200,255,0.45) 100%)',
-          color: synergyOver ? '#ff3860' : '#fff',
+            ? 'rgba(112, 159, 154,0.15)'
+            : 'linear-gradient(135deg, rgba(0,80,160,0.7) 0%, rgba(112, 159, 154,0.45) 100%)',
+          color: synergyOver ? '#c77c78' : '#fff',
           cursor: disabled ? 'not-allowed' : deploying ? 'wait' : 'pointer',
           fontFamily: 'monospace', fontWeight: 900, fontSize: '0.78rem', letterSpacing: '0.2em',
-          textShadow: synergyOver ? '0 0 12px rgba(255,56,96,0.9)' : '0 0 12px rgba(0,229,255,0.9)',
+          textShadow: 'none',
           boxShadow: synergyOver
-            ? '0 0 24px rgba(255,56,96,0.3)'
-            : '0 0 24px rgba(0,200,255,0.35), 0 0 50px rgba(0,200,255,0.1)',
+            ? '0 0 24px rgba(199, 124, 120,0.3)'
+            : '0 0 24px rgba(112, 159, 154,0.35), 0 0 50px rgba(112, 159, 154,0.1)',
           transition: 'all 0.3s', position: 'relative', overflow: 'hidden',
           opacity: disabled ? .42 : synergyOver ? 0.85 : 1,
         }}>
         {!synergyOver && (
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(to right, transparent, rgba(0,229,255,0.12), transparent)',
-            animation: 'btn-shimmer 2.2s linear infinite',
+            background: 'linear-gradient(to right, transparent, rgba(112, 159, 154,0.12), transparent)',
+            animation: 'none',
           }}/>
         )}
         <span style={{ position: 'relative', zIndex: 1 }}>
-          {synergyOver
+          <IconText text={synergyOver
             ? (zh ? '⚠ 专长过载 · 仍可部署' : '⚠ OVERLOAD · DEPLOY ANYWAY')
-            : deploying ? (zh ? '⟳ 正在部署…' : '⟳ DEPLOYING...') : (zh ? '▶ 部署探员' : '▶ DEPLOY AGENTS')}
+            : deploying ? (zh ? '⟳ 正在部署…' : '⟳ DEPLOYING...') : (zh ? '▶ 部署探员' : '▶ DEPLOY AGENTS')} />
         </span>
       </button>
       <style>{`
@@ -901,12 +899,12 @@ function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose })
   }}>
     <section onClick={event => event.stopPropagation()} style={{
       width: 'min(920px, 96vw)', maxHeight: '88dvh', overflow: 'auto', padding: 18, borderRadius: 18,
-      border: '1px solid rgba(232,201,138,.48)', background: 'linear-gradient(145deg,rgba(8,18,34,.98),rgba(2,7,18,.98))',
-      boxShadow: '0 28px 80px rgba(0,0,0,.65),0 0 38px rgba(232,201,138,.12)',
+      border: '1px solid rgba(197, 166, 111,.48)', background: 'linear-gradient(145deg,rgba(8,18,34,.98),rgba(2,7,18,.98))',
+      boxShadow: '0 28px 80px rgba(0,0,0,.65),0 0 38px rgba(197, 166, 111,.12)',
     }}>
       <header style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div><small style={{ color: '#f0d28b', letterSpacing: '.14em' }}>♛ CORE CONTRACT VAULT</small><h2 style={{ margin: '5px 0 0', color: '#f8e5b8', fontSize: '1rem' }}>{slotNames[slot]}</h2></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ color: '#7de8ff', font: '800 .62rem monospace' }}>💎 {diamonds.toLocaleString('en-US')}</span><button type="button" disabled={busy} onClick={onClose} aria-label={zh ? '关闭核心探员契约库' : 'Close core contract vault'} title={zh ? '关闭' : 'Close'} style={{ width: 44, height: 44, borderRadius: 10, border: '1px solid rgba(0,229,255,.35)', background: 'rgba(0,229,255,.08)', color: '#7df1ff', cursor: busy ? 'wait' : 'pointer', opacity: busy ? .45 : 1 }}>×</button></div>
+        <div><small style={{ color: '#e1d0ac', letterSpacing: '.14em' }}>♛ CORE CONTRACT VAULT</small><h2 style={{ margin: '5px 0 0', color: '#e1d0ac', fontSize: '1rem' }}>{slotNames[slot]}</h2></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ color: '#a5c8c0', font: '800 .62rem monospace' }}><IconText text={"💎 "} />{diamonds.toLocaleString('en-US')}</span><button type="button" disabled={busy} onClick={onClose} aria-label={zh ? '关闭核心探员契约库' : 'Close core contract vault'} title={zh ? '关闭' : 'Close'} style={{ width: 44, height: 44, borderRadius: 10, border: '1px solid rgba(112, 159, 154,.35)', background: 'rgba(112, 159, 154,.08)', color: '#a5c8c0', cursor: busy ? 'wait' : 'pointer', opacity: busy ? .45 : 1 }}>×</button></div>
       </header>
       <p style={{ margin: '0 0 15px', color: 'rgba(235,247,255,.5)', fontSize: '.58rem', lineHeight: 1.7 }}>{zh
         ? '核心探员价格高于普通支援。签约后永久拥有，可替换当前席位；原核心不会消失，经验、技能树与专长进度继续由该职业席位继承。'
@@ -917,28 +915,28 @@ function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose })
           const isOwned = owned.has(agent.id);
           const selected = currentId === agent.id;
           const isPending = pendingId === agent.id;
-          return <article key={agent.id} style={{ position: 'relative', padding: 13, borderRadius: 13, border: `1px solid ${selected || isPending ? agent.color : agent.color + '45'}`, background: selected ? `${agent.color}18` : isPending ? `${agent.color}12` : `${agent.color}09`, boxShadow: selected || isPending ? `0 0 22px ${agent.color}22` : 'none', transition: 'border-color .18s, background .18s, transform .18s', transform: isPending ? 'translateY(-2px)' : 'none' }}>
-            <span style={{ position: 'absolute', top: 9, right: 9, padding: '2px 6px', borderRadius: 999, border: `1px solid ${selected ? agent.color + '75' : 'rgba(255,255,255,.12)'}`, color: selected ? agent.color : isOwned ? '#6fffc0' : '#f0d28b', background: 'rgba(0,5,13,.72)', font: '800 .4rem monospace' }}>{selected ? (zh ? '当前席位' : 'ACTIVE') : isOwned ? (zh ? '已拥有' : 'OWNED') : (zh ? '待签约' : 'CONTRACT')}</span>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ width: 48, height: 48, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 24, border: `1px solid ${agent.color}80`, background: `${agent.color}18` }}>{agent.icon}</span><div><strong style={{ display: 'block', color: agent.color }}>{agent.id}</strong><small style={{ color: 'rgba(255,255,255,.45)' }}>{copy.role} · {agent.tier}</small></div></div>
+          return <article key={agent.id} style={{ position: 'relative', padding: 13, borderRadius: 13, border: `1px solid ${selected || isPending ? noirColor(agent.color) : noirColor(agent.color) + '45'}`, background: selected ? `${noirColor(agent.color)}18` : isPending ? `${noirColor(agent.color)}12` : `${noirColor(agent.color)}09`, boxShadow: selected || isPending ? `0 0 22px ${noirColor(agent.color)}22` : 'none', transition: 'border-color .18s, background .18s, transform .18s', transform: isPending ? 'translateY(-2px)' : 'none' }}>
+            <span style={{ position: 'absolute', top: 9, right: 9, padding: '2px 6px', borderRadius: 999, border: `1px solid ${selected ? noirColor(agent.color) + '75' : 'rgba(255,255,255,.12)'}`, color: selected ? noirColor(agent.color) : isOwned ? '#8aaa91' : '#e1d0ac', background: 'rgba(0,5,13,.72)', font: '800 .4rem monospace' }}>{selected ? (zh ? '当前席位' : 'ACTIVE') : isOwned ? (zh ? '已拥有' : 'OWNED') : (zh ? '待签约' : 'CONTRACT')}</span>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ width: 48, height: 48, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 24, border: `1px solid ${noirColor(agent.color)}80`, background: `${noirColor(agent.color)}18` }}><Icon name={agent.icon} /></span><div><strong style={{ display: 'block', color: noirColor(agent.color) }}>{agent.id}</strong><small style={{ color: 'rgba(255,255,255,.45)' }}>{copy.role} · {agent.tier}</small></div></div>
             <div style={{ marginTop: 10, color: 'rgba(240,248,255,.62)', fontSize: '.55rem', lineHeight: 1.6 }}>{copy.ability}</div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 9 }}>{bonusTags(agent).map(tag => <span key={tag} style={{ padding: '3px 6px', borderRadius: 5, border: `1px solid ${agent.color}35`, background: `${agent.color}0b`, color: `${agent.color}dd`, font: '700 .42rem monospace' }}>{tag}</span>)}</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}><span style={{ color: '#f0d28b', fontSize: '.58rem', fontWeight: 900 }}>POWER {agent.power}</span>{!isOwned && <span style={{ color: '#7de8ff', font: '800 .5rem monospace' }}>💎 {agent.cost}</span>}<button type="button" disabled={busy || selected} onClick={() => setPendingId(agent.id)} style={{ marginLeft: 'auto', minHeight: 38, padding: '7px 11px', borderRadius: 8, border: `1px solid ${agent.color}90`, background: `${agent.color}18`, color: agent.color, fontFamily: 'monospace', fontSize: '.52rem', fontWeight: 900, cursor: busy ? 'wait' : 'pointer', opacity: busy || selected ? .48 : 1 }}>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 9 }}>{bonusTags(agent).map(tag => <span key={tag} style={{ padding: '3px 6px', borderRadius: 5, border: `1px solid ${noirColor(agent.color)}35`, background: `${noirColor(agent.color)}0b`, color: `${noirColor(agent.color)}dd`, font: '700 .42rem monospace' }}>{tag}</span>)}</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}><span style={{ color: '#e1d0ac', fontSize: '.58rem', fontWeight: 900 }}>POWER {agent.power}</span>{!isOwned && <span style={{ color: '#a5c8c0', font: '800 .5rem monospace' }}><IconText text={"💎 "} />{agent.cost}</span>}<button type="button" disabled={busy || selected} onClick={() => setPendingId(agent.id)} style={{ marginLeft: 'auto', minHeight: 38, padding: '7px 11px', borderRadius: 8, border: `1px solid ${noirColor(agent.color)}90`, background: `${noirColor(agent.color)}18`, color: noirColor(agent.color), fontFamily: 'monospace', fontSize: '.52rem', fontWeight: 900, cursor: busy ? 'wait' : 'pointer', opacity: busy || selected ? .48 : 1 }}>
               {selected ? (zh ? '当前出战' : 'ACTIVE') : isPending ? (zh ? '已选中' : 'SELECTED') : (zh ? '预览替换' : 'PREVIEW')}
             </button></div>
           </article>;
         })}
       </div>
-      {pendingAgent && <div aria-live="polite" style={{ marginTop: 14, padding: 14, borderRadius: 13, border: `1px solid ${pendingAgent.color}55`, background: `linear-gradient(135deg,${pendingAgent.color}10,rgba(255,255,255,.02))` }}>
+      {pendingAgent && <div aria-live="polite" style={{ marginTop: 14, padding: 14, borderRadius: 13, border: `1px solid ${noirColor(pendingAgent.color)}55`, background: `linear-gradient(135deg,${noirColor(pendingAgent.color)}10,rgba(255,255,255,.02))` }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 12 }}>
-          <div><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '当前核心' : 'CURRENT CORE'}</small><strong style={{ display: 'block', color: currentAgent.color, marginTop: 3 }}>{currentAgent.icon} {currentAgent.id}</strong><span style={{ color: 'rgba(255,255,255,.35)', font: '.48rem monospace' }}>POWER {currentAgent.power}</span></div>
-          <span style={{ color: '#f0d28b', fontSize: '1.2rem', textShadow: '0 0 14px rgba(240,210,139,.55)' }}>→</span>
-          <div style={{ textAlign: 'right' }}><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '替换目标' : 'REPLACEMENT'}</small><strong style={{ display: 'block', color: pendingAgent.color, marginTop: 3 }}>{pendingAgent.icon} {pendingAgent.id}</strong><span style={{ color: '#78ffc0', font: '.48rem monospace' }}>POWER {pendingAgent.power} · {pendingAgent.power >= currentAgent.power ? '+' : ''}{pendingAgent.power - currentAgent.power}</span></div>
+          <div><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '当前核心' : 'CURRENT CORE'}</small><strong style={{ display: 'block', color: noirColor(currentAgent.color), marginTop: 3 }}><Icon name={currentAgent.icon} /> {currentAgent.id}</strong><span style={{ color: 'rgba(255,255,255,.35)', font: '.48rem monospace' }}>POWER {currentAgent.power}</span></div>
+          <span style={{ color: '#e1d0ac', fontSize: '1.2rem', textShadow: 'none' }}>→</span>
+          <div style={{ textAlign: 'right' }}><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '替换目标' : 'REPLACEMENT'}</small><strong style={{ display: 'block', color: noirColor(pendingAgent.color), marginTop: 3 }}><Icon name={pendingAgent.icon} /> {pendingAgent.id}</strong><span style={{ color: '#8aaa91', font: '.48rem monospace' }}>POWER {pendingAgent.power} · {pendingAgent.power >= currentAgent.power ? '+' : ''}{pendingAgent.power - currentAgent.power}</span></div>
         </div>
         <p style={{ margin: '11px 0', color: 'rgba(240,248,255,.56)', font: '.52rem/1.65 monospace' }}>{zh
           ? '确认后才会写入云端。原核心探员不会消失；该席位的等级、技能树、专长与行动优先级全部保留。'
           : 'The replacement is saved to the cloud only after confirmation. The previous core remains owned, and this slot keeps its level, skills, specialties and priorities.'}</p>
-        {!affordable && <div style={{ marginBottom: 9, color: '#ff718f', font: '800 .52rem monospace' }}>⚠ {zh ? `钻石不足，还差 ${pendingAgent.cost - diamonds}` : `NOT ENOUGH DIAMONDS · ${pendingAgent.cost - diamonds} MORE REQUIRED`}</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button type="button" disabled={busy} onClick={() => setPendingId(null)} style={{ minHeight: 42, padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.04)', color: 'rgba(255,255,255,.58)', cursor: busy ? 'wait' : 'pointer' }}>{zh ? '取消' : 'CANCEL'}</button><button type="button" disabled={busy || !affordable} onClick={() => onConfirm(pendingAgent, !pendingOwned)} style={{ minHeight: 42, minWidth: 150, padding: '8px 14px', borderRadius: 8, border: `1px solid ${pendingAgent.color}90`, background: `${pendingAgent.color}18`, color: pendingAgent.color, font: '900 .56rem monospace', cursor: busy ? 'wait' : !affordable ? 'not-allowed' : 'pointer', opacity: busy || !affordable ? .48 : 1 }}>{busy ? (zh ? '正在同步…' : 'SYNCING…') : pendingOwned ? (zh ? '确认替换并保存' : 'CONFIRM & SAVE') : (zh ? `💎 ${pendingAgent.cost} · 签约并替换` : `💎 ${pendingAgent.cost} · RECRUIT & REPLACE`)}</button></div>
+        {!affordable && <div style={{ marginBottom: 9, color: '#dda29a', font: '800 .52rem monospace' }}><IconText text={"⚠ "} />{zh ? `钻石不足，还差 ${pendingAgent.cost - diamonds}` : `NOT ENOUGH DIAMONDS · ${pendingAgent.cost - diamonds} MORE REQUIRED`}</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button type="button" disabled={busy} onClick={() => setPendingId(null)} style={{ minHeight: 42, padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.04)', color: 'rgba(255,255,255,.58)', cursor: busy ? 'wait' : 'pointer' }}>{zh ? '取消' : 'CANCEL'}</button><button type="button" disabled={busy || !affordable} onClick={() => onConfirm(pendingAgent, !pendingOwned)} style={{ minHeight: 42, minWidth: 150, padding: '8px 14px', borderRadius: 8, border: `1px solid ${noirColor(pendingAgent.color)}90`, background: `${noirColor(pendingAgent.color)}18`, color: noirColor(pendingAgent.color), font: '900 .56rem monospace', cursor: busy ? 'wait' : !affordable ? 'not-allowed' : 'pointer', opacity: busy || !affordable ? .48 : 1 }}><IconText text={busy ? (zh ? '正在同步…' : 'SYNCING…') : pendingOwned ? (zh ? '确认替换并保存' : 'CONFIRM & SAVE') : (zh ? `💎 ${pendingAgent.cost} · 签约并替换` : `💎 ${pendingAgent.cost} · RECRUIT & REPLACE`)} /></button></div>
       </div>}
     </section>
   </div>;
@@ -978,7 +976,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
     };
   }, []);
 
-  const accentColor = '#00e5ff';
+  const accentColor = '#709f9a';
 
   const showNotice = useCallback((message, duration = 1800, type = 'success') => {
     window.clearTimeout(noticeTimerRef.current);
@@ -1075,11 +1073,9 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   return (
     <div className={`td-lobby td-lobby-light-${lighting.phase}`} style={/** @type {React.CSSProperties & Record<string, string | number>} */ ({
       height: '100dvh', display: 'flex', flexDirection: 'column',
-      background: 'radial-gradient(ellipse at 30% 15%, #050e22 0%, #020810 55%, #010408 100%)',
+      background: 'radial-gradient(ellipse at 30% 15%, #08121c 0%, #08121c 55%, #08121c 100%)',
       fontFamily: "'Courier New', monospace", color: 'white',
       overflow: 'hidden', position: 'relative',
-      '--td-lobby-brightness': lighting.brightness,
-      '--td-lobby-saturation': lighting.saturation,
       '--td-lobby-day-glow': lighting.dayGlow,
       '--td-lobby-night-veil': lighting.nightVeil,
     })}>
@@ -1095,10 +1091,10 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
 
       {/* Corner brackets */}
       {[
-        { top: 0, left: 0, borderTop: '2px solid #00e5ff40', borderLeft: '2px solid #00e5ff40' },
-        { top: 0, right: 0, borderTop: '2px solid #a78bfa40', borderRight: '2px solid #a78bfa40' },
-        { bottom: 54, left: 0, borderBottom: '2px solid #00e5ff40', borderLeft: '2px solid #00e5ff40' },
-        { bottom: 54, right: 0, borderBottom: '2px solid #a78bfa40', borderRight: '2px solid #a78bfa40' },
+        { top: 0, left: 0, borderTop: '2px solid #709f9a40', borderLeft: '2px solid #709f9a40' },
+        { top: 0, right: 0, borderTop: '2px solid #9b9aae40', borderRight: '2px solid #9b9aae40' },
+        { bottom: 54, left: 0, borderBottom: '2px solid #709f9a40', borderLeft: '2px solid #709f9a40' },
+        { bottom: 54, right: 0, borderBottom: '2px solid #9b9aae40', borderRight: '2px solid #9b9aae40' },
       ].map((s, i) => (
         <div key={i} style={{ position: 'absolute', width: 36, height: 36, pointerEvents: 'none', zIndex: 10, ...s }}/>
       ))}
@@ -1114,10 +1110,10 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
         }}>
           <div onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" style={{
             width: 'min(560px, 94vw)', padding: 24, borderRadius: 16,
-            border: '1px solid rgba(0,229,255,.45)', background: '#06101d',
-            boxShadow: '0 0 45px rgba(0,229,255,.18)', fontFamily: 'monospace',
+            border: '1px solid rgba(112, 159, 154,.45)', background: '#101e2a',
+            boxShadow: '0 0 45px rgba(112, 159, 154,.18)', fontFamily: 'monospace',
           }}>
-            <div style={{ color: '#7df1ff', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '探员大厅快速指南' : 'AGENT HALL QUICK GUIDE'}</div>
+            <div style={{ color: '#a5c8c0', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '探员大厅快速指南' : 'AGENT HALL QUICK GUIDE'}</div>
             <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
               {(lang === 'zh' ? [
                 '查看案件简报，再选择主探员并分配专长点数。',
@@ -1133,7 +1129,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
             </ol>
             <button onClick={() => setShowTutorial(false)} style={{
               width: '100%', padding: 10, borderRadius: 8, cursor: 'pointer',
-              border: '1px solid #00e5ff80', background: 'rgba(0,229,255,.12)', color: '#7df1ff',
+              border: '1px solid #709f9a80', background: 'rgba(112, 159, 154,.12)', color: '#a5c8c0',
               fontFamily: 'monospace', fontWeight: 900,
             }}>{lang === 'zh' ? '明白了' : 'CONTINUE'}</button>
           </div>
@@ -1142,7 +1138,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
 
       {saveNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${saveNotice.type}`}>
         <span>{saveNotice.type === 'error' ? '!' : '✓'}</span>
-        <strong>{saveNotice.message.replace(/^[✓⚠]\s*/, '')}</strong>
+        <strong><IconText text={saveNotice.message.replace(/^[✓⚠]\s*/, '')} /></strong>
       </div>}
 
       {/* 协同技能解锁特效 */}
@@ -1154,22 +1150,22 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
       {/* Title */}
       <div className="td-lobby-title" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '7px 20px', borderBottom: '1px solid rgba(0,229,255,0.1)',
+        padding: '7px 20px', borderBottom: '1px solid rgba(112, 159, 154,0.1)',
         background: 'rgba(0,0,0,0.35)', flexShrink: 0, zIndex: 1,
       }}>
       <div className="td-lobby-title-copy">
           <span className="td-lobby-eyebrow">{targetCase ? (lang === 'zh' ? '◆ 目标案件战术简报' : '◆ TARGET-CASE BRIEFING') : (lang === 'zh' ? '◇ 全息指挥中心' : '◇ HOLOGRAPHIC COMMAND')}</span>
-          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>{caseTitle}</span>
-          <small>{targetCase
+          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#709f9a', textShadow: 'none', fontFamily: 'monospace', letterSpacing: '0.06em' }}>{caseTitle}</span>
+          <small><IconText text={targetCase
             ? `${targetCase.difficulty} · ⚡ ${CASE_ENERGY_COST[targetCase.difficulty] || 10} · ${threats.join(' / ')} · ${matchDetails.advice}`
             : activeSupport
               ? (lang === 'zh' ? `支援 ${activeSupport.icon} ${activeSupport.id} 已接入 · 部署后进入案件簿` : `SUPPORT ${activeSupport.icon} ${activeSupport.id} ONLINE · DEPLOY TO CASE ARCHIVE`)
-              : (lang === 'zh' ? '配置通用编组，部署后进入案件簿' : 'CONFIGURE A GENERAL SQUAD, THEN OPEN THE CASE ARCHIVE')}</small>
+              : (lang === 'zh' ? '配置通用编组，部署后进入案件簿' : 'CONFIGURE A GENERAL SQUAD, THEN OPEN THE CASE ARCHIVE')} /></small>
         </div>
         <div className="td-lobby-readiness">
-          <div title={matchDetails.advice}><small>{targetCase ? 'CASE MATCH' : 'READINESS'}</small><strong style={{ color: matchDetails.color }}>{matchForecast}<em>%</em></strong></div>
+          <div title={matchDetails.advice}><small>{targetCase ? 'CASE MATCH' : 'READINESS'}</small><strong style={{ color: noirColor(matchDetails.color) }}>{matchForecast}<em>%</em></strong></div>
           <i />
-          <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: agentDefs[selectedIdx].color }}>{agentDefs[selectedIdx].icon} {agentDefs[selectedIdx].id}</strong></div>
+          <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: noirColor(agentDefs[selectedIdx].color) }}><Icon name={agentDefs[selectedIdx].icon} /> {agentDefs[selectedIdx].id}</strong></div>
         </div>
       </div>
 
@@ -1246,7 +1242,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
       {hover && (
         <AgentLoreTooltip
           lore={getDisplayLore(agentDefs[hover.idx], hover.idx, lang)}
-          color={agentDefs[hover.idx].color}
+          color={noirColor(agentDefs[hover.idx].color)}
           icon={agentDefs[hover.idx].icon}
           roleZh={lang === 'zh' ? agentDefs[hover.idx].roleZh : agentDefs[hover.idx].role}
           x={hover.x} y={hover.y}

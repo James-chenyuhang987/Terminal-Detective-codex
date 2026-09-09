@@ -21,6 +21,7 @@ const owner = source('components/game/InvestigationTerminal.jsx');
 const page = source('pages/TerminalDetective.jsx');
 const home = source('components/game/DetectiveHome.jsx');
 const overlay = source('components/game/theater/NarrativeOverlay.jsx');
+const presentationMotion = source('components/ui/usePresentationMotion.js');
 const css = readFileSync(new URL('../src/components/game/theater/narrative.css', import.meta.url), 'utf8')
   + readFileSync(new URL('../src/components/game/theater/narrativeText.css', import.meta.url), 'utf8');
 function nodes(root, predicate) {
@@ -381,14 +382,21 @@ test('actual typewriter effect advances, pauses hidden/unfocused/Home/settings, 
   assert.equal(reduced.callbacks.size, 0);
 });
 
-test('actual overlay visibility/motion listeners clean up and refocus does not reset progress', () => {
+test('actual shared overlay motion listeners clean up and refocus does not reset progress', () => {
   const h = timerHarness();
-  const cleanup = effect(overlay, "query.addEventListener('change'", h.bindings);
+  assert.match(overlay.text, /const \{ foreground, reducedMotion \} = usePresentationMotion\(\)/);
+  const cleanup = effect(presentationMotion, "document.addEventListener('visibilitychange'", {
+    ...h.bindings, setSystemReduced: h.bindings.setReducedMotion,
+  });
+  const stopTyping = effect(overlay, 'window.setInterval', h.bindings);
+  h.tick();
+  const revealed = h.state.reveal.count;
   h.window.dispatch('blur'); assert.equal(h.state.foreground, false);
   h.window.dispatch('focus'); assert.equal(h.state.foreground, true);
+  assert.equal(h.state.reveal.count, revealed);
   h.document.hidden = true; h.document.dispatch('visibilitychange'); assert.equal(h.state.foreground, false);
   h.query.matches = true; h.query.dispatch('change'); assert.equal(h.state.reducedMotion, true);
-  cleanup();
+  stopTyping(); cleanup();
   for (const target of [h.window, h.document, h.query]) assert.equal(target.listeners.size, 0);
 });
 

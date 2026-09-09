@@ -1,3 +1,5 @@
+import { noirColor } from '@/components/ui/palette';
+import { IconText } from '@/components/ui/Icon';
 import React from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import {
@@ -9,7 +11,7 @@ import {
 function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChange }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
-  const color = meta.color;
+  const color = noirColor(meta.color);
   const cap = ATTR_MAX[meta.key];
   const effective = Math.min(base + bonus, cap);
   const canInc = isSpecialty && !locked && bonus < maxBonus;
@@ -17,8 +19,8 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
   const disabled = !isSpecialty || (locked && bonus === 0);
 
   const btn = (enabled, onClick, symbol) => (
-    <button onClick={enabled ? onClick : undefined} style={{
-      width: 22, height: 22, borderRadius: 5,
+    <button className="td-icon-button" disabled={!enabled} aria-label={`${symbol === '+' ? (zh ? '增加' : 'Increase') : (zh ? '减少' : 'Decrease')} ${zh ? meta.labelZh : meta.label}`} onClick={enabled ? onClick : undefined} style={{
+      width: 30, height: 30, borderRadius: 5,
       border: `1px solid ${enabled ? color + '60' : 'rgba(255,255,255,0.08)'}`,
       background: enabled ? `${color}18` : 'rgba(255,255,255,0.02)',
       color: enabled ? color : 'rgba(255,255,255,0.15)',
@@ -35,7 +37,7 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
         <div>
           <div style={{ fontSize: '0.48rem', fontWeight: 700, color, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
             {zh ? meta.labelZh : meta.label}
-            {!isSpecialty && <span style={{ marginLeft: 5, fontSize: '0.4rem', color: 'rgba(255,255,255,0.25)' }}>🔒 {zh ? '职业固定' : 'ROLE LOCKED'}</span>}
+            {!isSpecialty && <span style={{ marginLeft: 5, fontSize: '0.4rem', color: 'rgba(255,255,255,0.25)' }}><IconText text={"🔒 "} />{zh ? '职业固定' : 'ROLE LOCKED'}</span>}
             {isSpecialty && <span style={{ marginLeft: 5, fontSize: '0.4rem', color: color + '90' }}>◆ {zh ? '专长方向' : 'SPECIALTY'}</span>}
           </div>
           {zh && <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }}>{meta.label}</div>}
@@ -43,11 +45,11 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           {isSpecialty && btn(canDec, () => onChange(bonus - 1), '−')}
           <div style={{ minWidth: 52, textAlign: 'center', fontFamily: 'monospace' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 900, color, textShadow: `0 0 6px ${color}70` }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 900, color, textShadow: 'none' }}>
               {meta.isPercent ? `${effective}%` : effective}
             </span>
             {isSpecialty && bonus > 0 && (
-              <span style={{ fontSize: '0.44rem', color: '#00ff88', marginLeft: 3 }}>+{bonus}</span>
+              <span style={{ fontSize: '0.44rem', color: '#8aaa91', marginLeft: 3 }}>+{bonus}</span>
             )}
           </div>
           {isSpecialty && btn(canInc, () => onChange(bonus + 1), '+')}
@@ -65,8 +67,8 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
             position: 'absolute', top: 0, height: '100%',
             left: `${(base / cap) * 100}%`,
             width: `${(bonus / cap) * 100}%`,
-            background: 'linear-gradient(to right, #00ff8880, #00ff88)',
-            boxShadow: '0 0 8px #00ff8880',
+            background: 'linear-gradient(to right, #8aaa9180, #8aaa91)',
+            boxShadow: '0 0 8px #8aaa9180',
           }} />
         )}
       </div>
@@ -74,7 +76,8 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
   );
 }
 
-export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agentColor, attributeBonus = {} }) {
+export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agentColor: legacyColor, attributeBonus = {} }) {
+  const agentColor = noirColor(legacyColor);
   const { lang } = useLang();
   const zh = lang === 'zh';
   const def = AGENT_SPECIALTIES[agentIdx];
@@ -89,13 +92,13 @@ export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agent
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '10px 14px', marginBottom: 12, borderRadius: 10,
-        border: `1px solid ${locked ? '#ff386050' : agentColor + '40'}`,
-        background: locked ? 'rgba(255,56,96,0.06)' : `${agentColor}08`,
+        border: `1px solid ${locked ? '#c77c7850' : agentColor + '40'}`,
+        background: locked ? 'rgba(199, 124, 120,0.06)' : `${agentColor}08`,
         transition: 'all 0.3s',
       }}>
         <div style={{ fontFamily: 'monospace' }}>
           <div style={{ fontSize: '0.46rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em' }}>{zh ? '专长点余额' : 'SPEC POINTS'}</div>
-          <div style={{ fontSize: '0.4rem', color: locked ? '#ff3860' : 'rgba(255,255,255,0.25)', marginTop: 2 }}>
+          <div style={{ fontSize: '0.4rem', color: locked ? '#c77c78' : 'rgba(255,255,255,0.25)', marginTop: 2 }}>
             {locked
               ? (zh ? '余额耗尽 — 减点后方可再分配' : 'NO POINTS LEFT — REMOVE A POINT TO REALLOCATE')
               : (zh ? '仅可强化本职业的专长方向' : 'POINTS APPLY TO THIS ROLE’S SPECIALTIES ONLY')}
@@ -103,8 +106,8 @@ export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agent
         </div>
         <div style={{
           fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace',
-          color: locked ? '#ff3860' : '#00ff88',
-          textShadow: `0 0 14px ${locked ? '#ff3860' : '#00ff88'}80`,
+          color: locked ? '#c77c78' : '#8aaa91',
+          textShadow: 'none',
         }}>
           {remaining}<span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)' }}>/{SPECIALTY_BUDGET}</span>
         </div>
@@ -113,10 +116,9 @@ export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agent
       {/* budget bar */}
       <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', marginBottom: 14 }}>
         <div style={{
-          height: '100%', borderRadius: 2, width: `${(used / SPECIALTY_BUDGET) * 100}%`,
-          background: locked ? 'linear-gradient(to right, #ff6600, #ff3860)' : 'linear-gradient(to right, #00ff8880, #00ff88)',
-          boxShadow: `0 0 6px ${locked ? '#ff3860' : '#00ff88'}`,
-          transition: 'width 0.2s ease, background 0.3s',
+          height: '100%', borderRadius: 2, width: '100%', transform: `scaleX(${used / SPECIALTY_BUDGET})`, transformOrigin: 'left',
+          background: locked ? 'linear-gradient(to right, #c19a63, #c77c78)' : 'linear-gradient(to right, #8aaa9180, #8aaa91)',
+          transition: 'transform 0.2s ease, background 0.3s',
         }} />
       </div>
 

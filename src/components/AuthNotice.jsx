@@ -1,3 +1,4 @@
+import { IconText } from '@/components/ui/Icon';
 import { useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useLang } from '@/lib/lang.jsx';
@@ -62,10 +63,10 @@ export default function AuthNotice() {
   const success = authNotice.kind === 'success';
   return (
     <div className={`auth-global-notice ${success ? 'success' : 'error'}`} role={success ? 'status' : 'alert'}>
-      <span>{success ? '◆' : '⚠'} {text[authNotice.code] || text.unknown}</span>
+      <span><IconText text={success ? '◆' : '⚠'} /> {text[authNotice.code] || text.unknown}</span>
       <button aria-label={text.close} onClick={clearAuthNotice} type="button">×</button>
       <style>{`
-        .auth-global-notice{position:fixed;z-index:1000;top:max(12px,env(safe-area-inset-top));left:50%;width:min(560px,calc(100vw - max(24px,env(safe-area-inset-left)) - max(24px,env(safe-area-inset-right))));display:flex;align-items:center;justify-content:space-between;gap:12px;transform:translateX(-50%);padding:11px 12px 11px 15px;border-radius:10px;box-shadow:0 12px 40px #0008;backdrop-filter:blur(16px);font:600 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}.auth-global-notice.success{border:1px solid #27d98b80;background:#042e20ed;color:#80f4bd}.auth-global-notice.error{border:1px solid #ff4c7080;background:#3b0712ed;color:#ff9aac}.auth-global-notice button{min-width:32px;min-height:32px;border:0;border-radius:7px;background:#ffffff0d;color:inherit;font:20px/1 sans-serif;cursor:pointer}
+        .auth-global-notice{position:fixed;z-index:1000;top:max(12px,env(safe-area-inset-top));left:50%;width:min(560px,calc(100vw - max(24px,env(safe-area-inset-left)) - max(24px,env(safe-area-inset-right))));display:flex;align-items:center;justify-content:space-between;gap:12px;transform:translateX(-50%);padding:11px 12px 11px 15px;border-radius:10px;box-shadow:0 12px 40px #0008;backdrop-filter:blur(16px);font:600 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}.auth-global-notice.success{border:1px solid #8aaa9180;background:#042e20ed;color:#8aaa91}.auth-global-notice.error{border:1px solid #c77c7880;background:#3b0712ed;color:#dda29a}.auth-global-notice button{min-width:32px;min-height:32px;border:0;border-radius:7px;background:#ffffff0d;color:inherit;font:20px/1 sans-serif;cursor:pointer}
       `}</style>
     </div>
   );

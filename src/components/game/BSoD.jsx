@@ -1,12 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import Icon from '@/components/ui/Icon';
+import { useLang } from '@/lib/lang.jsx';
 
 export default function BSoD({ agentId, onDismiss }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), 50);
-    return () => clearTimeout(timer);
-  }, []);
+  const { lang } = useLang();
+  const zh = lang === 'zh';
 
   const errorCode = '0x' + Math.floor(Math.random() * 0xFFFFFFFF).toString(16).toUpperCase().padStart(8, '0');
 
@@ -14,41 +12,43 @@ export default function BSoD({ agentId, onDismiss }) {
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center transition-opacity duration-300"
       style={{
-        backgroundColor: '#0000aa',
-        opacity: visible ? 1 : 0,
+        backgroundColor: '#08121c',
+        color: '#e6dfcf',
+        borderTop: '4px solid #c77c78',
+        overflowY: 'auto',
         fontFamily: '"Courier New", monospace',
       }}
     >
       <div className="text-white max-w-2xl w-full p-8">
-        <div className="text-4xl font-bold mb-8">:(</div>
-        <div className="text-xl mb-6">
-          Your detective PC ran into a problem and needs to restart.
-        </div>
+        <div className="text-4xl font-bold mb-8" style={{ color: '#c77c78' }}><Icon name="warning" /></div>
+        <h1 className="text-xl mb-6">
+          {zh ? '侦探终端遇到逻辑异常，需要重启探员模块。' : 'Your detective PC ran into a problem and needs to restart.'}
+        </h1>
         <div className="text-sm mb-8 leading-relaxed opacity-80">
-          AGENT MODULE [{agentId}] ENCOUNTERED A FATAL LOGIC EXCEPTION.
+          {zh ? `探员模块 [${agentId}] 遇到严重逻辑异常。` : `AGENT MODULE [${agentId}] ENCOUNTERED A FATAL LOGIC EXCEPTION.`}
           <br />
-          Confusion threshold exceeded. Neural pathways corrupted.
+          {zh ? '混乱超过阈值，神经通路已受损。' : 'Confusion threshold exceeded. Neural pathways corrupted.'}
           <br />
-          We're collecting some error info, then we'll restart the module.
+          {zh ? '错误信息已收集，可以重启模块。' : "We're collecting some error info, then we'll restart the module."}
         </div>
-        <div className="text-sm mb-2">100% complete</div>
-        <div className="w-full bg-blue-800 h-2 mb-8">
-          <div className="bg-white h-2 w-full animate-pulse" />
+        <div className="text-sm mb-2">{zh ? '诊断完成 100%' : '100% complete'}</div>
+        <div className="w-full h-2 mb-8" style={{ background: '#172936' }}>
+          <div className="h-2 w-full" style={{ background: '#c5a66f' }} />
         </div>
-        <div className="text-xs opacity-60 mb-2">For more information about this issue:</div>
+        <div className="text-xs opacity-60 mb-2">{zh ? '异常详情：' : 'For more information about this issue:'}</div>
         <div className="text-xs opacity-60 mb-6">
           STOP CODE: AGENT_LOGIC_OVERFLOW
           <br />
           FAILED MODULE: REACT_ENGINE.SYS — {errorCode}
         </div>
         <div className="text-sm opacity-60">
-          What failed: {agentId}
+          {zh ? '故障模块：' : 'What failed:'} {agentId}
         </div>
         <button
           onClick={onDismiss}
-          className="mt-8 px-6 py-2 border border-white text-white text-sm hover:bg-white hover:text-blue-900 transition-colors"
+          className="td-ui-button td-button-primary mt-8 px-6 py-3 border text-sm"
         >
-          REBOOT AGENT MODULE
+          {zh ? '重启探员模块' : 'REBOOT AGENT MODULE'}
         </button>
       </div>
     </div>

@@ -56,6 +56,8 @@ import {
   stepTerminalTurn,
 } from '@/game/turnArchive';
 import { applyStaminaToTeam, canAgentInvestigate } from '@/game/agentStamina';
+import Icon, { IconText } from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
@@ -380,7 +382,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     }
     playedActionCinematicsRef.current.add(event.eventId);
     const playback = detectCinematicPlayback({
-      enabled: settings.cinematicsEnabled !== false,
+      enabled: settings.cinematicsEnabled !== false && !settings.reduceMotion,
       quality: settings.cinematicQuality,
     });
 
@@ -392,7 +394,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
         finishActionCinematic('timeout');
       }, 8000);
     });
-  }, [finishActionCinematic, settings.cinematicQuality, settings.cinematicsEnabled]);
+  }, [finishActionCinematic, settings.cinematicQuality, settings.cinematicsEnabled, settings.reduceMotion]);
 
   const handleEmergencyStabilize = useCallback(async () => {
     if (!authorityReady || isProcessing || finalizingRef.current || crisisPendingRef.current) return;
@@ -463,7 +465,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
         observation,
         observationTerminalText,
       } = generateObservationSections(gs, caseData, runLang);
-      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+      const reduceMotion = settings.reduceMotion || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
       const optionPacksPromise = executeRunCommand({ type: 'decision_options', lang: runLang }).then(response => response.result).then(
         value => ({ ok: true, value, error: null }),
         error => ({ ok: false, value: null, error }),
@@ -474,7 +476,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       await streamTerminalText({
         text: observationTerminalText,
         intervalMs: 18,
-        instant: false,
+        instant: reduceMotion,
         signal: ctrl.signal,
         onChunk: char => {
           setStreamingTerminal(current => current?.type === 'observe'
@@ -550,7 +552,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           transcript: observationTerminalText,
           language: runLang,
         });
-        if (settings.cinematicsEnabled !== false) {
+        if (settings.cinematicsEnabled !== false && !reduceMotion) {
           const playback = detectCinematicPlayback({
             enabled: true,
             quality: settings.cinematicQuality,
@@ -1025,8 +1027,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     selectedNpcId: selectedNPC?.npc_id || null,
   }), [caseData, decisionCards, gameState, isProcessing, lang, linkedPairs, newClueIds.length, reportMode, selectedNPC?.npc_id]);
 
-  const bgColor = phaseColor.bg;
-  const accentColor = phaseColor.accent;
+  const bgColor = noirColor(phaseColor.bg);
+  const accentColor = noirColor(phaseColor.accent);
 
   const dialoguePanel = selectedNPC && !reportMode && (
             <NPCDialogBox
@@ -1071,9 +1073,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const toolsPanel = (
 <div className={`td-investigation-tools ${mobileToolsOpen ? 'td-tools-open' : ''} w-72 border-l flex flex-col overflow-hidden`}
           style={{
-            borderColor: settings.panelLight ? skin.border : `${accentColor}20`,
-            backgroundColor: settings.panelLight ? skin.bg : 'rgba(0,0,0,0.4)',
-            color: settings.panelLight ? skin.text : undefined,
+            borderColor: settings.panelLight ? noirColor(skin.border) : `${accentColor}20`,
+            backgroundColor: settings.panelLight ? noirColor(skin.bg) : 'rgba(0,0,0,0.4)',
+            color: settings.panelLight ? noirColor(skin.text) : undefined,
           }}>
           <ToolPanelTabs
             active={toolTab}
@@ -1110,7 +1112,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
             <DecisionLog entries={decisionLog} accentColor={accentColor} />
           ) : toolTab === 'board' ? (
             <div className="flex-1 p-2">
-              <div className="text-xs mb-2 tracking-widest text-center" style={{ color: accentColor }}>{t.btnBoard}</div>
+              <div className="text-xs mb-2 tracking-widest text-center" style={{ color: accentColor }}><IconText text={t.btnBoard} /></div>
               <div style={{ height: theaterMode ? 420 : 'calc(100% - 30px)' }}>
                 <EvidenceBoard
                   clues={caseData.clue_dictionary}
@@ -1123,11 +1125,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           ) : (
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               <div className="text-xs tracking-widest mb-3" style={{ color: accentColor }}>
-                {t.evidenceLocker} ({gameState.unlocked_clues.length})
+                <IconText text={t.evidenceLocker} /> ({gameState.unlocked_clues.length})
               </div>
               {gameState.unlocked_clues.length === 0 ? (
                 <div className="text-xs opacity-30 text-center mt-8" style={{ color: accentColor }}>
-                  {t.noEvidence}
+                  <IconText text={t.noEvidence} />
                 </div>
               ) : (
                 gameState.unlocked_clues.map(id => {
@@ -1141,8 +1143,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           {/* Confusion Meter */}
           <div data-onboarding-target="confusion" className="p-3 border-t" style={{ borderColor: `${accentColor}20` }}>
             <div className="flex justify-between text-xs mb-1">
-              <span style={{ color: accentColor }}>{t.confusionLabel}</span>
-              <span style={{ color: gameState.confusion_score > 60 ? '#ff3860' : accentColor }}>
+              <span style={{ color: accentColor }}><IconText text={t.confusionLabel} /></span>
+              <span style={{ color: gameState.confusion_score > 60 ? '#c77c78' : accentColor }}>
                 {gameState.confusion_score}%
               </span>
             </div>
@@ -1151,11 +1153,10 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
                 style={{
                   width: `${gameState.confusion_score}%`,
                   background: gameState.confusion_score > 75
-                    ? 'linear-gradient(to right, #ff3860, #ff0020)'
+                    ? 'linear-gradient(to right, #c77c78, #c77c78)'
                     : gameState.confusion_score > 40
-                    ? 'linear-gradient(to right, #ffaa00, #ff5500)'
+                    ? 'linear-gradient(to right, #c19a63, #c19a63)'
                     : `linear-gradient(to right, ${accentColor}, ${accentColor}80)`,
-                  boxShadow: `0 0 8px ${gameState.confusion_score > 75 ? '#ff3860' : accentColor}`,
                 }} />
             </div>
           </div>
@@ -1196,12 +1197,12 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   return (
     <div className={`td-investigation td-page-shell min-h-screen flex flex-col ${theaterMode ? 'td-theater-mode' : ''}`}
       style={{
-        background: `radial-gradient(ellipse at top, ${bgColor} 0%, #040810 70%)`,
+        background: `radial-gradient(ellipse at top, ${bgColor} 0%, #08121c 70%)`,
         fontFamily: "'Courier New', monospace",
         transition: 'background 1s ease',
       }}>
 
-      {(!authorityReady || authorityError) && <div role="alert" className="td-ui-card" style={{ position: 'fixed', top: 58, left: '5%', right: '5%', zIndex: 10001, background: '#091321', color: '#ffd18a', padding: 16 }}>
+      {(!authorityReady || authorityError) && <div role="alert" className="td-ui-card" style={{ position: 'fixed', top: 58, left: '5%', right: '5%', zIndex: 10001, background: '#101e2a', color: '#c5a66f', padding: 16 }}>
         <p>{authorityLoading
           ? (lang === 'zh' ? '正在核对云端调查记录…' : 'CHECKING CLOUD INVESTIGATION…')
           : runRecoveryMessage(authorityError, lang)}</p>
@@ -1232,7 +1233,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       {showSettings && presentationActive && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
       {commandNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${commandNotice.type}`}>
-        <span>{commandNotice.type === 'error' ? '!' : '◆'}</span><strong>{commandNotice.message}</strong>
+        <span><Icon name={commandNotice.type === 'error' ? 'warning' : 'badge'} /></span><strong><IconText text={commandNotice.message} /></strong>
       </div>}
 
       {showCommandConsole && presentationActive && <CommandConsole
@@ -1291,7 +1292,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
         <div key={redFlash} onAnimationEnd={() => setRedFlash(0)}
           style={{
             position: 'fixed', inset: 0, zIndex: 150, pointerEvents: 'none',
-            background: 'radial-gradient(ellipse at center, rgba(255,0,32,0.35) 0%, rgba(140,0,16,0.6) 100%)',
+            background: 'radial-gradient(ellipse at center, transparent 55%, rgba(199,124,120,0.14) 100%)',
             animation: 'red-strike 0.9s ease-out forwards',
           }}>
           <style>{`@keyframes red-strike{0%{opacity:0}15%{opacity:1}100%{opacity:0}}`}</style>
@@ -1317,17 +1318,17 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       {!theaterMode && <div className="td-investigation-hud flex items-center justify-between px-4 py-2 border-b sticky top-0 z-50"
         style={{
           borderColor: `${accentColor}30`,
-          background: `linear-gradient(180deg, rgba(10,18,32,0.55) 0%, rgba(2,6,14,0.35) 100%)`,
-          backdropFilter: 'blur(18px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+          background: `linear-gradient(180deg, rgba(10,18,32,0.55) 0%, rgba(8, 18, 28,0.35) 100%)`,
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 ${accentColor}25, 0 8px 32px rgba(0,0,0,0.45)`,
           borderRadius: '0 0 16px 16px',
         }}>
         <div className="flex items-center gap-4">
           <button onClick={onOpenHome || onBackToLobby} className="td-ui-button td-button-ghost td-button-compact text-xs opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
-            style={{ color: accentColor }}>{onOpenHome ? (lang === 'zh' ? '⌂ 主页 / 暂存' : '⌂ HOME / SUSPEND') : t.lobbyBtn}</button>
-          <div className="text-xs font-bold tracking-widest" style={{ color: accentColor, textShadow: `0 0 10px ${accentColor}` }}>
-            {caseData.title} · {caseData.subtitle}
+            style={{ color: accentColor }}>{onOpenHome ? <><Icon name="building" /> {lang === 'zh' ? '主页 / 暂存' : 'HOME / SUSPEND'}</> : <IconText text={t.lobbyBtn} />}</button>
+          <div className="text-xs font-bold tracking-widest" style={{ color: accentColor }}>
+            <IconText text={caseData.title} /> · <IconText text={caseData.subtitle} />
           </div>
         </div>
         <div className="td-investigation-hud-stats flex items-center gap-6 text-xs">
@@ -1338,38 +1339,38 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
             { label: lang === 'zh' ? '线索' : 'CLUES', val: `${gameState.unlocked_clues.length}/${caseData.clue_dictionary.length}` },
             { label: lang === 'zh' ? '混乱' : 'CONFUSION', val: `${gameState.confusion_score}%` },
             { label: lang === 'zh' ? '体力' : 'STAMINA', val: activeAgentStrategy.team.map(agent => Math.round(agent.stamina)).join('/') },
-            { label: lang === 'zh' ? '指挥' : 'COMMAND', val: `◆ ${gameState.command_state?.points || 0}/${gameState.command_state?.max_points || 5}` },
+            { label: lang === 'zh' ? '指挥' : 'COMMAND', icon: 'badge', val: `${gameState.command_state?.points || 0}/${gameState.command_state?.max_points || 5}` },
           ].map(s => (
             <div key={s.label} className="text-center">
               <div className="opacity-40" style={{ color: accentColor }}>{s.label}</div>
               <div className="font-bold" style={{
-                color: (s.label === t.hudConfusion) && gameState.confusion_score > 60 ? '#ff3860' :
-                  (s.label === t.hudHp) && gameState.current_hp < 30 ? '#ff3860' : accentColor
-              }}>{s.val}</div>
+                color: (s.label === t.hudConfusion) && gameState.confusion_score > 60 ? '#c77c78' :
+                  (s.label === t.hudHp) && gameState.current_hp < 30 ? '#c77c78' : accentColor
+              }}>{s.icon && <Icon name={s.icon} />} <IconText text={s.val} /></div>
             </div>
           ))}
         </div>
         <div className="td-investigation-hud-actions flex gap-2">
           <button type="button" onClick={() => setShowCommandConsole(true)}
-            aria-label={lang === 'zh' ? '打开全息指挥台' : 'Open holographic command'}
-            title={lang === 'zh' ? '打开全息指挥台' : 'Open Holographic Command'}
+            aria-label={lang === 'zh' ? '打开调查指挥台' : 'Open investigation command'}
+            title={lang === 'zh' ? '打开调查指挥台' : 'Open Investigation Command'}
             className="td-ui-button td-command-hud-button td-hud-tool-button text-xs px-3 py-1 rounded border transition-all"
-            style={{ borderColor: '#e8c98a80', color: '#f4d99f', backgroundColor: 'rgba(232,201,138,.08)' }}>
-            ◆ {lang === 'zh' ? '指挥台' : 'COMMAND'}
+            style={{ borderColor: '#c5a66f80', color: '#e1d0ac', backgroundColor: 'rgba(197, 166, 111,.08)' }}>
+            <Icon name="compass" /> {lang === 'zh' ? '指挥台' : 'COMMAND'}
           </button>
           <button type="button" onClick={() => setShowSettings(true)}
             aria-label={lang === 'zh' ? '打开设置' : 'Open settings'}
             title={lang === 'zh' ? '设置' : 'Settings'}
             className="td-ui-button td-hud-tool-button text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: `${accentColor}50`, color: accentColor, backgroundColor: 'transparent' }}>
-            <span aria-hidden="true">⚙️</span><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span>
+            <Icon name="settings" /><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span>
           </button>
           <button type="button" onClick={() => setShowOnboarding(true)}
             aria-label={lang === 'zh' ? '打开调查指引' : 'Open investigation guide'}
             title={lang === 'zh' ? '新手指引' : 'Field Briefing'}
             className="td-ui-button td-hud-tool-button text-xs px-3 py-1 rounded border transition-all"
             style={{ borderColor: `${accentColor}50`, color: accentColor, backgroundColor: 'transparent' }}>
-            <span aria-hidden="true">?</span><span>{lang === 'zh' ? '指引' : 'GUIDE'}</span>
+            <Icon name="help" /><span>{lang === 'zh' ? '指引' : 'GUIDE'}</span>
           </button>
           <button type="button" onClick={() => setShowMiniMap(value => !value)}
             className="td-ui-button td-hud-tool-button td-mobile-only text-xs px-3 py-1 rounded border"
@@ -1377,7 +1378,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
             aria-pressed={showMiniMap}
             title={lang === 'zh' ? `${showMiniMap ? '隐藏' : '显示'}小地图` : `${showMiniMap ? 'Hide' : 'Show'} minimap`}
             style={{ borderColor: `${accentColor}50`, color: accentColor }}>
-            <span aria-hidden="true">🗺</span><span>{lang === 'zh' ? '地图' : 'MAP'}</span>
+            <Icon name="map" /><span>{lang === 'zh' ? '地图' : 'MAP'}</span>
           </button>
           <button type="button" data-onboarding-target="report" onClick={() => {
             if (selectedNPC) handleNPCDialogueClose();
@@ -1386,14 +1387,14 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           }}
             disabled={interactionLocked}
             className="td-ui-button td-button-secondary text-xs px-3 py-1 rounded border transition-all disabled:opacity-30"
-            style={{ borderColor: '#00ff8850', color: '#00ff88', backgroundColor: reportMode ? '#00ff8820' : 'transparent' }}>
-            {t.btnReport}
+            style={{ borderColor: '#8aaa9150', color: '#8aaa91', backgroundColor: reportMode ? '#8aaa9120' : 'transparent' }}>
+            <IconText text={t.btnReport} />
           </button>
           <button type="button" onClick={() => void handleRunIntent({ type: 'abandon' })}
             disabled={interactionLocked}
             className="td-ui-button td-button-danger text-xs px-3 py-1 rounded border transition-all disabled:opacity-30"
-            style={{ borderColor: '#ff386050', color: '#ff3860', backgroundColor: 'transparent' }}>
-            {t.btnEnd}
+            style={{ borderColor: '#c77c7850', color: '#c77c78', backgroundColor: 'transparent' }}>
+            <IconText text={t.btnEnd} />
           </button>
         </div>
       </div>}
@@ -1469,8 +1470,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
             {isViewingActiveTerminalTurn && streamingTerminal && (
               <div className={`td-terminal-stream is-${streamingTerminal.type}`}>
                 <span aria-hidden="true">
-                  {streamingTerminal.text}
-                  <span className="animate-pulse">▊</span>
+                  <IconText text={streamingTerminal.text} />
+                  <span aria-hidden="true">▊</span>
                 </span>
                 <span className="td-sr-only">{streamingTerminal.fullText}</span>
               </div>
@@ -1515,26 +1516,25 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               style={{
                 borderColor: accentColor, color: accentColor,
                 backgroundColor: `${accentColor}15`,
-                boxShadow: `0 0 15px ${accentColor}30`,
-                textShadow: `0 0 8px ${accentColor}`,
+                boxShadow: `inset 0 -2px 0 ${accentColor}60`,
               }}>
-              {t.executeCycle}
+              <IconText text={t.executeCycle} />
             </button>
             {isProcessing && !isFinalizing && (
               <button onClick={handleAbort} disabled={crisisPending}
                 className="td-ui-button td-button-danger px-4 py-2 text-xs rounded border transition-all"
-                style={{ borderColor: '#ff386060', color: '#ff3860', backgroundColor: '#ff386015' }}>
-                {t.abortBtn}
+                style={{ borderColor: '#c77c7860', color: '#c77c78', backgroundColor: '#c77c7815' }}>
+                <IconText text={t.abortBtn} />
               </button>
             )}
-            <button type="button" className="td-ui-button td-button-secondary td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}>🧰 {lang === 'zh' ? '工具' : 'TOOLS'}</button>
+            <button type="button" className="td-ui-button td-button-secondary td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}><Icon name="briefcase" /> {lang === 'zh' ? '工具' : 'TOOLS'}</button>
             <div data-onboarding-target="interrogate" className="td-investigation-npc-list flex gap-2 flex-wrap">
               {caseData.npcs.map(npc => (
                 <button key={npc.npc_id} onClick={() => handleNPCTalk(npc)}
                   disabled={interactionLocked}
                   className="td-ui-button td-npc-chip px-3 py-1 text-xs rounded border transition-all disabled:opacity-30 inline-flex items-center gap-2"
                   style={{ borderColor: `${accentColor}40`, color: `${accentColor}cc`, backgroundColor: `${accentColor}08` }}>
-                  <span>{npc.avatar} {npc.name}</span>
+                  <span><Icon name={npc.avatar} /> {npc.name}</span>
                   <EmotionBadge level={getEmotion(npcEmotionState, npc.npc_id).level} />
                 </button>
               ))}

@@ -1,23 +1,30 @@
+import Icon, { IconText } from '@/components/ui/Icon';
+import { drawIcon } from '@/components/ui/iconCanvas';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import { useSettings } from '@/lib/settings.jsx';
 
-const AGENT_COLORS = ['#00e5ff', '#ff6b6b', '#a78bfa'];
+const AGENT_COLORS = ['#709f9a', '#c77c78', '#9b9aae'];
 const AGENT_ICONS = ['🦅', '💔', '⚙️'];
 const AGENT_NAMES = ['隼目', '破心', '精算'];
 const AGENT_NAMES_EN = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
 
 // ── Canvas-based particle convergence effect ─────────────────────────────
 function ConvergenceCanvas({ active, clueIcon, type }) {
+  const { motionEnabled } = usePresentationMotion();
+  const { settings } = useSettings();
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
   const particlesRef = useRef([]);
   const startRef = useRef(null);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || !motionEnabled || !settings.particles) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     const W = canvas.width = canvas.offsetWidth || 600;
     const H = canvas.height = canvas.offsetHeight || 200;
     startRef.current = performance.now();
@@ -54,7 +61,7 @@ function ConvergenceCanvas({ active, clueIcon, type }) {
       if (elapsed > 0.6) {
         const intensity = Math.min(1, (elapsed - 0.6) * 1.5);
         const grad = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, 80 * intensity);
-        const glowColor = type === 'cross_validate' ? '#bf5fff' : '#00ff88';
+        const glowColor = type === 'cross_validate' ? '#9b9aae' : '#8aaa91';
         grad.addColorStop(0, glowColor + Math.round(intensity * 80).toString(16).padStart(2,'0'));
         grad.addColorStop(1, 'transparent');
         ctx.fillStyle = grad;
@@ -72,10 +79,7 @@ function ConvergenceCanvas({ active, clueIcon, type }) {
         ctx.strokeStyle = AGENT_COLORS[i];
         ctx.lineWidth = 1.5;
         ctx.stroke();
-        ctx.font = '12px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(AGENT_ICONS[i], o.x, o.y);
+        drawIcon(ctx, AGENT_ICONS[i], o.x - 8, o.y - 8, 16, AGENT_COLORS[i]);
 
         // Pulse ring
         const pRing = (elapsed * 2 + i * 0.4) % 1;
@@ -144,11 +148,8 @@ function ConvergenceCanvas({ active, clueIcon, type }) {
         ctx.save();
         ctx.translate(center.x, center.y);
         ctx.scale(scale, scale);
-        ctx.font = '28px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
         ctx.globalAlpha = burstAlpha;
-        ctx.fillText(clueIcon || '🔍', 0, 0);
+        drawIcon(ctx, clueIcon || 'search', -14, -14, 28, '#c5a66f');
         ctx.restore();
 
         // Radiating rings
@@ -156,7 +157,7 @@ function ConvergenceCanvas({ active, clueIcon, type }) {
           const ring = (elapsed * 1.5 + r * 0.33) % 1;
           ctx.beginPath();
           ctx.arc(center.x, center.y, 20 + ring * 60, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(0,255,136,${(1 - ring) * burstAlpha * 0.4})`;
+          ctx.strokeStyle = `rgba(138, 170, 145,${(1 - ring) * burstAlpha * 0.4})`;
           ctx.lineWidth = 1.5;
           ctx.stroke();
         }
@@ -170,10 +171,10 @@ function ConvergenceCanvas({ active, clueIcon, type }) {
     }
 
     frameRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frameRef.current);
-  }, [active, type]);
+    return () => { cancelAnimationFrame(frameRef.current); ctx.clearRect(0, 0, W, H); };
+  }, [active, type, clueIcon, motionEnabled, settings.particles]);
 
-  if (!active) return null;
+  if (!active || !motionEnabled || !settings.particles) return null;
   return (
     <canvas
       ref={canvasRef}
@@ -186,11 +187,13 @@ function ConvergenceCanvas({ active, clueIcon, type }) {
 // ── Agent status row shown during synergy ────────────────────────────────
 function AgentSynergyRow() {
   const { lang } = useLang();
-  const [visible, setVisible] = useState(false);
+  const { motionEnabled } = usePresentationMotion();
+  const [visible, setVisible] = useState(!motionEnabled);
   useEffect(() => {
+    if (!motionEnabled) { setVisible(true); return; }
     const t = setTimeout(() => setVisible(true), 50);
     return () => clearTimeout(t);
-  }, []);
+  }, [motionEnabled]);
 
   return (
     <div
@@ -205,10 +208,10 @@ function AgentSynergyRow() {
               borderColor: AGENT_COLORS[i],
               backgroundColor: AGENT_COLORS[i] + '20',
               boxShadow: `0 0 12px ${AGENT_COLORS[i]}60`,
-              animation: 'synergy-pulse 0.8s ease-in-out infinite alternate',
+              animation: 'none',
             }}
           >
-            {AGENT_ICONS[i]}
+            <Icon name={AGENT_ICONS[i]} />
           </div>
           <div className="text-xs font-bold" style={{ color: AGENT_COLORS[i] }}>{name}</div>
           <div className="text-xs opacity-60" style={{ color: AGENT_COLORS[i] }}>{lang === 'zh' ? '锁定' : 'LOCKED'}</div>
@@ -243,7 +246,7 @@ export default function AgentSynergyFX({ event }) {
   if (!current) return null;
 
   const isValidate = current.type === 'cross_validate';
-  const borderColor = isValidate ? '#bf5fff' : '#00ff88';
+  const borderColor = isValidate ? '#9b9aae' : '#8aaa91';
   const title = isValidate
     ? (zh ? '⚡ 逻辑共鸣 — 交叉验证' : '⚡ LOGIC RESONANCE — CROSS VALIDATION')
     : (zh ? '🔗 线索汇聚 — 集体锁定' : '🔗 CLUE CONVERGENCE — TEAM LOCK');
@@ -270,7 +273,7 @@ export default function AgentSynergyFX({ event }) {
         style={{ borderColor: borderColor + '30', backgroundColor: borderColor + '10' }}
       >
         <div className="text-xs font-bold tracking-widest" style={{ color: borderColor }}>
-          {title}
+          <IconText text={title} />
         </div>
       </div>
 
@@ -289,7 +292,7 @@ export default function AgentSynergyFX({ event }) {
         className="text-center text-xs py-2 border-t"
         style={{ borderColor: borderColor + '20', color: borderColor + 'aa' }}
       >
-        {current.clueIcon} {current.clueKeyword} — {zh ? '三名探员达成协同共识' : 'THREE AGENTS REACHED CONSENSUS'}
+        <Icon name={current.clueIcon} /> {current.clueKeyword} — {zh ? '三名探员达成协同共识' : 'THREE AGENTS REACHED CONSENSUS'}
       </div>
 
       <style>{`

@@ -1,13 +1,15 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { PRIORITY_ACTIONS, normalizePriorityList } from '@/game/teamConfig';
 import { useLang } from '@/lib/lang.jsx';
+import Icon, { IconText } from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 // ── Static zone layout positions (% of container) ────────────────────────────
 const ZONE_LAYOUT = {
-  zone_datacenter: { x: 50, y: 20, label: '数据中心', labelEn: 'DATA CENTER', sublabel: '案发现场', sublabelEn: 'CRIME SCENE', icon: '💻', color: '#ff3860' },
-  zone_lobby:      { x: 20, y: 60, label: '大堂', labelEn: 'LOBBY', sublabel: '监控中心', sublabelEn: 'SECURITY HUB', icon: '📹', color: '#00e5ff' },
-  zone_lab:        { x: 80, y: 60, label: '私人实验室', labelEn: 'PRIVATE LAB', sublabel: '黑客入口', sublabelEn: 'HACK ENTRY', icon: '🔬', color: '#a78bfa' },
-  zone_balcony:    { x: 50, y: 85, label: '天台阳台', labelEn: 'ROOFTOP', sublabel: '逃离路线', sublabelEn: 'ESCAPE ROUTE', icon: '🌃', color: '#ffaa00' },
+  zone_datacenter: { x: 50, y: 20, label: '数据中心', labelEn: 'DATA CENTER', sublabel: '案发现场', sublabelEn: 'CRIME SCENE', icon: '💻', color: '#c77c78' },
+  zone_lobby:      { x: 20, y: 60, label: '大堂', labelEn: 'LOBBY', sublabel: '监控中心', sublabelEn: 'SECURITY HUB', icon: '📹', color: '#709f9a' },
+  zone_lab:        { x: 80, y: 60, label: '私人实验室', labelEn: 'PRIVATE LAB', sublabel: '黑客入口', sublabelEn: 'HACK ENTRY', icon: '🔬', color: '#9b9aae' },
+  zone_balcony:    { x: 50, y: 85, label: '天台阳台', labelEn: 'ROOFTOP', sublabel: '逃离路线', sublabelEn: 'ESCAPE ROUTE', icon: '🌃', color: '#c19a63' },
 };
 
 const ZONE_CONNECTIONS = [
@@ -20,9 +22,9 @@ const ZONE_CONNECTIONS = [
 
 const VISIT_COLORS = {
   unvisited:  { border: 'rgba(255,255,255,0.15)', bg: 'rgba(255,255,255,0.03)', text: 'rgba(255,255,255,0.35)' },
-  current:    { border: '#00ff88', bg: 'rgba(0,255,136,0.12)', text: '#00ff88' },
+  current:    { border: '#8aaa91', bg: 'rgba(138, 170, 145,0.12)', text: '#8aaa91' },
   visited:    { border: 'rgba(255,255,255,0.35)', bg: 'rgba(255,255,255,0.06)', text: 'rgba(255,255,255,0.7)' },
-  key:        { border: '#ffaa00', bg: 'rgba(255,170,0,0.12)', text: '#ffaa00' },
+  key:        { border: '#c19a63', bg: 'rgba(193, 154, 99,0.12)', text: '#c19a63' },
 };
 
 // ── Edge line between two zones ───────────────────────────────────────────────
@@ -42,7 +44,7 @@ function EdgeLine({ fromKey, toKey, positions, traveled, accentColor }) {
       stroke={isTraveled ? accentColor : 'rgba(255,255,255,0.08)'}
       strokeWidth={isTraveled ? 2 : 1}
       strokeDasharray={isTraveled ? '6 3' : '4 6'}
-      style={{ filter: isTraveled ? `drop-shadow(0 0 4px ${accentColor})` : 'none', transition: 'all 0.5s' }}
+      style={{ transition: 'stroke 0.2s' }}
     />
   );
 }
@@ -61,7 +63,6 @@ function PathTrail({ path, positions, accentColor }) {
       strokeWidth="2.5"
       strokeDasharray="8 4"
       opacity="0.6"
-      style={{ filter: `drop-shadow(0 0 6px ${accentColor})` }}
     />
   );
 }
@@ -74,7 +75,7 @@ function ZoneNode({
   const { lang } = useLang();
   const zh = lang === 'zh';
   const zDef  = definition || {};
-  const color = zDef.color || '#00e5ff';
+  const color = noirColor(zDef.color || '#709f9a');
   const hasKey = visitCount > 0 && clues.length > 0;
 
   let state = 'unvisited';
@@ -82,7 +83,7 @@ function ZoneNode({
   else if (hasKey) state = 'key';
   else if (visitCount > 0) state = 'visited';
 
-  const c = VISIT_COLORS[state];
+  const c = Object.fromEntries(Object.entries(VISIT_COLORS[state]).map(([key, value]) => [key, noirColor(value)]));
 
   return (
     <div
@@ -99,45 +100,29 @@ function ZoneNode({
         minWidth: 110,
       }}
     >
-      {/* Pulse ring for current zone */}
-      {isCurrentZone && (
-        <div style={{
-          position: 'absolute', inset: -12,
-          borderRadius: '50%',
-          border: `2px solid ${color}`,
-          animation: 'zone-pulse 1.8s ease-in-out infinite',
-          pointerEvents: 'none',
-        }} />
-      )}
-
       {/* Main card */}
       <div style={{
         border: `1.5px solid ${isCurrentZone ? color : c.border}`,
-        background: isCurrentZone ? `rgba(0,255,136,0.10)` : c.bg,
+        background: isCurrentZone ? `rgba(138, 170, 145,0.10)` : c.bg,
         borderRadius: 12,
         padding: '8px 12px',
-        boxShadow: isCurrentZone
-          ? `0 0 20px ${color}60, 0 0 40px ${color}20`
-          : hasKey
-          ? `0 0 12px ${color}30`
-          : 'none',
-        transition: 'all 0.3s',
+        boxShadow: isCurrentZone ? `inset 3px 0 0 ${color}` : '0 3px 8px rgba(0,0,0,0.18)',
+        transition: 'border-color 0.2s, background-color 0.2s',
         backdropFilter: 'blur(4px)',
       }}>
         {/* Icon + label */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontSize: 16 }}>{zDef.icon}</span>
+          <Icon name={zDef.icon} size={18} style={{ color }} />
           <div>
             <div style={{
               fontSize: '0.65rem', fontWeight: 900, fontFamily: 'monospace',
               color: isCurrentZone ? color : c.text,
-              textShadow: isCurrentZone ? `0 0 8px ${color}` : 'none',
               letterSpacing: '0.04em',
             }}>
-              {zh ? zDef.label : (zDef.labelEn || zDef.label)}
+              <IconText text={zh ? zDef.label : (zDef.labelEn || zDef.label)} />
             </div>
             <div style={{ fontSize: '0.5rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>
-              {zh ? zDef.sublabel : (zDef.sublabelEn || zDef.sublabel)}
+              <IconText text={zh ? zDef.sublabel : (zDef.sublabelEn || zDef.sublabel)} />
             </div>
           </div>
         </div>
@@ -157,12 +142,11 @@ function ZoneNode({
           {clues.length > 0 && (
             <span style={{
               fontSize: '0.5rem', fontFamily: 'monospace',
-              color: '#ffaa00', fontWeight: 700,
-              background: 'rgba(255,170,0,0.12)',
+              color: '#c19a63', fontWeight: 700,
+              background: 'rgba(193, 154, 99,0.12)',
               borderRadius: 4, padding: '1px 5px',
-              boxShadow: '0 0 6px #ffaa0050',
             }}>
-              🔍 {clues.length} {zh ? '线索' : 'CLUES'}
+              <Icon name="search" /> {clues.length} {zh ? '线索' : 'CLUES'}
             </span>
           )}
         </div>
@@ -172,14 +156,14 @@ function ZoneNode({
           <div style={{
             marginTop: 6,
             fontSize: '0.5rem', fontFamily: 'monospace',
-            color: '#00ff88',
-            borderTop: '1px solid rgba(0,255,136,0.2)',
+            color: '#8aaa91',
+            borderTop: '1px solid rgba(138, 170, 145,0.2)',
             paddingTop: 4,
             lineHeight: 1.4,
             maxWidth: 130,
             wordBreak: 'break-all',
           }}>
-            ▶ {feedback}
+            <Icon name="play" /> <IconText text={feedback} />
           </div>
         )}
       </div>
@@ -189,7 +173,8 @@ function ZoneNode({
 
 // ── Agent avatar following current zone ───────────────────────────────────────
 function AgentAvatar({ pos, agentStrategy, accentColor }) {
-  const icon = agentStrategy?.team?.[0] ? '👁️' : '🕵️';
+  const { lang } = useLang();
+  const icon = agentStrategy?.team?.[0] ? 'eye' : 'detective';
   return (
     <div style={{
       position: 'absolute',
@@ -198,17 +183,15 @@ function AgentAvatar({ pos, agentStrategy, accentColor }) {
       transform: 'translate(-50%, -160%)',
       zIndex: 10,
       pointerEvents: 'none',
-      animation: 'agent-float 2.5s ease-in-out infinite',
     }}>
       <div style={{
         width: 32, height: 32, borderRadius: '50%',
         border: `2px solid ${accentColor}`,
-        background: `radial-gradient(circle, ${accentColor}30 0%, transparent 70%)`,
-        boxShadow: `0 0 16px ${accentColor}80`,
+        background: '#101e2a', color: accentColor,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 16,
       }}>
-        {icon}
+        <Icon name={icon} size={18} label={lang === 'zh' ? '调查队当前位置' : 'Investigation team position'} />
       </div>
       <div style={{
         width: 2, height: 12,
@@ -225,7 +208,7 @@ export default function CaseFlowMap({
   caseData,
   agentPath,        // string[] of zone keys in visit order
   zoneFeedback,     // { [zoneKey]: string } agent stop feedback
-  accentColor,
+  accentColor: legacyAccentColor,
   agentStrategy,
   onPriorityChange, // callback(reorderedPriorityList)
   priorityDisabled = false,
@@ -233,6 +216,7 @@ export default function CaseFlowMap({
   const { lang } = useLang();
   const zh = lang === 'zh';
   const containerRef = useRef(null);
+  const accentColor = noirColor(legacyAccentColor);
   const zoneLayout = caseData?.zone_layout || ZONE_LAYOUT;
   const zoneConnections = caseData?.zone_connections || ZONE_CONNECTIONS;
 
@@ -336,7 +320,7 @@ export default function CaseFlowMap({
       <div className="flex items-center justify-between px-3 py-2 border-b"
         style={{ borderColor: `${accentColor}20`, background: 'rgba(0,0,0,0.5)' }}>
         <div style={{ fontSize: '0.6rem', color: accentColor, fontWeight: 700, letterSpacing: '0.12em' }}>
-          ◈ {zh ? '案件流程图 · 拖拽节点调整优先级' : 'CASE FLOW MAP · DRAG NODES TO REARRANGE'}
+          <Icon name="route" /> {zh ? '案件流程图 · 拖拽节点调整位置' : 'CASE FLOW MAP · DRAG NODES TO REARRANGE'}
         </div>
         <div style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.3)' }}>
           {agentPath.length} {zh ? '步移动' : 'MOVES'} · {Object.keys(visitCounts).filter(k => visitCounts[k]).length} {zh ? '区域勘察' : 'ZONES VISITED'}
@@ -388,12 +372,13 @@ export default function CaseFlowMap({
       {/* Priority list */}
       <div className="border-t px-3 py-2" style={{ borderColor: `${accentColor}20`, background: 'rgba(0,0,0,0.4)' }}>
         <div style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.35)', marginBottom: 4, letterSpacing: '0.08em' }}>
-          ◎ {zh ? '调查优先级（拖拽排序）' : 'INVESTIGATION PRIORITY (DRAG TO SORT)'}
+          <Icon name="sliders" /> {zh ? '调查优先级（拖拽排序）' : 'INVESTIGATION PRIORITY (DRAG TO SORT)'}
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {priority.map((actionId, idx) => {
-            const action = PRIORITY_ACTIONS.find(item => item.id === actionId);
-            if (!action) return null;
+            const metadata = PRIORITY_ACTIONS.find(item => item.id === actionId);
+            if (!metadata) return null;
+            const action = { ...metadata, color: noirColor(metadata.color) };
             const isOver = dragOverPri === actionId;
             return (
               <div
@@ -413,12 +398,12 @@ export default function CaseFlowMap({
                   cursor: 'grab',
                   fontSize: '0.55rem', color: 'rgba(255,255,255,0.55)',
                   transition: 'all 0.15s',
-                  boxShadow: isOver ? `0 0 8px ${action.color}50` : 'none',
+                  boxShadow: isOver ? `inset 2px 0 0 ${action.color}` : 'none',
                 }}
               >
                 <span style={{ opacity: 0.4 }}>#{idx + 1}</span>
-                <span>{action.icon}</span>
-                <span style={{ color: action.color }}>{zh ? action.label : action.labelEn}</span>
+                <Icon name={action.icon} style={{ color: action.color }} />
+                <span style={{ color: action.color }}><IconText text={zh ? action.label : action.labelEn} /></span>
                 <span className="td-priority-mobile-buttons" style={{ display: 'none', gap: 2 }}>
                   <button type="button" aria-label={zh ? '上移' : 'Move up'} disabled={priorityDisabled || idx === 0} onClick={() => movePriority(idx, -1)}>↑</button>
                   <button type="button" aria-label={zh ? '下移' : 'Move down'} disabled={priorityDisabled || idx === priority.length - 1} onClick={() => movePriority(idx, 1)}>↓</button>
@@ -428,17 +413,6 @@ export default function CaseFlowMap({
           })}
         </div>
       </div>
-
-      <style>{`
-        @keyframes zone-pulse {
-          0%, 100% { transform: scale(1); opacity: 0.6; }
-          50%       { transform: scale(1.3); opacity: 0.15; }
-        }
-        @keyframes agent-float {
-          0%, 100% { transform: translate(-50%, -160%); }
-          50%       { transform: translate(-50%, -175%); }
-        }
-      `}</style>
     </div>
   );
 }

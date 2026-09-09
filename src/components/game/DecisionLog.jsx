@@ -1,26 +1,28 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import Icon, { IconText } from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 // Entry shape: { id, turn, thought, action, observation, isKeyDecision, keyReason, newClues, isTrap, timestamp }
 
 const ACTION_COLORS = {
-  search_area:        '#00e5ff',
-  examine_clue:       '#00e5ff',
-  analyze_forensics:  '#00e5ff',
-  interrogate_npc:    '#ffaa00',
-  interrogate_suspect:'#ffaa00',
-  check_alibi:        '#ffaa00',
-  present_evidence:   '#a3ff47',
-  hack_system:        '#a78bfa',
-  hack_terminal:      '#a78bfa',
-  decrypt_file:       '#a78bfa',
-  access_records:     '#a78bfa',
-  set_trap:           '#ff9d00',
+  search_area:        '#709f9a',
+  examine_clue:       '#709f9a',
+  analyze_forensics:  '#709f9a',
+  interrogate_npc:    '#c19a63',
+  interrogate_suspect:'#c19a63',
+  check_alibi:        '#c19a63',
+  present_evidence:   '#8aaa91',
+  hack_system:        '#9b9aae',
+  hack_terminal:      '#9b9aae',
+  decrypt_file:       '#9b9aae',
+  access_records:     '#9b9aae',
+  set_trap:           '#c19a63',
   default:            '#c0c0d0',
 };
 
 function getActionColor(action) {
-  return ACTION_COLORS[action] || ACTION_COLORS.default;
+  return noirColor(ACTION_COLORS[action] || ACTION_COLORS.default);
 }
 
 function EntryCard({ entry, accentColor, isLatest }) {
@@ -36,32 +38,34 @@ function EntryCard({ entry, accentColor, isLatest }) {
     <div
       style={{
         borderRadius: 10,
-        border: `1px solid ${isTrap ? '#ff660050' : isKey ? '#ffaa0050' : `${accentColor}20`}`,
+        border: `1px solid ${isTrap ? '#c19a6350' : isKey ? '#c19a6350' : `${accentColor}20`}`,
         background: isTrap
-          ? 'rgba(255,102,0,0.06)'
+          ? 'rgba(193, 154, 99,0.06)'
           : isKey
-          ? 'rgba(255,170,0,0.05)'
+          ? 'rgba(193, 154, 99,0.05)'
           : 'rgba(255,255,255,0.02)',
         marginBottom: 6,
         overflow: 'hidden',
-        boxShadow: isLatest ? `0 0 12px ${accentColor}20` : 'none',
+        boxShadow: isLatest ? `inset 2px 0 0 ${accentColor}90` : 'none',
         transition: 'box-shadow 0.3s',
       }}
     >
       {/* Header row */}
       <button
+        type="button"
         onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
         className="w-full flex items-center gap-2 px-3 py-2 text-left"
         style={{ background: 'transparent', border: 'none' }}
       >
         {/* Turn badge */}
         <div style={{
           width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-          border: `1.5px solid ${isKey ? '#ffaa00' : accentColor}50`,
-          background: isKey ? 'rgba(255,170,0,0.12)' : `${accentColor}10`,
+          border: `1.5px solid ${isKey ? '#c19a63' : accentColor}50`,
+          background: isKey ? 'rgba(193, 154, 99,0.12)' : `${accentColor}10`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '0.55rem', fontFamily: 'monospace', fontWeight: 900,
-          color: isKey ? '#ffaa00' : accentColor,
+          color: isKey ? '#c19a63' : accentColor,
         }}>
           {entry.turn}
         </div>
@@ -73,19 +77,19 @@ function EntryCard({ entry, accentColor, isLatest }) {
             color, letterSpacing: '0.04em',
             display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            {isTrap && <span style={{ color: '#ff6600' }}>🎭 </span>}
-            {isKey && !isTrap && <span style={{ color: '#ffaa00' }}>⭐ </span>}
+            {isTrap && <Icon name="mask" style={{ color: '#c19a63' }} />}
+            {isKey && !isTrap && <Icon name="star" style={{ color: '#c19a63' }} />}
             [{entry.action?.toUpperCase() || 'UNKNOWN'}]
           </div>
           {/* Key reason pill */}
           {(isKey || isTrap) && (
             <div style={{
               fontSize: '0.5rem', fontFamily: 'monospace',
-              color: isTrap ? '#ff9d00' : '#ffaa00',
+              color: isTrap ? '#c19a63' : '#c19a63',
               opacity: 0.8,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
-              {entry.keyReason}
+              <IconText text={entry.keyReason} />
             </div>
           )}
         </div>
@@ -95,8 +99,8 @@ function EntryCard({ entry, accentColor, isLatest }) {
           <div style={{
             fontSize: '0.5rem', fontFamily: 'monospace', fontWeight: 700,
             padding: '1px 5px', borderRadius: 4,
-            background: '#00ff8820', border: '1px solid #00ff8840',
-            color: '#00ff88', whiteSpace: 'nowrap',
+            background: '#8aaa9120', border: '1px solid #8aaa9140',
+            color: '#8aaa91', whiteSpace: 'nowrap',
           }}>
             +{entry.newClues.length} {lang === 'zh' ? '线索' : 'CLUES'}
           </div>
@@ -109,18 +113,18 @@ function EntryCard({ entry, accentColor, isLatest }) {
       {expanded && (
         <div style={{ padding: '0 12px 10px', borderTop: `1px solid rgba(255,255,255,0.05)` }}>
           {/* THOUGHT */}
-          <Section label="THOUGHT" color="#bf5fff" icon="🧠">
+          <Section label={lang === 'zh' ? '思路' : 'THOUGHT'} color="#9b9aae" icon="brain">
             <div style={{
-              fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(191,95,255,0.85)',
+              fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(155, 154, 174,0.85)',
               lineHeight: 1.55, whiteSpace: 'pre-wrap', maxHeight: 100,
               overflowY: 'auto',
             }}>
-              {entry.thought || '—'}
+              <IconText text={entry.thought || '—'} />
             </div>
           </Section>
 
           {/* ACTION */}
-          <Section label="ACTION" color={color} icon="▶">
+          <Section label={lang === 'zh' ? '行动' : 'ACTION'} color={color} icon="play">
             <div style={{
               fontSize: '0.62rem', fontFamily: 'monospace', color,
               fontWeight: 700, letterSpacing: '0.04em',
@@ -130,13 +134,13 @@ function EntryCard({ entry, accentColor, isLatest }) {
           </Section>
 
           {/* OBSERVATION */}
-          <Section label="OBSERVATION" color="#00e5ff" icon="👁️">
+          <Section label={lang === 'zh' ? '观察' : 'OBSERVATION'} color="#709f9a" icon="eye">
             <div style={{
-              fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(0,229,255,0.8)',
+              fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(112, 159, 154,0.8)',
               lineHeight: 1.55, whiteSpace: 'pre-wrap', maxHeight: 80,
               overflowY: 'auto',
             }}>
-              {entry.observation || '—'}
+              <IconText text={entry.observation || '—'} />
             </div>
           </Section>
 
@@ -144,14 +148,14 @@ function EntryCard({ entry, accentColor, isLatest }) {
           {entry.newClues?.length > 0 && (
             <div style={{
               marginTop: 5, padding: '4px 8px', borderRadius: 6,
-              background: 'rgba(0,255,136,0.06)', border: '1px solid rgba(0,255,136,0.15)',
+              background: 'rgba(138, 170, 145,0.06)', border: '1px solid rgba(138, 170, 145,0.15)',
             }}>
-              <div style={{ fontSize: '0.55rem', color: '#00ff88', fontFamily: 'monospace', marginBottom: 2 }}>
-                🔍 {lang === 'zh' ? '新获线索' : 'NEW CLUES'}
+              <div style={{ fontSize: '0.55rem', color: '#8aaa91', fontFamily: 'monospace', marginBottom: 2 }}>
+                <Icon name="search" /> {lang === 'zh' ? '新获线索' : 'NEW CLUES'}
               </div>
               {entry.newClues.map((c, i) => (
-                <div key={i} style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(0,255,136,0.7)' }}>
-                  · {c}
+                <div key={i} style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: 'rgba(138, 170, 145,0.7)' }}>
+                  · <IconText text={c} />
                 </div>
               ))}
             </div>
@@ -175,15 +179,16 @@ function Section({ label, color, icon, children }) {
         display: 'flex', alignItems: 'center', gap: 4,
         opacity: 0.8,
       }}>
-        {icon} {label}
+        <Icon name={icon} /> {label}
       </div>
       {children}
     </div>
   );
 }
 
-export default function DecisionLog({ entries, accentColor }) {
+export default function DecisionLog({ entries, accentColor: legacyAccentColor }) {
   const { lang } = useLang();
+  const accentColor = noirColor(legacyAccentColor);
   const zh = lang === 'zh';
   const bottomRef = useRef(null);
 
@@ -207,11 +212,11 @@ export default function DecisionLog({ entries, accentColor }) {
           fontSize: '0.6rem', fontFamily: 'monospace', fontWeight: 700,
           color: accentColor, letterSpacing: '0.1em', marginBottom: 2,
         }}>
-          ◈ {zh ? '决策日志' : 'DECISION LOG'}
+          <Icon name="book" /> {zh ? '决策日志' : 'DECISION LOG'}
         </div>
         <div className="flex gap-3" style={{ fontSize: '0.52rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>
           <span>{entries.length} {zh ? '轮次' : 'TURNS'}</span>
-          <span style={{ color: '#ffaa00' }}>⭐ {keyCount} {zh ? '关键决策' : 'KEY DECISIONS'}</span>
+          <span style={{ color: '#c19a63' }}><Icon name="star" /> {keyCount} {zh ? '关键决策' : 'KEY DECISIONS'}</span>
         </div>
       </div>
 

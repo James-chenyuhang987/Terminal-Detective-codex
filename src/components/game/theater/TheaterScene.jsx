@@ -293,7 +293,7 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
 
 function HotspotRing({ target, nearby, selected }) {
   const active = nearby || selected;
-  const color = target.kind === 'npc' ? '#87eeea' : target.kind === 'door' ? '#a7b7ff' : '#ffd39a';
+  const color = target.kind === 'npc' ? '#a5c8c0' : target.kind === 'door' ? '#a7b7ff' : '#e1d0ac';
   return <mesh position={[target.position[0], 0.028, target.position[2]]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
     <ringGeometry args={[active ? 0.4 : 0.33, active ? 0.46 : 0.37, 32]} />
     <meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.45} depthWrite={false} />

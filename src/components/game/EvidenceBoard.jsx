@@ -1,28 +1,33 @@
 import React, { useEffect, useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import Icon from '@/components/ui/Icon';
+import { drawIcon } from '@/components/ui/iconCanvas';
+import { noirColor } from '@/components/ui/palette';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 const NODE_COLORS = {
-  CRITICAL: '#ff3860',
-  HIGH: '#ffaa00',
-  MEDIUM: '#00ffff',
-  LOW: '#8888aa',
+  CRITICAL: '#c77c78',
+  HIGH: '#c19a63',
+  MEDIUM: '#709f9a',
+  LOW: '#9b9aae',
 };
 
 export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData: _caseData }) {
   const { lang } = useLang();
+  const { motionEnabled, foreground } = usePresentationMotion();
   const zh = lang === 'zh';
   const canvasRef = useRef(null);
   const nodesRef = useRef({});
   const animFrameRef = useRef(null);
-  const particlesRef = useRef([]);
   const freshnessTimersRef = useRef(new Map());
 
   const unlockedClues = clues.filter(c => unlockedIds.includes(c.clue_id));
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !foreground) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     const W = canvas.width = canvas.offsetWidth;
     const H = canvas.height = canvas.offsetHeight;
 
@@ -39,17 +44,6 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
           clue,
           isNew: true,
         };
-        // Spawn particles for new node
-        for (let p = 0; p < 12; p++) {
-          particlesRef.current.push({
-            x: W / 2 + Math.cos(angle) * r,
-            y: H / 2 + Math.sin(angle) * r,
-            vx: (Math.random() - 0.5) * 4,
-            vy: (Math.random() - 0.5) * 4,
-            life: 1,
-            color: NODE_COLORS[clue.weight] || '#00ffff',
-          });
-        }
         const freshnessTimer = setTimeout(() => {
           if (nodesRef.current[clue.clue_id])
             nodesRef.current[clue.clue_id].isNew = false;
@@ -64,12 +58,12 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
       if (!unlockedIds.includes(id)) delete nodesRef.current[id];
     });
 
-    let t = 0;
+    let frameCount = 0;
     const animate = () => {
       ctx.clearRect(0, 0, W, H);
 
       // Background grid
-      ctx.strokeStyle = 'rgba(0,255,255,0.04)';
+      ctx.strokeStyle = 'rgba(112, 159, 154,0.04)';
       ctx.lineWidth = 1;
       for (let x = 0; x < W; x += 40) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -78,11 +72,10 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
       }
 
-      t += 0.02;
       const nodes = Object.values(nodesRef.current);
 
-      // Force-directed layout
-      nodes.forEach(n => {
+      // A short settling pass; the board stays still while evidence is read.
+      if (motionEnabled) nodes.forEach(n => {
         // Center gravity
         n.vx += (W / 2 - n.x) * 0.001;
         n.vy += (H / 2 - n.y) * 0.001;
@@ -112,9 +105,9 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
         if (!nA || !nB) return;
 
         const gradient = ctx.createLinearGradient(nA.x, nA.y, nB.x, nB.y);
-        gradient.addColorStop(0, 'rgba(255,56,96,0.8)');
-        gradient.addColorStop(0.5, 'rgba(255,56,96,0.4)');
-        gradient.addColorStop(1, 'rgba(255,56,96,0.8)');
+        gradient.addColorStop(0, 'rgba(199, 124, 120,0.8)');
+        gradient.addColorStop(0.5, 'rgba(199, 124, 120,0.4)');
+        gradient.addColorStop(1, 'rgba(199, 124, 120,0.8)');
 
         ctx.beginPath();
         ctx.moveTo(nA.x, nA.y);
@@ -122,84 +115,39 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
         ctx.strokeStyle = gradient;
         ctx.lineWidth = 1.5;
         ctx.stroke();
-
-        // Animated pulse along edge
-        const pct = (Math.sin(t * 2) + 1) / 2;
-        const px = nA.x + (nB.x - nA.x) * pct;
-        const py = nA.y + (nB.y - nA.y) * pct;
-        ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#ff3860';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#ff3860';
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      });
-
-      // Draw particles
-      particlesRef.current = particlesRef.current.filter(p => p.life > 0);
-      particlesRef.current.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.life;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = p.color;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.shadowBlur = 0;
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.95;
-        p.vy *= 0.95;
-        p.life -= 0.02;
       });
 
       // Draw nodes
       nodes.forEach(n => {
-        const color = NODE_COLORS[n.clue.weight] || '#00ffff';
-        const pulse = n.isNew ? (Math.sin(t * 8) + 1) / 2 : (Math.sin(t * 2 + n.x) + 1) / 2;
-        const radius = 18 + pulse * 4;
-
-        // Outer glow
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, radius + 8, 0, Math.PI * 2);
-        ctx.fillStyle = `${color}15`;
-        ctx.fill();
+        const color = noirColor(NODE_COLORS[n.clue.weight] || '#709f9a');
+        const radius = 20;
 
         // Node circle
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(10,15,30,0.9)';
         ctx.strokeStyle = color;
-        ctx.lineWidth = n.isNew ? 3 : 1.5;
-        ctx.shadowBlur = n.isNew ? 20 : 10;
-        ctx.shadowColor = color;
+        ctx.lineWidth = n.isNew && motionEnabled && frameCount < 89 ? 3 : 1.5;
         ctx.fill();
         ctx.stroke();
-        ctx.shadowBlur = 0;
 
-        // Icon
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(n.clue.visual_icon, n.x, n.y);
+        drawIcon(ctx, n.clue.visual_icon, n.x - 9, n.y - 9, 18, color);
 
         // Label below
         ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillStyle = color;
-        ctx.shadowBlur = 6;
-        ctx.shadowColor = color;
         ctx.fillText(n.clue.keyword, n.x, n.y + radius + 12);
-        ctx.shadowBlur = 0;
       });
 
-      animFrameRef.current = requestAnimationFrame(animate);
+      frameCount++;
+      if (motionEnabled && frameCount < 90) animFrameRef.current = requestAnimationFrame(animate);
     };
 
-    animFrameRef.current = requestAnimationFrame(animate);
+    animate();
     return () => cancelAnimationFrame(animFrameRef.current);
-  }, [unlockedIds, validEdges]);
+  }, [unlockedIds, validEdges, motionEnabled, foreground]);
 
   useEffect(() => () => {
     freshnessTimersRef.current.forEach(clearTimeout);
@@ -208,27 +156,29 @@ export default function EvidenceBoard({ clues, unlockedIds, validEdges, caseData
 
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden"
-      style={{ background: 'radial-gradient(ellipse at center, #0a0f20 0%, #040810 100%)' }}>
+      style={{ background: 'radial-gradient(ellipse at center, #08121c 0%, #08121c 100%)' }}>
       <canvas
         ref={canvasRef}
         className="w-full h-full"
+        role="img"
+        aria-label={`${zh ? '证物板' : 'Evidence board'}: ${unlockedClues.map(clue => clue.keyword).join(', ') || (zh ? '尚未保全证据' : 'No evidence secured')}`}
         style={{ display: 'block' }}
       />
       {unlockedClues.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-4xl mb-3 opacity-20">🕸️</div>
-            <div className="text-xs tracking-widest opacity-30" style={{ color: '#00ffff', fontFamily: 'monospace' }}>
+            <div className="mb-3 opacity-40"><Icon name="network" size={36} /></div>
+            <div className="text-xs tracking-widest opacity-30" style={{ color: '#709f9a', fontFamily: 'monospace' }}>
               {zh ? '尚未保全证据' : 'NO EVIDENCE SECURED'}
             </div>
-            <div className="text-xs opacity-20 mt-1" style={{ color: '#00ffff', fontFamily: 'monospace' }}>
+            <div className="text-xs opacity-20 mt-1" style={{ color: '#709f9a', fontFamily: 'monospace' }}>
               {zh ? '开始调查以填充证物板' : 'Begin investigation to populate the board'}
             </div>
           </div>
         </div>
       )}
       <div className="absolute top-2 left-2 text-xs opacity-30"
-        style={{ color: '#00ffff', fontFamily: 'monospace' }}>
+        style={{ color: '#709f9a', fontFamily: 'monospace' }}>
         {zh ? '证物板' : 'EVIDENCE BOARD'} · {unlockedClues.length} {zh ? '节点' : 'NODES'}
       </div>
     </div>

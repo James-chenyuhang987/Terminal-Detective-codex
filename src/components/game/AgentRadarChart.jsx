@@ -1,12 +1,13 @@
+import { noirColor } from '@/components/ui/palette';
 import React, { useMemo } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 
 const AXES = [
-  { key: 'logic_power',         label: 'LOGIC',   labelZh: '逻辑', max: 100, color: '#00e5ff' },
-  { key: 'observation_focus',   label: 'OBS',     labelZh: '观察', max: 100, color: '#a78bfa' },
-  { key: 'confusion_resistance',label: 'CHAOS',   labelZh: '抗扰', max: 100, color: '#00ff88' },
-  { key: 'ap_cost_discount',    label: 'AP',      labelZh: '折扣', max: 30,  color: '#ffaa00' },
-  { key: 'hack_level',          label: 'HACK',    labelZh: '黑客', max: 100, color: '#ff6b35' },
+  { key: 'logic_power',         label: 'LOGIC',   labelZh: '逻辑', max: 100, color: '#709f9a' },
+  { key: 'observation_focus',   label: 'OBS',     labelZh: '观察', max: 100, color: '#9b9aae' },
+  { key: 'confusion_resistance',label: 'CHAOS',   labelZh: '抗扰', max: 100, color: '#8aaa91' },
+  { key: 'ap_cost_discount',    label: 'AP',      labelZh: '折扣', max: 30,  color: '#c19a63' },
+  { key: 'hack_level',          label: 'HACK',    labelZh: '黑客', max: 100, color: '#c19a63' },
 ];
 
 const N = AXES.length;
@@ -20,7 +21,8 @@ const polarToXY = (r, angle) => ({
   y: CY + r * Math.sin(angle),
 });
 
-export default function AgentRadarChart({ agent, agentColor, allAgents, size = 160 }) {
+export default function AgentRadarChart({ agent, agentColor: legacyColor, allAgents, size = 160 }) {
+  const agentColor = noirColor(legacyColor);
   const { lang } = useLang();
   const zh = lang === 'zh';
   // Build polygon points for one agent's data
@@ -102,8 +104,8 @@ export default function AgentRadarChart({ agent, agentColor, allAgents, size = 1
         {currentPoints.map((p, i) => (
           <circle
             key={i} cx={p.x} cy={p.y} r="2.8"
-            fill={AXES[i].color}
-            style={{ filter: `drop-shadow(0 0 4px ${AXES[i].color})`, transition: 'all 0.25s ease' }}
+            fill={noirColor(AXES[i].color)}
+            style={{ filter: `drop-shadow(0 0 4px ${noirColor(AXES[i].color)})`, transition: 'all 0.25s ease' }}
           />
         ))}
 
@@ -117,7 +119,7 @@ export default function AgentRadarChart({ agent, agentColor, allAgents, size = 1
                 x={pos.x} y={pos.y + 3}
                 textAnchor="middle" dominantBaseline="middle"
                 fontSize="7.5" fontFamily="monospace" fontWeight="700"
-                fill={axis.color}
+                fill={noirColor(axis.color)}
               >
                 {zh ? axis.labelZh : axis.label}
               </text>
@@ -125,7 +127,7 @@ export default function AgentRadarChart({ agent, agentColor, allAgents, size = 1
                 x={pos.x} y={pos.y + 11}
                 textAnchor="middle" dominantBaseline="middle"
                 fontSize="6" fontFamily="monospace"
-                fill={`${axis.color}80`}
+                fill={`${noirColor(axis.color)}80`}
               >
                 {axis.label}
               </text>}

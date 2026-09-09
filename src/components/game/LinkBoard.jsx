@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import Icon from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 // 推理连线板 — 拖拽两条已解锁线索，由受保护的确定性规则判定有效性。
-const WEIGHT_COLORS = { CRITICAL: '#ff3860', HIGH: '#ffaa00', MEDIUM: '#00e5ff', LOW: '#8888aa' };
+const WEIGHT_COLORS = { CRITICAL: '#c77c78', HIGH: '#c19a63', MEDIUM: '#709f9a', LOW: '#9b9aae' };
 
 export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isChecking, accentColor: _accentColor }) {
   const { lang } = useLang();
@@ -58,8 +60,8 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
   return (
     <div className="flex-1 flex flex-col overflow-hidden" style={{ fontFamily: 'monospace' }}>
       <div style={{ padding: '8px 10px 4px', textAlign: 'center' }}>
-        <div style={{ fontSize: '0.6rem', color: '#00ffff', fontWeight: 700, letterSpacing: '0.15em' }}>
-          🔗 {zh ? '推理连线' : 'LINK BOARD'}
+        <div style={{ fontSize: '0.6rem', color: '#709f9a', fontWeight: 700, letterSpacing: '0.15em' }}>
+          <Icon name="link" /> {zh ? '推理连线' : 'LINK BOARD'}
         </div>
         <div style={{ fontSize: '0.44rem', color: 'rgba(255,255,255,0.35)', marginTop: 3, lineHeight: 1.6 }}>
           {zh ? '按住一条线索拖向另一条线索建立推理连接' : 'Drag one clue onto another to create a deduction link'}<br/>{zh ? 'AI 将判定逻辑是否成立' : 'The AI will validate the logical relationship'}
@@ -77,12 +79,12 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
         <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5, overflow: 'visible' }}>
           {linkedPairs.map((p, i) => {
             const a = getCenter(p.a), b = getCenter(p.b);
-            const color = p.valid ? '#00ff88' : '#ff3860';
+            const color = p.valid ? '#8aaa91' : '#c77c78';
             return (
               <g key={i}>
                 <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
                   stroke={color} strokeWidth={p.valid ? 2 : 1} strokeDasharray={p.valid ? 'none' : '4 4'}
-                  opacity={0.7} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+                  opacity={0.7} />
                 <circle cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r={5}
                   fill="rgba(2,8,20,0.9)" stroke={color} strokeWidth={1} />
                 <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 + 2.5} textAnchor="middle" fontSize={6} fill={color}>
@@ -93,8 +95,7 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
           })}
           {dragFrom && fromCenter && dragPos && (
             <line x1={fromCenter.x} y1={fromCenter.y} x2={dragPos.x} y2={dragPos.y}
-              stroke="#00ffff" strokeWidth={1.5} strokeDasharray="6 4" opacity={0.9}
-              style={{ filter: 'drop-shadow(0 0 6px #00ffff)' }} />
+              stroke="#709f9a" strokeWidth={1.5} strokeDasharray="6 4" opacity={0.9} />
           )}
         </svg>
 
@@ -106,7 +107,7 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
           unlocked.map(clue => {
             const isSource = dragFrom === clue.clue_id;
             const isTarget = hoverTarget === clue.clue_id;
-            const wColor = WEIGHT_COLORS[clue.weight] || '#00e5ff';
+            const wColor = noirColor(WEIGHT_COLORS[clue.weight] || '#709f9a');
             return (
               <div
                 key={clue.clue_id}
@@ -116,15 +117,15 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '8px 10px', marginBottom: 6, borderRadius: 8,
-                  border: `1px solid ${isTarget ? '#00ffff' : isSource ? wColor : wColor + '35'}`,
-                  background: isTarget ? 'rgba(0,255,255,0.15)' : isSource ? `${wColor}18` : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${isTarget ? '#709f9a' : isSource ? wColor : wColor + '35'}`,
+                  background: isTarget ? 'rgba(112, 159, 154,0.15)' : isSource ? `${wColor}18` : 'rgba(255,255,255,0.03)',
                   cursor: isChecking ? 'wait' : 'grab',
                   userSelect: 'none', position: 'relative', zIndex: 2,
-                  boxShadow: isTarget ? '0 0 14px #00ffff60' : isSource ? `0 0 10px ${wColor}50` : 'none',
+                  boxShadow: isTarget || isSource ? `inset 2px 0 0 ${wColor}` : 'none',
                   transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s',
                 }}
               >
-                <span style={{ fontSize: 15 }}>{clue.visual_icon}</span>
+                <Icon name={clue.visual_icon} size={18} style={{ color: wColor }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.56rem', fontWeight: 700, color: wColor }}>{clue.keyword}</div>
                   <div style={{
@@ -140,14 +141,13 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
       </div>
 
       {isChecking && (
-        <div style={{
-          padding: '8px', textAlign: 'center', fontSize: '0.5rem', color: '#00ffff',
-          borderTop: '1px solid rgba(0,255,255,0.2)', animation: 'lb-pulse 0.8s ease-in-out infinite',
+        <div role="status" style={{
+          padding: '8px', textAlign: 'center', fontSize: '0.5rem', color: '#709f9a',
+          borderTop: '1px solid rgba(112, 159, 154,0.2)',
         }}>
-          ⟳ {zh ? '规则正在验证推理链…' : 'RULES ARE VALIDATING THE DEDUCTION…'}
+          <Icon name="refresh" /> {zh ? '规则正在验证推理链…' : 'RULES ARE VALIDATING THE DEDUCTION…'}
         </div>
       )}
-      <style>{`@keyframes lb-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
     </div>
   );
 }

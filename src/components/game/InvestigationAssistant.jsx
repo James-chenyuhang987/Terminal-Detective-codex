@@ -1,4 +1,8 @@
+import Icon, { IconText } from '@/components/ui/Icon';
+import { useLang } from '@/lib/lang.jsx';
+
 export default function InvestigationAssistant({ brief }) {
+  const { lang } = useLang();
   if (!brief) return null;
 
   return (
@@ -10,13 +14,11 @@ export default function InvestigationAssistant({ brief }) {
       aria-atomic="true"
     >
       <span className="td-assistant-avatar" aria-hidden="true">
-        <i />
-        <b>🤖</b>
-        <em />
+        <Icon name="robot" size={24} />
       </span>
-      <div key={brief.messageKey} className="td-assistant-bubble">
-        <small>NOVA // TACTICAL ASSISTANT</small>
-        <p>{brief.message}</p>
+      <div className="td-assistant-bubble">
+        <small>NOVA // {lang === 'zh' ? '调查助理' : 'TACTICAL ASSISTANT'}</small>
+        <p><IconText text={brief.message} /></p>
       </div>
     </aside>
   );

@@ -1,50 +1,57 @@
+import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useState, useEffect, useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import FusionForgeFX from '@/components/game/FusionForgeFX';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 // 推理重演过场：图标飞入碰撞 → 闪光 → 打字机真相碎片 → 进度条计数
 export default function LinkCinematic({ data, onDone }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
-  const [phase, setPhase] = useState('forge'); // forge → fly → flash → type → progress
+  const { reducedMotion, motionEnabled, foreground } = usePresentationMotion();
+  const [phase, setPhase] = useState(reducedMotion ? 'type' : 'forge'); // forge → fly → flash → type → progress
   const [typed, setTyped] = useState('');
   const [showSkip, setShowSkip] = useState(false);
   const [progressVal, setProgressVal] = useState(data.fragmentsBefore || 0);
-  const timers = useRef([]);
+  const typedCount = useRef(0);
 
   const total = data.fragmentsTotal || 7;
   const fullText = (data.narrative || '') + (data.villain_memory ? `\n\n${zh ? '▚ 凶手视角回忆' : '▚ KILLER\'S MEMORY'}\n${data.villain_memory}` : '');
 
-  // 熔炼视效结束后才进入重演过场
   useEffect(() => {
-    if (phase !== 'fly') return;
-    const push = (fn, ms) => timers.current.push(setTimeout(fn, ms));
-    push(() => setPhase('flash'), 420);
-    push(() => setPhase('type'), 900);
-    push(() => setShowSkip(true), 5000);
-    return () => timers.current.forEach(clearTimeout);
-  }, [phase]);
+    if (phase !== 'fly' && phase !== 'flash') return;
+    if (reducedMotion) { setPhase('type'); return; }
+    if (!foreground) return;
+    const timer = setTimeout(() => setPhase(phase === 'fly' ? 'flash' : 'type'), phase === 'fly' ? 420 : 480);
+    return () => clearTimeout(timer);
+  }, [phase, reducedMotion, foreground]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSkip(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
-  // typewriter
   useEffect(() => {
     if (phase !== 'type') return;
-    let i = 0;
+    if (reducedMotion) { setTyped(fullText); setPhase('progress'); return; }
+    if (!foreground) return;
+    const characters = Array.from(fullText);
     const id = setInterval(() => {
-      i++;
-      setTyped(fullText.slice(0, i));
-      if (i >= fullText.length) {
+      typedCount.current++;
+      setTyped(characters.slice(0, typedCount.current).join(''));
+      if (typedCount.current >= characters.length) {
         clearInterval(id);
         setPhase('progress');
       }
     }, 26);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, fullText, reducedMotion, foreground]);
 
   // progress counter
   useEffect(() => {
     if (phase !== 'progress') return;
     const target = data.hidden_ending_progress || (data.fragmentsBefore || 0) + 1;
+    if (!motionEnabled) { setProgressVal(target); return; }
     const id = setInterval(() => {
       setProgressVal(v => {
         if (v >= target) { clearInterval(id); return target; }
@@ -52,7 +59,7 @@ export default function LinkCinematic({ data, onDone }) {
       });
     }, 320);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, data.hidden_ending_progress, data.fragmentsBefore, motionEnabled]);
 
   const flying = phase === 'fly';
   const flashing = phase === 'flash';
@@ -73,14 +80,14 @@ export default function LinkCinematic({ data, onDone }) {
       position: 'fixed', inset: 0, zIndex: 200, background: '#000',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'monospace', padding: 20,
-      animation: 'cine-in 0.3s ease both',
+      animation: motionEnabled ? 'cine-in 0.3s ease both' : 'none',
     }}>
       {/* 破碎感扫描纹理 */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.5,
         backgroundImage: 'repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,0.045) 3px 4px)',
       }}/>
-      {flashing && (
+      {flashing && motionEnabled && (
         <div style={{ position: 'absolute', inset: 0, background: '#fff', animation: 'cine-flash 0.5s ease-out both' }}/>
       )}
 
@@ -88,8 +95,7 @@ export default function LinkCinematic({ data, onDone }) {
         position: 'relative', width: '100%', maxWidth: 620,
         border: '1px solid rgba(255,255,255,0.5)', padding: '26px 24px',
         background: 'rgba(4,4,6,0.92)',
-        boxShadow: flashing ? '0 0 90px #fff' : '0 0 40px rgba(255,255,255,0.12)',
-        transition: 'box-shadow 0.5s',
+        boxShadow: '0 20px 60px #0006', maxHeight: 'calc(100dvh - 40px)', overflowY: 'auto',
       }}>
         <div style={{
           fontSize: '0.5rem', letterSpacing: '0.3em', color: 'rgba(255,255,255,0.4)',
@@ -105,23 +111,21 @@ export default function LinkCinematic({ data, onDone }) {
               {i === 1 && (
                 <div style={{
                   width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                  background: flashing ? '#fff' : 'transparent',
-                  border: '1px solid rgba(255,255,255,0.4)',
-                  boxShadow: flashing ? '0 0 40px #fff' : 'none',
+                  background: flashing ? '#c5a66f44' : 'transparent',
+                  border: '1px solid #c5a66f80',
                   transition: 'all 0.3s',
                 }}/>
               )}
               <div style={{
-                textAlign: 'center', minWidth: 90,
-                transform: flying ? `translateX(${c.dir * 320}px)` : 'none',
-                opacity: flying ? 0 : 1,
+                textAlign: 'center', minWidth: 0, flex: '1 1 0', overflowWrap: 'anywhere',
+                transform: flying && motionEnabled ? `translateX(${c.dir * 20}px)` : 'none',
+                opacity: flying && motionEnabled ? 0 : 1,
                 transition: 'transform 0.4s cubic-bezier(.22,1,.36,1), opacity 0.4s',
               }}>
                 <div style={{
                   fontSize: 28,
-                  filter: `drop-shadow(0 0 ${flashing ? 22 : 8}px #fff)`,
-                  transition: 'filter 0.4s',
-                }}>{c.visual_icon || '🔍'}</div>
+                  color: '#c5a66f',
+                }}><Icon name={c.visual_icon || '🔍'} /></div>
                 <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.75)', marginTop: 6 }}>{c.keyword}</div>
               </div>
             </React.Fragment>
@@ -131,7 +135,7 @@ export default function LinkCinematic({ data, onDone }) {
         {/* 真相碎片字幕 */}
         <div style={{
           minHeight: 128, fontSize: '0.62rem', lineHeight: 1.9,
-          color: '#f2f2f2', whiteSpace: 'pre-wrap',
+          color: '#e6dfcf', whiteSpace: 'pre-wrap',
           borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 16,
         }}>
           {typed}
@@ -146,13 +150,13 @@ export default function LinkCinematic({ data, onDone }) {
           </div>
           <div style={{ height: 4, background: 'rgba(255,255,255,0.12)' }}>
             <div style={{
-              width: `${(progressVal / total) * 100}%`, height: '100%',
-              background: '#fff', boxShadow: '0 0 12px #fff',
-              transition: 'width 0.4s ease',
+              width: '100%', height: '100%', transformOrigin: 'left', transform: `scaleX(${progressVal / total})`,
+              background: '#c5a66f',
+              transition: 'transform 0.4s ease',
             }}/>
           </div>
           {data.is_core_link && (
-            <div style={{ marginTop: 10, fontSize: '0.5rem', color: '#ff3860', letterSpacing: '0.14em' }}>
+            <div style={{ marginTop: 10, fontSize: '0.5rem', color: '#c77c78', letterSpacing: '0.14em' }}>
               ▚ {zh ? '核心逻辑链被击穿 — 凶手行为模式已永久改变' : 'CORE CHAIN BREACHED — THE KILLER HAS CHANGED'}
             </div>
           )}
@@ -160,11 +164,11 @@ export default function LinkCinematic({ data, onDone }) {
 
         {(phase === 'progress') && (
           <button onClick={onDone} style={{
-            marginTop: 20, width: '100%', padding: '10px', cursor: 'pointer',
+            marginTop: 20, width: '100%', minHeight: 44, padding: '10px', cursor: 'pointer',
             border: '1px solid rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.08)',
             color: '#fff', fontFamily: 'monospace', fontSize: '0.58rem', letterSpacing: '0.2em',
           }}>
-            {zh ? '▶ 返回调查' : '▶ RESUME INVESTIGATION'}
+            <IconText text={zh ? '▶ 返回调查' : '▶ RESUME INVESTIGATION'} />
           </button>
         )}
       </div>
@@ -173,16 +177,16 @@ export default function LinkCinematic({ data, onDone }) {
         <button onClick={onDone} style={{
           position: 'absolute', bottom: 22, right: 22, cursor: 'pointer',
           border: '1px solid rgba(255,255,255,0.3)', background: 'transparent',
-          color: 'rgba(255,255,255,0.55)', padding: '6px 14px',
+          color: '#9caaa9', minHeight: 44, padding: '10px 14px',
           fontFamily: 'monospace', fontSize: '0.5rem', letterSpacing: '0.15em',
         }}>
-          {zh ? '跳过过场 ▶▶' : 'SKIP ▶▶'}
+          <IconText text={zh ? '跳过过场 ▶▶' : 'SKIP ▶▶'} />
         </button>
       )}
 
       <style>{`
         @keyframes cine-in{from{opacity:0}to{opacity:1}}
-        @keyframes cine-flash{0%{opacity:1}100%{opacity:0}}
+        @keyframes cine-flash{0%{opacity:.06}100%{opacity:0}}
       `}</style>
     </div>
   );

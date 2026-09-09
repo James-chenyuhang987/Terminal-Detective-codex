@@ -6,8 +6,8 @@ export default function StoryModeControl({ value, onChange, disabled = false, li
   const { lang } = useLang();
   const name = useId();
   const selected = normalizeStoryMode(value);
-  const accent = light ? '#0b6d8a' : '#7df1ff';
-  const text = light ? '#122033' : '#e2f2ff';
+  const accent = light ? '#0b6d8a' : '#a5c8c0';
+  const text = light ? '#122033' : '#e6dfcf';
   const detail = light ? '#40576c' : '#a7b8cb';
   const labels = {
     theater: lang === 'zh' ? '3D侦探剧情模式' : '3D Detective Story',

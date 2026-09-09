@@ -28,12 +28,12 @@ export default function StoryModeChooser({ initialMode, onConfirm, onCancel, bus
       style={{
         width: 'min(560px, calc(100vw - 28px))', maxHeight: 'calc(100dvh - 32px)',
         margin: 'auto', padding: 'clamp(16px, 4vw, 28px)', overflowY: 'auto',
-        border: '1px solid #67d5f080', borderRadius: 16, color: '#e2f2ff',
+        border: '1px solid #c5a66f80', borderRadius: 16, color: '#e6dfcf',
         background: 'linear-gradient(155deg, #102333, #040a14)',
         boxShadow: '0 24px 90px #000b', fontFamily: 'monospace',
       }}>
       <form onSubmit={event => { event.preventDefault(); if (!busy) onConfirm(choice); }}>
-        <div style={{ color: '#80dfee', fontSize: '.65rem', letterSpacing: '.15em' }}>TERMINAL DETECTIVE · STORY MODE</div>
+        <div style={{ color: '#a5c8c0', fontSize: '.65rem', letterSpacing: '.15em' }}>TERMINAL DETECTIVE · STORY MODE</div>
         <h2 id={titleId} style={{ margin: '12px 0', fontSize: 'clamp(1.2rem, 4vw, 1.6rem)' }}>
           {lang === 'zh' ? '选择你的侦探体验' : 'Choose your detective experience'}
         </h2>
@@ -43,8 +43,8 @@ export default function StoryModeChooser({ initialMode, onConfirm, onCancel, bus
             : 'Explore a 3D story scene or the classic text terminal. Confirm before loading your profile, registering or entering Home. Switch later from Home or Settings.'}
         </p>
         <StoryModeControl value={choice} onChange={setChoice} disabled={busy} />
-        {error && <p role="alert" style={{ color: '#ff9aad', fontSize: '.75rem', lineHeight: 1.7 }}>{error}</p>}
-        <p role="status" aria-live="polite" style={{ minHeight: 22, margin: '12px 0', color: '#80dfee', fontSize: '.7rem' }}>
+        {error && <p role="alert" style={{ color: '#dda29a', fontSize: '.75rem', lineHeight: 1.7 }}>{error}</p>}
+        <p role="status" aria-live="polite" style={{ minHeight: 22, margin: '12px 0', color: '#a5c8c0', fontSize: '.7rem' }}>
           {busy ? (lang === 'zh' ? '正在读取侦探档案…' : 'Loading detective profile…') : ''}
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -52,13 +52,13 @@ export default function StoryModeChooser({ initialMode, onConfirm, onCancel, bus
             flex: 1, minHeight: 44, padding: 12, border: '1px solid #7aacc566', borderRadius: 8,
             background: 'transparent', color: '#c4d6e7', cursor: 'pointer',
           }}>{lang === 'zh' ? '取消 / 返回' : 'Cancel / Back'}</button>
-          <button type="submit" className="td-ui-button" disabled={busy} aria-busy={busy} style={{
-            flex: 1, minHeight: 44, padding: 12, border: '1px solid #80dfee', borderRadius: 8,
-            background: '#80dfee20', color: '#c9f8ff', cursor: busy ? 'wait' : 'pointer', opacity: busy ? .6 : 1,
+          <button type="submit" className="td-ui-button td-button-primary" disabled={busy} aria-busy={busy} style={{
+            flex: 1, minHeight: 44, padding: 12, borderRadius: 8,
+            cursor: busy ? 'wait' : 'pointer', opacity: busy ? .6 : 1,
           }}>{lang === 'zh' ? (error ? '确认并重试' : '确认并继续') : (error ? 'Confirm & retry' : 'Confirm & continue')}</button>
         </div>
       </form>
-      <style>{`.td-story-mode-chooser::backdrop{background:rgba(0,4,12,.84);backdrop-filter:blur(6px)}.td-story-mode-chooser :focus-visible,.td-story-mode-control :focus-visible{outline:3px solid #e8c98a;outline-offset:4px}`}</style>
+      <style>{`.td-story-mode-chooser::backdrop{background:rgba(0,4,12,.84);backdrop-filter:blur(6px)}.td-story-mode-chooser :focus-visible,.td-story-mode-control :focus-visible{outline:3px solid #c5a66f;outline-offset:4px}`}</style>
     </dialog>
   );
 }

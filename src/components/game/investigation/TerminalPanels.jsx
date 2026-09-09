@@ -4,22 +4,25 @@ import { useLang } from '@/lib/lang.jsx';
 import { EmotionBadge } from '@/components/game/InterrogationHints';
 import AgentStaminaMeter from '@/components/game/AgentStaminaMeter';
 import { AGENT_STAMINA_INVESTIGATION_COST, canAgentInvestigate } from '@/game/agentStamina';
+import Icon, { IconText } from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 export function TerminalLine({ line, accentColor }) {
   const colors = {
-    default: '#c0c0d0', phase: accentColor, observe: '#00e5ff', thought: '#bf5fff',
-    action: '#00ff88', narration: '#e0e0f0', clue_desc: '#8888aa', success: '#00ff88',
-    error: '#ff3860', warning: '#ffaa00', trap: '#ff6600', system: '#8888aa', divider: '#ffffff15',
+    default: '#c0c0d0', phase: accentColor, observe: '#709f9a', thought: '#9b9aae',
+    action: '#8aaa91', narration: '#e0e0f0', clue_desc: '#9b9aae', success: '#8aaa91',
+    error: '#c77c78', warning: '#c19a63', trap: '#c19a63', system: '#9b9aae', divider: '#ffffff15',
   };
   return (
-    <div className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: colors[line.type] || colors.default, fontFamily: 'monospace' }}>
-      {line.text}
+    <div className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: noirColor(colors[line.type] || colors.default), fontFamily: 'monospace' }}>
+      <IconText text={line.text} />
     </div>
   );
 }
 
-export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChange, onQuestion, onClose, isProcessing, accentColor, emotion, team = [], error = null, storyMotion = false, presentationActive = true }) {
+export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChange, onQuestion, onClose, isProcessing, accentColor: legacyAccentColor, emotion, team = [], error = null, storyMotion = false, presentationActive = true }) {
   const { t, lang } = useLang();
+  const accentColor = noirColor(legacyAccentColor);
   const zh = lang === 'zh';
   const ref = useRef(null);
   const initialDialogueLength = useRef(dialogue.length);
@@ -36,22 +39,22 @@ export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChang
     <div className={`border-t p-3${storyMotion ? ' td-npc-story' : ''}`} style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-bold flex items-center gap-2" style={{ color: accentColor }}>
-          <span>{npc.avatar} {t.interrogating}: {npc.name} · {npc.role}</span>
+          <span><Icon name={npc.avatar} /> <IconText text={t.interrogating} />: {npc.name} · {npc.role}</span>
           <EmotionBadge level={emotion?.level} />
         </div>
-        <button type="button" onClick={onClose} className="text-xs opacity-40 hover:opacity-80" style={{ color: accentColor }} aria-label={t.close || 'Close'}>✕</button>
+        <button type="button" onClick={onClose} className="text-xs opacity-40 hover:opacity-80" style={{ color: accentColor }} aria-label={t.close || 'Close'}><Icon name="close" size={16} /></button>
       </div>
       <div ref={ref} className="max-h-32 overflow-y-auto space-y-1 mb-2">
         {dialogue.map((entry, index) => (
           <div key={`${npc.npc_id}-${entry.role}-${index}`} className="text-xs" style={{
-            color: entry.role === 'agent' ? '#00ff88' : entry.role === 'npc' ? '#ffaa00' : '#8888aa',
+            color: entry.role === 'agent' ? '#8aaa91' : entry.role === 'npc' ? '#c19a63' : '#9b9aae',
             fontStyle: entry.role === 'system' ? 'italic' : 'normal',
           }}>
-            {entry.role === 'agent' ? '> AGENT: ' : entry.role === 'npc' ? `${npc.avatar} ${entry.name}: ` : ''}
+            {entry.role === 'agent' ? '> AGENT: ' : entry.role === 'npc' ? <><Icon name={npc.avatar} /> {entry.name}: </> : ''}
             {storyMotion && entry.role !== 'agent'
               ? <NPCStatement text={entry.text} lang={lang} animate={entry.role === 'npc' && index >= initialDialogueLength.current} active={presentationActive}
                 showAll={revealedThrough.npcId === npc.npc_id && index <= revealedThrough.index} />
-              : entry.text}
+              : entry.role === 'agent' ? entry.text : <IconText text={entry.text} />}
           </div>
         ))}
       </div>
@@ -82,7 +85,7 @@ export function NPCDialogBox({ npc, dialogue, packs, executorId, onExecutorChang
         {(activePack?.questions || []).map(question => (
           <button type="button" key={question.questionId} disabled={isProcessing || !canQuestion}
             onClick={() => onQuestion(question)} className={question.repeated ? 'is-repeated' : ''}>
-            <header><span>{question.repeated ? '↻' : question.tone === 'evidence' ? '📎' : '◇'} {question.text}</span><strong>{question.estimatedAlignment}%</strong></header>
+            <header><span><Icon name={question.repeated ? 'refresh' : question.tone === 'evidence' ? 'paperclip' : 'chat'} /> <IconText text={question.text} /></span><strong>{question.estimatedAlignment}%</strong></header>
             <div><i><b style={{ width: `${question.estimatedAlignment}%` }} /></i></div>
             <footer><span>{zh ? '探员预估 · ' : 'AGENT ESTIMATE · '}{question.confidence === 'high' ? (zh ? '高置信' : 'HIGH') : question.confidence === 'medium' ? (zh ? '中置信' : 'MEDIUM') : (zh ? '低置信' : 'LOW')}</span><code>{question.focusAttribute} · STA -{AGENT_STAMINA_INVESTIGATION_COST}%</code></footer>
           </button>
@@ -110,13 +113,13 @@ export function StructuredReportPanel({ options, value, onChange, onSubmit, onCa
   const complete = fields.every(([key]) => value[key]) && (value.evidenceIds?.length || 0) >= 1;
   return (
     <section className="td-structured-report" data-onboarding-target="structured-report">
-      <header><div><small>{zh ? '结构化结案报告' : 'STRUCTURED CASE REPORT'}</small><h3>{zh ? '用已经发现的证据重建案件' : 'RECONSTRUCT THE CASE FROM DISCOVERED EVIDENCE'}</h3></div><button type="button" onClick={onCancel} aria-label={zh ? '关闭结案报告' : 'Close case report'} title={zh ? '关闭' : 'Close'}>✕</button></header>
-      {error && <div className="td-report-error" role="alert">⚠ {error}</div>}
+      <header><div><small>{zh ? '结构化结案报告' : 'STRUCTURED CASE REPORT'}</small><h3>{zh ? '用已经发现的证据重建案件' : 'RECONSTRUCT THE CASE FROM DISCOVERED EVIDENCE'}</h3></div><button type="button" onClick={onCancel} aria-label={zh ? '关闭结案报告' : 'Close case report'} title={zh ? '关闭' : 'Close'}><Icon name="close" size={18} /></button></header>
+      {error && <div className="td-report-error" role="alert"><Icon name="warning" /> {error}</div>}
       {!options ? <div className="td-report-loading">{zh ? '正在读取合法报告选项…' : 'LOADING LEGAL REPORT OPTIONS…'}</div> : <>
         <div className="td-report-fields">
           {fields.map(([key, label, choices]) => <label key={key}><span>{label}</span><select value={value[key] || ''} onChange={event => onChange({ ...value, [key]: event.target.value })} disabled={isProcessing}><option value="">{zh ? '请选择…' : 'SELECT…'}</option>{choices.map(choice => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label>)}
         </div>
-        <div className="td-report-evidence"><header><span>{zh ? '支持证据（选择 2–4 条可获得更高评价）' : 'SUPPORTING EVIDENCE (SELECT 2–4 FOR A STRONGER GRADE)'}</span><b>{value.evidenceIds?.length || 0}/4</b></header><div>{(options.availableEvidence || []).map(item => <button type="button" key={item.id} className={value.evidenceIds?.includes(item.id) ? 'is-selected' : ''} onClick={() => toggleEvidence(item.id)} disabled={isProcessing || (!value.evidenceIds?.includes(item.id) && value.evidenceIds?.length >= 4)}>🔎 {item.label}</button>)}</div></div>
+        <div className="td-report-evidence"><header><span>{zh ? '支持证据（选择 2–4 条可获得更高评价）' : 'SUPPORTING EVIDENCE (SELECT 2–4 FOR A STRONGER GRADE)'}</span><b>{value.evidenceIds?.length || 0}/4</b></header><div>{(options.availableEvidence || []).map(item => <button type="button" key={item.id} className={value.evidenceIds?.includes(item.id) ? 'is-selected' : ''} onClick={() => toggleEvidence(item.id)} disabled={isProcessing || (!value.evidenceIds?.includes(item.id) && value.evidenceIds?.length >= 4)}><Icon name="search" /> {item.label}</button>)}</div></div>
         <p>{zh ? '事实贴近度只用于战术选择；最终评价由受保护的案件规则和你提交的证据共同决定。' : 'Alignment guides tactics; the final grade is determined by protected case rules and your submitted evidence.'}</p>
         <footer><button type="button" onClick={onCancel} disabled={isProcessing}>{zh ? '取消' : 'CANCEL'}</button><button type="button" onClick={onSubmit} disabled={isProcessing || !complete}>{isProcessing ? (zh ? '校验中…' : 'VALIDATING…') : (zh ? '提交结案报告' : 'SUBMIT CASE REPORT')}</button></footer>
       </>}
@@ -127,13 +130,13 @@ export function StructuredReportPanel({ options, value, onChange, onSubmit, onCa
 
 export function JudgeResult({ result }) {
   const { t } = useLang();
-  const scoreColors = { S: '#00ff88', A: '#00ffff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' };
-  const color = scoreColors[result.score] || '#ffffff';
+  const scoreColors = { S: '#8aaa91', A: '#709f9a', B: '#c19a63', C: '#c19a63', D: '#c77c78' };
+  const color = noirColor(scoreColors[result.score] || '#ffffff');
   return (
     <div className="mt-3 p-3 rounded border" style={{ borderColor: `${color}50`, backgroundColor: `${color}10` }}>
       <div className="flex items-center gap-3 mb-2">
-        <div className="text-3xl font-bold" style={{ color, textShadow: `0 0 20px ${color}` }}>{result.score}</div>
-        <div className="text-xs" style={{ color }}>{result.is_passed ? t.caseClosedTag : t.reportRejectedTag}</div>
+        <div className="text-3xl font-bold" style={{ color }}>{result.score}</div>
+        <div className="text-xs" style={{ color }}><IconText text={result.is_passed ? t.caseClosedTag : t.reportRejectedTag} /></div>
       </div>
       <div className="text-xs" style={{ color: `${color}cc` }}>{result.critique}</div>
     </div>

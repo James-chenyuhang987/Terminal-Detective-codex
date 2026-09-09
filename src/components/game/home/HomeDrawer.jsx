@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLang } from '@/lib/lang.jsx';
+import Icon, { IconText } from '@/components/ui/Icon.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion.js';
 
-export default function HomeDrawer({ title, subtitle, children, onClose, busy = false, width = 620 }) {
+export default function HomeDrawer({ title, subtitle, icon = undefined, children, onClose, busy = false, width = 620 }) {
   const { lang } = useLang();
+  const { motionEnabled } = usePresentationMotion();
   const closeRef = useRef(null);
   const drawerRef = useRef(null);
   const previousFocusRef = useRef(null);
@@ -14,8 +17,8 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
     if (busy || closing) return;
     setClosing(true);
     window.clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = window.setTimeout(onClose, 190);
-  }, [busy, closing, onClose]);
+    closeTimerRef.current = window.setTimeout(onClose, motionEnabled ? 190 : 0);
+  }, [busy, closing, onClose, motionEnabled]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
@@ -52,18 +55,18 @@ export default function HomeDrawer({ title, subtitle, children, onClose, busy = 
   }, [requestClose]);
 
   const drawer = (
-    <div className={`td-home-drawer-layer ${closing ? 'is-closing' : ''}`}>
+    <div className={`td-home-drawer-layer ${closing ? 'is-closing' : ''}`} data-td-motion={motionEnabled ? 'active' : 'paused'}>
       <div className="td-drawer-backdrop" onClick={requestClose} />
       <aside className="td-home-drawer" ref={drawerRef} role="dialog" aria-modal="true" aria-label={title} aria-busy={busy} style={{ width: `min(${width}px, 100vw)` }}>
         <header className="td-home-drawer-header">
           <div>
-            <div className="td-home-drawer-title">{title}</div>
+            <div className="td-home-drawer-title">{icon && <Icon name={icon} size={20} />} <IconText text={title} /></div>
             {subtitle && <div className="td-home-drawer-subtitle">{subtitle}</div>}
           </div>
           <button type="button" className="td-ui-button td-icon-button td-home-drawer-close" ref={closeRef}
             onClick={requestClose} disabled={busy}
             aria-label={lang === 'zh' ? '关闭面板' : 'Close panel'}
-            title={lang === 'zh' ? '关闭' : 'Close'}>{busy ? 'SYNC…' : '✕'}</button>
+            title={lang === 'zh' ? '关闭' : 'Close'}>{busy ? <Icon name="refresh" size={18} /> : <Icon name="close" size={18} />}</button>
         </header>
         <div className="td-home-drawer-content" style={{ pointerEvents: busy ? 'none' : 'auto', opacity: busy ? .72 : 1 }}>{children}</div>
         {busy && <div className="td-home-drawer-sync" />}

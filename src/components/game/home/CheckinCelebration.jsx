@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ITEM_CATALOG } from '@/game/playerProfile';
+import Icon from '@/components/ui/Icon.jsx';
 
 function rewardParts(reward, lang) {
   const parts = [];
@@ -22,25 +23,15 @@ export default function CheckinCelebration({ reward, day, lang = 'zh', onDone })
   const parts = rewardParts(reward, lang);
   return (
     <div className="td-checkin-celebration" role="status" aria-live="assertive" onClick={onDone}>
-      <div className="td-checkin-rays" aria-hidden="true" />
-      <div className="td-checkin-particles" aria-hidden="true">
-        {Array.from({ length: 24 }, (_, index) => (
-          <i key={index} style={/** @type {import('react').CSSProperties & Record<string, string>} */ ({
-            '--particle-angle': `${index * 15}deg`,
-            '--particle-distance': `${-150 - (index % 5) * 24}px`,
-            '--particle-delay': `${(index % 6) * 35}ms`,
-          })} />
-        ))}
-      </div>
       <section className="td-checkin-reward-card">
-        <span className="td-checkin-seal">✓</span>
-        <small>DAILY ARCHIVE · DAY {day}</small>
+        <span className="td-checkin-seal"><Icon name="check" size={26} /></span>
+        <small>{lang === 'zh' ? `每日归档 · 第 ${day} 天` : `DAILY ARCHIVE · DAY ${day}`}</small>
         <h2>{lang === 'zh' ? '签到完成' : 'CHECK-IN COMPLETE'}</h2>
         <p>{lang === 'zh' ? '今日补给已安全写入侦探档案' : 'Today’s supplies are secured in your detective profile'}</p>
         <div className="td-checkin-reward-list">
-          {parts.map(part => <div key={`${part.label}-${part.value}`}><span>{part.icon}</span><strong>{part.value}</strong><small>{part.label}</small></div>)}
+          {parts.map(part => <div key={`${part.label}-${part.value}`}><span><Icon name={part.icon} size={24} /></span><strong>{part.value}</strong><small>{part.label}</small></div>)}
         </div>
-        <em>{lang === 'zh' ? '点击任意位置继续' : 'CLICK ANYWHERE TO CONTINUE'}</em>
+        <button type="button" className="td-ui-button td-button-secondary" onClick={event => { event.stopPropagation(); onDone(); }}>{lang === 'zh' ? '继续调查' : 'CONTINUE'}</button>
       </section>
     </div>
   );

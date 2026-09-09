@@ -2,10 +2,10 @@ import React from 'react';
 
 // 纯 CSS/SVG 抽象场景插图 —— 按区域/行动类型映射，无加载延迟
 const SCENE_MAP = {
-  zone_datacenter: { racks: true, rain: false, glow: '#00e5ff' },
-  zone_lab:        { flask: true, rain: false, glow: '#a78bfa' },
-  zone_lobby:      { figures: true, rain: false, glow: '#00ff88' },
-  zone_balcony:    { figures: true, rain: true, glow: '#ffaa00' },
+  zone_datacenter: { racks: true, rain: false, glow: '#709f9a' },
+  zone_lab:        { flask: true, rain: false, glow: '#9b9aae' },
+  zone_lobby:      { figures: true, rain: false, glow: '#8aaa91' },
+  zone_balcony:    { figures: true, rain: true, glow: '#c19a63' },
 };
 
 const ACTION_HINT = {
@@ -27,7 +27,7 @@ export default function SceneIllustration({ zone, actionTag, height = 110 }) {
     <div style={{
       position: 'relative', height, width: '100%', overflow: 'hidden',
       borderRadius: 12, border: `1px solid ${c}25`,
-      background: `linear-gradient(180deg, ${c}12 0%, rgba(2,6,14,0.85) 100%)`,
+      background: `linear-gradient(180deg, ${c}12 0%, rgba(8, 18, 28,0.85) 100%)`,
     }}>
       <svg width="100%" height="100%" viewBox="0 0 320 110" preserveAspectRatio="xMidYMax slice">
         {/* 地平线网格 */}
@@ -72,27 +72,15 @@ export default function SceneIllustration({ zone, actionTag, height = 110 }) {
           </g>
         ))}
 
-        {/* 数据流 */}
         {[0, 1, 2, 3, 4, 5].map(i => (
-          <rect key={`d${i}`} x={14 + i * 52} y="0" width="1.5" height="18"
-            fill={c} fillOpacity="0.5">
-            <animate attributeName="y" values="-20;110" dur={`${1.8 + i * 0.4}s`} repeatCount="indefinite" />
-          </rect>
+          <rect key={`d${i}`} x={14 + i * 52} y={8 + (i % 3) * 21} width="1" height="12"
+            fill={c} fillOpacity="0.18" />
         ))}
 
-        {/* 雨线 */}
         {s.rain && [0, 1, 2, 3, 4, 5, 6, 7].map(i => (
-          <line key={`r${i}`} x1={i * 42} y1="0" x2={i * 42 - 10} y2="24"
-            stroke={c} strokeOpacity="0.3" strokeWidth="1">
-            <animate attributeName="y1" values="-24;110" dur={`${0.7 + i * 0.09}s`} repeatCount="indefinite" />
-            <animate attributeName="y2" values="0;134" dur={`${0.7 + i * 0.09}s`} repeatCount="indefinite" />
-          </line>
+          <line key={`r${i}`} x1={i * 42} y1={(i % 3) * 18} x2={i * 42 - 10} y2={(i % 3) * 18 + 24}
+            stroke={c} strokeOpacity="0.2" strokeWidth="1" />
         ))}
-
-        {/* 扫描光带 */}
-        <rect x="0" y="0" width="320" height="2" fill={c} fillOpacity="0.5">
-          <animate attributeName="y" values="0;110;0" dur="6s" repeatCount="indefinite" />
-        </rect>
       </svg>
     </div>
   );

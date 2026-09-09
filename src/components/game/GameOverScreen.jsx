@@ -1,3 +1,4 @@
+import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   getLevelFromXP, getXPToNextLevel, SKILL_TREES, LEVEL_XP_TABLE, MAX_LEVEL,
@@ -7,6 +8,9 @@ import { useProfile } from '@/lib/ProfileContext.jsx';
 import LevelUpModal from '@/components/game/LevelUpModal';
 import { useLang } from '@/lib/lang.jsx';
 import { normalizeCaseScore } from '@/game/caseEvaluation';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
+import SlicedTitle from '@/components/ui/SlicedTitle';
+import { useSettings } from '@/lib/settings.jsx';
 
 // ── XP formula ────────────────────────────────────────────────────────────────
 const SCORE_TITLES = {
@@ -18,13 +22,16 @@ const SCORE_TITLES_EN = {
 
 // ── Particle burst on level up ────────────────────────────────────────────────
 function LevelUpParticles({ color, trigger }) {
+  const { motionEnabled } = usePresentationMotion();
+  const { settings } = useSettings();
   const canvasRef = useRef(null);
   const particles = useRef([]);
 
   useEffect(() => {
-    if (!trigger || !canvasRef.current) return;
+    if (!trigger || !canvasRef.current || !motionEnabled || !settings.particles) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
     particles.current = Array.from({ length: 28 }, () => ({
@@ -49,16 +56,19 @@ function LevelUpParticles({ color, trigger }) {
       else ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [trigger]);
+    return () => { cancelAnimationFrame(raf); ctx.clearRect(0, 0, canvas.width, canvas.height); };
+  }, [trigger, motionEnabled, color, settings.particles]);
 
   return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }} />;
 }
 
 // ── Animated number counter ───────────────────────────────────────────────────
-function Counter({ target, duration = 1200, color = '#00e5ff', suffix = '' }) {
-  const [val, setVal] = useState(0);
+function Counter({ target, duration = 1200, color = '#709f9a', suffix = '' }) {
+  const { motionEnabled } = usePresentationMotion();
+  const [val, setVal] = useState(motionEnabled ? 0 : target);
+  const finished = useRef(false);
   useEffect(() => {
+    if (!motionEnabled || finished.current) { setVal(target); finished.current = true; return; }
     let start = null;
     let frameId = 0;
     const step = (ts) => {
@@ -66,36 +76,55 @@ function Counter({ target, duration = 1200, color = '#00e5ff', suffix = '' }) {
       const pct = Math.min((ts - start) / duration, 1);
       setVal(Math.round((1 - Math.pow(1 - pct, 3)) * target));
       if (pct < 1) frameId = requestAnimationFrame(step);
+      else finished.current = true;
     };
     frameId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frameId);
-  }, [target, duration]);
+  }, [target, duration, motionEnabled]);
   return <span style={{ color, fontFamily: 'monospace', fontWeight: 900 }}>{val >= 0 ? '+' : ''}{val}{suffix}</span>;
 }
 
 // ── XP Bar ────────────────────────────────────────────────────────────────────
 function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0, onLevelUp }) {
   const { lang } = useLang();
-  const [displayed, setDisplayed] = useState(oldXP);
+  const { motionEnabled } = usePresentationMotion();
+  const reported = useRef(new Set());
+  const completedTarget = useRef(null);
+  const notifyRef = useRef(onLevelUp);
+  notifyRef.current = onLevelUp;
+  const [displayed, setDisplayed] = useState(motionEnabled ? oldXP : newXP);
   const [flash, setFlash] = useState(false);
   const [particleTrigger, setParticleTrigger] = useState(0);
   const [visible, setVisible] = useState(false);
   const [levelUps, setLevelUps] = useState([]);
 
   useEffect(() => {
+    if (!motionEnabled) { setVisible(true); return; }
+    if (visible) return;
     const t = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(t);
-  }, [delay]);
+  }, [delay, motionEnabled, visible]);
 
   useEffect(() => {
     if (!visible) return;
     let frameId = 0;
-    const levelTimers = [];
     const crossings = [];
     for (let lvl = 1; lvl <= MAX_LEVEL; lvl++) {
       if (LEVEL_XP_TABLE[lvl] > oldXP && LEVEL_XP_TABLE[lvl] <= newXP) crossings.push(lvl);
     }
     setLevelUps(crossings);
+    const finish = () => {
+      completedTarget.current = newXP;
+      setDisplayed(newXP);
+      setFlash(true);
+      if (motionEnabled && crossings.some(lvl => !reported.current.has(lvl))) setParticleTrigger(t => t + 1);
+      crossings.forEach((lvl, idx) => {
+        if (reported.current.has(lvl)) return;
+        reported.current.add(lvl);
+        notifyRef.current?.({ fromLevel: idx === 0 ? getLevelFromXP(oldXP) : crossings[idx - 1], toLevel: lvl, agentIdx });
+      });
+    };
+    if (!motionEnabled || completedTarget.current === newXP) { finish(); return; }
 
     const startTimer = setTimeout(() => {
       let start = null;
@@ -105,28 +134,15 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
         const pct = Math.min((ts - start) / dur, 1);
         setDisplayed(Math.round(oldXP + (1 - Math.pow(1 - pct, 4)) * (newXP - oldXP)));
         if (pct < 1) frameId = requestAnimationFrame(step);
-        else {
-          setFlash(true);
-          if (crossings.length > 0) {
-            setParticleTrigger(t => t + 1);
-            // Stagger modal per crossing level
-            crossings.forEach((lvl, idx) => {
-              const timer = setTimeout(() => {
-                onLevelUp?.({ fromLevel: idx === 0 ? getLevelFromXP(oldXP) : crossings[idx - 1], toLevel: lvl, agentIdx });
-              }, idx * 200);
-              levelTimers.push(timer);
-            });
-          }
-        }
+        else finish();
       };
       frameId = requestAnimationFrame(step);
     }, 300);
     return () => {
       clearTimeout(startTimer);
       cancelAnimationFrame(frameId);
-      levelTimers.forEach(clearTimeout);
     };
-  }, [visible, oldXP, newXP]);
+  }, [visible, oldXP, newXP, motionEnabled, agentIdx]);
 
   const level = getLevelFromXP(displayed);
   const { current, needed, pct } = getXPToNextLevel(displayed);
@@ -144,7 +160,7 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
           background: didLevelUp && flash ? `${color}40` : `${color}15`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'monospace', fontWeight: 900, fontSize: '0.85rem', color,
-          boxShadow: flash ? `0 0 24px ${color}, 0 0 48px ${color}60` : `0 0 8px ${color}40`,
+          boxShadow: flash ? `0 0 0 3px ${color}20` : 'none',
           transition: 'all 0.6s ease',
           animation: didLevelUp && flash ? 'badge-pulse 1s ease-in-out 2' : 'none',
         }}>
@@ -153,7 +169,7 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 14 }}>{agentIcon}</span>
+              <span style={{ fontSize: 14 }}><Icon name={agentIcon} /></span>
               <span style={{ color, fontSize: '0.72rem', fontFamily: 'monospace', fontWeight: 700 }}>{agentName}</span>
               {didLevelUp && flash && (
                 <span style={{ fontSize: '0.5rem', color: '#fff', fontFamily: 'monospace', background: color, borderRadius: 4, padding: '1px 6px', fontWeight: 900, animation: 'level-badge-in 0.4s cubic-bezier(.22,1,.36,1) both' }}>
@@ -166,7 +182,7 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
             </span>
           </div>
           <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', position: 'relative' }}>
-            <div style={{ height: '100%', width: isMax ? '100%' : `${pct}%`, background: `linear-gradient(to right, ${color}50, ${color})`, boxShadow: `0 0 10px ${color}80`, transition: 'width 0.08s linear', borderRadius: 4 }}/>
+            <div style={{ height: '100%', width: '100%', transformOrigin: 'left', transform: `scaleX(${isMax ? 1 : pct / 100})`, background: `linear-gradient(to right, ${color}80, ${color})`, transition: 'transform 0.08s linear', borderRadius: 4 }}/>
             {!isMax && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', transform: `translateX(${pct - 100}%)`, transition: 'transform 0.08s linear', pointerEvents: 'none' }}/>}
           </div>
         </div>
@@ -183,24 +199,26 @@ function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0,
 // ── Score grade ring ──────────────────────────────────────────────────────────
 function ScoreRing({ score, isPassed }) {
   const { lang } = useLang();
-  const colors = { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' };
+  const { motionEnabled } = usePresentationMotion();
+  const colors = { S: '#8aaa91', A: '#709f9a', B: '#c19a63', C: '#c19a63', D: '#c77c78' };
   const color = colors[score] || '#888';
   const [visible, setVisible] = useState(false);
   useEffect(() => {
+    if (!motionEnabled) { setVisible(true); return; }
     const timer = setTimeout(() => setVisible(true), 200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [motionEnabled]);
   return (
     <div style={{
       width: 110, height: 110, borderRadius: '50%', flexShrink: 0,
       border: `3px solid ${color}`,
       background: `radial-gradient(circle, ${color}18 0%, transparent 70%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      boxShadow: `0 0 40px ${color}60, inset 0 0 20px ${color}10`,
+      boxShadow: `0 0 0 6px ${color}0c`,
       transform: visible ? 'scale(1)' : 'scale(0.3)', opacity: visible ? 1 : 0,
       transition: 'all 0.6s cubic-bezier(.22,1,.36,1)',
     }}>
-      <div style={{ fontSize: '3rem', fontWeight: 900, fontFamily: 'monospace', color, textShadow: `0 0 20px ${color}`, lineHeight: 1 }}>{score}</div>
+      <div style={{ fontSize: '3rem', fontWeight: 900, fontFamily: 'monospace', color, textShadow: 'none', lineHeight: 1 }}>{score}</div>
       <div style={{ fontSize: '0.5rem', fontFamily: 'monospace', color: `${color}80`, letterSpacing: '0.15em', marginTop: 2 }}>{isPassed ? (lang === 'zh' ? '已侦破' : 'SOLVED') : (lang === 'zh' ? '失败' : 'FAILED')}</div>
     </div>
   );
@@ -208,13 +226,15 @@ function ScoreRing({ score, isPassed }) {
 
 // ── XP Source Row ─────────────────────────────────────────────────────────────
 function XPSourceRow({ label, val, color, icon, delay, sublabel }) {
-  const [visible, setVisible] = useState(false);
-  const [counted, setCounted] = useState(false);
+  const { motionEnabled } = usePresentationMotion();
+  const [visible, setVisible] = useState(!motionEnabled);
+  const [counted, setCounted] = useState(!motionEnabled);
   useEffect(() => {
+    if (!motionEnabled) { setVisible(true); setCounted(true); return; }
     const t1 = setTimeout(() => setVisible(true), delay);
     const t2 = setTimeout(() => setCounted(true), delay + 300);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [delay]);
+  }, [delay, motionEnabled]);
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -225,14 +245,14 @@ function XPSourceRow({ label, val, color, icon, delay, sublabel }) {
       transition: 'all 0.35s ease',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 14 }}><Icon name={icon} /></span>
         <div>
           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.65rem', fontFamily: 'monospace' }}>{label}</div>
           {sublabel && <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.55rem', fontFamily: 'monospace' }}>{sublabel}</div>}
         </div>
       </div>
-      <div style={{ color: val < 0 ? '#ff3860' : color, fontWeight: 900, fontSize: '0.78rem', fontFamily: 'monospace', textShadow: `0 0 8px ${val < 0 ? '#ff3860' : color}80`, minWidth: 60, textAlign: 'right' }}>
-        {counted ? <Counter target={val} color={val < 0 ? '#ff3860' : color} suffix=" XP" duration={900} /> : `${val >= 0 ? '+' : ''}${val} XP`}
+      <div style={{ color: val < 0 ? '#c77c78' : color, fontWeight: 900, fontSize: '0.78rem', fontFamily: 'monospace', textShadow: 'none', minWidth: 60, textAlign: 'right' }}>
+        {counted ? <Counter target={val} color={val < 0 ? '#c77c78' : color} suffix=" XP" duration={900} /> : `${val >= 0 ? '+' : ''}${val} XP`}
       </div>
     </div>
   );
@@ -241,12 +261,13 @@ function XPSourceRow({ label, val, color, icon, delay, sublabel }) {
 // ── Main GameOverScreen ───────────────────────────────────────────────────────
 const AGENT_NAMES  = ['隼目', '破心', '幽灵'];
 const AGENT_ICONS  = ['👁️', '🔥', '💻'];
-const AGENT_COLORS = ['#00e5ff', '#ff6b6b', '#a78bfa'];
+const AGENT_COLORS = ['#709f9a', '#c77c78', '#9b9aae'];
 
 export default function GameOverScreen({ judgeResult, gameState, caseData, onReturnToLobby, onReturnToLanding, onSettlement }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const { profile } = useProfile();
+  const { motionEnabled } = usePresentationMotion();
   const [xpGain, setXpGain] = useState(null);
   const [oldProg] = useState(() => normalizeAgentProgression(profile?.agent_progression));
   const [oldDetective] = useState(() => ({ level: profile?.level || 1, xp: profile?.xp || 0 }));
@@ -261,11 +282,10 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
   const [currentModal, setCurrentModal] = useState(null);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      setPhase('xp');
-    }, 1400);
+    if (!motionEnabled) { setPhase('xp'); return; }
+    const t = setTimeout(() => setPhase('xp'), 1400);
     return () => clearTimeout(t);
-  }, []);
+  }, [motionEnabled]);
 
   const syncSettlement = useCallback(async () => {
     if (settlementSentRef.current) return;
@@ -310,22 +330,22 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
   const score = normalizeCaseScore(judgeResult?.score);
   const isPassed = judgeResult?.is_passed === true;
   const scoreTitle = zh ? (SCORE_TITLES[score] || '见习侦探') : (SCORE_TITLES_EN[score] || 'DETECTIVE TRAINEE');
-  const mainColor = isPassed ? '#00ff88' : '#ff3860';
+  const mainColor = isPassed ? '#8aaa91' : '#c77c78';
   const settlementCanLeave = settlementStatus === 'saved';
 
   const BONUS_ROWS = xpGain ? [
-    { label: zh ? `案件评分 · ${score} 级` : `CASE RANK · ${score}`, sublabel: scoreTitle, val: xpGain.base, color: { S: '#00ff88', A: '#00e5ff', B: '#ffaa00', C: '#ff6600', D: '#ff3860' }[score] || '#888', icon: { S: '🏆', A: '⭐', B: '🔰', C: '📋', D: '📝' }[score] || '📋' },
-    { label: `${zh ? '线索收集' : 'CLUES COLLECTED'} · ${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, sublabel: `${zh ? '完成度' : 'COMPLETION'} ${Math.round(((gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1)) * 100)}%${isPassed ? '' : (zh ? ' · 过程经验减半' : ' · PROCESS XP AT 50%')}`, val: xpGain.clueBonus, color: '#a78bfa', icon: '🔍' },
-    { label: `${zh ? 'AP 效率 · 剩余' : 'AP EFFICIENCY · REMAINING'} ${gameState.action_points_left || 0}${zh ? ' 点' : ''}`, sublabel: zh ? '结合调查完成度计算，上限 60 XP' : 'Weighted by investigation progress, maximum 60 XP', val: xpGain.apBonus, color: '#ffaa00', icon: '⚡' },
-    { label: `${zh ? '混乱控制 · 最终' : 'CONFUSION CONTROL · FINAL'} ${gameState.confusion_score || 0}%`, sublabel: zh ? '结合调查完成度计算（满分 45 XP）' : 'Weighted by investigation progress (maximum 45 XP)', val: xpGain.confusionBonus, color: '#00ff88', icon: '🧠' },
-    { label: zh ? '无系统崩溃' : 'NO SYSTEM CRASH', sublabel: zh ? '按云端记录的崩溃次数结算' : 'Based on the cloud-recorded crash count', val: xpGain.noBSoD, color: '#ff3aff', icon: '🛡️' },
-    ...(xpGain.outcomeAdjustment < 0 ? [{ label: zh ? '未结案经验调整' : 'UNSOLVED CASE ADJUSTMENT', sublabel: zh ? '报告未通过，但已保留调查过程经验' : 'The report was rejected, but process XP is retained', val: xpGain.outcomeAdjustment, color: '#ff3860', icon: '📝' }] : []),
+    { label: zh ? `案件评分 · ${score} 级` : `CASE RANK · ${score}`, sublabel: scoreTitle, val: xpGain.base, color: { S: '#8aaa91', A: '#709f9a', B: '#c19a63', C: '#c19a63', D: '#c77c78' }[score] || '#888', icon: { S: '🏆', A: '⭐', B: '🔰', C: '📋', D: '📝' }[score] || '📋' },
+    { label: `${zh ? '线索收集' : 'CLUES COLLECTED'} · ${gameState.unlocked_clues?.length || 0}/${caseData?.clue_dictionary?.length || 0}`, sublabel: `${zh ? '完成度' : 'COMPLETION'} ${Math.round(((gameState.unlocked_clues?.length || 0) / (caseData?.clue_dictionary?.length || 1)) * 100)}%${isPassed ? '' : (zh ? ' · 过程经验减半' : ' · PROCESS XP AT 50%')}`, val: xpGain.clueBonus, color: '#9b9aae', icon: '🔍' },
+    { label: `${zh ? 'AP 效率 · 剩余' : 'AP EFFICIENCY · REMAINING'} ${gameState.action_points_left || 0}${zh ? ' 点' : ''}`, sublabel: zh ? '结合调查完成度计算，上限 60 XP' : 'Weighted by investigation progress, maximum 60 XP', val: xpGain.apBonus, color: '#c19a63', icon: '⚡' },
+    { label: `${zh ? '混乱控制 · 最终' : 'CONFUSION CONTROL · FINAL'} ${gameState.confusion_score || 0}%`, sublabel: zh ? '结合调查完成度计算（满分 45 XP）' : 'Weighted by investigation progress (maximum 45 XP)', val: xpGain.confusionBonus, color: '#8aaa91', icon: '🧠' },
+    { label: zh ? '无系统崩溃' : 'NO SYSTEM CRASH', sublabel: zh ? '按云端记录的崩溃次数结算' : 'Based on the cloud-recorded crash count', val: xpGain.noBSoD, color: '#9b9aae', icon: '🛡️' },
+    ...(xpGain.outcomeAdjustment < 0 ? [{ label: zh ? '未结案经验调整' : 'UNSOLVED CASE ADJUSTMENT', sublabel: zh ? '报告未通过，但已保留调查过程经验' : 'The report was rejected, but process XP is retained', val: xpGain.outcomeAdjustment, color: '#c77c78', icon: '📝' }] : []),
   ] : [];
 
   return (
     <div className="td-game-over td-page-shell" style={{
       minHeight: '100dvh',
-      background: 'radial-gradient(ellipse at 30% 10%, #0a0020 0%, #03060f 60%)',
+      background: 'radial-gradient(ellipse at 30% 10%, #08121c 0%, #08121c 60%)',
       fontFamily: "'Courier New', monospace",
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: '32px 16px', overflowY: 'auto', color: '#fff',
@@ -339,9 +359,9 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
           <div style={{ display: 'inline-block', border: `1px solid ${mainColor}50`, borderRadius: 6, padding: '3px 14px', fontSize: '0.55rem', fontFamily: 'monospace', color: `${mainColor}80`, letterSpacing: '0.25em', marginBottom: 12, background: `${mainColor}08` }}>
             ◈ {zh ? '案件归档' : 'CASE CLOSED'} · {caseData?.case_id || 'NEON_BLOOD_01'} · {new Date().toLocaleDateString(zh ? 'zh-CN' : 'en-US')}
           </div>
-          <h1 style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)', fontWeight: 900, margin: 0, background: isPassed ? 'linear-gradient(135deg, #00ff88 0%, #00e5ff 100%)' : 'linear-gradient(135deg, #ff3860 0%, #ff6600 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '0.08em' }}>
-            {isPassed ? (zh ? '◈ 案件终结' : '◈ CASE SOLVED') : (zh ? '◈ 调查失败' : '◈ INVESTIGATION FAILED')}
-          </h1>
+          <SlicedTitle as="h1" style={{ fontSize: 'clamp(1.6rem, 5vw, 3rem)', margin: 0, color: mainColor }}>
+            {isPassed ? (zh ? '案件终结' : 'CASE SOLVED') : (zh ? '调查失败' : 'INVESTIGATION FAILED')}
+          </SlicedTitle>
           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: 6, letterSpacing: '0.2em' }}>{caseData?.title} · {caseData?.subtitle}</div>
         </div>
 
@@ -351,7 +371,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ color: mainColor, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4, letterSpacing: '0.08em' }}>{scoreTitle}</div>
             <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.68rem', lineHeight: 1.7, marginBottom: 10 }}>{judgeResult?.critique || (zh ? '调查记录已归档。' : 'Investigation record archived.')}</div>
-            <div style={{ color: isPassed ? 'rgba(0,255,136,.72)' : 'rgba(255,170,0,.78)', fontSize: '0.56rem', lineHeight: 1.6, marginBottom: 10 }}>
+            <div style={{ color: isPassed ? 'rgba(138, 170, 145,.72)' : 'rgba(193, 154, 99,.78)', fontSize: '0.56rem', lineHeight: 1.6, marginBottom: 10 }}>
               {isPassed
                 ? (zh ? 'C 级为基础结案门槛；效率与证据完整度用于提高评级和经验。' : 'Grade C is the closure threshold; efficiency and evidence completeness improve rank and XP.')
                 : (zh ? 'D 级表示核心结论仍不正确；本局调查过程经验不会清零。' : 'Grade D means the core conclusion is still incorrect; process XP from this run is retained.')}
@@ -364,7 +384,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
                 { label: zh ? '混乱峰值' : 'CONFUSION', val: `${gameState.confusion_score || 0}%`, icon: '🌀' },
               ].map(s => (
                 <div key={s.label} style={{ textAlign: 'center' }}>
-                  <div style={{ color: mainColor, fontSize: '1rem', fontWeight: 900 }}>{s.icon} {s.val}</div>
+                  <div style={{ color: mainColor, fontSize: '1rem', fontWeight: 900 }}><Icon name={s.icon} /> {s.val}</div>
                   <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.5rem', letterSpacing: '0.1em' }}>{s.label}</div>
                 </div>
               ))}
@@ -373,53 +393,53 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
         </div>
 
         {/* XP breakdown */}
-        <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(0,229,255,0.15)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.6s 0.3s cubic-bezier(.22,1,.36,1) both' }}>
-          <div style={{ color: 'rgba(0,229,255,0.7)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 10, fontFamily: 'monospace' }}>◈ {zh ? '经验值结算明细' : 'XP BREAKDOWN'}</div>
+        <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(112, 159, 154,0.15)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.6s 0.3s cubic-bezier(.22,1,.36,1) both' }}>
+          <div style={{ color: 'rgba(112, 159, 154,0.7)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 10, fontFamily: 'monospace' }}>◈ {zh ? '经验值结算明细' : 'XP BREAKDOWN'}</div>
           {BONUS_ROWS.map((r, i) => (
             <XPSourceRow key={i} label={r.label} val={r.val} color={r.color} icon={r.icon} delay={400 + i * 180} sublabel={r.sublabel} />
           ))}
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>{zh ? '本局总计获得' : 'TOTAL EARNED'}</span>
-            <span style={{ color: '#00ff88', fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', textShadow: '0 0 16px #00ff88' }}>
-              {!xpGain ? (zh ? '等待云端确认' : 'AWAITING CLOUD') : phase !== 'summary' ? <Counter target={xpGain.total} suffix=" XP" color="#00ff88" duration={1200} /> : `+${xpGain.total} XP`}
+            <span style={{ color: '#8aaa91', fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', textShadow: 'none' }}>
+              {!xpGain ? (zh ? '等待云端确认' : 'AWAITING CLOUD') : phase !== 'summary' ? <Counter target={xpGain.total} suffix=" XP" color="#8aaa91" duration={1200} /> : `+${xpGain.total} XP`}
             </span>
           </div>
         </div>
 
         {phase === 'xp' && settledDetective && (
           <div className={`td-ui-card td-result-panel td-detective-level-result ${settledDetective.level > oldDetective.level ? 'is-level-up' : ''}`} style={{
-            border: `1px solid ${settledDetective.level > oldDetective.level ? 'rgba(232,201,138,.48)' : 'rgba(0,229,255,.2)'}`,
+            border: `1px solid ${settledDetective.level > oldDetective.level ? 'rgba(197, 166, 111,.48)' : 'rgba(112, 159, 154,.2)'}`,
             borderRadius: 14, padding: '14px 16px', marginBottom: 20, position: 'relative', overflow: 'hidden',
             background: settledDetective.level > oldDetective.level
-              ? 'linear-gradient(135deg,rgba(232,201,138,.15),rgba(0,229,255,.07))'
-              : 'linear-gradient(135deg,rgba(0,229,255,.08),rgba(0,0,0,.5))',
+              ? 'linear-gradient(135deg,rgba(197, 166, 111,.15),rgba(112, 159, 154,.07))'
+              : 'linear-gradient(135deg,rgba(112, 159, 154,.08),rgba(0,0,0,.5))',
             animation: 'go-in .55s cubic-bezier(.22,1,.36,1) both',
           }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 13 }}>
-              <div style={{ width: 46, height: 46, borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1px solid rgba(232,201,138,.72)', background: 'rgba(232,201,138,.1)', color: '#f1d28c', fontWeight: 900, boxShadow: '0 0 18px rgba(232,201,138,.2)' }}>{settledDetective.level}</div>
+              <div style={{ width: 46, height: 46, borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1px solid rgba(197, 166, 111,.72)', background: 'rgba(197, 166, 111,.1)', color: '#c5a66f', fontWeight: 900, boxShadow: '0 0 18px rgba(197, 166, 111,.2)' }}>{settledDetective.level}</div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: settledDetective.level > oldDetective.level ? '#f4d99c' : '#7df1ff', fontSize: '.67rem', fontWeight: 900, letterSpacing: '.1em' }}>
+                <div style={{ color: settledDetective.level > oldDetective.level ? '#e1d0ac' : '#a5c8c0', fontSize: '.67rem', fontWeight: 900, letterSpacing: '.1em' }}>
                   {settledDetective.level > oldDetective.level
                     ? (zh ? `侦探等级提升 · LV.${settledDetective.level}` : `DETECTIVE LEVEL UP · LV.${settledDetective.level}`)
                     : (zh ? `侦探成长 · LV.${settledDetective.level}` : `DETECTIVE PROGRESS · LV.${settledDetective.level}`)}
                 </div>
                 <div style={{ height: 6, borderRadius: 999, overflow: 'hidden', background: 'rgba(255,255,255,.08)', marginTop: 8 }}>
-                  <div style={{ width: `${settledDetective.level >= DETECTIVE_LEVEL_CAP ? 100 : Math.min(100, settledDetective.xp / XP_PER_LEVEL * 100)}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,#00c8ff,#7df1ff,#f0d28b)', boxShadow: '0 0 12px rgba(0,229,255,.5)' }} />
+                  <div style={{ width: `${settledDetective.level >= DETECTIVE_LEVEL_CAP ? 100 : Math.min(100, settledDetective.xp / XP_PER_LEVEL * 100)}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,#709f9a,#a5c8c0,#e1d0ac)', boxShadow: '0 0 12px rgba(112, 159, 154,.5)' }} />
                 </div>
-                <div style={{ color: 'rgba(230,247,255,.42)', fontSize: '.52rem', marginTop: 5 }}>
+                <div style={{ color: 'rgba(230, 223, 207,.42)', fontSize: '.52rem', marginTop: 5 }}>
                   {settledDetective.level >= DETECTIVE_LEVEL_CAP ? 'MAX' : `${settledDetective.xp}/${XP_PER_LEVEL} XP`}
                 </div>
               </div>
-              <div style={{ color: '#00ff88', fontWeight: 900, fontSize: '.75rem', whiteSpace: 'nowrap' }}>+{xpGain.total} XP</div>
+              <div style={{ color: '#8aaa91', fontWeight: 900, fontSize: '.75rem', whiteSpace: 'nowrap' }}>+{xpGain.total} XP</div>
             </div>
-            {settledDetective.level > oldDetective.level && <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid rgba(232,201,138,.15)', color: 'rgba(244,220,167,.68)', fontSize: '.54rem' }}>{zh ? '新的等级奖励已解锁，可在首页“等级之路”领取。' : 'A new reward is ready on the Level Road at Home.'}</div>}
+            {settledDetective.level > oldDetective.level && <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid rgba(197, 166, 111,.15)', color: 'rgba(244,220,167,.68)', fontSize: '.54rem' }}>{zh ? '新的等级奖励已解锁，可在首页“等级之路”领取。' : 'A new reward is ready on the Level Road at Home.'}</div>}
           </div>
         )}
 
         {/* Agent XP bars */}
         {phase === 'xp' && newProg && (
-          <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(167,139,250,0.2)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.5s cubic-bezier(.22,1,.36,1) both', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ color: 'rgba(167,139,250,0.8)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 14, fontFamily: 'monospace' }}>◈ {zh ? '探员晋升档案' : 'AGENT ADVANCEMENT'}</div>
+          <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(155, 154, 174,0.2)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.5s cubic-bezier(.22,1,.36,1) both', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ color: 'rgba(155, 154, 174,0.8)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 14, fontFamily: 'monospace' }}>◈ {zh ? '探员晋升档案' : 'AGENT ADVANCEMENT'}</div>
             {AGENT_NAMES.map((name, i) => (
               <XPBar
                 key={i} agentIdx={i} agentName={zh ? name : ['NEXUS-01', 'AURORA-09', 'CIPHER-47'][i]}
@@ -437,26 +457,26 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
           <div style={{ textAlign: 'center', marginBottom: 20, animation: 'go-in 0.6s 0.5s cubic-bezier(.22,1,.36,1) both' }}>
             <div style={{ display: 'inline-block', border: `2px solid ${mainColor}60`, borderRadius: 12, padding: '10px 32px', background: `${mainColor}10`, backdropFilter: 'blur(8px)' }}>
               <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.52rem', letterSpacing: '0.2em', marginBottom: 4, fontFamily: 'monospace' }}>{zh ? '本局评定称号' : 'CASE TITLE EARNED'}</div>
-              <div style={{ color: mainColor, fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', textShadow: `0 0 16px ${mainColor}` }}>{scoreTitle}</div>
+              <div style={{ color: mainColor, fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', textShadow: 'none' }}>{scoreTitle}</div>
             </div>
           </div>
         )}
 
         <div role="status" style={{
           marginBottom: 12, textAlign: 'center', fontFamily: 'monospace', fontSize: '.58rem',
-          color: settlementStatus === 'saved' ? '#00ff88' : settlementStatus === 'error' ? '#ff6b84' : '#ffaa00',
+          color: settlementStatus === 'saved' ? '#8aaa91' : settlementStatus === 'error' ? '#c77c78' : '#c19a63',
         }}>
-          {settlementStatus === 'saved'
+          <IconText text={settlementStatus === 'saved'
             ? (zh ? '✓ 调查档案已同步至 Cloudflare' : '✓ INVESTIGATION SYNCED TO CLOUDFLARE')
             : settlementStatus === 'error'
               ? (zh ? '⚠ 云端结算尚未确认；重试会核对同一案件，不会重复发奖。' : '⚠ CLOUD SETTLEMENT UNCONFIRMED. RETRY CHECKS THE SAME RUN WITHOUT DUPLICATE REWARDS.')
-              : (zh ? '⟳ 正在同步调查结算…' : '⟳ SYNCING CASE SETTLEMENT…')}
+              : (zh ? '⟳ 正在同步调查结算…' : '⟳ SYNCING CASE SETTLEMENT…')} />
           {settlementStatus === 'error' && <button className="td-ui-button td-button-danger td-button-compact" onClick={() => void syncSettlement()} style={{ marginLeft: 9 }}>{zh ? '重试' : 'RETRY'}</button>}
         </div>
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', animation: 'go-in 0.6s 0.6s cubic-bezier(.22,1,.36,1) both' }}>
-          <button className="td-ui-button td-button-primary" onClick={onReturnToLobby} disabled={!settlementCanLeave} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#fff', background: 'linear-gradient(135deg, #00c8ff 0%, #a78bfa 100%)', border: 'none', borderRadius: 12, cursor: settlementCanLeave ? 'pointer' : 'wait', opacity: settlementCanLeave ? 1 : .45, boxShadow: '0 0 30px rgba(0,200,255,0.4)', transition: 'all 0.2s' }}
+          <button className="td-ui-button td-button-primary" onClick={onReturnToLobby} disabled={!settlementCanLeave} style={{ padding: '14px 36px', fontSize: '0.8rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.08em', borderRadius: 10, cursor: settlementCanLeave ? 'pointer' : 'wait', opacity: settlementCanLeave ? 1 : .45 }}
             onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
             ↺ {zh ? '重新配置编队' : 'RECONFIGURE SQUAD'}
