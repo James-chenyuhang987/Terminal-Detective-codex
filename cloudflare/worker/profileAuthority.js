@@ -46,6 +46,7 @@ async function profileRequest(request, env, session) {
     await env.DB.prepare(`UPDATE profiles SET active_session_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`)
       .bind(body.session_id, session.user_id).run();
     row = await readProfileRow(env, session.user_id, now);
+    if (row.active_session_id !== body.session_id) return error('SESSION_TAKEN', 'This account is active on another device.', 409);
     return json(await successPayload(env, row, session));
   }
   if (row.active_session_id !== body.session_id) return error('SESSION_TAKEN', 'This account is active on another device.', 409);
