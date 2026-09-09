@@ -242,7 +242,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
       </div>
 
       <div style={{ marginTop: 40, fontSize: '0.55rem', color: 'rgba(255,255,255,0.18)', letterSpacing: '0.2em', textAlign: 'center' }}>
-        <IconText text={t.caseArchiveFooter} />
+        <IconText text={t.caseArchiveFooter.replace('{count}', String(ALL_CASES.length))} />
       </div>
     </div>
   );

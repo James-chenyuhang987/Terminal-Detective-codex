@@ -10,6 +10,9 @@ import { drawIcon } from '../src/components/ui/iconCanvas.js';
 import { NOIR, noirColor } from '../src/components/ui/palette.js';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/lib/settingsData.js';
 import { LEVEL_XP_TABLE, MAX_LEVEL, getLevelFromXP, getXPToNextLevel } from '../src/game/agentProgression.js';
+import { ALL_CASES } from '../src/game/caseData.js';
+import { CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS } from '../src/game/playerProfile.js';
+import { AUTH_EMAIL_LANGUAGE_KEY } from '../src/lib/authEmail.js';
 
 const read = path => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8');
 function load(path, imports, bindings = {}, suffix = '') {
@@ -55,6 +58,31 @@ test('icon-only actions can have a label, while text adapters preserve copy and 
   assert.match(markup, /Energy 12/);
   for (const unknown of ['👩🏽‍💻', '🕵🏽‍♂️', '🕵🏽', '👨‍👩‍👧‍👦', 'Cafe\u0301 🇨🇳']) {
     assert.deepEqual(iconTextParts(unknown), [{ text: unknown }]);
+  }
+});
+
+test('localized case archive footer matches the rendered current or changed catalog count', () => {
+  for (const lang of ['zh', 'en']) {
+    const language = load('lib/lang.jsx', { react, '@/lib/authEmail': { AUTH_EMAIL_LANGUAGE_KEY } }, {
+      localStorage: { getItem: () => lang },
+    });
+    for (const catalog of [ALL_CASES, ALL_CASES.slice(0, 3), []]) {
+      const { default: CaseSelect } = load('components/game/CaseSelect.jsx', {
+        react, '@/game/caseData': { ALL_CASES: catalog },
+        '@/game/playerProfile': { CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS },
+        '@/lib/lang.jsx': language, '@/components/ui/Icon': icons, '@/components/ui/palette': { noirColor },
+      });
+      const markup = renderToStaticMarkup(React.createElement(language.LangProvider, null,
+        React.createElement(CaseSelect, { profile: { energy: 100, solved_cases: [] } })));
+      const count = (markup.match(/class="td-ui-card td-case-card\b/g) || []).length;
+      assert.equal(count, catalog.length);
+      const expected = lang === 'zh'
+        ? `TERMINAL DETECTIVE · 案件档案 · ${count}个案件可选`
+        : `TERMINAL DETECTIVE · CASE ARCHIVE · ${count} INVESTIGATIONS AVAILABLE`;
+      assert.ok(markup.includes(expected), `${lang} footer must match all ${count} rendered cases`);
+      assert.ok(language.LANG[lang].caseArchiveFooter.includes('{count}'));
+      assert.ok(!markup.includes('{count}'), 'the localized placeholder must be resolved');
+    }
   }
 });
 
