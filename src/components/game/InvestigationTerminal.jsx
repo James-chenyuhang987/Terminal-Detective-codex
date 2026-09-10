@@ -257,6 +257,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const resumeRun = useCallback(async () => {
     const view = runViewRef.current;
     const isCurrent = () => view?.active && view.client === runClient && runViewRef.current === view;
+    if (!isCurrent() || view.recovering) return;
+    // Transport deduplication alone still presents its shared response twice.
+    view.recovering = true;
     setAuthorityLoading(true);
     setAuthorityReady(false);
     setAuthorityError(null);
@@ -269,6 +272,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     } catch (error) {
       if (isCurrent()) setAuthorityError(error);
     } finally {
+      view.recovering = false;
       if (isCurrent()) setAuthorityLoading(false);
     }
   }, [commitServerRun, runClient]);

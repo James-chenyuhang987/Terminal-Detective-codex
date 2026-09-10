@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import Icon, { IconText } from '@/components/ui/Icon';
-import SlicedTitle from '@/components/ui/SlicedTitle';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 const GOLD = '#c5a66f';
@@ -85,6 +84,7 @@ function FeatureCard({ icon, title, desc, delay }) {
 }
 
 function TitleLogo({ t, lang }) {
+  const { reducedMotion, foreground } = usePresentationMotion();
   const copy = lang === 'zh'
     ? { eyebrow: '皇家侦探署 · 全息案件终端', motto: '真相藏在每一道微光之后' }
     : { eyebrow: 'ROYAL DETECTIVE BUREAU · HOLOGRAPHIC CASE TERMINAL', motto: 'Every glimmer conceals a fragment of truth' };
@@ -92,9 +92,9 @@ function TitleLogo({ t, lang }) {
   return (
     <header className="td-landing-title">
       <div className="td-landing-eyebrow td-gold-flow-text">{copy.eyebrow}</div>
-      <h1 className="td-landing-title-words" aria-label="Terminal Detective">
-        <SlicedTitle as="span">TERMINAL</SlicedTitle>
-        <SlicedTitle as="span" className="is-second">DETECTIVE</SlicedTitle>
+      <h1 className="td-landing-title-words" aria-label="Terminal Detective" data-motion-reduced={reducedMotion} data-motion-paused={!foreground}>
+        <span className="td-gold-flow-text td-landing-gold-title">TERMINAL</span>
+        <span className="td-gold-flow-text td-landing-gold-title is-second">DETECTIVE</span>
       </h1>
       <p><IconText text={t.subtitle} /></p>
       <div className="td-landing-motto"><span />{copy.motto}<span /></div>

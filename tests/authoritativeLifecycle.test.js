@@ -245,6 +245,81 @@ test('actual lost-answer receipt replay restores dialogue and fresh options with
   }
 });
 
+test('overlapping cloud retries present a recovered answer only once', async () => {
+  const h = await interviewRuntime({ lost: true });
+  await h.ask();
+  assert.equal(h.client.hasPending(), true);
+  await Promise.all([h.resume(), h.resume()]);
+  assert.equal(h.stored.ready, true);
+  assert.equal(h.stored.charges, 1);
+  assert.equal(h.stored.dialogue.filter(line => line.role === 'npc').length, 1);
+  assert.equal(h.calls.filter(body => body.action === 'command').length, 2);
+  assert.equal(h.client.hasPending(), false);
+});
+
+test('recovery stays single-flight until presentation finishes and releases the gate after failure', async () => {
+  const h = gateway();
+  const presentation = deferred();
+  let presentations = 0;
+  h.bindings.recoveryPresentationRef.current = async () => {
+    presentations++;
+    await presentation.promise;
+    throw new Error('presentation failed');
+  };
+  const resume = handler('resumeRun', h.bindings);
+  const first = resume();
+  h.pending.resolve({ run: { id: 'cloud-run' } });
+  await Promise.resolve();
+  const overlapping = resume();
+  presentation.resolve();
+  await Promise.all([first, overlapping]);
+  assert.equal(presentations, 1);
+  assert.equal(h.stored.commits.length, 1);
+  assert.equal(h.stored.ready.includes(true), false);
+  h.bindings.recoveryPresentationRef.current = () => { presentations++; };
+  await resume();
+  assert.equal(presentations, 2);
+  assert.equal(h.stored.ready.at(-1), true);
+});
+
+test('an old view finishing recovery cannot release the replacement view gate', async () => {
+  const h = gateway();
+  const oldPresentation = deferred();
+  const newPresentation = deferred();
+  let presentations = 0;
+  h.bindings.recoveryPresentationRef.current = () => (++presentations === 1 ? oldPresentation.promise : newPresentation.promise);
+  const resume = handler('resumeRun', h.bindings);
+  const oldRequest = resume();
+  h.pending.resolve({ run: { id: 'cloud-run' } });
+  await Promise.resolve();
+  h.bindings.runViewRef.current.active = false;
+  h.bindings.runViewRef.current = { active: true, client: h.bindings.runClient };
+  const currentRequest = resume();
+  await Promise.resolve();
+  oldPresentation.resolve();
+  await oldRequest;
+  await resume();
+  assert.equal(presentations, 2);
+  assert.equal(h.stored.loading.at(-1), true);
+  assert.equal(h.stored.ready.includes(true), false);
+  newPresentation.resolve();
+  await currentRequest;
+  assert.equal(h.stored.loading.at(-1), false);
+  assert.equal(h.stored.ready.at(-1), true);
+});
+
+test('an inactive recovery callback cannot change loading or readiness', async () => {
+  const h = gateway();
+  const resume = handler('resumeRun', h.bindings);
+  h.bindings.runViewRef.current.active = false;
+  h.pending.resolve({ run: { id: 'old-view' } });
+  await resume();
+  assert.deepEqual(h.stored.loading, []);
+  assert.deepEqual(h.stored.ready, []);
+  assert.deepEqual(h.stored.errors, []);
+  assert.deepEqual(h.stored.commits, []);
+});
+
 test('actual close during accepted question keeps server commit and releases late narrative instead of blocking the queue', async () => {
   const h = await interviewRuntime({ deferredAnswer: true });
   const request = h.ask();
