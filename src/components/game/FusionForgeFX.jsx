@@ -1,4 +1,7 @@
+import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useEffect, useRef, useState } from 'react';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
+import { useSettings } from '@/lib/settings.jsx';
 
 // 高能音效：上升扫频 → 撞击和弦 → 熔炼余韵
 function playForgeSound(isCore) {
@@ -53,34 +56,49 @@ function playForgeSound(isCore) {
     noise.connect(ng); ng.connect(master);
     noise.start(now + 0.88);
 
-    setTimeout(() => ctx.close(), 2800);
+    const timer = setTimeout(() => { void ctx.close().catch(() => {}); }, 2800);
+    return () => { clearTimeout(timer); if (ctx.state !== 'closed') void ctx.close().catch(() => {}); };
   } catch { /* 静音环境下忽略 */ }
 }
 
 // 熔炼合体视效：两张线索卡向中心撞击 → 熔融粒子 → 冲击波 → 凝成印记
 export default function FusionForgeFX({ clueA, clueB, isCore, onDone }) {
+  const { motionEnabled, reducedMotion, foreground } = usePresentationMotion();
+  const { settings } = useSettings();
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const startRef = useRef(0);
   const [stage, setStage] = useState('charge'); // charge → impact → sigil
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  const completed = useRef(false);
+  const soundPlayed = useRef(false);
 
   useEffect(() => {
-    playForgeSound(isCore);
+    if (!foreground || !settings.sfxEnabled || soundPlayed.current) return;
+    soundPlayed.current = true;
+    return playForgeSound(isCore);
+  }, [foreground, settings.sfxEnabled, isCore]);
+
+  useEffect(() => {
+    const finish = () => { if (!completed.current) { completed.current = true; doneRef.current?.(); } };
+    if (reducedMotion) { setStage('sigil'); const timer = setTimeout(finish, 350); return () => clearTimeout(timer); }
     const t1 = setTimeout(() => setStage('impact'), 880);
     const t2 = setTimeout(() => setStage('sigil'), 1500);
-    const t3 = setTimeout(() => onDone?.(), 2600);
+    const t3 = setTimeout(finish, 2600);
     return () => [t1, t2, t3].forEach(clearTimeout);
-  }, []);
+  }, [reducedMotion]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !motionEnabled || !settings.particles) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
     resize();
     window.addEventListener('resize', resize);
 
-    const hot = isCore ? ['#ff3860', '#ff8a00', '#ffe066'] : ['#00e5ff', '#a78bfa', '#ffffff'];
+    const hot = isCore ? ['#c77c78', '#c19a63', '#c5a66f'] : ['#709f9a', '#9b9aae', '#ffffff'];
     const sparks = [];
     startRef.current = performance.now();
 
@@ -108,7 +126,7 @@ export default function FusionForgeFX({ clueA, clueB, isCore, onDone }) {
 
       // 撞击瞬间：喷射火星 + 冲击波
       if (el > 0.86 && sparks.length === 0) {
-        for (let i = 0; i < 160; i++) {
+        for (let i = 0; i < 48; i++) {
           const a = Math.random() * Math.PI * 2;
           const sp = 2 + Math.random() * 9;
           sparks.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: hot[i % hot.length] });
@@ -148,14 +166,14 @@ export default function FusionForgeFX({ clueA, clueB, isCore, onDone }) {
       ctx.fillStyle = grad;
       ctx.fill();
 
-      rafRef.current = requestAnimationFrame(draw);
+      if (el < 2.6) rafRef.current = requestAnimationFrame(draw);
     };
     rafRef.current = requestAnimationFrame(draw);
-    return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(rafRef.current); };
-  }, [isCore]);
+    return () => { window.removeEventListener('resize', resize); cancelAnimationFrame(rafRef.current); ctx.clearRect(0, 0, canvas.width, canvas.height); };
+  }, [isCore, motionEnabled, settings.particles]);
 
   const charging = stage === 'charge';
-  const accent = isCore ? '#ff3860' : '#00e5ff';
+  const accent = isCore ? '#c77c78' : '#709f9a';
 
   return (
     <div style={{
@@ -166,28 +184,26 @@ export default function FusionForgeFX({ clueA, clueB, isCore, onDone }) {
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
 
       {/* 撞击白闪 */}
-      {stage !== 'charge' && (
+      {motionEnabled && stage !== 'charge' && (
         <div style={{ position: 'absolute', inset: 0, background: '#fff', animation: 'forge-flash 0.55s ease-out both' }} />
       )}
 
       {/* 两张线索卡向中心熔炼 */}
       <div style={{
         position: 'absolute', inset: 0, display: 'flex',
-        alignItems: 'center', justifyContent: 'center', gap: charging ? 260 : 0,
-        transition: 'gap 0.85s cubic-bezier(.7,0,.3,1)',
+        alignItems: 'center', justifyContent: 'center', gap: 16,
       }}>
         {[clueA, clueB].map((c, i) => (
           <div key={i} style={{
             width: 108, padding: '12px 8px', textAlign: 'center',
             border: `1px solid ${accent}90`, background: 'rgba(6,8,16,0.9)',
             boxShadow: `0 0 24px ${accent}70`,
-            transform: charging ? 'scale(1)' : 'scale(0.25) rotate(' + (i ? 14 : -14) + 'deg)',
+            transform: charging ? `translateX(${i ? 1 : -1}6px)` : `translateX(${i ? -54 : 54}px) scale(.7)`,
             opacity: charging ? 1 : 0,
-            filter: charging ? 'none' : 'blur(3px) brightness(2.4)',
-            transition: 'all 0.6s cubic-bezier(.7,0,.3,1)',
+            transition: 'transform 0.6s cubic-bezier(.7,0,.3,1), opacity .6s ease',
           }}>
-            <div style={{ fontSize: 26, filter: `drop-shadow(0 0 10px ${accent})` }}>{c?.visual_icon || '🔍'}</div>
-            <div style={{ fontSize: '0.48rem', color: '#e8e8f5', marginTop: 6 }}>{c?.keyword}</div>
+            <div style={{ fontSize: 26, filter: `drop-shadow(0 0 10px ${accent})` }}><Icon name={c?.visual_icon || '🔍'} /></div>
+            <div style={{ fontSize: '0.48rem', color: '#e6dfcf', marginTop: 6 }}>{c?.keyword}</div>
           </div>
         ))}
       </div>
@@ -204,7 +220,7 @@ export default function FusionForgeFX({ clueA, clueB, isCore, onDone }) {
             border: `2px solid ${accent}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: `0 0 60px ${accent}, inset 0 0 40px ${accent}80`,
             fontSize: 34,
-          }}>🧩</div>
+          }}><IconText text={"🧩"} /></div>
           <div style={{
             fontSize: '0.62rem', letterSpacing: '0.34em', color: '#fff',
             textShadow: `0 0 18px ${accent}`,
@@ -219,7 +235,7 @@ export default function FusionForgeFX({ clueA, clueB, isCore, onDone }) {
 
       <style>{`
         @keyframes forge-in{from{opacity:0}to{opacity:1}}
-        @keyframes forge-flash{0%{opacity:0.95}100%{opacity:0}}
+        @keyframes forge-flash{0%{opacity:0.08}100%{opacity:0}}
         @keyframes sigil-in{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:scale(1)}}
       `}</style>
     </div>

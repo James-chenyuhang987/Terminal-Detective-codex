@@ -61,6 +61,14 @@ Theater NPC answers use the same inline word renderer with staggered fades bound
 
 During interludes, equivalent Home / Settings / text-mode controls are provided **inside** the dialog because the underlying portal toolbar is intentionally inert under a native modal. Settings or Home hides/closes the presentation modal without consuming the chapter. Escape skips an interlude; Escape cancels an unconfirmed entry passage. Continue remains disabled until full reveal; Skip advances directly.
 
+### Shared noir presentation
+
+Home, registration, investigation tools and results use deep ink-blue surfaces, aged brass hierarchy and restrained teal accents. Success, warning and danger retain distinct colors and meaningful text labels. Original line SVG icons share vector geometry with canvas effects. Explicit presentation adapters recognize legacy saved avatar/icon/color strings without rewriting profiles, case definitions, protocol values, player names or narrative Unicode; no external icon font, remote font or image is required.
+
+Landing, deployment briefing and result headings have a finite clipped character reveal using only transform and opacity, with intact accessible text and natural Chinese wrapping. Investigation prose does not use this effect. System reduced motion and the **Reduce motion / 减少动态效果** setting both expose static final content; hidden/unfocused windows stop decorative painting. Result counters finish at confirmed values without replaying level-up notifications. Timers, animation frames, audio and focus listeners are cleaned up on unmount. Keyboard focus, non-hover touch targets and narrow-screen wrapping remain available independently of animation.
+
+The existing Node runner checks these adapters, SVG accessibility, canvas paths, motion lifecycle and result final-state behavior in `tests/noirPresentation.test.js`; visual browser checks are still needed for artwork, layout and contrast.
+
 ## Scene and asset architecture
 
 `TheaterPresentation.jsx` is a DOM HUD with an error boundary and a lazy import of `TheaterScene.jsx`. The renderer loads local Blender room/character GLBs plus `assets/theater/manifest.json`. All asset URLs are derived from `${import.meta.env.BASE_URL}assets/theater/…`, including subpath deployments. Terminal-only play never requests theater GLBs or its renderer chunk. Existing optional action cinematics can still load their own separate assets.

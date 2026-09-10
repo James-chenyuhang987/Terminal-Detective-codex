@@ -9,6 +9,9 @@ import { MAX_SETTINGS_IMPORT_BYTES, normalizeSettings, parseSettingsImport } fro
 import { ToggleRow, SegmentRow, ActionRow, SectionTitle } from '@/components/game/settings/SettingRow';
 import StatusToast from '@/components/game/StatusToast';
 import StoryModeControl from '@/components/game/theater/StoryModeControl';
+import Icon from '@/components/ui/Icon.jsx';
+import { noirColor } from '@/components/ui/palette.js';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion.js';
 
 const TX = {
   zh: {
@@ -20,7 +23,8 @@ const TX = {
     sfx: '音效', sfxDesc: '按钮与关键事件提示音',
     scanlines: 'CRT 扫描线', scanlinesDesc: '复古显示器横向扫描纹理',
     glitch: '故障特效强度', glitchDesc: '混乱值升高时的画面撕裂程度',
-    particles: '粒子动画', particlesDesc: '大厅神经网络粒子与浮动光点',
+    particles: '粒子动画', particlesDesc: '大厅背景与关键事件中的装饰粒子',
+    reduceMotion: '减少动态效果', reduceMotionDesc: '减少装饰动画与过渡；始终遵循系统的减少动态效果偏好',
     cinematics: '行动 3D 演示', cinematicsDesc: '每两回合及重大事件播放全屏现场重演；关闭后使用快速 2D 结果镜头',
     cinematicQuality: '3D 演示画质', cinematicQualityDesc: '自动模式依据设备性能和节省流量设置选择 3D 或 2D 安全模式',
     data: '游戏数据 · DATA',
@@ -55,7 +59,8 @@ const TX = {
     sfx: 'Sound Effects', sfxDesc: 'Button and key-event cues',
     scanlines: 'CRT Scanlines', scanlinesDesc: 'Retro monitor scanline texture',
     glitch: 'Glitch Intensity', glitchDesc: 'Screen tearing as confusion rises',
-    particles: 'Particle FX', particlesDesc: 'Lobby neural particles and floating motes',
+    particles: 'Particle FX', particlesDesc: 'Decorative particles in the lobby and key events',
+    reduceMotion: 'Reduce Motion', reduceMotionDesc: 'Reduce decorative animation and transitions; your system’s reduced-motion preference is always respected',
     cinematics: '3D Action Replays', cinematicsDesc: 'Play full-screen reenactments every two turns and on major events; disabled mode uses a quick 2D result shot',
     cinematicQuality: '3D Replay Quality', cinematicQualityDesc: 'Auto chooses 3D or the safe 2D mode from device capability and data-saver preferences',
     data: 'DATA',
@@ -88,7 +93,14 @@ export default function SettingsDrawer({ onClose }) {
   const { user, providers, linkGitHub, unlinkGitHub, addPassword, changePassword, logout } = useAuth();
   const { settings, setSetting, resetSettings } = useSettings();
   const { profile, account, pendingCount, syncStatus } = useProfile();
-  const skin = panelSkin(settings.panelLight);
+  const skin = {
+    ...Object.fromEntries(Object.entries(panelSkin(settings.panelLight)).map(([key, value]) => [key, noirColor(value)])),
+    ...(settings.panelLight ? {
+      bg: 'rgba(230,223,207,.98)', panel: 'rgba(245,240,229,.9)', text: '#182733',
+      subText: '#4c5b5b', border: 'rgba(81,99,99,.3)', accent: '#426762',
+    } : {}),
+  };
+  const { motionEnabled } = usePresentationMotion();
   const tx = TX[lang] || TX.zh;
   const [toast, setToast] = useState(null);
   const [confirm, setConfirm] = useState(null); // { text, run }
@@ -110,8 +122,8 @@ export default function SettingsDrawer({ onClose }) {
     error: tx.syncError,
   }[syncStatus] || tx.syncWorking;
   const syncColor = syncStatus === 'online'
-    ? '#00b878'
-    : ['syncing', 'pending', 'loading'].includes(syncStatus) ? '#ffaa00' : '#ff6b84';
+    ? '#8aaa91'
+    : ['syncing', 'pending', 'loading'].includes(syncStatus) ? '#c19a63' : '#c77c78';
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
@@ -230,15 +242,15 @@ export default function SettingsDrawer({ onClose }) {
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(0,4,10,0.6)', backdropFilter: 'blur(3px)',
       }} />
-      <div role="dialog" aria-modal="true" aria-label={tx.title} style={{
+      <div className="td-settings-drawer" role="dialog" aria-modal="true" aria-label={tx.title} data-td-motion={motionEnabled ? 'active' : 'paused'} style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 201,
         width: 'min(400px, 100vw)', display: 'flex', flexDirection: 'column',
         background: skin.bg,
         borderLeft: `1px solid ${skin.accent}55`,
         boxShadow: `-18px 0 50px rgba(0,0,0,0.6), inset 1px 0 0 ${skin.accent}30`,
-        backdropFilter: 'blur(16px) saturate(150%)',
+        backdropFilter: 'blur(16px)',
         fontFamily: 'monospace',
-        animation: 'settings-in 0.28s cubic-bezier(.22,1,.36,1)',
+        animation: motionEnabled ? 'settings-in 0.28s cubic-bezier(.22,1,.36,1)' : 'none',
       }}>
         {/* Header */}
         <div style={{
@@ -246,17 +258,17 @@ export default function SettingsDrawer({ onClose }) {
           padding: 'calc(76px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right)) 14px 16px', borderBottom: `1px solid ${skin.border}`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <span style={{ fontSize: 15 }}>⚙️</span>
+            <Icon name="settings" size={18} style={{ color: skin.accent }} />
             <span style={{
               fontSize: '0.82rem', fontWeight: 900, letterSpacing: '0.2em',
-              color: skin.accent, textShadow: settings.panelLight ? 'none' : `0 0 12px ${skin.accent}70`,
+              color: skin.accent,
             }}>{tx.title}</span>
           </div>
           <button ref={closeRef} onClick={closeSafely} disabled={saving} style={{
             background: 'transparent', border: `1px solid ${skin.border}`, borderRadius: 7,
             color: skin.subText, cursor: 'pointer', padding: '4px 9px', fontSize: '0.58rem',
             fontFamily: 'monospace',
-          }}>✕ {tx.close}</button>
+          }}><Icon name="close" size={15} /> {tx.close}</button>
         </div>
 
         {/* Body */}
@@ -281,6 +293,8 @@ export default function SettingsDrawer({ onClose }) {
             <ToggleRow skin={skin} label={tx.sfx} desc={tx.sfxDesc}
               value={settings.sfxEnabled}
               onChange={(v) => { setSetting('sfxEnabled', v); playSfx(v, 'click'); }} />
+            <ToggleRow skin={skin} label={tx.reduceMotion} desc={tx.reduceMotionDesc}
+              value={settings.reduceMotion} onChange={(v) => change('reduceMotion', v)} />
             <ToggleRow skin={skin} label={tx.scanlines} desc={tx.scanlinesDesc}
               value={settings.scanlines} onChange={(v) => change('scanlines', v)} />
             <SegmentRow skin={skin} label={tx.glitch} desc={tx.glitchDesc}
@@ -318,7 +332,7 @@ export default function SettingsDrawer({ onClose }) {
                   notify(tx.okClear, 'success');
                 },
               })} />
-            <div style={{ padding: '10px 12px', borderRadius: 9, border: '1px solid rgba(255,56,96,.28)', background: 'rgba(255,56,96,.05)' }}>
+            <div style={{ padding: '10px 12px', borderRadius: 9, border: '1px solid rgba(199, 124, 120,.28)', background: 'rgba(199, 124, 120,.05)' }}>
               <div style={{ color: skin.text, fontWeight: 700, fontSize: '.7rem' }}>{tx.cloudReset}</div>
               <div style={{ color: skin.subText, fontSize: '.55rem', lineHeight: 1.5, marginTop: 4 }}>{tx.cloudResetDesc}</div>
             </div>
@@ -341,11 +355,11 @@ export default function SettingsDrawer({ onClose }) {
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.providers}</div>
               <div style={{ display: 'grid', gap: 8, marginTop: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ color: skin.subText, fontSize: '.56rem' }}>✉ {tx.passwordProvider} · {providers.includes('password') ? tx.linked : tx.notLinked}</span>
+                  <span style={{ color: skin.subText, fontSize: '.56rem' }}><Icon name="mail" size={14} /> {tx.passwordProvider} · {providers.includes('password') ? tx.linked : tx.notLinked}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ color: skin.subText, fontSize: '.56rem' }}>GH {tx.githubProvider} · {providers.includes('github.com') ? tx.linked : tx.notLinked}</span>
-                  <button type="button" onClick={() => void runAccountAction(() => providers.includes('github.com') ? unlinkGitHub(currentPassword) : linkGitHub(currentPassword))} style={{ padding: '6px 8px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${providers.includes('github.com') ? '#ff6b8460' : `${skin.accent}65`}`, background: 'transparent', color: providers.includes('github.com') ? '#ff7890' : skin.accent, fontFamily: 'monospace', fontSize: '.5rem' }}>{providers.includes('github.com') ? tx.unlinkGithub : tx.linkGithub}</button>
+                  <button type="button" onClick={() => void runAccountAction(() => providers.includes('github.com') ? unlinkGitHub(currentPassword) : linkGitHub(currentPassword))} style={{ padding: '6px 8px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${providers.includes('github.com') ? '#c77c7860' : `${skin.accent}65`}`, background: 'transparent', color: providers.includes('github.com') ? '#dda29a' : skin.accent, fontFamily: 'monospace', fontSize: '.5rem' }}>{providers.includes('github.com') ? tx.unlinkGithub : tx.linkGithub}</button>
                 </div>
               </div>
             </div>
@@ -354,22 +368,22 @@ export default function SettingsDrawer({ onClose }) {
               {providers.includes('password') && (
                 <>
                   <div style={{ color: skin.subText, fontSize: '.5rem', marginTop: 8 }}>{tx.currentPassword}</div>
-                  <input type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} placeholder={tx.currentPasswordPlaceholder} style={{ width: '100%', marginTop: 5, padding: 8, borderRadius: 7, border: `1px solid ${skin.border}`, background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace', fontSize: '.55rem' }} />
+                  <input className="td-ui-input" aria-label={tx.currentPassword} type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} placeholder={tx.currentPasswordPlaceholder} style={{ width: '100%', marginTop: 5, padding: 8, borderRadius: 7, border: `1px solid ${skin.border}`, background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace', fontSize: '.55rem' }} />
                 </>
               )}
-              <input type="password" autoComplete="new-password" minLength={8} maxLength={64} value={accountPassword} onChange={event => setAccountPassword(event.target.value)} placeholder={tx.passwordPlaceholder} style={{ width: '100%', marginTop: 8, padding: 8, borderRadius: 7, border: `1px solid ${skin.border}`, background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace', fontSize: '.55rem' }} />
+              <input className="td-ui-input" aria-label={providers.includes('password') ? tx.passwordChange : tx.passwordSetup} type="password" autoComplete="new-password" minLength={8} maxLength={64} value={accountPassword} onChange={event => setAccountPassword(event.target.value)} placeholder={tx.passwordPlaceholder} style={{ width: '100%', marginTop: 8, padding: 8, borderRadius: 7, border: `1px solid ${skin.border}`, background: 'rgba(0,0,0,.25)', color: skin.text, fontFamily: 'monospace', fontSize: '.55rem' }} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
                 {[
                   [accountPasswordState.length, tx.passwordRuleLength],
                   [accountPasswordState.letter, tx.passwordRuleLetter],
                   [accountPasswordState.number, tx.passwordRuleNumber],
-                ].map(([valid, label]) => <span key={label} style={{ color: accountPassword && valid ? '#00b878' : skin.subText, fontSize: '.48rem' }}>{accountPassword && valid ? '✓' : '○'} {label}</span>)}
+                ].map(([valid, label]) => <span key={label} style={{ color: accountPassword && valid ? '#8aaa91' : skin.subText, fontSize: '.48rem' }}><Icon name={accountPassword && valid ? 'check' : 'clock'} size={11} label={accountPassword && valid ? (lang === 'zh' ? '已满足' : 'Satisfied') : (lang === 'zh' ? '未满足' : 'Not satisfied')} /> {label}</span>)}
               </div>
               <button type="button" disabled={!accountPasswordState.valid || saving} onClick={() => void runAccountAction(() => providers.includes('password') ? changePassword(accountPassword, currentPassword) : addPassword(accountPassword))} style={{ width: '100%', marginTop: 7, padding: 8, borderRadius: 7, cursor: accountPasswordState.valid && !saving ? 'pointer' : 'not-allowed', opacity: accountPasswordState.valid && !saving ? 1 : .4, border: `1px solid ${skin.accent}65`, background: `${skin.accent}13`, color: skin.accent, fontFamily: 'monospace', fontSize: '.55rem' }}>{tx.passwordSave}</button>
             </div>
             <div style={{ padding: '10px 12px', borderRadius: 9, border: `1px solid ${skin.border}`, background: skin.panel }}>
               <div style={{ fontSize: '0.7rem', color: skin.text, fontWeight: 700 }}>{tx.sync}</div>
-              <div style={{ fontSize: '0.55rem', color: syncColor, marginTop: 4 }}>● {syncLabel}</div>
+              <div style={{ fontSize: '0.55rem', color: syncColor, marginTop: 4 }}><Icon name="signal" size={14} /> {syncLabel}</div>
             </div>
             <ActionRow skin={skin} danger label={tx.logout} desc={tx.logoutDesc} btnLabel={tx.logoutBtn} onClick={() => void runAccountAction(logout)} />
           </div>
@@ -391,7 +405,7 @@ export default function SettingsDrawer({ onClose }) {
             <div style={{ display: 'flex', gap: 9, marginTop: 16 }}>
               <button onClick={() => void runConfirmed()} disabled={saving} style={{
                 flex: 1, padding: 9, borderRadius: 8, cursor: 'pointer',
-                border: '1px solid #ff3860', background: 'rgba(255,56,96,0.16)', color: '#ff3860',
+                border: '1px solid #c77c78', background: 'rgba(199, 124, 120,0.16)', color: '#c77c78',
                 fontFamily: 'monospace', fontSize: '0.62rem', letterSpacing: '0.12em',
               }}>{tx.yes}</button>
               <button onClick={() => setConfirm(null)} disabled={saving} style={{

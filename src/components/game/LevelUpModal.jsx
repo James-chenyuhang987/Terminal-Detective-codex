@@ -1,23 +1,29 @@
+import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
+import { useSettings } from '@/lib/settings.jsx';
+import { noirColor } from '@/components/ui/palette';
 
 // ── Full-screen particle burst canvas ────────────────────────────────────────
 function BurstCanvas({ color }) {
   const ref = useRef(null);
+  const { motionEnabled } = usePresentationMotion();
+  const { settings } = useSettings();
 
   useEffect(() => {
     const canvas = ref.current;
-    if (!canvas) return;
+    if (!canvas || !motionEnabled || !settings.particles) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // Spawn 80 particles in all directions
-    const particles = Array.from({ length: 80 }, (_, i) => {
-      const angle = (i / 80) * Math.PI * 2 + Math.random() * 0.2;
-      const speed = 3 + Math.random() * 9;
+    const particles = Array.from({ length: 32 }, (_, i) => {
+      const angle = (i / 32) * Math.PI * 2 + Math.random() * 0.2;
+      const speed = 2 + Math.random() * 4;
       return {
         x: cx, y: cy,
         vx: Math.cos(angle) * speed,
@@ -91,7 +97,7 @@ function BurstCanvas({ color }) {
 
       // Center nova flash
       if (frame < 20) {
-        const alpha = (1 - frame / 20) * 0.7;
+        const alpha = (1 - frame / 20) * 0.12;
         const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 120 * (frame / 20));
         grad.addColorStop(0, color + 'ff');
         grad.addColorStop(1, color + '00');
@@ -108,8 +114,8 @@ function BurstCanvas({ color }) {
     };
 
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [color]);
+    return () => { cancelAnimationFrame(raf); ctx.clearRect(0, 0, canvas.width, canvas.height); };
+  }, [color, motionEnabled, settings.particles]);
 
   return (
     <canvas ref={ref} style={{
@@ -121,12 +127,14 @@ function BurstCanvas({ color }) {
 // ── Skill slot card ───────────────────────────────────────────────────────────
 function SkillCard({ skill, color, delay }) {
   const { lang } = useLang();
+  const { motionEnabled } = usePresentationMotion();
   const zh = lang === 'zh';
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(!motionEnabled);
   useEffect(() => {
+    if (!motionEnabled) { setVisible(true); return; }
     const t = setTimeout(() => setVisible(true), delay);
     return () => clearTimeout(t);
-  }, [delay]);
+  }, [delay, motionEnabled]);
 
   return (
     <div style={{
@@ -147,13 +155,13 @@ function SkillCard({ skill, color, delay }) {
         fontSize: 22,
         boxShadow: `0 0 14px ${color}60`,
       }}>
-        {skill.icon}
+        <Icon name={skill.icon} />
       </div>
       <div>
         <div style={{
           color, fontSize: '0.72rem', fontWeight: 900, fontFamily: 'monospace',
           letterSpacing: '0.04em', marginBottom: 3,
-          textShadow: `0 0 8px ${color}`,
+          textShadow: 'none',
         }}>
           {zh ? skill.name : (skill.nameEn || skill.name)}
         </div>
@@ -178,21 +186,23 @@ function SkillCard({ skill, color, delay }) {
 
 // ── Spinning level ring ───────────────────────────────────────────────────────
 function LevelRing({ fromLevel, toLevel, color }) {
-  const [shown, setShown] = useState(false);
-  const [flipped, setFlipped] = useState(false);
+  const { motionEnabled } = usePresentationMotion();
+  const [shown, setShown] = useState(!motionEnabled);
+  const [flipped, setFlipped] = useState(!motionEnabled);
 
   useEffect(() => {
+    if (!motionEnabled) { setShown(true); setFlipped(true); return; }
     const t1 = setTimeout(() => setShown(true), 100);
     const t2 = setTimeout(() => setFlipped(true), 800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, []);
+  }, [motionEnabled]);
 
   return (
     <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 20px' }}>
       {/* Outer spinning ring */}
       <svg style={{
         position: 'absolute', inset: 0, width: '100%', height: '100%',
-        animation: 'lvl-spin 3s linear infinite',
+        animation: 'none',
       }} viewBox="0 0 140 140">
         <circle cx="70" cy="70" r="65" fill="none" stroke={color + '30'} strokeWidth="2"/>
         <circle cx="70" cy="70" r="65" fill="none" stroke={color} strokeWidth="2.5"
@@ -202,7 +212,7 @@ function LevelRing({ fromLevel, toLevel, color }) {
       {/* Inner spinning ring (opposite) */}
       <svg style={{
         position: 'absolute', inset: 8, width: 'calc(100% - 16px)', height: 'calc(100% - 16px)',
-        animation: 'lvl-spin-rev 4s linear infinite',
+        animation: 'none',
       }} viewBox="0 0 124 124">
         <circle cx="62" cy="62" r="58" fill="none" stroke={color + '20'} strokeWidth="1.5"/>
         <circle cx="62" cy="62" r="58" fill="none" stroke={color + '80'} strokeWidth="1.5"
@@ -222,7 +232,7 @@ function LevelRing({ fromLevel, toLevel, color }) {
           transform: flipped ? 'scale(0.4) translateY(-20px)' : shown ? 'scale(1)' : 'scale(0.4)',
           transition: 'all 0.5s cubic-bezier(.22,1,.36,1)',
           color: `${color}80`, fontSize: '2.2rem', fontWeight: 900,
-          textShadow: `0 0 20px ${color}60`,
+          textShadow: 'none',
         }}>
           {fromLevel}
         </div>
@@ -233,7 +243,7 @@ function LevelRing({ fromLevel, toLevel, color }) {
           transform: flipped ? 'scale(1)' : 'scale(2)',
           transition: 'all 0.5s cubic-bezier(.22,1,.36,1)',
           color, fontSize: '2.8rem', fontWeight: 900,
-          textShadow: `0 0 30px ${color}, 0 0 60px ${color}80`,
+          textShadow: 'none',
         }}>
           {toLevel}
         </div>
@@ -251,20 +261,53 @@ function LevelRing({ fromLevel, toLevel, color }) {
 }
 
 // ── Main LevelUpModal ─────────────────────────────────────────────────────────
-export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel, color, newSkills, onClose }) {
+export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel, color: legacyColor, newSkills, onClose }) {
+  const color = noirColor(legacyColor);
   const { lang } = useLang();
   const zh = lang === 'zh';
-  const [show, setShow] = useState(false);
+  const { motionEnabled } = usePresentationMotion();
+  const [show, setShow] = useState(!motionEnabled);
+  const closeTimer = useRef(null);
+  const closing = useRef(false);
+  const dialogRef = useRef(null);
+  const dismissRef = useRef(null);
 
   useEffect(() => {
+    if (!motionEnabled) { setShow(true); return; }
     const t = setTimeout(() => setShow(true), 30);
     return () => clearTimeout(t);
-  }, []);
+  }, [motionEnabled]);
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
 
   const handleClose = () => {
+    if (closing.current) return;
+    closing.current = true;
     setShow(false);
-    setTimeout(onClose, 300);
+    if (!motionEnabled) { onClose(); return; }
+    closeTimer.current = setTimeout(onClose, 300);
   };
+  dismissRef.current = handleClose;
+
+  useEffect(() => {
+    const previous = document.activeElement;
+    const dialog = dialogRef.current;
+    dialog?.focus();
+    const onKeyDown = event => {
+      if (event.key === 'Escape') { event.preventDefault(); dismissRef.current(); return; }
+      if (event.key !== 'Tab' || !dialog) return;
+      const controls = Array.from(dialog.querySelectorAll('button:not(:disabled), [tabindex="0"]'));
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!(first instanceof HTMLElement) || !(last instanceof HTMLElement)) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    dialog?.addEventListener('keydown', onKeyDown);
+    return () => {
+      dialog?.removeEventListener('keydown', onKeyDown);
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, []);
 
   return (
     <div style={{
@@ -272,7 +315,8 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: show ? 'rgba(0,0,0,0.82)' : 'rgba(0,0,0,0)',
       backdropFilter: show ? 'blur(6px)' : 'none',
-      transition: 'all 0.3s ease',
+      transition: 'background 0.3s ease',
+      paddingBlock: 16, overflowY: 'auto',
     }} onClick={handleClose}>
 
       {/* Burst canvas behind modal */}
@@ -280,6 +324,7 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
 
       {/* Modal card */}
       <div
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={zh ? '探员晋升' : 'Agent advancement'}
         onClick={e => e.stopPropagation()}
         style={{
           position: 'relative', zIndex: 10,
@@ -288,8 +333,8 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
           background: 'rgba(2, 6, 20, 0.96)',
           border: `1.5px solid ${color}70`,
           borderRadius: 20,
-          boxShadow: `0 0 60px ${color}50, 0 0 120px ${color}20, inset 0 0 40px ${color}08`,
-          overflow: 'hidden',
+          boxShadow: '0 24px 80px #0007',
+          maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto',
           opacity: show ? 1 : 0,
           transform: show ? 'scale(1) translateY(0)' : 'scale(0.85) translateY(30px)',
           transition: 'all 0.45s cubic-bezier(.22,1,.36,1)',
@@ -313,16 +358,16 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
             ◈ {zh ? '探员晋升' : 'AGENT ADVANCEMENT'}
           </div>
           <button type="button" onClick={handleClose} aria-label={zh ? '关闭晋升面板' : 'Close advancement panel'} title={zh ? '关闭' : 'Close'} style={{
-            background: 'none', border: 'none', color: `${color}60`,
-            cursor: 'pointer', fontSize: '1rem', lineHeight: 1,
+            background: 'none', border: 'none', color,
+            cursor: 'pointer', fontSize: '1rem', lineHeight: 1, minWidth: 44, minHeight: 44,
           }}>✕</button>
         </div>
 
         <div style={{ padding: '24px 24px 20px' }}>
           {/* Agent name */}
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ fontSize: 28, marginBottom: 4 }}>{agentIcon}</div>
-            <div style={{ color, fontSize: '0.9rem', fontWeight: 900, letterSpacing: '0.08em', textShadow: `0 0 12px ${color}` }}>
+            <div style={{ fontSize: 28, marginBottom: 4 }}><Icon name={agentIcon} /></div>
+            <div style={{ color, fontSize: '0.9rem', fontWeight: 900, letterSpacing: '0.08em', textShadow: 'none' }}>
               {agentName}
             </div>
           </div>
@@ -366,21 +411,12 @@ export default function LevelUpModal({ agentName, agentIcon, fromLevel, toLevel,
           )}
 
           {/* Continue button */}
-          <button onClick={handleClose} style={{
-            width: '100%', marginTop: 20,
+          <button onClick={handleClose} className="td-ui-button td-button-primary" style={{
+            width: '100%', marginTop: 20, minHeight: 44,
             padding: '12px', borderRadius: 10,
-            border: `1.5px solid ${color}80`,
-            background: `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)`,
-            color, fontFamily: 'monospace', fontWeight: 900, fontSize: '0.72rem',
-            letterSpacing: '0.2em', cursor: 'pointer',
-            boxShadow: `0 0 20px ${color}30`,
-            transition: 'all 0.2s',
-            animation: 'go-in 0.4s 1s both',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.background = `${color}40`; e.currentTarget.style.boxShadow = `0 0 30px ${color}50`; }}
-            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)`; e.currentTarget.style.boxShadow = `0 0 20px ${color}30`; }}
-          >
-            ▶ {zh ? '继续' : 'CONTINUE'}
+            fontFamily: 'monospace', fontWeight: 900, fontSize: '0.72rem',
+            letterSpacing: '0.12em', cursor: 'pointer',
+          }}><IconText text={" ▶ "} />{zh ? '继续' : 'CONTINUE'}
           </button>
         </div>
       </div>

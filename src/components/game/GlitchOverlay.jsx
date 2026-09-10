@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useSettings } from '@/lib/settings.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 export default function GlitchOverlay({ intensity = 0, type = 'default' }) {
   const { settings } = useSettings();
   const [lines, setLines] = useState([]);
+  const { motionEnabled } = usePresentationMotion();
 
   const scale = settings.glitchLevel === 'off' ? 0 : settings.glitchLevel === 'low' ? 0.45 : 1;
-  const level = intensity * scale;
+  const level = motionEnabled ? intensity * scale : 0;
 
   useEffect(() => {
     if (level <= 0) return;
@@ -17,7 +19,7 @@ export default function GlitchOverlay({ intensity = 0, type = 'default' }) {
       width: 20 + Math.random() * 80,
       height: 1 + Math.random() * 3,
       opacity: 0.3 + Math.random() * 0.7,
-      color: type === 'red' ? '#ff0040' : type === 'blue' ? '#0040ff' : '#00ffff',
+      color: type === 'red' ? '#c77c78' : type === 'blue' ? '#709f9a' : '#709f9a',
       delay: Math.random() * 0.5,
     })));
   }, [level, type]);
@@ -40,7 +42,7 @@ export default function GlitchOverlay({ intensity = 0, type = 'default' }) {
             height: `${line.height}px`,
             backgroundColor: line.color,
             opacity: line.opacity,
-            animation: `glitchLine ${0.1 + Math.random() * 0.3}s ${line.delay}s infinite`,
+            animation: `glitchLine ${1.2 + line.delay}s ${line.delay}s 2 both`,
             boxShadow: `0 0 6px ${line.color}`,
           }}
         />
@@ -59,12 +61,12 @@ export default function GlitchOverlay({ intensity = 0, type = 'default' }) {
       {level > 50 && (
         <>
           <div className="absolute inset-0" style={{
-            backgroundColor: 'rgba(255,0,64,0.05)',
+            backgroundColor: 'rgba(199, 124, 120,0.05)',
             transform: `translateX(${level * 0.02}px)`,
             mixBlendMode: 'screen',
           }} />
           <div className="absolute inset-0" style={{
-            backgroundColor: 'rgba(0,255,255,0.05)',
+            backgroundColor: 'rgba(112, 159, 154,0.05)',
             transform: `translateX(${-level * 0.02}px)`,
             mixBlendMode: 'screen',
           }} />

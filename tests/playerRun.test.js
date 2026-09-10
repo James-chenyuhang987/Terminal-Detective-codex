@@ -103,11 +103,39 @@ test('business rejection commits returned run revision and clears only its own r
 });
 
 test('unconfirmed, malformed, and wrong-run responses never discard pending receipts', async () => {
-  for (const bad of [{ data: {} }, response(snapshot(1, { id: 'other-run' })), { data: { authority_version: 0, run: snapshot() } }]) {
+  for (const bad of [{ data: {} }, response(snapshot(1, { id: 'other-run' })),
+    { data: { authority_version: 0, run: snapshot() } },
+    ...['STALE_RUN', 'RUN_SETTLED'].map(error => ({ data: { authority_version: 1, run: snapshot(1), error } })),
+  ]) {
     const client = createPlayerRunClient(options({ invoke: async (_name, body) => body.action === 'status' ? response() : bad }));
     await client.resume();
     await assert.rejects(client.command({ type: 'abandon' }), { code: 'INVALID_RUN_RESPONSE' });
     assert.equal(client.hasPending(), true);
+  }
+});
+
+test('missing or malformed command results retain the receipt and recover the original outcome', async () => {
+  for (const result of [undefined, null, [], 'accepted', 1, true]) {
+    const storage = memoryStorage();
+    const calls = [];
+    let complete = false;
+    const client = createPlayerRunClient(options({ storage, invoke: async (_name, body) => {
+      if (body.action === 'status') return { data: { authority_version: 1, run: snapshot() } };
+      calls.push(structuredClone(body));
+      return { data: { authority_version: 1, run: snapshot(1), result: complete ? { response: 'Recorded answer' } : result } };
+    } }));
+    await client.resume();
+    await assert.rejects(client.command({ type: 'question', npc_id: 'npc', question_id: 'q1' }), { code: 'INVALID_RUN_RESPONSE' });
+    assert.equal(client.hasPending(), true);
+    const receipt = [...storage.values.values()][0];
+    await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_INTENT_PENDING' });
+    assert.equal([...storage.values.values()][0], receipt);
+    complete = true;
+    const recovered = await client.resume();
+    assert.equal(recovered.result.response, 'Recorded answer');
+    assert.deepEqual(recovered.recovered_command, calls[0].command);
+    assert.deepEqual(calls[1], calls[0]);
+    assert.equal(client.hasPending(), false);
   }
 });
 

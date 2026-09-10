@@ -167,6 +167,31 @@ test('takeover rejects pending command including a race at commit and replay', a
   assert.equal(claimed.profile.profile_revision, 1);
 });
 
+test('a device claim superseded before its confirmation returns SESSION_TAKEN instead of writable success', async () => {
+  const DB = authorityDB({ gold: 800, rewarded_runs: ['historical-paid-run'] });
+  const prepare = DB.prepare;
+  DB.prepare = sql => {
+    const statement = prepare(sql);
+    if (sql.includes('UPDATE profiles SET active_session_id = ?')) {
+      const run = statement.run.bind(statement);
+      statement.run = async () => {
+        const result = await run();
+        DB.sqlite.prepare('UPDATE profiles SET active_session_id = ? WHERE user_id = ?')
+          .run('winning-device-123456', USER_ID);
+        return result;
+      };
+    }
+    return statement;
+  };
+  const result = await send(DB, { action: 'claim_session' });
+  assert.equal(result.status, 409);
+  assert.equal(result.code, 'SESSION_TAKEN');
+  assert.equal(DB.profile().active_session_id, 'winning-device-123456');
+  assert.equal(DB.profile().profile_revision, 0);
+  assert.equal(DB.count('profile_operations'), 0);
+  assert.deepEqual(JSON.parse(DB.profile().profile_json).rewarded_runs, ['historical-paid-run']);
+});
+
 test('newly claimed device can replay a prior intent without including device in operation hash', async () => {
   const DB = authorityDB({ gold: 800 });
   const body = envelope({ type: 'purchase_item', item_id: 'energy_cell' });

@@ -65,6 +65,10 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function firebasePrincipal(user) {
+  return user?.uid ? `${user.uid}:${user.emailVerified ? 'verified' : 'unverified'}` : '';
+}
+
 function actionUrl(kind = 'verified') {
   const url = new URL(import.meta.env.BASE_URL || '/', window.location.origin);
   url.searchParams.set('auth', kind);
@@ -151,6 +155,9 @@ export function AuthProvider({ children }) {
   const [authNotice, setAuthNotice] = useState(null);
   const [authBackendReady, setAuthBackendReady] = useState(false);
   const mountedRef = useRef(true);
+  const authInstanceRef = useRef(null);
+  // Token events invalidate readiness waits before a session bootstrap can start.
+  const observationRef = useRef(0);
   const bootSequenceRef = useRef(0);
   const observedPrincipalRef = useRef('');
   const authCheckedRef = useRef(false);
@@ -167,8 +174,8 @@ export function AuthProvider({ children }) {
     if (readinessPromiseRef.current) return readinessPromiseRef.current;
     const request = requestAuthReadiness(appParams.serverUrl, firebasePublicConfig.projectId)
       .then(() => {
-        authBackendReadyRef.current = true;
-        if (mountedRef.current) {
+        if (mountedRef.current && readinessPromiseRef.current === request) {
+          authBackendReadyRef.current = true;
           setAuthBackendReady(true);
           setAuthServiceError('');
         }
@@ -180,7 +187,7 @@ export function AuthProvider({ children }) {
           : error?.code === 'AUTH_BACKEND_NOT_READY'
             ? AUTH_FEEDBACK_CODES.BACKEND_NOT_READY
             : AUTH_FEEDBACK_CODES.NETWORK;
-        if (mountedRef.current) {
+        if (mountedRef.current && readinessPromiseRef.current === request) {
           setAuthBackendReady(false);
           setAuthServiceError(code);
         }
@@ -197,15 +204,18 @@ export function AuthProvider({ children }) {
     forceRefresh = false,
     throwOnFailure = false,
   } = {}) => {
-    const nextPrincipal = nextUser?.uid
-      ? `${nextUser.uid}:${nextUser.emailVerified ? 'verified' : 'unverified'}`
-      : '';
+    const nextPrincipal = firebasePrincipal(nextUser);
+    if (!mountedRef.current || !authInstanceRef.current
+      || firebasePrincipal(authInstanceRef.current.currentUser) !== nextPrincipal) return null;
     if (observedPrincipalRef.current !== nextPrincipal || (nextPrincipal && forceRefresh)) {
       observedPrincipalRef.current = nextPrincipal;
-      bootSequenceRef.current += 1;
       sessionBootstrapRef.current.clear();
     }
-    const sequence = bootSequenceRef.current;
+    const sequence = ++bootSequenceRef.current;
+    const observation = observationRef.current;
+    const isCurrent = () => mountedRef.current
+      && sequence === bootSequenceRef.current && observation === observationRef.current
+      && firebasePrincipal(authInstanceRef.current?.currentUser) === nextPrincipal;
     const previousUid = authenticatedUidRef.current;
     const preserveSession = Boolean(nextUser?.uid && previousUid === nextUser.uid);
     setFirebaseUser(nextUser || null);
@@ -232,14 +242,14 @@ export function AuthProvider({ children }) {
     }
     try {
       const session = await sessionBootstrapRef.current.run(nextUser, { forceRefresh });
-      if (!mountedRef.current || sequence !== bootSequenceRef.current) return null;
+      if (!isCurrent()) return null;
       authenticatedUidRef.current = nextUser.uid;
       sessionRetryUidRef.current = '';
       setUser(session.user);
       setIsAuthenticated(true);
       return session.user;
     } catch (error) {
-      if (!mountedRef.current || sequence !== bootSequenceRef.current) return null;
+      if (!isCurrent()) return null;
       const code = error?.feedbackCode || AUTH_FEEDBACK_CODES.NETWORK;
       const recoverable = isRecoverableAuthFailure(code, error);
       const keepCurrentSession = preserveSession && recoverable;
@@ -272,16 +282,22 @@ export function AuthProvider({ children }) {
     const redirectAction = consumeRedirectAction();
     let authInstance = null;
     const retryAuth = () => {
+      if (cancelled || !mountedRef.current) return;
       const current = authInstance?.currentUser;
-      if (cancelled || !current?.emailVerified) {
+      if (!current?.emailVerified) {
         if (!authBackendReadyRef.current) void ensureAuthBackend().catch(() => {});
         return;
       }
       if (authBackendReadyRef.current && sessionRetryUidRef.current !== current.uid) return;
+      const observation = observationRef.current;
+      const principal = firebasePrincipal(current);
+      const isCurrent = () => !cancelled && mountedRef.current
+        && observation === observationRef.current
+        && firebasePrincipal(authInstance?.currentUser) === principal;
       void ensureAuthBackend()
-        .then(() => applyFirebaseUser(current))
+        .then(() => isCurrent() ? applyFirebaseUser(authInstance.currentUser) : null)
         .catch(() => {
-          sessionRetryUidRef.current = current.uid;
+          if (isCurrent()) sessionRetryUidRef.current = current.uid;
         });
     };
     window.addEventListener('online', retryAuth);
@@ -290,6 +306,7 @@ export function AuthProvider({ children }) {
     void firebaseAuthReady().then(async auth => {
       if (!auth || cancelled || !mountedRef.current) return;
       authInstance = auth;
+      authInstanceRef.current = auth;
       setAuthTokenProvider(force => auth.currentUser?.getIdToken(Boolean(force)) || '');
       try {
         const redirectResult = await getRedirectResult(auth);
@@ -305,22 +322,35 @@ export function AuthProvider({ children }) {
           setAuthNotice({ kind: 'error', code });
         }
       }
-      if (authReturn.feedback && mountedRef.current) {
+      if (cancelled || !mountedRef.current) return;
+      if (authReturn.feedback) {
         setAuthServiceError(authReturn.feedback);
         setAuthNotice({ kind: 'error', code: authReturn.feedback });
       }
       unsubscribe = onIdTokenChanged(auth, async nextUser => {
-        if (cancelled) return;
+        if (cancelled || !mountedRef.current) return;
+        const observation = ++observationRef.current;
+        const principal = firebasePrincipal(nextUser);
+        if (observedPrincipalRef.current !== principal) {
+          observedPrincipalRef.current = principal;
+          bootSequenceRef.current += 1;
+          sessionBootstrapRef.current.clear();
+        }
+        const isCurrent = () => !cancelled && mountedRef.current
+          && observation === observationRef.current
+          && (auth.currentUser?.uid || '') === (nextUser?.uid || '');
         const shouldBlock = !authCheckedRef.current
           || Boolean(nextUser?.emailVerified && authenticatedUidRef.current !== nextUser.uid);
         if (shouldBlock) setIsLoadingAuth(true);
         if (!authReturn.feedback && authReturn.action === 'verified' && nextUser && !nextUser.emailVerified) {
           try {
             await reload(nextUser);
+            if (!isCurrent()) return;
             if (nextUser.emailVerified) await nextUser.getIdToken(true);
           } catch {
             // The verification panel remains available as a safe manual retry.
           }
+          if (!isCurrent()) return;
           if (!nextUser.emailVerified) {
             setAuthNotice({ kind: 'error', code: AUTH_NOTICE_CODES.VERIFICATION_INCOMPLETE });
           }
@@ -333,9 +363,10 @@ export function AuthProvider({ children }) {
         } else {
           try {
             await ensureAuthBackend();
-            await applyFirebaseUser(nextUser);
+            if (!isCurrent()) return;
+            await applyFirebaseUser(auth.currentUser);
           } catch (error) {
-            if (!cancelled && mountedRef.current) {
+            if (isCurrent()) {
               const code = feedbackCodeFor(error);
               setFirebaseUser(nextUser);
               setVerificationEmail(nextUser.email || '');
@@ -349,10 +380,10 @@ export function AuthProvider({ children }) {
             }
           }
         }
-        if (!cancelled && mountedRef.current) {
+        if (isCurrent()) {
           authCheckedRef.current = true;
           setAuthChecked(true);
-          if (shouldBlock) setIsLoadingAuth(false);
+          setIsLoadingAuth(false);
         }
       });
     }).catch(error => {
@@ -367,6 +398,10 @@ export function AuthProvider({ children }) {
     return () => {
       cancelled = true;
       mountedRef.current = false;
+      authInstanceRef.current = null;
+      observationRef.current += 1;
+      bootSequenceRef.current += 1;
+      readinessPromiseRef.current = null;
       window.clearInterval(recoveryTimer);
       window.removeEventListener('online', retryAuth);
       unsubscribe();
@@ -609,11 +644,15 @@ export function AuthProvider({ children }) {
     } catch (error) {
       throw feedbackError(feedbackCodeFor(error), error);
     }
+    observationRef.current += 1;
     bootSequenceRef.current += 1;
     observedPrincipalRef.current = '';
     sessionBootstrapRef.current.clear();
     authenticatedUidRef.current = '';
     sessionRetryUidRef.current = '';
+    if (!mountedRef.current) return;
+    setVerificationEmail('');
+    setIsLoadingAuth(false);
     setFirebaseUser(null);
     setUser(null);
     setIsAuthenticated(false);

@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import NarrativeText from './NarrativeText';
 import './narrative.css';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 export default function NarrativeOverlay({ title, text, lang, active = true, busy = false, error = '', onComplete,
   onCancel = null, onHome = null, onSettings = null, onSwitchMode = null, restoreFocusSelector = '' }) {
@@ -9,29 +10,11 @@ export default function NarrativeOverlay({ title, text, lang, active = true, bus
   const textId = useId();
   const dialogRef = useRef(null);
   const [reveal, setReveal] = useState({ count: 0, complete: false, instant: false });
-  const [foreground, setForeground] = useState(() => !document.hidden && document.hasFocus());
-  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true);
+  const { foreground, reducedMotion } = usePresentationMotion();
   const characters = Array.from(text);
   const complete = reveal.complete || reducedMotion;
   const visibleCount = complete ? characters.length : Math.min(reveal.count, characters.length);
   const instant = reducedMotion || reveal.instant === true;
-
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updateMotion = () => setReducedMotion(query.matches);
-    const updateFocus = () => setForeground(!document.hidden && document.hasFocus());
-    const blur = () => setForeground(false);
-    query.addEventListener('change', updateMotion);
-    document.addEventListener('visibilitychange', updateFocus);
-    window.addEventListener('focus', updateFocus);
-    window.addEventListener('blur', blur);
-    return () => {
-      query.removeEventListener('change', updateMotion);
-      document.removeEventListener('visibilitychange', updateFocus);
-      window.removeEventListener('focus', updateFocus);
-      window.removeEventListener('blur', blur);
-    };
-  }, []);
 
   useEffect(() => {
     if (reducedMotion) setReveal(current => current.complete ? current : { ...current, complete: true });

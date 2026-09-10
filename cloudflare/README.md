@@ -31,6 +31,10 @@ Runtime baseline: Node.js 22+ for tooling, React 18.3.1, Firebase Web SDK 12.18.
 
 The browser cannot select a profile owner through a request header or payload; the Worker derives it only from the verified Firebase token. Unknown `/api/*` paths return JSON 404 and never fall through to the SPA.
 
+## Client recovery after deployment
+
+A failed lazy module/CSS load triggers at most one automatic cache-busting reload per 90-second recovery window, shared across failed assets. The guard survives address-bar cleanup and restricted browser storage using the reload URL timestamp plus in-memory state. Merely loading the entry page does not clear the guard: a later investigation or lobby import may still fail. If recovery is blocked, the original error remains available to the UI, and the error screen's manual **Load latest version** action stays available. This recovery neither clears profile/run receipts nor changes production data.
+
 ## Required configuration
 
 Create `.env.local` for local builds, or provide these values to the production Vite build:
@@ -52,7 +56,7 @@ Set the matching public project ID in `wrangler.jsonc` or the Cloudflare dashboa
 }
 ```
 
-The checked-in `wrangler.jsonc` contains the public production Firebase project ID, not a credential. The four public Firebase Web App values still come from the build environment and are not committed. `npm run release:check` reads the same production environment as Vite: `.env`, `.env.local`, `.env.production`, then `.env.production.local` (later files override earlier ones); existing shell/CI variables take highest priority, including empty values. It uses the browser's Firebase config validator to reject missing/placeholder values, surrounding whitespace, malformed auth hostnames and non-Web App IDs, and also rejects frontend/Worker project mismatches, invalid D1 IDs and unsafe CORS origins before a production build can proceed. A valid custom auth hostname is supported, but its Firebase authorization and hosting must be verified separately. Error messages report field names rather than supplied values.
+The checked-in `wrangler.jsonc` contains the public production Firebase project ID, not a credential. The four public Firebase Web App values still come from the build environment and are not committed. `npm run release:check` reads the same production environment as Vite: `.env`, `.env.local`, `.env.production`, then `.env.production.local` (later files override earlier ones); existing shell/CI variables take highest priority, including empty values. It uses the browser's Firebase config validator to reject missing/placeholder values, surrounding whitespace, malformed auth hostnames and non-Web App IDs, and also rejects frontend/Worker project or application ID mismatches, a missing/duplicate `DB` D1 binding or its invalid database ID, and unsafe CORS origins before a production build can proceed. `VITE_APP_ID` must exactly match the Worker's `APP_ID`; an unset or empty browser value defaults to `terminal-detective`. A valid custom auth hostname is supported, but its Firebase authorization and hosting must be verified separately. Error messages report field names rather than supplied values.
 
 If the frontend is also hosted on another origin, such as GitHub Pages, list its exact origin in `CORS_ALLOWED_ORIGINS`:
 

@@ -1,3 +1,5 @@
+import Icon, { IconText } from '@/components/ui/Icon';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { getConnectedZones } from '@/game/caseRuntime';
@@ -42,7 +44,7 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
   const [readyZone, setReadyZone] = useState(null);
   const [nearby, setNearby] = useState(null);
   const [panel, setPanel] = useState(() => spatialRef.current.arrived || busy || dialoguePanel || reportPanel ? null : 'arrival');
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const { reducedMotion } = usePresentationMotion();
   const controlsRef = useRef({ forward: false, backward: false, left: false, right: false, activate: /** @type {(() => boolean) | null} */ (null) });
   const zoneId = gameState.current_zone;
   const ready = readyZone === zoneId;
@@ -54,12 +56,6 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
     controlsRef.current[key] = true;
     return true;
   };
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReducedMotion(query.matches);
-    update(); query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
   useEffect(() => {
     if (movementPaused) ['forward', 'backward', 'left', 'right'].forEach(key => { controlsRef.current[key] = false; });
   }, [movementPaused]);
@@ -93,7 +89,7 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
     </header>
     <div className="td-theater-objective"><small>{busy ? phase : (zh ? '当前任务' : 'CURRENT OBJECTIVE')}</small><p>{busy ? (zh ? '正在处理调查指令。可安全切换呈现模式，决策和结算不会取消。' : 'Processing your order. Switching presentation does not cancel decisions or settlement.') : (zh ? '走近人物交谈，或调查工作台开启行动选择。建立证据链后提交报告。' : 'Approach contacts to talk, or inspect a workstation to choose an action. Link evidence, then file your report.')}</p></div>
 
-    {!panel && !dialoguePanel && !reportPanel && (streamingText || fieldLine) && <aside className="td-theater-transmission" aria-label={zh ? '现场字幕' : 'Field subtitles'}><small>{zh ? '现场通讯 · 完整记录见手记' : 'FIELD COMMS · FULL RECORD IN NOTEBOOK'}</small><p role="status">{streamingText || fieldLine.text}</p></aside>}
+    {!panel && !dialoguePanel && !reportPanel && (streamingText || fieldLine) && <aside className="td-theater-transmission" aria-label={zh ? '现场字幕' : 'Field subtitles'}><small>{zh ? '现场通讯 · 完整记录见手记' : 'FIELD COMMS · FULL RECORD IN NOTEBOOK'}</small><p role="status"><IconText text={streamingText || fieldLine.text} /></p></aside>}
 
     {!panel && !dialoguePanel && !reportPanel && !failed && <div className="td-theater-exploration-hud"><p>{movementPaused ? (zh ? '现场移动已暂停' : 'Movement paused') : (zh ? 'WASD / 方向键移动 · 拖动视角 · E 交互' : 'WASD / arrows move · Drag to orbit · E interact')}</p>
       <button type="button" className="td-theater-interact" disabled={!nearby || movementPaused || !ready} onClick={() => interact(nearby)}>{nearby ? `E · ${nearbyLabel}` : (zh ? '靠近光圈标记以交互' : 'Approach a marked contact or prop')}</button>
@@ -108,11 +104,11 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
     {reportPanel && !panel ? <FieldPanel active={active && !paused} title={zh ? '结案 · 事实重建' : 'Report · reconstruction'}>{reportPanel}</FieldPanel>
       : dialoguePanel && !panel ? <FieldPanel active={active && !paused} title={zh ? '现场对话 · 字幕与提问' : 'Field dialogue · subtitles & questions'}>{dialoguePanel}</FieldPanel>
         : panel && <FieldPanel active={active && !paused} title={panel === 'tools' ? (zh ? '调查工具箱' : 'Investigation toolkit') : panel === 'notebook' ? (zh ? '现场手记' : 'Field notebook') : panel === 'routes' ? (zh ? '区域通道' : 'Room routes') : panel === 'contacts' ? (zh ? '案件联络人' : 'Case contacts') : (zh ? '准备调查' : 'Prepare investigation')} onClose={closePanel}>
-          {panel === 'arrival' ? <><small>{zh ? '抵达现场 · 案件简报' : 'Scene arrival · case briefing'}</small><p>{caseData.scene?.description}</p><p>{caseData.case_id === 'Lvl_01' ? (zh ? '霓虹血迹：数据中心、大堂、实验室与阳台的紧凑剧情场景。' : 'Neon Blood: compact data center, lobby, lab and balcony scenes.') : (zh ? '本案件使用通用场景布置；案件人物、证据与规则仍来自原案。' : 'This case uses generic scene staging; its characters, evidence and rules remain case-specific.')}</p><p>{zh ? '本模式以字幕与角色动作叙事。移动不推进回合；调查和提问仍会消耗原有资源。' : 'Subtitles and character gestures tell the story. Movement does not advance rounds; investigations and questions still spend their normal resources.'}</p><button type="button" onClick={closePanel}>{zh ? '进入现场' : 'Enter the scene'}</button></> : panel === 'tools' ? toolsPanel : panel === 'notebook' ? <><p>{caseData.scene?.description}</p><hr />{lines.map(line => <TerminalLine key={line.id} line={line} accentColor="#7ce9ed" />)}{streamingText && <p role="status">{streamingText}</p>}</>
-            : panel === 'contacts' ? <><p>{zh ? '联络列表与现场人物使用同一提问规则。初始陈述不是已经证实的事实。' : 'Contacts use the same question rules as scene characters. Initial statements are not verified facts.'}</p>{caseData.npcs.map(npc => <button type="button" disabled={busy} key={npc.npc_id} onClick={() => { closePanel(); onTalk(npc); }}>{npc.avatar} {npc.name} · {npc.role}</button>)}</>
+          {panel === 'arrival' ? <><small>{zh ? '抵达现场 · 案件简报' : 'Scene arrival · case briefing'}</small><p>{caseData.scene?.description}</p><p>{caseData.case_id === 'Lvl_01' ? (zh ? '霓虹血迹：数据中心、大堂、实验室与阳台的紧凑剧情场景。' : 'Neon Blood: compact data center, lobby, lab and balcony scenes.') : (zh ? '本案件使用通用场景布置；案件人物、证据与规则仍来自原案。' : 'This case uses generic scene staging; its characters, evidence and rules remain case-specific.')}</p><p>{zh ? '本模式以字幕与角色动作叙事。移动不推进回合；调查和提问仍会消耗原有资源。' : 'Subtitles and character gestures tell the story. Movement does not advance rounds; investigations and questions still spend their normal resources.'}</p><button type="button" onClick={closePanel}>{zh ? '进入现场' : 'Enter the scene'}</button></> : panel === 'tools' ? toolsPanel : panel === 'notebook' ? <><p>{caseData.scene?.description}</p><hr />{lines.map(line => <TerminalLine key={line.id} line={line} accentColor="#a5c8c0" />)}{streamingText && <p role="status"><IconText text={streamingText} /></p>}</>
+            : panel === 'contacts' ? <><p>{zh ? '联络列表与现场人物使用同一提问规则。初始陈述不是已经证实的事实。' : 'Contacts use the same question rules as scene characters. Initial statements are not verified facts.'}</p>{caseData.npcs.map(npc => <button type="button" disabled={busy} key={npc.npc_id} onClick={() => { closePanel(); onTalk(npc); }}><Icon name={npc.avatar} /> {npc.name} · {npc.role}</button>)}</>
               : <>{panel === 'routes' ? <><p>{zh ? '门只显示通道，不会免费开启区域。选择符合入口条件的行动，结算成功后自动进入目标场景。' : 'Doors show routes, not free travel. Choose an action meeting the entry requirement; successful settlement moves you into the next scene.'}</p><ul>{getConnectedZones(caseData, zoneId).map(id => <li key={id}><strong>{caseData.scene?.zones?.[id]?.label || id}</strong><code>{caseData.scene?.zones?.[id]?.entry_requirement || 'search_area'}</code></li>)}</ul><button type="button" onClick={() => openTool('map')}>{zh ? '查看路线与行动优先级' : 'View routes & action priorities'}</button></>
                 : <p>{zh ? '现场勘查会读取当前区域的公开观察，随后由你选择探员与分支行动。靠近物件不会赠送证据，也不会绕过体力或入口限制。' : 'Investigation reads public observations from the current zone, then lets you choose an agent and branching action. Walking near props grants no evidence and bypasses no stamina or entry requirements.'}</p>}
-                <p>{brief?.message}</p><div className="td-theater-team">{team.map(agent => <span key={agent.agent_id}>{agent.agent_id}<b>{Math.round(agent.stamina)}% {zh ? '体力' : 'stamina'}</b></span>)}</div>
+                <p><IconText text={brief?.message} /></p><div className="td-theater-team">{team.map(agent => <span key={agent.agent_id}>{agent.agent_id}<b>{Math.round(agent.stamina)}% {zh ? '体力' : 'stamina'}</b></span>)}</div>
                 <p>{zh ? '每轮先恢复 4% 体力；参与者消耗 10%。整备也推进回合和证据销毁倒计时。' : 'Each turn restores 4% stamina; participants spend 10%. Recovery also advances the round and evidence destruction deadlines.'}</p>
                 <button type="button" className="is-primary" disabled={busy || gameState.action_points_left <= 0} onClick={execute}>{zh ? '开始观察 / 选择探员与行动' : 'Observe / choose agent & action'}</button>
               </>}

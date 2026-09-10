@@ -17,6 +17,7 @@ function component(path, imports, bindings = {}) {
   return exports.default || exports.NPCDialogBox;
 }
 const NarrativeText = component('src/components/game/theater/NarrativeText.jsx', {
+  '@/lib/settings.jsx': { useSettings: () => ({ settings: { reduceMotion: false } }) },
   react: { ...React, default: React, useMemo: callback => callback(), useRef: value => ({ current: value }), useLayoutEffect: () => {} },
   '@/game/narrativeMotion': { segmentNarrativeText, narrativeTextTiming }, './narrativeText.css': {},
 });
@@ -123,6 +124,8 @@ test('actual NPC panel animates only appended answers and Show all never dispatc
       return refs[slot];
     }, useState: value => { revealed ??= value; return [revealed, next => { revealed = next; }]; }, useEffect: () => {} },
     '@/components/game/theater/NPCStatement': { default: Statement },
+    '@/components/ui/Icon': { default: () => null, IconText: ({ text }) => text },
+    '@/components/ui/palette': { noirColor: color => color },
     '@/lib/lang.jsx': { useLang: () => ({ lang: 'en', t: { interrogating: 'Interrogating', close: 'Close' } }) },
     '@/components/game/InterrogationHints': { EmotionBadge: () => null },
     '@/components/game/AgentStaminaMeter': { default: () => null },
@@ -158,7 +161,7 @@ test('actual NPC panel animates only appended answers and Show all never dispatc
   assert.equal(statements(render({ storyMotion: false })).length, 0);
 });
 
-function textAnimationHarness({ supported = true, reduced = false } = {}) {
+function textAnimationHarness({ supported = true, reduced = false, gameReduced = false } = {}) {
   const effects = [];
   const refs = [];
   let cursor = 0;
@@ -176,6 +179,7 @@ function textAnimationHarness({ supported = true, reduced = false } = {}) {
   let visible = 1;
   const node = { ...element(-1), querySelectorAll: () => spans.slice(0, visible) };
   const Text = component('src/components/game/theater/NarrativeText.jsx', {
+    '@/lib/settings.jsx': { useSettings: () => ({ settings: { reduceMotion: gameReduced } }) },
     react: { ...React, default: React, useMemo: callback => callback(), useRef: value => {
       const slot = cursor++;
       if (!(slot in refs)) refs[slot] = { current: value };
@@ -233,7 +237,7 @@ test('Show all and live reduced motion finish paused animations; new words never
 });
 
 test('missing native animation and initial reduced motion retain immediately visible text', () => {
-  for (const options of [{ supported: false }, { reduced: true }]) {
+  for (const options of [{ supported: false }, { reduced: true }, { gameReduced: true }]) {
     const h = textAnimationHarness(options);
     const text = h.render({ variant: 'title' });
     const cleanup = h.effects[0](); h.reveal(3);

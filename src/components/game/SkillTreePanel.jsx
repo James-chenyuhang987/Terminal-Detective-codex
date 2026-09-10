@@ -1,17 +1,18 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import Icon from '@/components/ui/Icon';
+import React, { useRef, useEffect, useState, useCallback, useId } from 'react';
 import { SKILL_TREES, getLevelFromXP } from '@/game/agentProgression';
 import { useLang } from '@/lib/lang.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 // ── 每个探员的技能链定义（线性解锁关系）─────────────────────────────────────
 // skills[0] → skills[1] → skills[2] → ...
 // prerequisite: 每个技能需要前一个技能已解锁才能装备
 
 const AGENT_NAMES  = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
-const AGENT_COLORS = ['#00e5ff', '#a78bfa', '#ff6b35'];
+const AGENT_COLORS = ['#709f9a', '#9b9aae', '#c19a63'];
 const AGENT_ICONS  = ['👁️', '🔬', '💻'];
 
-// Node layout — 5 nodes arranged in a branching diagonal chain
-// We'll compute positions in a zig-zag pattern inside the canvas
+// Canvas coordinates scale horizontally; node centers share that scale, not their 56px hit areas.
 const NODE_RADIUS = 28;
 const CANVAS_W = 320;
 const CANVAS_H = 360;
@@ -30,13 +31,15 @@ function getNodePositions(count) {
 
 // ── Animated connector canvas ─────────────────────────────────────────────────
 function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions, color }) {
+  const { motionEnabled, foreground } = usePresentationMotion();
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !foreground) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     canvas.width = CANVAS_W;
     canvas.height = CANVAS_H;
 
@@ -61,7 +64,7 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
         ctx.setLineDash([]);
 
         // Animated energy packet along unlocked edges
-        if (fromUnlocked && toUnlocked) {
+        if (motionEnabled && t < 89 && fromUnlocked && toUnlocked) {
           const progress = ((t * 0.012) + i * 0.4) % 1;
           const px = from.x + (to.x - from.x) * progress;
           const py = from.y + (to.y - from.y) * progress;
@@ -76,12 +79,12 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
       }
 
       t++;
-      frameRef.current = requestAnimationFrame(draw);
+      if (motionEnabled && t < 90) frameRef.current = requestAnimationFrame(draw);
     };
 
-    frameRef.current = requestAnimationFrame(draw);
+    draw();
     return () => cancelAnimationFrame(frameRef.current);
-  }, [skills, equippedIds, unlockedByLevel, color, positions]);
+  }, [skills, equippedIds, unlockedByLevel, color, positions, motionEnabled, foreground]);
 
   return (
     <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
@@ -90,7 +93,8 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
 }
 
 // ── Single skill node ─────────────────────────────────────────────────────────
-function SkillNode({ skill, position, color, state, onClick, isHovered, onHover }) {
+function SkillNode({ skill, position, color, state, onClick, onHover, onFocus, onDismiss, tooltipId }) {
+  const { lang } = useLang();
   // state: 'locked' | 'available' | 'equipped'
   const stateConfig = {
     locked:    { border: 'rgba(255,255,255,0.12)', bg: 'rgba(255,255,255,0.03)', opacity: 0.45, glow: 0 },
@@ -100,32 +104,36 @@ function SkillNode({ skill, position, color, state, onClick, isHovered, onHover 
   const cfg = stateConfig[state];
 
   return (
-    <div
-      onClick={() => state !== 'locked' && onClick(skill)}
+    <button type="button" className="td-skill-node" disabled={state === 'locked'}
+      aria-label={lang === 'zh' ? skill.name : (skill.nameEn || skill.name)}
+      aria-pressed={state === 'equipped'}
+      aria-describedby={tooltipId}
+      onClick={() => onClick(skill)}
+      onFocus={() => onFocus(skill.id)} onBlur={() => onFocus(null)}
       onMouseEnter={() => onHover(skill.id)}
       onMouseLeave={() => onHover(null)}
+      onKeyDown={event => { if (event.key === 'Escape') onDismiss(skill.id); }}
       style={{
         position: 'absolute',
-        left: position.x - NODE_RADIUS,
+        left: `calc(${position.x / CANVAS_W * 100}% - ${NODE_RADIUS}px)`,
         top:  position.y - NODE_RADIUS,
         width: NODE_RADIUS * 2,
         height: NODE_RADIUS * 2,
+        boxSizing: 'border-box',
         borderRadius: '50%',
         border: `2px solid ${cfg.border}`,
         background: cfg.bg,
+        color, padding: 0,
         opacity: cfg.opacity,
         cursor: state === 'locked' ? 'not-allowed' : 'pointer',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         transition: 'all 0.25s ease',
-        boxShadow: state !== 'locked' && isHovered
-          ? `0 0 ${cfg.glow + 12}px ${color}, 0 0 ${cfg.glow * 2}px ${color}60`
-          : `0 0 ${cfg.glow}px ${color}80`,
-        transform: isHovered && state !== 'locked' ? 'scale(1.12)' : 'scale(1)',
+        boxShadow: state === 'equipped' ? `inset 0 0 0 3px ${color}20` : 'none',
         zIndex: 5,
       }}
     >
-      <span style={{ fontSize: 16, lineHeight: 1 }}>{skill.icon}</span>
+      <span style={{ fontSize: 16, lineHeight: 1 }}><Icon name={skill.icon} /></span>
       {state === 'equipped' && (
         <div style={{
           position: 'absolute', top: -6, right: -6,
@@ -140,24 +148,29 @@ function SkillNode({ skill, position, color, state, onClick, isHovered, onHover 
           Lv{skill.unlock_level}
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
-function SkillTooltip({ skill, position, color, state, canvasW }) {
+function SkillTooltip({ id, skill, position, color, state }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   if (!skill) return null;
   const name = zh ? skill.name : (skill.nameEn || skill.name);
   const desc = zh ? skill.desc : (skill.descEn || skill.desc);
-  const isLeft = position.x > canvasW / 2;
+  const belowNode = position.y < CANVAS_H / 2;
   return (
-    <div style={{
+    <div id={id} role="tooltip" className="td-skill-tooltip" style={{
       position: 'absolute',
-      top: position.y - 50,
-      [isLeft ? 'right' : 'left']: canvasW - position.x + 16,
-      width: 160,
+      [belowNode ? 'top' : 'bottom']: belowNode ? position.y + NODE_RADIUS + 8 : CANVAS_H - position.y + NODE_RADIUS + 8,
+      left: 8,
+      right: 8,
+      width: 'calc(100% - 16px)',
+      maxWidth: 280,
+      boxSizing: 'border-box',
+      margin: '0 auto',
+      overflowWrap: 'anywhere',
       background: 'rgba(2,6,20,0.97)',
       border: `1px solid ${color}60`,
       borderRadius: 10,
@@ -169,8 +182,8 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
       animation: 'tt-in 0.15s ease both',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-        <span style={{ fontSize: 18 }}>{skill.icon}</span>
-        <div>
+        <span style={{ fontSize: 18, flexShrink: 0 }}><Icon name={skill.icon} /></span>
+        <div style={{ minWidth: 0 }}>
           <div style={{ color, fontSize: '0.65rem', fontWeight: 900, letterSpacing: '0.04em' }}>{name}</div>
           <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.45rem' }}>{zh ? '需要' : 'REQUIRES'} Lv.{skill.unlock_level}</div>
         </div>
@@ -179,10 +192,10 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
       {state === 'equipped' && (
         <div style={{
           marginTop: 6, padding: '4px 7px', borderRadius: 4,
-          border: '1px solid #00ff8840', background: '#00ff8810',
+          border: '1px solid #8aaa9140', background: '#8aaa9110',
         }}>
-          <span style={{ color: '#00ff88', fontSize: '0.44rem', fontWeight: 900 }}>◉ {zh ? '本局效果' : 'ACTIVE EFFECT'}</span>
-          <div style={{ color: '#00ff88cc', fontSize: '0.46rem', marginTop: 2, lineHeight: 1.5 }}>
+          <span style={{ color: '#8aaa91', fontSize: '0.44rem', fontWeight: 900 }}>◉ {zh ? '本局效果' : 'ACTIVE EFFECT'}</span>
+          <div style={{ color: '#8aaa91cc', fontSize: '0.46rem', marginTop: 2, lineHeight: 1.5 }}>
             {zh ? '部署后真实生效：' : 'Applies after deployment: '}{desc}
           </div>
         </div>
@@ -193,7 +206,7 @@ function SkillTooltip({ skill, position, color, state, canvasW }) {
         </div>
       )}
       {state === 'equipped' && (
-        <div style={{ marginTop: 6, color: '#ff3860', fontSize: '0.48rem', background: '#ff386015', borderRadius: 4, padding: '3px 6px', textAlign: 'center' }}>
+        <div style={{ marginTop: 6, color: '#c77c78', fontSize: '0.48rem', background: '#c77c7815', borderRadius: 4, padding: '3px 6px', textAlign: 'center' }}>
           {zh ? '点击卸下' : 'CLICK TO UNEQUIP'}
         </div>
       )}
@@ -215,6 +228,9 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
     return loadout.find(row => row?.agent_id === agentId)?.skill_ids || loadout[index] || [];
   });
   const [hoveredId, setHoveredId] = useState(null);
+  const [focusedId, setFocusedId] = useState(null);
+  const [dismissedId, setDismissedId] = useState(null);
+  const tooltipId = useId();
 
   const xp = progression[agentIdx]?.xp || 0;
   const level = getLevelFromXP(xp);
@@ -252,17 +268,18 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
     return 'available'; // show as available but equip blocked by prereq check
   };
 
-  const hoveredSkill = skills.find(s => s.id === hoveredId);
-  const hoveredPos   = hoveredSkill ? positions[skills.indexOf(hoveredSkill)] : null;
-  const hoveredState = hoveredSkill ? getNodeState(hoveredSkill, skills.indexOf(hoveredSkill)) : null;
+  const activeId = focusedId || hoveredId;
+  const activeSkill = activeId !== dismissedId ? skills.find(s => s.id === activeId) : null;
+  const activePos = activeSkill ? positions[skills.indexOf(activeSkill)] : null;
+  const activeState = activeSkill ? getNodeState(activeSkill, skills.indexOf(activeSkill)) : null;
 
   return (
-    <div style={{ fontFamily: 'monospace', position: 'relative' }}>
+    <div style={{ fontFamily: 'monospace', position: 'relative', minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: '0.52rem', color, fontWeight: 700, letterSpacing: '0.12em' }}>
-            {AGENT_ICONS[agentIdx]} {AGENT_NAMES[agentIdx]} · SKILL TREE
+            <Icon name={AGENT_ICONS[agentIdx]} /> {AGENT_NAMES[agentIdx]} · SKILL TREE
           </div>
           <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
             Lv.{level} · {zh ? `已装备 ${equippedIds.length}/${skills.length} 技能` : `${equippedIds.length}/${skills.length} EQUIPPED`}
@@ -284,9 +301,9 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
       </div>
 
       {/* Tree canvas area */}
-      <div style={{
-        position: 'relative', width: CANVAS_W, height: CANVAS_H,
-        border: `1px solid ${color}18`, borderRadius: 12,
+      <div className="td-skill-tree" style={{
+        position: 'relative', width: '100%', maxWidth: CANVAS_W, height: CANVAS_H,
+        borderRadius: 12, boxShadow: `inset 0 0 0 1px ${color}18`,
         background: `radial-gradient(ellipse at 50% 30%, ${color}06 0%, transparent 70%)`,
         overflow: 'visible',
         margin: '0 auto',
@@ -303,13 +320,16 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
           const pos = positions[i];
           const isLeft = i % 2 === 0;
           return (
-            <div key={`lv-${i}`} style={{
+            <div key={`lv-${i}`} className="td-skill-label" style={{
               position: 'absolute',
-              top: pos.y - 10,
-              [isLeft ? 'right' : 'left']: isLeft ? CANVAS_W - pos.x + NODE_RADIUS + 6 : pos.x + NODE_RADIUS + 6,
-              fontSize: '0.5rem', fontFamily: 'monospace',
+              top: pos.y,
+              left: isLeft ? `calc(${pos.x / CANVAS_W * 100}% + ${NODE_RADIUS + 8}px)` : 8,
+              right: isLeft ? 8 : `calc(${100 - pos.x / CANVAS_W * 100}% + ${NODE_RADIUS + 8}px)`,
+              transform: 'translateY(-50%)',
+              fontSize: '0.5rem', fontFamily: 'monospace', lineHeight: 1.4,
               color: unlockedByLevel.includes(skill.id) ? color + 'cc' : 'rgba(255,255,255,0.2)',
-              whiteSpace: 'nowrap',
+              textAlign: isLeft ? 'left' : 'right',
+              whiteSpace: 'normal', overflowWrap: 'anywhere',
               pointerEvents: 'none',
             }}>
               <div style={{ fontWeight: 700, fontSize: '0.6rem' }}>{zh ? skill.name : (skill.nameEn || skill.name)}</div>
@@ -325,17 +345,18 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
             position={positions[i]} color={color}
             state={getNodeState(skill, i)}
             onClick={handleSkillClick}
-            isHovered={hoveredId === skill.id}
-            onHover={setHoveredId}
+            onHover={id => { setHoveredId(id); if (id) setDismissedId(null); }}
+            onFocus={id => { setFocusedId(id); if (id) setDismissedId(null); }}
+            onDismiss={setDismissedId}
+            tooltipId={activeSkill?.id === skill.id ? tooltipId : undefined}
           />
         ))}
 
         {/* Tooltip */}
-        {hoveredSkill && hoveredPos && (
+        {activeSkill && activePos && (
           <SkillTooltip
-            skill={hoveredSkill} position={hoveredPos}
-            color={color} state={hoveredState}
-            canvasW={CANVAS_W}
+            id={tooltipId} skill={activeSkill} position={activePos}
+            color={color} state={activeState}
           />
         )}
       </div>
@@ -354,8 +375,8 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
                 border: `1px solid ${color}30`, background: `${color}08`,
                 animation: 'skill-row-in 0.3s ease both',
               }}>
-                <span style={{ fontSize: 12 }}>{s.icon}</span>
-                <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 12 }}><Icon name={s.icon} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: '0.58rem', color, fontWeight: 700 }}>{zh ? s.name : (s.nameEn || s.name)}</span>
                   <span style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>{zh ? s.desc : (s.descEn || s.desc)}</span>
                 </div>

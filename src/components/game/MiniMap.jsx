@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import Icon, { IconText } from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 const DEFAULT_ZONE_LAYOUT = {
-  zone_datacenter: { x: 50, y: 18, label: '数据中心', labelEn: 'Data Center', sublabel: '案发现场', sublabelEn: 'Crime Scene', icon: '💻', color: '#ff3860' },
-  zone_lobby:      { x: 20, y: 60, label: '大堂', labelEn: 'Lobby', sublabel: '监控中心', sublabelEn: 'Surveillance', icon: '📹', color: '#00e5ff' },
-  zone_lab:        { x: 80, y: 60, label: '私人实验室', labelEn: 'Private Lab', sublabel: '黑客入口', sublabelEn: 'Hack Entry', icon: '🔬', color: '#a78bfa' },
-  zone_balcony:    { x: 50, y: 85, label: '天台阳台', labelEn: 'Roof Balcony', sublabel: '逃离路线', sublabelEn: 'Escape Route', icon: '🌃', color: '#ffaa00' },
+  zone_datacenter: { x: 50, y: 18, label: '数据中心', labelEn: 'Data Center', sublabel: '案发现场', sublabelEn: 'Crime Scene', icon: '💻', color: '#c77c78' },
+  zone_lobby:      { x: 20, y: 60, label: '大堂', labelEn: 'Lobby', sublabel: '监控中心', sublabelEn: 'Surveillance', icon: '📹', color: '#709f9a' },
+  zone_lab:        { x: 80, y: 60, label: '私人实验室', labelEn: 'Private Lab', sublabel: '黑客入口', sublabelEn: 'Hack Entry', icon: '🔬', color: '#9b9aae' },
+  zone_balcony:    { x: 50, y: 85, label: '天台阳台', labelEn: 'Roof Balcony', sublabel: '逃离路线', sublabelEn: 'Escape Route', icon: '🌃', color: '#c19a63' },
 };
 
 const DEFAULT_CONNECTIONS = [
@@ -21,15 +23,17 @@ const DEFAULT_CLUE_ZONE_MAP = {
 };
 
 // Clue weight → color
-const WEIGHT_COLOR = { CRITICAL: '#ff3860', HIGH: '#ff6b35', MEDIUM: '#ffaa00', LOW: '#00e5ff', HIDDEN: '#a78bfa' };
+const WEIGHT_COLOR = { CRITICAL: '#c77c78', HIGH: '#c19a63', MEDIUM: '#c19a63', LOW: '#709f9a', HIDDEN: '#9b9aae' };
 
-export default function MiniMap({ gameState, caseData, agentPath, accentColor }) {
+export default function MiniMap({ gameState, caseData, agentPath, accentColor: legacyAccentColor }) {
   const { t, lang } = useLang();
+  const accentColor = noirColor(legacyAccentColor);
   const zh = lang !== 'en';
   const [tab, setTab] = useState('map'); // 'map' | 'clues' | 'plot'
   const [expanded, setExpanded] = useState(false);
 
-  const zoneLayout  = caseData?.zone_layout    || DEFAULT_ZONE_LAYOUT;
+  const zoneLayout = Object.fromEntries(Object.entries(caseData?.zone_layout || DEFAULT_ZONE_LAYOUT)
+    .map(([id, zone]) => [id, { ...zone, color: noirColor(zone.color) }]));
   const connections = caseData?.zone_connections || DEFAULT_CONNECTIONS;
   const clueZoneMap = caseData?.zone_clue_map   || DEFAULT_CLUE_ZONE_MAP;
 
@@ -68,33 +72,38 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
       border: `1px solid ${accentColor}35`,
       borderRadius: 12, overflow: 'hidden',
       backdropFilter: 'blur(10px)',
-      boxShadow: `0 0 24px ${accentColor}18`,
-      transition: 'all 0.3s ease',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+      transition: 'width 0.2s ease, border-color 0.2s ease',
     }}>
       {/* ── Header ── */}
-      <div
-        className="flex items-center justify-between px-2 py-1 cursor-pointer select-none"
-        style={{ borderBottom: `1px solid ${accentColor}20`, background: `${accentColor}0a` }}
+      <button
+        type="button"
+        className="flex items-center justify-between w-full px-2 py-1 cursor-pointer select-none"
+        style={{ border: 0, borderBottom: `1px solid ${accentColor}20`, background: `${accentColor}0a`, fontFamily: 'inherit' }}
         onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
       >
         <span style={{ fontSize: '0.55rem', color: accentColor, fontWeight: 700, letterSpacing: '0.1em' }}>
-          {t.minimap}
+          <IconText text={t.minimap} />
         </span>
-        <span style={{ fontSize: '0.6rem', color: `${accentColor}60`, cursor: 'pointer' }}>
+        <span aria-hidden="true" style={{ fontSize: '0.6rem', color: `${accentColor}60` }}>
           {expanded ? '−' : '+'}
         </span>
-      </div>
+      </button>
 
       {/* ── Tab bar ── */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${accentColor}15` }}>
         {[
-          { key: 'map',   label: '🗺' },
-          { key: 'clues', label: '🔍' },
-          { key: 'plot',  label: '📋' },
+          { key: 'map', icon: 'map', label: zh ? '地图' : 'Map' },
+          { key: 'clues', icon: 'search', label: zh ? '线索' : 'Clues' },
+          { key: 'plot', icon: 'clipboard', label: zh ? '案情' : 'Case' },
         ].map(tb => (
           <button
+            type="button"
             key={tb.key}
             onClick={() => setTab(tb.key)}
+            aria-pressed={tab === tb.key}
+            title={tb.label}
             style={{
               flex: 1, padding: '3px 0', fontSize: '0.65rem',
               fontFamily: 'monospace', cursor: 'pointer', border: 'none',
@@ -104,7 +113,7 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
               transition: 'all 0.15s',
             }}
           >
-            {tb.label}
+            <Icon name={tb.icon} size={13} /> <span style={{ fontSize: '0.5rem' }}>{tb.label}</span>
           </button>
         ))}
       </div>
@@ -134,7 +143,6 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
                   stroke={bothVisited ? accentColor : 'rgba(255,255,255,0.1)'}
                   strokeWidth={bothVisited ? 1.5 : 0.8}
                   strokeDasharray={bothVisited ? '5 3' : '3 5'}
-                  style={{ filter: bothVisited ? `drop-shadow(0 0 3px ${accentColor})` : 'none' }}
                 />
               );
             })}
@@ -158,31 +166,28 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
                   borderRadius: '50%',
                   border: `${isCurrent ? 2 : 1}px solid ${color}`,
                   background: isCurrent ? `${zd.color}30` : isVisited ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)',
-                  boxShadow: isCurrent ? `0 0 12px ${zd.color}80` : 'none',
+                  color,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: isCurrent ? 11 : 8, transition: 'all 0.3s',
-                  animation: isCurrent ? 'mm-pulse 1.8s ease-in-out infinite' : 'none',
+                  fontSize: isCurrent ? 11 : 8, transition: 'border-color 0.2s, background-color 0.2s',
                 }}>
-                  {zd.icon}
+                  <Icon name={zd.icon} size={isCurrent ? 13 : 10} label={expanded ? undefined : (zh ? zd.label : (zd.labelEn || zd.label))} />
                 </div>
                 {clueCount > 0 && (
                   <div style={{
                     position: 'absolute', top: -4, right: -4,
                     width: 12, height: 12, borderRadius: '50%',
-                    background: '#ffaa00', color: '#000',
+                    background: '#c19a63', color: '#000',
                     fontSize: '0.4rem', fontWeight: 900,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 0 6px #ffaa0080',
                   }}>{clueCount}</div>
                 )}
                 {expanded && (
                   <div style={{
                     marginTop: 3, fontSize: '0.42rem', color,
-                    textShadow: isCurrent ? `0 0 6px ${zd.color}` : 'none',
                     whiteSpace: 'nowrap', fontWeight: isCurrent ? 700 : 400,
                     maxWidth: 55, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
-                    {zh ? zd.label : (zd.labelEn || zd.label)}
+                    <IconText text={zh ? zd.label : (zd.labelEn || zd.label)} />
                   </div>
                 )}
               </div>
@@ -196,7 +201,7 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
                 { color: accentColor, label: t.currentPos },
                 { color: 'rgba(255,255,255,0.6)', label: t.investigated },
                 { color: 'rgba(255,255,255,0.2)', label: t.unexplored },
-                { color: '#ffaa00', label: t.clueLabel },
+                { color: '#c19a63', label: t.clueLabel },
               ].map(item => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ width: 5, height: 5, borderRadius: '50%', background: item.color }} />
@@ -212,15 +217,15 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
       {tab === 'clues' && (
         <div style={{ maxHeight: mapH + 30, overflowY: 'auto', padding: '6px 8px' }}>
           <div style={{ fontSize: '0.48rem', color: `${accentColor}80`, marginBottom: 6, letterSpacing: '0.08em' }}>
-            {t.clueDetails} ({unlockedClueObjs.length})
+            <IconText text={t.clueDetails} /> ({unlockedClueObjs.length})
           </div>
           {unlockedClueObjs.length === 0 ? (
             <div style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.25)', textAlign: 'center', paddingTop: 16 }}>
-              {t.noClues}
+              <IconText text={t.noClues} />
             </div>
           ) : (
             unlockedClueObjs.map(clue => {
-              const wc = WEIGHT_COLOR[clue.weight] || '#fff';
+              const wc = noirColor(WEIGHT_COLOR[clue.weight] || '#fff');
               return (
                 <div key={clue.clue_id} style={{
                   marginBottom: 6, padding: '5px 7px',
@@ -230,7 +235,7 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
                   background: `${wc}08`,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-                    <span style={{ fontSize: 12 }}>{clue.visual_icon}</span>
+                    <Icon name={clue.visual_icon} size={14} style={{ color: wc }} />
                     <span style={{ fontSize: '0.55rem', fontWeight: 700, color: wc }}>{clue.keyword}</span>
                     <span style={{ marginLeft: 'auto', fontSize: '0.38rem', color: `${wc}70`, border: `1px solid ${wc}30`, borderRadius: 3, padding: '0 3px' }}>{clue.weight}</span>
                   </div>
@@ -240,10 +245,10 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
                   {/* Zone badge */}
                   {clueZoneMap[clue.clue_id] && zoneLayout[clueZoneMap[clue.clue_id]] && (
                     <div style={{ marginTop: 3, fontSize: '0.38rem', color: zoneLayout[clueZoneMap[clue.clue_id]].color, opacity: 0.7 }}>
-                      {zoneLayout[clueZoneMap[clue.clue_id]].icon}{' '}
-                      {zh
+                      <Icon name={zoneLayout[clueZoneMap[clue.clue_id]].icon} />{' '}
+                      <IconText text={zh
                         ? zoneLayout[clueZoneMap[clue.clue_id]].label
-                        : (zoneLayout[clueZoneMap[clue.clue_id]].labelEn || zoneLayout[clueZoneMap[clue.clue_id]].label)}
+                        : (zoneLayout[clueZoneMap[clue.clue_id]].labelEn || zoneLayout[clueZoneMap[clue.clue_id]].label)} />
                     </div>
                   )}
                 </div>
@@ -257,7 +262,7 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
       {tab === 'plot' && (
         <div style={{ maxHeight: mapH + 30, overflowY: 'auto', padding: '6px 8px' }}>
           <div style={{ fontSize: '0.48rem', color: `${accentColor}80`, marginBottom: 6, letterSpacing: '0.08em' }}>
-            {t.plotSummary}
+            <IconText text={t.plotSummary} />
           </div>
           {/* Case header */}
           <div style={{
@@ -266,27 +271,27 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
             background: `${accentColor}08`,
           }}>
             <div style={{ fontSize: '0.6rem', fontWeight: 700, color: accentColor, marginBottom: 2 }}>
-              {caseData?.title || (zh ? '未知案件' : 'Unknown Case')}
+              <IconText text={caseData?.title || (zh ? '未知案件' : 'Unknown Case')} />
             </div>
             <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.4)' }}>
-              {caseData?.subtitle || ''}
+              <IconText text={caseData?.subtitle || ''} />
             </div>
           </div>
           {/* Plot lines */}
           {plotLines.map((line, i) => (
             <div key={i} style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, marginBottom: 4, paddingLeft: 6, borderLeft: `1px solid ${accentColor}20` }}>
-              {line}
+              <IconText text={line} />
             </div>
           ))}
           {/* NPC list */}
           {caseData?.npcs?.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: '0.42rem', color: `${accentColor}60`, marginBottom: 4, letterSpacing: '0.08em' }}>
-                ◎ {zh ? '相关人员' : 'PERSONS OF INTEREST'}
+                <Icon name="users" /> {zh ? '相关人员' : 'PERSONS OF INTEREST'}
               </div>
               {caseData.npcs.map(npc => (
                 <div key={npc.npc_id} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                  <span style={{ fontSize: 12 }}>{npc.avatar}</span>
+                  <Icon name={npc.avatar} size={14} />
                   <div>
                     <span style={{ fontSize: '0.52rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{npc.name}</span>
                     <span style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.3)', marginLeft: 4 }}>· {npc.role}</span>
@@ -304,17 +309,10 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor })
         display: 'flex', justifyContent: 'space-between',
         fontSize: '0.42rem', color: `${accentColor}60`,
       }}>
-        <span>🗺 {visitedZones.size}/{Object.keys(zoneLayout).length} {t.zonesLabel}</span>
-        <span>🔍 {gameState?.unlocked_clues?.length || 0}</span>
-        <span>⚡ {t.apLabel} {gameState?.action_points_left || 0}</span>
+        <span><Icon name="map" /> {visitedZones.size}/{Object.keys(zoneLayout).length} {t.zonesLabel}</span>
+        <span><Icon name="search" label={zh ? '线索' : 'Clues'} /> {gameState?.unlocked_clues?.length || 0}</span>
+        <span><Icon name="bolt" /> {t.apLabel} {gameState?.action_points_left || 0}</span>
       </div>
-
-      <style>{`
-        @keyframes mm-pulse {
-          0%,100% { box-shadow: 0 0 12px currentColor; transform: scale(1); }
-          50%      { box-shadow: 0 0 20px currentColor; transform: scale(1.15); }
-        }
-      `}</style>
     </div>
   );
 }

@@ -15,6 +15,7 @@ const config = JSON.stringify({
     CORS_ALLOWED_ORIGINS: 'https://game.example,http://localhost:5173',
   },
   d1_databases: [{
+    binding: 'DB',
     database_id: '4afe18c5-2a7b-49a9-9c8c-6fcdbfb86d23',
   }],
 });
@@ -43,6 +44,32 @@ test('release configuration rejects placeholders and Firebase project mismatches
     () => validateReleaseConfig(config, { ...environment, VITE_FIREBASE_PROJECT_ID: 'another-project' }),
     /project IDs must match/,
   );
+});
+
+test('release configuration rejects API application IDs that would route the client to a different app', () => {
+  for (const appId of ['another-app', ' terminal-detective ', 'terminal/detective', 'terminal?detective']) {
+    assert.throws(() => validateReleaseConfig(config, { ...environment, VITE_APP_ID: appId }), /APP_ID/);
+  }
+  const differentWorker = config.replace('"APP_ID":"terminal-detective"', '"APP_ID":"another-app"');
+  assert.throws(() => validateReleaseConfig(differentWorker, environment), /APP_ID/);
+  assert.equal(validateReleaseConfig(differentWorker, { ...environment, VITE_APP_ID: 'another-app' }).appId, 'another-app');
+  assert.equal(validateReleaseConfig(config, { ...environment, VITE_APP_ID: '' }).appId, 'terminal-detective');
+  const whitespaceWorker = config.replace('"APP_ID":"terminal-detective"', '"APP_ID":" terminal-detective "');
+  assert.throws(() => validateReleaseConfig(whitespaceWorker, environment), /APP_ID/);
+});
+
+test('release configuration validates the DB binding rather than the first unrelated D1 database', () => {
+  const parsed = JSON.parse(config);
+  const database = parsed.d1_databases[0];
+  for (const databases of [[{ ...database, binding: 'UNRELATED' }],
+    [{ ...database, binding: 'UNRELATED' }, { ...database, database_id: 'invalid' }],
+    [], [database, database]]) {
+    assert.throws(() => validateReleaseConfig(JSON.stringify({ ...parsed, d1_databases: databases }), environment), /D1.*DB/);
+  }
+  const unrelated = { ...database, binding: 'UNRELATED' };
+  for (const databases of [[unrelated, database], [database, unrelated]]) {
+    assert.equal(validateReleaseConfig(JSON.stringify({ ...parsed, d1_databases: databases }), environment).databaseId, database.database_id);
+  }
 });
 
 test('release configuration requires every public Firebase Web App value', () => {
@@ -135,6 +162,7 @@ test('release configuration accepts Wrangler JSONC comments and trailing commas'
       "CORS_ALLOWED_ORIGINS": "https://game.example",
     },
     "d1_databases": [{
+      "binding": "DB",
       "database_id": "4afe18c5-2a7b-49a9-9c8c-6fcdbfb86d23",
     }],
   }`;

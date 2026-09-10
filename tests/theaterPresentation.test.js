@@ -118,5 +118,7 @@ test('shared tools, reports, and notebook have accessible scene-independent cont
   assert.match(presentation, /onPointerCancel/);
   assert.match(presentation, /onLostPointerCapture/);
   assert.match(presentation, /previous.isConnected/);
-  assert.match(presentation, /prefers-reduced-motion/);
+  assert.match(presentation, /const \{ reducedMotion \} = usePresentationMotion\(\)/);
+  assert.match(read('components/ui/usePresentationMotion.js'), /prefers-reduced-motion/);
+  assert.match(read('components/ui/usePresentationMotion.js'), /settings.reduceMotion/);
 });

@@ -1,8 +1,10 @@
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { segmentNarrativeText, narrativeTextTiming } from '@/game/narrativeMotion';
 import './narrativeText.css';
+import { useSettings } from '@/lib/settings.jsx';
 
 export default function NarrativeText({ text, lang, variant = 'passage', visibleCount = Infinity, paused = false, instant = false }) {
+  const { settings } = useSettings();
   const tokens = useMemo(() => segmentNarrativeText(text, lang), [text, lang]);
   const root = useRef(null);
   const animations = useRef(new Map());
@@ -22,7 +24,7 @@ export default function NarrativeText({ text, lang, variant = 'passage', visible
   useLayoutEffect(() => {
     const node = root.current;
     if (!node) return;
-    const immediate = instant || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const immediate = instant || settings.reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const reveal = (element, key, frames, timing) => {
       if (!animations.current.has(key)) {
         animations.current.set(key, immediate || !element.animate ? null : element.animate(frames, timing));
@@ -42,7 +44,7 @@ export default function NarrativeText({ text, lang, variant = 'passage', visible
       const index = Number(element.dataset.token);
       reveal(element, index, [{ opacity: 0 }, { opacity: 1 }], narrativeTextTiming(variant, index));
     });
-  }, [text, lang, variant, visibleCount, paused, instant]);
+  }, [text, lang, variant, visibleCount, paused, instant, settings.reduceMotion]);
 
   return <span ref={root} className={`td-narrative-text td-narrative-text--${variant}`} aria-hidden="true">
     {tokens.map(({ text: token, end, whitespace }, index) => whitespace ? token : <span key={index} data-token={index}

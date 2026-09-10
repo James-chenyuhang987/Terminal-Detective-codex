@@ -1,6 +1,8 @@
 import React from 'react';
 import { INTENSITY_META, EMOTION_META } from '@/game/npcEmotion';
 import { useLang } from '@/lib/lang.jsx';
+import Icon, { IconText } from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 
 // 审讯策略提示栏 — 点击方向标签填入输入框
 export default function InterrogationHints({ hints, onPick }) {
@@ -16,7 +18,8 @@ export default function InterrogationHints({ hints, onPick }) {
         {lang === 'zh' ? '审讯策略' : 'STRATEGY'}
       </span>
       {hints.map(h => {
-        const m = INTENSITY_META[h.intensity] || INTENSITY_META.calm;
+        const meta = INTENSITY_META[h.intensity] || INTENSITY_META.calm;
+        const m = { ...meta, color: noirColor(meta.color) };
         return (
           <button key={h.id} onClick={() => onPick(h.text)}
             style={{
@@ -33,8 +36,8 @@ export default function InterrogationHints({ hints, onPick }) {
               width: 14, height: 14, borderRadius: '50%', fontSize: 9,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: `${m.color}25`,
-            }}>{m.icon}</span>
-            {h.label}
+            }}><Icon name={m.icon} /></span>
+            <IconText text={h.label} />
           </button>
         );
       })}
@@ -44,7 +47,8 @@ export default function InterrogationHints({ hints, onPick }) {
 
 export function EmotionBadge({ level = 'calm' }) {
   const { lang } = useLang();
-  const m = EMOTION_META[level] || EMOTION_META.calm;
+  const meta = EMOTION_META[level] || EMOTION_META.calm;
+  const m = { ...meta, color: noirColor(meta.color) };
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -52,7 +56,7 @@ export function EmotionBadge({ level = 'calm' }) {
       border: `1px solid ${m.color}55`, background: `${m.color}18`,
       color: m.color, fontFamily: 'monospace', fontSize: '0.45rem', fontWeight: 700,
     }}>
-      {m.icon} {lang === 'zh' ? m.zh : m.en}
+      <Icon name={m.icon} /> {lang === 'zh' ? m.zh : m.en}
     </span>
   );
 }

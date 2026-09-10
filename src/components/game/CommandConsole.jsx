@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { COMMAND_CONTINGENCIES, COMMAND_DOCTRINES, commandCost } from '@/game/commandSystem';
+import Icon, { IconText } from '@/components/ui/Icon';
 
 export default function CommandConsole({ commandState, busy = false, onStabilize, onClose }) {
   const { lang } = useLang();
@@ -25,17 +26,17 @@ export default function CommandConsole({ commandState, busy = false, onStabilize
     if (event.target === event.currentTarget) onClose?.();
   }}>
     <section className="td-command-console" role="dialog" aria-modal="true" aria-label={zh ? '指挥台' : 'Command Console'}>
-      <header><div><small>TACTICAL COMMAND // LIVE</small><h2>{zh ? '全息指挥台' : 'HOLOGRAPHIC COMMAND'}</h2></div><button ref={closeRef} type="button" onClick={onClose} aria-label={zh ? '关闭' : 'Close'}>×</button></header>
+      <header><div><small>TACTICAL COMMAND // LIVE</small><h2>{zh ? '调查指挥台' : 'INVESTIGATION COMMAND'}</h2></div><button ref={closeRef} type="button" onClick={onClose} aria-label={zh ? '关闭' : 'Close'}><Icon name="close" size={18} /></button></header>
       <div className="td-command-console-meter">
-        <span>{zh ? '当前指挥点' : 'COMMAND POINTS'}</span><strong>◆ {state.points || 0}<small>/{state.max_points || 5}</small></strong>
+        <span>{zh ? '当前指挥点' : 'COMMAND POINTS'}</span><strong><Icon name="badge" /> {state.points || 0}<small>/{state.max_points || 5}</small></strong>
         <i>{Array.from({ length: state.max_points || 5 }, (_, index) => <b key={index} className={index < (state.points || 0) ? 'is-filled' : ''} />)}</i>
       </div>
       <div className="td-command-console-plan">
-        <article><span>{doctrine?.icon || '◇'}</span><div><small>{zh ? '指挥学说' : 'DOCTRINE'}</small><strong>{zh ? doctrine?.name : doctrine?.nameEn}</strong><p>{zh ? doctrine?.desc : doctrine?.descEn}</p></div></article>
-        <article><span>{contingency?.icon || '◇'}</span><div><small>{zh ? '应急预案' : 'CONTINGENCY'}</small><strong>{zh ? contingency?.name : contingency?.nameEn}</strong><p>{state.contingency_status === 'used' ? (zh ? '已触发' : 'TRIGGERED') : state.contingency_status === 'missed' ? (zh ? '因点数不足而失效' : 'MISSED: INSUFFICIENT POINTS') : (zh ? contingency?.desc : contingency?.descEn)}</p></div></article>
+        <article><span><Icon name={doctrine?.icon || 'compass'} /></span><div><small>{zh ? '指挥学说' : 'DOCTRINE'}</small><strong><IconText text={zh ? doctrine?.name : doctrine?.nameEn} /></strong><p><IconText text={zh ? doctrine?.desc : doctrine?.descEn} /></p></div></article>
+        <article><span><Icon name={contingency?.icon || 'shield'} /></span><div><small>{zh ? '应急预案' : 'CONTINGENCY'}</small><strong><IconText text={zh ? contingency?.name : contingency?.nameEn} /></strong><p><IconText text={state.contingency_status === 'used' ? (zh ? '已触发' : 'TRIGGERED') : state.contingency_status === 'missed' ? (zh ? '因点数不足而失效' : 'MISSED: INSUFFICIENT POINTS') : (zh ? contingency?.desc : contingency?.descEn)} /></p></div></article>
       </div>
       <button type="button" className="td-command-stabilize" disabled={unavailable} onClick={onStabilize}>
-        <span>⌁</span><div><strong>{zh ? '紧急稳态' : 'EMERGENCY STABILIZE'}</strong><small>{state.emergency_stabilize_used ? (zh ? '本案已使用' : 'ALREADY USED THIS CASE') : (zh ? '立即降低 12 点混乱，每案限一次' : 'REDUCE CONFUSION BY 12 · ONCE PER CASE')}</small></div><b>◆ {stabilizeCost}</b>
+        <span><Icon name="shield" /></span><div><strong>{zh ? '紧急稳态' : 'EMERGENCY STABILIZE'}</strong><small>{state.emergency_stabilize_used ? (zh ? '本案已使用' : 'ALREADY USED THIS CASE') : (zh ? '立即降低 12 点混乱，每案限一次' : 'REDUCE CONFUSION BY 12 · ONCE PER CASE')}</small></div><b><Icon name="badge" /> {stabilizeCost}</b>
       </button>
       <footer>{zh ? '战术预演与联合行动可在每轮决策卡中启用。所有指挥消耗仅在行动成功结算后扣除。' : 'TACTICAL PREVIEW AND JOINT ACTION ARE AVAILABLE ON DECISION CARDS. COSTS COMMIT ONLY AFTER A SUCCESSFUL ACTION.'}</footer>
     </section>

@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { calcCaseMatchScore, CASE_NEON_BLOOD } from '@/game/casePresets';
 import { useLang } from '@/lib/lang.jsx';
+import { noirColor } from '@/components/ui/palette';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 // 当前案件匹配度 — 数字仪表盘
 export default function CaseMatchGauge({ agents }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
-  const { score, color, advice } = calcCaseMatchScore(agents, CASE_NEON_BLOOD, lang);
+  const { motionEnabled } = usePresentationMotion();
+  const { score, color: legacyColor, advice } = calcCaseMatchScore(agents, CASE_NEON_BLOOD, lang);
+  const color = noirColor(legacyColor);
   const [flash, setFlash] = useState(false);
 
   useEffect(() => {
+    if (!motionEnabled) { setFlash(false); return; }
     setFlash(true);
     const t = setTimeout(() => setFlash(false), 220);
     return () => clearTimeout(t);
-  }, [score]);
+  }, [score, motionEnabled]);
 
   const w = CASE_NEON_BLOOD.weights;
 
@@ -40,9 +45,9 @@ export default function CaseMatchGauge({ agents }) {
 
       <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.07)', margin: '7px 0 6px' }}>
         <div style={{
-          height: '100%', borderRadius: 3, width: `${score}%`,
+          height: '100%', borderRadius: 3, width: '100%', transform: `scaleX(${score / 100})`, transformOrigin: 'left',
           background: `linear-gradient(to right, ${color}70, ${color})`,
-          boxShadow: `0 0 8px ${color}90`, transition: 'width 0.25s ease',
+          transition: motionEnabled ? 'transform 0.25s ease' : 'none',
         }} />
       </div>
 

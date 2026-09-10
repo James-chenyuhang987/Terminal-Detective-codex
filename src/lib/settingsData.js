@@ -1,6 +1,6 @@
 import { DEFAULT_STORY_MODE, normalizeStoryMode } from '../game/storyMode.js';
 
-/** @typedef {{ storyMode: 'terminal' | 'theater', panelLight: boolean, sfxEnabled: boolean, scanlines: boolean, glitchLevel: 'off' | 'low' | 'high', particles: boolean, investigationTutorialEnabled: boolean, cinematicsEnabled: boolean, cinematicQuality: 'auto' | 'low' | 'high' }} Settings */
+/** @typedef {{ storyMode: 'terminal' | 'theater', panelLight: boolean, sfxEnabled: boolean, scanlines: boolean, reduceMotion: boolean, glitchLevel: 'off' | 'low' | 'high', particles: boolean, investigationTutorialEnabled: boolean, cinematicsEnabled: boolean, cinematicQuality: 'auto' | 'low' | 'high' }} Settings */
 
 /** @type {Readonly<Settings>} */
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   panelLight: false,
   sfxEnabled: true,
   scanlines: true,
+  reduceMotion: false,
   glitchLevel: 'high',
   particles: true,
   investigationTutorialEnabled: true,

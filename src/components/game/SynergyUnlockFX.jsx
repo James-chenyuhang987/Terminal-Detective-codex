@@ -1,5 +1,9 @@
+import { noirColor } from '@/components/ui/palette';
+import Icon from '@/components/ui/Icon';
 import React, { useEffect, useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
+import { useSettings } from '@/lib/settings.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 // 协同技能解锁全屏特效 — 冲击波 + 光束 + 技能卡 + 音效
 function playUnlockChord() {
@@ -18,24 +22,34 @@ function playUnlockChord() {
       osc.start(now + i * 0.06);
       osc.stop(now + i * 0.06 + 1.2);
     });
-    setTimeout(() => ctx.close(), 2000);
-  } catch {}
+    const timer = setTimeout(() => { void ctx.close().catch(() => {}); }, 2000);
+    return () => { clearTimeout(timer); if (ctx.state !== 'closed') void ctx.close().catch(() => {}); };
+  } catch { return undefined; }
 }
 
 export default function SynergyUnlockFX({ skill, onDone }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
-  const timerRef = useRef(null);
+  const { settings } = useSettings();
+  const { motionEnabled, foreground } = usePresentationMotion();
+  const played = useRef(null);
+  const done = useRef(onDone);
+  done.current = onDone;
 
   useEffect(() => {
     if (!skill) return;
-    playUnlockChord();
-    timerRef.current = setTimeout(onDone, 2800);
-    return () => clearTimeout(timerRef.current);
+    const timer = setTimeout(() => done.current(), 2800);
+    return () => clearTimeout(timer);
   }, [skill]);
 
+  useEffect(() => {
+    if (!skill || !foreground || !settings.sfxEnabled || played.current === skill) return;
+    played.current = skill;
+    return playUnlockChord();
+  }, [skill, foreground, settings.sfxEnabled]);
+
   if (!skill) return null;
-  const c = skill.color;
+  const c = noirColor(skill.color);
 
   return (
     <div style={{
@@ -47,25 +61,25 @@ export default function SynergyUnlockFX({ skill, onDone }) {
       <div style={{
         position: 'absolute', inset: 0,
         background: `radial-gradient(ellipse at 50% 50%, transparent 40%, ${c}30 100%)`,
-        animation: 'su-tint 2.6s ease-out both',
+        animation: motionEnabled ? 'su-tint 2.6s ease-out both' : 'none', opacity: motionEnabled ? 1 : .15,
       }} />
 
       {/* 冲击波环 */}
-      {[0, 0.18, 0.36].map((d, i) => (
+      {motionEnabled && settings.particles && [0, 0.18].map((d, i) => (
         <div key={i} style={{
           position: 'absolute', width: 200, height: 200, borderRadius: '50%',
-          border: `2px solid ${c}`, boxShadow: `0 0 40px ${c}`,
+          border: `1px solid ${c}60`,
           animation: `su-ring 1.5s ${d}s cubic-bezier(.2,.7,.3,1) both`,
         }} />
       ))}
 
       {/* 放射光束 */}
-      {Array.from({ length: 12 }).map((_, i) => (
+      {motionEnabled && settings.particles && Array.from({ length: 6 }).map((_, i) => (
         <div key={`b${i}`} style={{
           position: 'absolute', width: 2, height: '46vh',
           background: `linear-gradient(to top, transparent, ${c})`,
           transformOrigin: 'bottom center',
-          transform: `rotate(${i * 30}deg) translateY(-50%)`,
+          transform: `rotate(${i * 60}deg) translateY(-50%)`,
           animation: `su-beam 1.1s ${i * 0.03}s ease-out both`,
         }} />
       ))}
@@ -75,21 +89,21 @@ export default function SynergyUnlockFX({ skill, onDone }) {
         position: 'relative', width: 420, maxWidth: '88vw',
         border: `1px solid ${c}`, borderRadius: 16,
         background: 'rgba(2,8,20,0.95)',
-        boxShadow: `0 0 70px ${c}55, inset 0 0 40px ${c}12`,
+        boxShadow: '0 24px 60px #0006',
         padding: '22px 26px', textAlign: 'center',
-        animation: 'su-card 0.55s 0.2s cubic-bezier(.22,1,.36,1) both',
+        animation: motionEnabled ? 'su-card 0.55s 0.2s cubic-bezier(.22,1,.36,1) both' : 'none',
       }}>
         <div style={{ fontSize: '0.5rem', color: `${c}aa`, letterSpacing: '0.35em', marginBottom: 10 }}>
           {zh ? '协同技能激活' : 'SYNERGY UNLOCKED'}
         </div>
         <div style={{
           fontSize: '3rem', lineHeight: 1, marginBottom: 8,
-          filter: `drop-shadow(0 0 22px ${c})`,
-          animation: 'su-icon 1.4s ease-in-out infinite alternate',
-        }}>{skill.icon}</div>
+          color: c,
+          animation: 'none',
+        }}><Icon name={skill.icon} /></div>
         <div style={{
           fontSize: '1.35rem', fontWeight: 900, color: c,
-          letterSpacing: '0.2em', textShadow: `0 0 26px ${c}`,
+          letterSpacing: '0.2em', textShadow: 'none',
         }}>{zh ? skill.name : skill.nameEn}</div>
         <div style={{
           marginTop: 6, display: 'inline-block',
@@ -100,9 +114,9 @@ export default function SynergyUnlockFX({ skill, onDone }) {
         <div style={{
           marginTop: 14, padding: '11px 14px', borderRadius: 10,
           border: `1px solid ${c}35`, background: `${c}0a`,
-          color: '#e6f7ff', fontSize: '0.66rem', lineHeight: 1.75,
+          color: '#e6dfcf', fontSize: '0.66rem', lineHeight: 1.75,
         }}>
-          <span style={{ color: '#00ff88', fontWeight: 900 }}>◉ {zh ? '增益效果 ' : 'BONUS EFFECT '}</span>
+          <span style={{ color: '#8aaa91', fontWeight: 900 }}>◉ {zh ? '增益效果 ' : 'BONUS EFFECT '}</span>
           {zh ? skill.desc : skill.descEn}
         </div>
       </div>

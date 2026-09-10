@@ -33,7 +33,7 @@ function handler(name, bindings) {
 const skip = authority ? false : 'Backend reducer is integrated separately; set TD_AUTHORITY_TEST_ROOT to its worktree.';
 const now = new Date('2026-09-07T00:00:00.000Z');
 
-async function runtimeFixture({ lostQuestion = false, seedRun = () => {}, jointRound = false } = {}) {
+async function runtimeFixture({ lostQuestion = false, incompleteQuestion = false, seedRun = () => {}, jointRound = false } = {}) {
   let run = authority.createRun({ id: 'ui-contract-run', caseData: Case_Data_Lvl_01, teamConfig: buildTeamConfig(), effects: { skill_effects: { auto_unlock_first: true } }, now });
   seedRun(run);
   const ledger = new Map();
@@ -56,6 +56,7 @@ async function runtimeFixture({ lostQuestion = false, seedRun = () => {}, jointR
       const response = { data: { authority_version: 1, run: authority.publicRun(run), result: outcome.result } };
       ledger.set(body.operation_id, response);
       if (lostQuestion && body.command.type === 'question') throw new Error('Accepted answer lost');
+      if (incompleteQuestion && body.command.type === 'question') return { data: { authority_version: 1, run: response.data.run } };
       return response;
     },
   };
@@ -208,24 +209,32 @@ test('real reducer accepts joint-action costs and only cloud outcomes for crisis
   assert.equal(authority.deriveRunSummary(crashed.cloud()).is_passed, false);
 });
 
-test('lost real reducer question response replays its answer and options without another stamina debit', { skip }, async () => {
-  const h = await runtimeFixture({ lostQuestion: true });
-  const npc = Case_Data_Lvl_01.npcs[0];
-  await h.perform('handleNPCTalk')(npc);
-  const [executorId, pack] = Object.entries(h.stored.packs).find(([, value]) => value.questions.length);
-  h.bindings.npcExecutorId = executorId;
-  await h.perform('handleNPCQuestion')(pack.questions[0]);
-  const chargedStamina = h.cloud().state.agent_stamina[executorId];
-  assert.equal(h.stored.ready, false);
-  assert.equal(h.client.hasPending(), true);
-  h.reload();
-  await h.resume();
-  assert.equal(h.stored.ready, true);
-  assert.equal(h.client.hasPending(), false);
-  assert.equal(h.stored.state.agent_stamina[executorId], chargedStamina);
-  assert.equal(h.stored.dialogue.filter(line => line.role === 'npc').length, 1);
-  assert.deepEqual(h.stored.packs, h.cloud().interrogation_options[npc.npc_id].packs);
-  const requests = h.calls.filter(body => body.command?.type === 'question');
-  assert.equal(requests.length, 2);
-  assert.deepEqual(requests[1], { ...requests[0], session_id: 'newly-claimed-device' });
-});
+for (const incompleteQuestion of [false, true]) {
+  test(`${incompleteQuestion ? 'incomplete' : 'lost'} real reducer question response replays its answer and options without another stamina debit`, { skip }, async () => {
+    for (const reload of [false, true]) {
+      const h = await runtimeFixture({ lostQuestion: !incompleteQuestion, incompleteQuestion });
+      const npc = Case_Data_Lvl_01.npcs[0];
+      await h.perform('handleNPCTalk')(npc);
+      const [executorId, pack] = Object.entries(h.stored.packs).find(([, value]) => value.questions.length);
+      h.bindings.npcExecutorId = executorId;
+      const previousStamina = h.cloud().state.agent_stamina[executorId];
+      await h.perform('handleNPCQuestion')(pack.questions[0]);
+      const chargedStamina = h.cloud().state.agent_stamina[executorId];
+      assert.ok(chargedStamina < previousStamina);
+      assert.equal(h.stored.ready, false);
+      assert.equal(h.client.hasPending(), true);
+      assert.equal(h.stored.dialogue.filter(line => line.role === 'npc').length, 0);
+      if (incompleteQuestion) assert.equal(h.stored.authorityError.code, 'INVALID_RUN_RESPONSE');
+      if (reload) h.reload();
+      await h.resume();
+      assert.equal(h.stored.ready, true);
+      assert.equal(h.client.hasPending(), false);
+      assert.equal(h.stored.state.agent_stamina[executorId], chargedStamina);
+      assert.equal(h.stored.dialogue.filter(line => line.role === 'npc').length, 1);
+      assert.deepEqual(h.stored.packs, h.cloud().interrogation_options[npc.npc_id].packs);
+      const requests = h.calls.filter(body => body.command?.type === 'question');
+      assert.equal(requests.length, 2);
+      assert.deepEqual(requests[1], { ...requests[0], session_id: reload ? 'newly-claimed-device' : 'fixture-device' });
+    }
+  });
+}

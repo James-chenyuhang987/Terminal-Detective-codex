@@ -6,8 +6,8 @@ const TerminalDetective = lazy(() => import('@/pages/TerminalDetective.jsx'));
 
 function GameLoading() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-[#02060e]">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-200/20 border-t-cyan-400" />
+    <div className="fixed inset-0 flex items-center justify-center bg-[#08121c]">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#c5a66f]/20 border-t-[#c5a66f]" />
     </div>
   );
 }

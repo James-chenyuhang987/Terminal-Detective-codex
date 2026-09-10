@@ -53,7 +53,8 @@ test('investigation loop streams the complete observation then thought before op
   assert.ok(thoughtStream < openDecision);
   assert.match(terminal, /observationTerminalText,\s*\} = generateObservationSections/);
   assert.match(terminal, /streamTerminalText\(\{\s*text:\s*observationTerminalText/);
-  assert.match(terminal, /text:\s*observationTerminalText,\s*intervalMs:\s*18,\s*instant:\s*false/);
+  assert.match(terminal, /const reduceMotion = settings\.reduceMotion \|\| window\.matchMedia/);
+  assert.match(terminal, /text:\s*observationTerminalText,\s*intervalMs:\s*18,\s*instant:\s*reduceMotion/);
   assert.match(terminal, /addLine\(observationTerminalText,\s*'observe'\)/);
   assert.doesNotMatch(terminal, /addLine\(`◈ \$\{t\.turnLabel\}.*observationPhase.*'phase'\)/);
   assert.match(terminal, /story:\s*publicStory[\s\S]*setDecisionStory\(\{[\s\S]*\.\.\.publicStory/);

@@ -1,3 +1,5 @@
+import { IconText } from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 import React, { useEffect, useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import SceneIllustration from '@/components/game/SceneIllustration';
@@ -39,7 +41,7 @@ export default function ActionCinematicFallback({ event, onComplete, loading = f
   return (
     <div
       className={`td-action-cinematic td-action-cinematic-fallback ${loading ? 'is-loading' : ''}`}
-      style={/** @type {React.CSSProperties & {'--cine-accent': string}} */ ({ '--cine-accent': event?.accentColor || '#00e5ff' })}
+      style={/** @type {React.CSSProperties & {'--cine-accent': string}} */ ({ '--cine-accent': noirColor(event?.accentColor || '#709f9a') })}
       role="dialog"
       aria-modal="true"
       aria-label={zh ? '行动演示' : 'ACTION REENACTMENT'}
@@ -52,8 +54,7 @@ export default function ActionCinematicFallback({ event, onComplete, loading = f
         {!loading && <strong>{(OUTCOME_TEXT[event?.outcome] || OUTCOME_TEXT.progress)[lang] || OUTCOME_TEXT.progress.zh}</strong>}
       </div>
       <button ref={skipRef} type="button" className="td-cinematic-skip" onClick={() => completeRef.current?.('skipped')}>
-        {zh ? '跳过演示' : 'SKIP REPLAY'} ▶▶
-      </button>
+        {zh ? '跳过演示' : 'SKIP REPLAY'}<IconText text={" ▶▶ "} /></button>
     </div>
   );
 }

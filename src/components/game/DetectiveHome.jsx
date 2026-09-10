@@ -18,6 +18,7 @@ import { getHomeModuleMeta } from '@/components/game/home/homeModuleMeta';
 import { transactionErrorMessage } from '@/game/transactionFeedback';
 import { useSettings } from '@/lib/settings.jsx';
 import StoryModeControl from '@/components/game/theater/StoryModeControl';
+import Icon from '@/components/ui/Icon.jsx';
 
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
@@ -66,8 +67,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
     error: lang === 'zh' ? '同步失败' : 'Sync failed',
   }[syncStatus] || (lang === 'zh' ? '连接中…' : 'Connecting…');
   const syncColor = syncStatus === 'online'
-    ? '#00ff88'
-    : ['syncing', 'pending', 'loading'].includes(syncStatus) ? '#ffaa00' : '#ff3860';
+    ? '#8aaa91'
+    : ['syncing', 'pending', 'loading'].includes(syncStatus) ? '#c19a63' : '#c77c78';
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
@@ -193,8 +194,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
 
   if (!profile) {
     return (
-      <div style={{ minHeight: '100dvh', background: '#0a0a0f', display: 'grid', placeItems: 'center', color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.75rem' }}>
-        {loadError ? <div style={{ textAlign: 'center' }}><div style={{ color: '#ff7890', marginBottom: 12 }}>{lang === 'zh' ? '读取云端档案失败' : 'Failed to load cloud profile'}</div><button onClick={retryLoad} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #00e5ff80', background: 'rgba(0,229,255,.1)', color: '#7df1ff', cursor: 'pointer', fontFamily: 'monospace' }}>{lang === 'zh' ? '重试' : 'RETRY'}</button></div> : (lang === 'zh' ? '读取侦探档案…' : 'LOADING DETECTIVE PROFILE…')}
+      <div style={{ minHeight: '100dvh', background: '#08121c', display: 'grid', placeItems: 'center', color: '#709f9a', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+        {loadError ? <div style={{ textAlign: 'center' }}><div style={{ color: '#dda29a', marginBottom: 12 }}>{lang === 'zh' ? '读取云端档案失败' : 'Failed to load cloud profile'}</div><button onClick={retryLoad} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #709f9a80', background: 'rgba(112, 159, 154,.1)', color: '#a5c8c0', cursor: 'pointer', fontFamily: 'monospace' }}>{lang === 'zh' ? '重试' : 'RETRY'}</button></div> : (lang === 'zh' ? '读取侦探档案…' : 'LOADING DETECTIVE PROFILE…')}
       </div>
     );
   }
@@ -237,7 +238,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
       <div className="td-home-topbar" style={{
         position: 'relative', zIndex: 2,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-        padding: '12px 22px', borderBottom: '1px solid rgba(0,229,255,0.14)',
+        padding: '12px 22px', borderBottom: '1px solid rgba(112, 159, 154,0.14)',
         background: 'linear-gradient(180deg, rgba(4,10,18,0.82), rgba(4,10,18,0.4))',
         backdropFilter: 'blur(16px) saturate(160%)',
         boxShadow: '0 6px 26px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
@@ -254,10 +255,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
             {topActions.map(({ icon, key, label }) => (
               <button type="button" className="td-ui-button td-home-top-action" key={key}
                 onClick={() => openModule(key)} aria-label={label} title={label}>
-                <span aria-hidden="true">{icon}</span><span>{label}</span>
+                <Icon name={icon} size={18} /><span>{label}</span>
               </button>
             ))}
-            <span title={`${syncLabel} · BUILD ${BUILD_ID}`} style={{ color: syncColor, fontSize: '0.7rem' }}>📶 <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
+            <span title={`${syncLabel} · BUILD ${BUILD_ID}`} style={{ color: syncColor, fontSize: '0.7rem' }}><Icon name="signal" size={18} label={syncLabel} /> <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
           </div>
         </div>
       </div>
@@ -284,9 +285,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
           <div style={{ textAlign: 'center' }}>
             <h1 style={{
               margin: 0, fontSize: 'clamp(2.1rem, 5.4vw, 3.7rem)', fontWeight: 900, letterSpacing: '0.05em',
-              background: 'linear-gradient(180deg, #ffffff 0%, #cfefff 42%, #38b9ff 100%)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              filter: 'drop-shadow(0 3px 2px rgba(0,0,0,0.85)) drop-shadow(0 0 26px rgba(0,180,255,0.55))',
+              color: '#e6dfcf', textShadow: '0 3px 12px rgba(0,0,0,.5)',
             }}>
               {lang === 'zh'
                 ? `侦探${named ? profile.detective_name : 'XXX'}的家`
@@ -294,11 +293,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
             </h1>
             <div style={{
               width: 200, height: 1, margin: '10px auto 0',
-              background: 'linear-gradient(to right, transparent, rgba(0,229,255,0.7), transparent)',
-              boxShadow: '0 0 12px rgba(0,229,255,0.6)',
+              background: 'linear-gradient(to right, transparent, rgba(112, 159, 154,0.7), transparent)',
+              opacity: .5,
             }} />
             <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginTop: 8, letterSpacing: '0.14em' }}>
-              {lang === 'zh' ? '每一个线索，都是揭开真相的钥匙' : 'EVERY CLUE IS A KEY TO THE TRUTH'} 🔍
+              <Icon name="search" size={15} /> {lang === 'zh' ? '每一个线索，都是揭开真相的钥匙' : 'EVERY CLUE IS A KEY TO THE TRUTH'}
             </div>
           </div>
 
@@ -308,7 +307,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
           {suspendedCase && (
             <section aria-label={lang === 'zh' ? '进行中的调查' : 'Investigation in progress'} style={{
               width: '100%', maxWidth: 600, padding: 16, borderRadius: 12,
-              border: '1px solid #e8c98a80', background: 'rgba(44,32,13,.9)', color: '#f0d9a5',
+              border: '1px solid #c5a66f80', background: 'rgba(44,32,13,.9)', color: '#e1d0ac',
             }}>
               <h2 style={{ margin: 0, fontSize: '.85rem' }}>
                 {lang === 'zh' ? '调查已暂存' : 'Investigation suspended'} · {lang === 'en' ? (suspendedCase.en?.title || suspendedCase.subtitle || suspendedCase.title) : suspendedCase.title}
@@ -319,8 +318,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
                   : 'Your case and squad are saved in the cloud. Resume the same investigation after switching modes, reloading, or signing in again without another charge. Camera position and unsent drafts remain only in this page.'}
               </p>
               <button ref={resumeRef} type="button" className="td-ui-button td-button-gold" onClick={onResume} style={{
-                minHeight: 44, padding: '10px 16px', borderRadius: 8, border: '1px solid #e8c98a',
-                background: '#e8c98a20', color: '#ffe5b0', cursor: 'pointer', fontFamily: 'monospace',
+                minHeight: 44, padding: '10px 16px', borderRadius: 8, border: '1px solid #c5a66f',
+                background: '#c5a66f20', color: '#e1d0ac', cursor: 'pointer', fontFamily: 'monospace',
               }}>{lang === 'zh' ? '继续当前调查' : 'Resume current investigation'}</button>
             </section>
           )}
@@ -329,11 +328,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
             {!named ? (
               onRegister
                 ? <div className="td-ui-card td-home-investigate-card" style={{
-                    width: 300, border: '1px solid rgba(0,229,255,0.4)', borderRadius: 14, padding: 20,
-                    background: 'linear-gradient(160deg, rgba(0,229,255,0.12), rgba(0,0,0,0.8))', textAlign: 'center',
+                    width: 300, border: '1px solid rgba(112, 159, 154,0.4)', borderRadius: 14, padding: 20,
+                    background: 'linear-gradient(160deg, rgba(112, 159, 154,0.12), rgba(0,0,0,0.8))', textAlign: 'center',
                   }}>
-                    <div style={{ fontSize: 24 }}>🪪</div>
-                    <div style={{ color: '#00e5ff', fontWeight: 900, letterSpacing: '0.16em', fontSize: '0.9rem', margin: '8px 0 6px' }}>
+                    <div style={{ color: '#a5c8c0' }}><Icon name="id" size={28} /></div>
+                    <div style={{ color: '#709f9a', fontWeight: 900, letterSpacing: '0.16em', fontSize: '0.9rem', margin: '8px 0 6px' }}>
                       {lang === 'zh' ? '尚未注册身份' : 'IDENTITY NOT REGISTERED'}
                     </div>
                     <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
@@ -341,19 +340,19 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
                     </div>
                     <button className="td-ui-button td-button-primary td-button-wide" onClick={onRegister} style={{
                       width: '100%', padding: 11, cursor: 'pointer', borderRadius: 10,
-                      border: '1px solid #00e5ff', background: 'rgba(0,229,255,0.18)',
-                      color: '#cfefff', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
+                      border: '1px solid #709f9a', background: 'rgba(112, 159, 154,0.18)',
+                      color: '#e6dfcf', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
                     }}>{lang === 'zh' ? '前往注册' : 'REGISTER IDENTITY'}</button>
                   </div>
                 : <NameInputDialog onConfirm={handleName} busy={busy} />
             ) : (
               <div className="td-ui-card td-home-investigate-card" style={{
-                width: 300, border: '1px solid rgba(197,160,89,0.5)', borderRadius: 14, padding: '20px',
-                background: 'linear-gradient(160deg, rgba(197,160,89,0.16), rgba(0,0,0,0.8))', textAlign: 'center',
-                boxShadow: '0 0 34px rgba(197,160,89,0.22)',
+                width: 300, border: '1px solid rgba(197, 166, 111,0.5)', borderRadius: 14, padding: '20px',
+                background: 'linear-gradient(160deg, rgba(197, 166, 111,0.16), rgba(0,0,0,0.8))', textAlign: 'center',
+                boxShadow: '0 14px 28px rgba(0,0,0,.3)',
               }}>
-                <div style={{ fontSize: 24 }}>🔎</div>
-                <div style={{ color: '#e8c98a', fontWeight: 900, letterSpacing: '0.2em', fontSize: '1rem', margin: '8px 0 6px' }}>
+                <div style={{ color: '#c5a66f' }}><Icon name="search" size={28} /></div>
+                <div style={{ color: '#c5a66f', fontWeight: 900, letterSpacing: '0.2em', fontSize: '1rem', margin: '8px 0 6px' }}>
                   {suspendedCase ? (lang === 'zh' ? '「继续调查」' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '「开始调查」' : 'START INVESTIGATION')}
                 </div>
                 <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
@@ -363,13 +362,13 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
                 </div>
                 <button className="td-ui-button td-button-gold td-button-wide" onClick={quickStart} style={{
                   width: '100%', padding: '11px', cursor: 'pointer', borderRadius: 10,
-                  border: '1px solid #c5a059', background: 'rgba(197,160,89,0.22)',
-                  color: '#f0d9a5', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
+                  border: '1px solid #c5a66f', background: 'rgba(197, 166, 111,0.22)',
+                  color: '#e1d0ac', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
                 }}>{suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '开始调查' : 'START INVESTIGATION')}</button>
                 <button className="td-ui-button td-button-ghost td-button-compact" onClick={() => openModule('profile')} style={{
                   marginTop: 8, background: 'transparent', border: 'none', cursor: 'pointer',
                   color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: '0.55rem',
-                }}>✎ {lang === 'zh' ? '修改档案' : 'EDIT PROFILE'}</button>
+                }}><Icon name="edit" /> {lang === 'zh' ? '修改档案' : 'EDIT PROFILE'}</button>
               </div>
             )}
             <HomePortal onEnter={() => openModule('agent_market')} />

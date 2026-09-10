@@ -1,9 +1,12 @@
+import Icon from '@/components/ui/Icon';
+import { noirColor } from '@/components/ui/palette';
 import React from 'react';
 import { getLore } from '@/game/agentLore';
 import { useLang } from '@/lib/lang.jsx';
 
 // 完整档案 Tab — 时间线布局 + 战绩 + 心理评估
-export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _roleZh, lore: loreOverride = null }) {
+export default function AgentDossierPanel({ agentIdx, color: legacyColor, icon, roleZh: _roleZh, lore: loreOverride = null }) {
+  const color = noirColor(legacyColor);
   const { lang } = useLang();
   const zh = lang === 'zh';
   const lore = loreOverride || getLore(agentIdx, lang);
@@ -17,7 +20,7 @@ export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _role
         background: `${color}08`, padding: '10px 12px', marginBottom: 12,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span style={{ fontSize: 14 }}>{icon}</span>
+          <span style={{ fontSize: 14 }}><Icon name={icon} /></span>
           <span style={{ fontSize: '0.58rem', color, fontWeight: 900 }}>{lore.id}</span>
           <span style={{
             marginLeft: 'auto', fontSize: '0.4rem', color,
@@ -59,7 +62,7 @@ export default function AgentDossierPanel({ agentIdx, color, icon, roleZh: _role
               position: 'absolute', left: -16, top: 3,
               width: 9, height: 9, borderRadius: '50%',
               background: color, boxShadow: `0 0 10px ${color}`,
-              border: '2px solid #020810',
+              border: '2px solid #08121c',
             }} />
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <span style={{ fontSize: '0.5rem', fontWeight: 900, color, letterSpacing: '0.06em' }}>{m.year}</span>

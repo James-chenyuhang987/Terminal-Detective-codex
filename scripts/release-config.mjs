@@ -38,11 +38,13 @@ export function validateReleaseConfig(configSource, environment = {}) {
   const errors = [];
   const config = parseJsonc(configSource);
   const vars = config?.vars || {};
-  const database = Array.isArray(config?.d1_databases) ? config.d1_databases[0] : null;
+  const databases = Array.isArray(config?.d1_databases) ? config.d1_databases.filter(database => database?.binding === 'DB') : [];
+  const database = databases.length === 1 ? databases[0] : null;
   const workerProjectId = String(vars.FIREBASE_PROJECT_ID || '').trim();
   const frontendProjectId = String(environment.VITE_FIREBASE_PROJECT_ID || '').trim();
   const databaseId = String(database?.database_id || '').trim();
-  const appId = String(vars.APP_ID || '').trim();
+  const appId = String(vars.APP_ID || '');
+  const frontendAppId = String(environment.VITE_APP_ID || 'terminal-detective');
   const allowedOrigins = String(vars.CORS_ALLOWED_ORIGINS || '')
     .split(',')
     .map(value => value.trim())
@@ -68,8 +70,9 @@ export function validateReleaseConfig(configSource, environment = {}) {
     errors.push(`${firebaseFields[field]} ${frontend.reason === 'missing'
       ? 'is required and must not be a placeholder' : 'is invalid for Firebase Web configuration'}.`);
   }
-  if (!UUID.test(databaseId)) errors.push('wrangler.jsonc must contain a valid D1 database ID.');
-  if (!appId || PLACEHOLDER.test(appId)) errors.push('wrangler.jsonc must contain a real APP_ID.');
+  if (!UUID.test(databaseId)) errors.push('wrangler.jsonc must contain one D1 binding named DB with a valid database ID.');
+  if (!appId || PLACEHOLDER.test(appId) || appId.trim() !== appId) errors.push('wrangler.jsonc must contain a real APP_ID without surrounding whitespace.');
+  if (frontendAppId !== appId) errors.push('VITE_APP_ID and Worker APP_ID must match (the browser defaults to terminal-detective).');
   if (!allowedOrigins.length || allowedOrigins.some(origin => !exactOrigin(origin))) {
     errors.push('CORS_ALLOWED_ORIGINS must contain exact HTTPS origins without paths.');
   }

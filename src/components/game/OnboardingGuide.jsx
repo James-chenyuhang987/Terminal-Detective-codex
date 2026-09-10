@@ -1,6 +1,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLang } from '@/lib/lang.jsx';
+import Icon from '@/components/ui/Icon.jsx';
+import { noirColor } from '@/components/ui/palette.js';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion.js';
 
 const STEPS = [
   {
@@ -8,12 +11,12 @@ const STEPS = [
     target: '[data-onboarding-target="nova"]',
     zh: {
       t: '认识 NOVA 战术助理',
-      d: '留意下方发光的 NOVA 头像与对话气泡：它会根据调查进度告诉你下一步，并总结已经发现的证据、提供不剧透的推理提示。',
+      d: '留意下方标记的 NOVA 头像与对话气泡：它会根据调查进度告诉你下一步，并总结已经发现的证据、提供不剧透的推理提示。',
       hint: 'NOVA 的提示会随调查状态自动更新，不需要额外点击。',
     },
     en: {
       t: 'MEET NOVA, YOUR TACTICAL ASSISTANT',
-      d: 'Watch the glowing NOVA portrait and message below. NOVA tracks the investigation, recommends your next step, and summarizes only the evidence you have already discovered.',
+      d: 'Watch the marked NOVA portrait and message below. NOVA tracks the investigation, recommends your next step, and summarizes only the evidence you have already discovered.',
       hint: 'NOVA updates automatically as the investigation changes — no extra click is needed.',
     },
   },
@@ -73,8 +76,9 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
+export default function OnboardingGuide({ onClose, accentColor = '#709f9a' }) {
   const { lang } = useLang();
+  const { motionEnabled } = usePresentationMotion();
   const zh = lang === 'zh';
   const [i, setI] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
@@ -160,7 +164,8 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
   const guide = (
     <div
       className={`td-onboarding-overlay ${targetRect ? 'has-target' : ''}`}
-      style={/** @type {React.CSSProperties & {'--onboarding-accent': string}} */ ({ '--onboarding-accent': accentColor })}
+      data-td-motion={motionEnabled ? 'active' : 'paused'}
+      style={/** @type {React.CSSProperties & {'--onboarding-accent': string}} */ ({ '--onboarding-accent': noirColor(accentColor) })}
     >
       {targetRect && (
         <div
@@ -187,16 +192,16 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
       >
         <header className="td-onboarding-header">
           <div>{zh ? '新 手 指 引' : 'FIELD BRIEFING'} · {i + 1}/{STEPS.length}</div>
-          <button type="button" onClick={onClose}>{zh ? '跳过 ✕' : 'SKIP ✕'}</button>
+          <button type="button" onClick={onClose}>{zh ? '跳过' : 'SKIP'} <Icon name="close" size={14} /></button>
         </header>
 
         <div className="td-onboarding-title-block">
-          <span>{step.icon}</span>
+          <span><Icon name={step.icon} size={30} /></span>
           <h2 id="td-onboarding-title">{c.t}</h2>
         </div>
 
         <p id="td-onboarding-description" className="td-onboarding-description">{c.d}</p>
-        {c.hint && <p className="td-onboarding-hint"><span>◆</span>{c.hint}</p>}
+        {c.hint && <p className="td-onboarding-hint"><Icon name="help" size={14} style={{ color: 'var(--onboarding-accent)' }} />{c.hint}</p>}
         {step.abilityDemo && (
           <div className="td-onboarding-ability-demo" aria-label={zh ? '机制示例' : 'Mechanic example'}>
             <small>{zh ? '机制示例 · 不读取当前案件数据' : 'MECHANIC EXAMPLE · NO CURRENT CASE DATA'}</small>
@@ -219,15 +224,15 @@ export default function OnboardingGuide({ onClose, accentColor = '#00e5ff' }) {
         </nav>
 
         <footer className="td-onboarding-actions">
-          {i > 0 && <button type="button" className="is-back" onClick={() => setI(i - 1)}>{zh ? '◀ 上一步' : '◀ BACK'}</button>}
+          {i > 0 && <button type="button" className="is-back" onClick={() => setI(i - 1)}><Icon name="play" size={12} style={{ transform: 'rotate(180deg)' }} /> {zh ? '上一步' : 'BACK'}</button>}
           <button type="button" className="is-next" onClick={() => (isLast ? onClose() : setI(i + 1))}>
             {isLast
-              ? (zh ? '▶ 开始调查' : '▶ START INVESTIGATION')
-              : (i === 0 ? (zh ? '明白，继续 ▶' : 'GOT IT, CONTINUE ▶') : (zh ? '下一步 ▶' : 'NEXT ▶'))}
+              ? (zh ? '开始调查' : 'START INVESTIGATION')
+              : (i === 0 ? (zh ? '明白，继续' : 'GOT IT, CONTINUE') : (zh ? '下一步' : 'NEXT'))} <Icon name="play" size={12} />
           </button>
         </footer>
 
-        {targetRect && <div className="td-onboarding-target-label" aria-hidden="true">↓ {step.label || 'NOVA'}</div>}
+        {targetRect && <div className="td-onboarding-target-label" aria-hidden="true"><Icon name="play" size={11} style={{ transform: 'rotate(90deg)' }} /> {step.label || 'NOVA'}</div>}
       </section>
     </div>
   );

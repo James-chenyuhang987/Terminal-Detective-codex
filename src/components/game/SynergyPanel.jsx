@@ -1,3 +1,5 @@
+import { noirColor } from '@/components/ui/palette';
+import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useEffect, useRef, useState } from 'react';
 import { SYNERGY_SKILLS } from '@/game/specialtySystem';
 import { useLang } from '@/lib/lang.jsx';
@@ -46,7 +48,7 @@ function SynergyCard({ skill, isActive }) {
     prevActive.current = isActive;
   }, [isActive]);
 
-  const c = skill.color;
+  const c = noirColor(skill.color);
   return (
     <div style={{
       position: 'relative', width: 168, borderRadius: 10, padding: '9px 11px',
@@ -60,14 +62,14 @@ function SynergyCard({ skill, isActive }) {
     }}>
       {justActivated && <ParticleBurst color={c} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 15, filter: isActive ? `drop-shadow(0 0 6px ${c})` : 'grayscale(1)' }}>{skill.icon}</span>
+        <span style={{ fontSize: 15, color: isActive ? c : '#9caaa9' }}><Icon name={skill.icon} /></span>
         <span style={{ fontSize: '0.58rem', fontWeight: 900, color: isActive ? c : 'rgba(255,255,255,0.4)' }}>
           {zh ? skill.name : skill.nameEn}
         </span>
         <span style={{
           marginLeft: 'auto', fontSize: '0.38rem', fontWeight: 700,
-          color: isActive ? '#00ff88' : 'rgba(255,255,255,0.25)',
-          border: `1px solid ${isActive ? '#00ff8850' : 'rgba(255,255,255,0.12)'}`,
+          color: isActive ? '#8aaa91' : 'rgba(255,255,255,0.25)',
+          border: `1px solid ${isActive ? '#8aaa9150' : 'rgba(255,255,255,0.12)'}`,
           borderRadius: 3, padding: '0 4px',
         }}>{isActive ? (zh ? '已激活' : 'ACTIVE') : (zh ? '未触发' : 'INACTIVE')}</span>
       </div>
@@ -88,17 +90,17 @@ export default function SynergyPanel({ synergy }) {
         <span style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.2em' }}>
           ◈ {zh ? '组队协同效果' : 'TEAM SYNERGY'}
         </span>
-        <span style={{ fontSize: '0.44rem', color: synergy.matchScore >= 0.66 ? '#00ff88' : '#ffaa00' }}>
+        <span style={{ fontSize: '0.44rem', color: synergy.matchScore >= 0.66 ? '#8aaa91' : '#c19a63' }}>
           {zh ? '专长匹配度' : 'SPECIALTY MATCH'} {Math.round(synergy.matchScore * 100)}%
           {synergy.matchScore >= 0.66 && (zh ? ' · 危机惩罚 -20%' : ' · CRISIS PENALTY -20%')}
         </span>
         {synergy.overload && (
           <span style={{
-            fontSize: '0.42rem', color: '#ff3860', fontFamily: 'monospace',
-            border: '1px solid #ff386060', borderRadius: 4, padding: '1px 6px',
-            background: '#ff386015', animation: 'syn-warn 0.9s ease-in-out infinite',
+            fontSize: '0.42rem', color: '#c77c78', fontFamily: 'monospace',
+            border: '1px solid #c77c7860', borderRadius: 4, padding: '1px 6px',
+            background: '#c77c7815', animation: 'none',
           }}>
-            {zh ? '⚠ 专长过载 — 三人专长雷同，混乱增长 +15%' : '⚠ SPECIALTY OVERLOAD — CONFUSION GAIN +15%'}
+            <IconText text={zh ? '⚠ 专长过载 — 三人专长雷同，混乱增长 +15%' : '⚠ SPECIALTY OVERLOAD — CONFUSION GAIN +15%'} />
           </span>
         )}
       </div>
