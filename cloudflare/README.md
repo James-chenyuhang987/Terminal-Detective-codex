@@ -31,6 +31,10 @@ Runtime baseline: Node.js 22+ for tooling, React 18.3.1, Firebase Web SDK 12.18.
 
 The browser cannot select a profile owner through a request header or payload; the Worker derives it only from the verified Firebase token. Unknown `/api/*` paths return JSON 404 and never fall through to the SPA.
 
+## Client recovery after deployment
+
+A failed lazy module/CSS load triggers at most one automatic cache-busting reload per 90-second recovery window, shared across failed assets. The guard survives address-bar cleanup and restricted browser storage using the reload URL timestamp plus in-memory state. Merely loading the entry page does not clear the guard: a later investigation or lobby import may still fail. If recovery is blocked, the original error remains available to the UI, and the error screen's manual **Load latest version** action stays available. This recovery neither clears profile/run receipts nor changes production data.
+
 ## Required configuration
 
 Create `.env.local` for local builds, or provide these values to the production Vite build:

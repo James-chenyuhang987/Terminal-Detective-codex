@@ -1,8 +1,8 @@
 const RECOVERY_STORAGE_KEY = 'td_chunk_recovery_v1';
 const RECOVERY_QUERY_KEY = '__td_reload';
 const RECOVERY_WINDOW_MS = 90_000;
-const STABLE_CLEAR_DELAY_MS = 15_000;
 const pendingRuntimes = new WeakSet();
+const recoveryAttempts = new WeakMap();
 
 const CHUNK_ERROR_PATTERNS = [
   /failed to fetch dynamically imported module/i,
@@ -24,20 +24,31 @@ function recoverySignature(error) {
   return asset || message.slice(0, 240) || 'unknown-chunk';
 }
 
-function readRecoveryState(storage) {
+function readRecoveryState(runtime) {
   try {
-    const parsed = JSON.parse(storage?.getItem(RECOVERY_STORAGE_KEY) || 'null');
+    const parsed = JSON.parse(runtime.sessionStorage?.getItem(RECOVERY_STORAGE_KEY) || 'null');
     return parsed && typeof parsed === 'object' ? parsed : null;
   } catch {
     return null;
   }
 }
 
-function writeRecoveryState(storage, state) {
+function writeRecoveryState(runtime, state) {
   try {
-    storage?.setItem(RECOVERY_STORAGE_KEY, JSON.stringify(state));
+    runtime.sessionStorage?.setItem(RECOVERY_STORAGE_KEY, JSON.stringify(state));
   } catch {
     // Recovery must still work when storage is blocked or full.
+  }
+}
+
+function readRecoveryMarker(runtime) {
+  try {
+    const marker = new URL(runtime.location.href).searchParams.get(RECOVERY_QUERY_KEY);
+    if (!marker || !/^[a-z0-9]+$/i.test(marker)) return null;
+    const attemptedAt = Number.parseInt(marker, 36);
+    return Number.isSafeInteger(attemptedAt) && attemptedAt > 0 ? attemptedAt : null;
+  } catch {
+    return null;
   }
 }
 
@@ -62,20 +73,28 @@ export function attemptChunkRecovery(error, runtime = window, now = Date.now()) 
   if (!isChunkLoadError(error)) return false;
   if (pendingRuntimes.has(runtime)) return true;
 
-  const signature = recoverySignature(error);
-  const previous = readRecoveryState(runtime.sessionStorage);
-  const attemptedRecently = previous?.signature === signature
-    && now - Number(previous?.attemptedAt || 0) < RECOVERY_WINDOW_MS;
-
-  if (attemptedRecently) return false;
+  const attempts = [recoveryAttempts.get(runtime), readRecoveryMarker(runtime), readRecoveryState(runtime)?.attemptedAt];
+  // Bound the whole recovery cycle, not just one chunk: offline deployments can
+  // fail on different lazy modules after the initial document has loaded.
+  if (attempts.some(attemptedAt => Number.isSafeInteger(attemptedAt) && attemptedAt > 0
+    && now >= attemptedAt && now - attemptedAt < RECOVERY_WINDOW_MS)) return false;
 
   pendingRuntimes.add(runtime);
-  writeRecoveryState(runtime.sessionStorage, { signature, attemptedAt: now });
-  reloadLatestVersion(runtime, now);
-  return true;
+  recoveryAttempts.set(runtime, now);
+  writeRecoveryState(runtime, { signature: recoverySignature(error), attemptedAt: now });
+  try {
+    reloadLatestVersion(runtime, now);
+    return true;
+  } catch {
+    pendingRuntimes.delete(runtime);
+    return false;
+  }
 }
 
 export function installChunkRecovery(runtime = window) {
+  // Keep the URL fallback after address-bar cleanup when browser storage is blocked.
+  const attemptedAt = readRecoveryMarker(runtime);
+  if (attemptedAt !== null) recoveryAttempts.set(runtime, attemptedAt);
   const onPreloadError = (event) => {
     const error = event?.payload || event?.reason || event;
     if (attemptChunkRecovery(error, runtime)) event?.preventDefault?.();
@@ -95,12 +114,7 @@ export function installChunkRecovery(runtime = window) {
     // An unusual URL must not prevent the app from booting.
   }
 
-  const stableTimer = runtime.setTimeout?.(() => {
-    try { runtime.sessionStorage?.removeItem(RECOVERY_STORAGE_KEY); } catch { /* ignore */ }
-  }, STABLE_CLEAR_DELAY_MS);
-
   return () => {
     runtime.removeEventListener('vite:preloadError', onPreloadError);
-    if (stableTimer !== undefined) runtime.clearTimeout?.(stableTimer);
   };
 }

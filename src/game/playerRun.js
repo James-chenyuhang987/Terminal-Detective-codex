@@ -114,8 +114,9 @@ export function createPlayerRunClient({ ownerUid, runId, sessionId, invoke, stor
         }),
       ]);
       const data = response?.data;
-      if (!isAuthoritativeRun(data?.run, runId) || data.authority_version !== 1) {
-        throw runError(data?.error || 'INVALID_RUN_RESPONSE');
+      if (!isAuthoritativeRun(data?.run, runId) || data.authority_version !== 1
+        || (body.action === 'command' && (!data.result || typeof data.result !== 'object' || Array.isArray(data.result)))) {
+        throw runError('INVALID_RUN_RESPONSE');
       }
       revision = data.run.revision;
       return data;
