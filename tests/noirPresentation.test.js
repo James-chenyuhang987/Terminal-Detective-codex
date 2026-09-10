@@ -86,6 +86,43 @@ test('localized case archive footer matches the rendered current or changed cata
   }
 });
 
+test('landing restores the original flowing gold title without sliced text or losing motion preferences', () => {
+  for (const lang of ['zh', 'en']) {
+    const language = load('lib/lang.jsx', { react, '@/lib/authEmail': { AUTH_EMAIL_LANGUAGE_KEY } }, {
+      localStorage: { getItem: () => lang },
+    });
+    for (const [reducedMotion, foreground] of [[false, true], [true, true], [false, false]]) {
+      const motion = { usePresentationMotion: () => ({ reducedMotion, foreground, motionEnabled: !reducedMotion && foreground }) };
+      const { default: Landing } = load('components/game/GameLanding.jsx', {
+        react, '@/lib/lang.jsx': language, '@/components/ui/Icon': icons,
+        '@/components/ui/SlicedTitle': load('components/ui/SlicedTitle.jsx', { react, './usePresentationMotion.js': motion }),
+        '@/components/ui/usePresentationMotion': motion,
+      });
+      const markup = renderToStaticMarkup(React.createElement(language.LangProvider, null,
+        React.createElement(Landing, { onStart: () => {} })));
+      assert.equal((markup.match(/<h1\b/g) || []).length, 1);
+      assert.match(markup, /aria-label="Terminal Detective"/);
+      assert.match(markup, new RegExp(`data-motion-reduced="${reducedMotion}"`));
+      assert.match(markup, new RegExp(`data-motion-paused="${!foreground}"`));
+      assert.match(markup, /<span class="td-gold-flow-text td-landing-gold-title">TERMINAL<\/span>/);
+      assert.match(markup, /<span class="td-gold-flow-text td-landing-gold-title is-second">DETECTIVE<\/span>/);
+      assert.doesNotMatch(markup, /td-type-slice|td-sliced-title/);
+      assert.match(markup, /<svg/);
+    }
+  }
+  const css = read('index.css');
+  const gold = css.match(/\.td-landing-title-words \.td-landing-gold-title \{([^}]+)\}/)?.[1];
+  assert.ok(gold);
+  assert.match(gold, /linear-gradient\(92deg,#7b4f12 0%,#f0cb70 18%,#fff7c7 34%,#b97718 51%,#ffe89b 69%,#fff8cf 82%,#8b5917 100%\)/);
+  assert.match(gold, /background-size: 300% 100%/);
+  assert.match(gold, /background-clip: text/);
+  assert.match(gold, /-webkit-text-fill-color: transparent/);
+  assert.match(gold, /animation: td-gold-flow 6s linear infinite/);
+  assert.match(css, /\.td-landing-title-words\[data-motion-reduced="true"\] \.td-landing-gold-title \{ animation: none; \}/);
+  assert.match(css, /\.td-landing-title-words\[data-motion-paused="true"\] \.td-landing-gold-title \{ animation-play-state: paused; \}/);
+  assert.doesNotMatch(css, /\.td-landing-title \.td-sliced-title/);
+});
+
 test('canvas icons use the shared vector geometry rather than font emoji', () => {
   const oldPath = globalThis.Path2D;
   const paths = [];
