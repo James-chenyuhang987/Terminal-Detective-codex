@@ -3,7 +3,7 @@ import { useLang } from '@/lib/lang.jsx';
 import Icon, { IconText } from '@/components/ui/Icon';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
-const GOLD = '#c5a66f';
+const GOLD = '#f0c76b';
 
 function MatrixRain({ color = GOLD }) {
   const canvasRef = useRef(null);
@@ -74,7 +74,7 @@ function Scanlines() {
 
 function FeatureCard({ icon, title, desc, delay }) {
   return (
-    <article className="td-ui-card td-feature-card td-landing-feature" style={{ animationDelay: `${delay}s` }}>
+    <article className="td-ui-card td-feature-card td-landing-feature td-landing-gold-edge" style={{ animationDelay: `${delay}s` }}>
       <span className="td-landing-feature-corner" aria-hidden="true" />
       <div className="td-landing-feature-icon"><Icon name={icon} size={22} /></div>
       <strong className="td-gold-flow-text">{title}</strong>
@@ -114,9 +114,9 @@ function DetectiveFigure({ lang }) {
       <svg viewBox="0 0 480 620" role="img" aria-label={copy.role}>
         <defs>
           <linearGradient id="detective-gold" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#e1d0ac" />
-            <stop offset="0.42" stopColor="#c5a66f" />
-            <stop offset="1" stopColor="#6d4412" />
+            <stop offset="0" stopColor="#fff0b5" />
+            <stop offset="0.42" stopColor={GOLD} />
+            <stop offset="1" stopColor="#b67d26" />
           </linearGradient>
           <linearGradient id="detective-coat" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#31230f" />
@@ -167,7 +167,7 @@ function DetectiveFigure({ lang }) {
           <path d="m312 338-35 45" stroke="#e1d0ac" strokeWidth="2" strokeLinecap="round" />
         </g>
       </svg>
-      <div className="td-detective-identity">
+      <div className="td-detective-identity td-landing-gold-edge">
         <small>{copy.registry}</small>
         <strong className="td-gold-flow-text">{copy.role}</strong>
         <span><i />{copy.state}</span>
@@ -246,7 +246,7 @@ function StartButton({ busy, error, onClick, t, lang }) {
     };
 
   return (
-    <div className="td-landing-start-wrap">
+    <div className="td-landing-start-wrap td-landing-gold-edge">
       <div className="td-landing-case-seal" aria-hidden="true"><span>TD</span><small>Ω</small></div>
       <small>{copy.label}</small>
       <h2 className="td-gold-flow-text"><IconText text={t.startBtn} /></h2>
@@ -277,13 +277,13 @@ function LangToggle() {
   );
 }
 
-function CaseLaunchPanel({ busy, error, lang, t, onStart }) {
+function CaseLaunchPanel({ lang, t }) {
   const copy = lang === 'zh'
     ? { dossier: '最高机密案件档案', state: '案件通道已加密', caseName: '霓虹血迹', danger: 'Ω 级高危案件' }
     : { dossier: 'TOP SECRET CASE DOSSIER', state: 'CASE CHANNEL ENCRYPTED', caseName: 'NEON BLOOD', danger: 'OMEGA-CLASS THREAT' };
 
   return (
-    <section className="td-landing-case-panel">
+    <section className="td-landing-case-panel td-landing-gold-edge">
       <header>
         <div>
           <small>{copy.dossier}</small>
@@ -298,7 +298,6 @@ function CaseLaunchPanel({ busy, error, lang, t, onStart }) {
       <StatRow t={t} />
       <div className="td-landing-case-action">
         <TerminalPreview lang={lang} />
-        <StartButton busy={busy} error={error} lang={lang} onClick={onStart} t={t} />
       </div>
     </section>
   );
@@ -306,9 +305,10 @@ function CaseLaunchPanel({ busy, error, lang, t, onStart }) {
 
 export default function GameLanding({ busy = false, error = '', onStart }) {
   const { lang, t } = useLang();
+  const { reducedMotion, foreground } = usePresentationMotion();
 
   return (
-    <div className="td-page-shell td-landing">
+    <div className="td-page-shell td-landing" data-motion-reduced={reducedMotion} data-motion-paused={!foreground}>
       <MatrixRain />
       <Scanlines />
       <div className="td-landing-ambient" aria-hidden="true" />
@@ -324,11 +324,12 @@ export default function GameLanding({ busy = false, error = '', onStart }) {
         </div>
       </div>
 
+      <div className="td-landing-content td-scroll-region" role="region" aria-label={lang === 'zh' ? '游戏介绍' : 'Game introduction'} tabIndex={0}>
       <main className="td-landing-main">
         <section className="td-landing-hero">
           <div className="td-landing-copy">
             <TitleLogo lang={lang} t={t} />
-            <CaseLaunchPanel busy={busy} error={error} lang={lang} onStart={onStart} t={t} />
+            <CaseLaunchPanel lang={lang} t={t} />
           </div>
           <DetectiveFigure lang={lang} />
         </section>
@@ -341,6 +342,10 @@ export default function GameLanding({ busy = false, error = '', onStart }) {
       </main>
 
       <footer className="td-landing-footer"><IconText text={t.bottomBar} /></footer>
+      </div>
+      <div className="td-landing-dock">
+        <StartButton busy={busy} error={error} lang={lang} onClick={onStart} t={t} />
+      </div>
     </div>
   );
 }

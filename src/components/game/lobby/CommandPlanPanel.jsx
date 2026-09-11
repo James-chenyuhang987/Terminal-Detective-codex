@@ -25,14 +25,14 @@ function PlanOption({ item, selected, onClick, lang }) {
   );
 }
 
-export default function CommandPlanPanel({ value, onChange, targetCase = null, mobileActive = false, className = '' }) {
+export default function CommandPlanPanel({ value, onChange, targetCase = null, mobileActive = false, className = '', id = undefined, labelledBy = undefined }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const plan = normalizeCommandPlan(value);
   const set = (patch) => onChange?.(normalizeCommandPlan({ ...plan, ...patch }));
 
   return (
-    <section className={`td-command-plan ${mobileActive ? 'td-mobile-active' : ''} ${className}`}>
+    <section id={id} role={labelledBy ? 'tabpanel' : undefined} aria-labelledby={labelledBy} tabIndex={labelledBy ? 0 : undefined} className={`td-command-plan ${mobileActive ? 'td-mobile-active' : ''} ${className}`}>
       <header>
         <div>
           <span>◇ COMMAND PROTOCOL</span>

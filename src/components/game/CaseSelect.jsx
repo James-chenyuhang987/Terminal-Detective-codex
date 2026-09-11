@@ -57,7 +57,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
 
   return (
     <div
-      className="td-case-select td-page-shell min-h-screen flex flex-col items-center px-4 py-10"
+      className="td-case-select td-page-shell"
       style={{
         background: 'radial-gradient(ellipse at 50% 0%, #101e2a 0%, #08121c 60%, #08121c 100%)',
         fontFamily: "'Courier New', monospace",
@@ -75,7 +75,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
       </button>
 
       {/* Header */}
-      <div className="text-center mb-10">
+      <header className="td-case-header text-center">
         <div style={{ fontSize: '0.6rem', letterSpacing: '0.5em', color: 'rgba(112, 159, 154,0.5)', marginBottom: 8 }}>
           <IconText text={t.selectInvestigation} />
         </div>
@@ -92,11 +92,11 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
           <IconText text={t.caseArchiveSubtitle} />
         </div>
         <div className="td-case-wallet"><span><Icon name="bolt" label={lang === 'zh' ? '体力' : 'Energy'} /> {profile?.energy || 0}</span><span><Icon name="coin" label={lang === 'zh' ? '金币' : 'Gold'} /> {(profile?.gold || 0).toLocaleString('en-US')}</span><span><Icon name="gem" label={lang === 'zh' ? '钻石' : 'Diamonds'} /> {(profile?.diamonds || 0).toLocaleString('en-US')}</span></div>
-      </div>
+      </header>
 
-      {/* Case cards */}
-      {error && <div className="td-status-banner is-error" style={{ width: '100%', maxWidth: 860, margin: '-22px auto 18px' }}>{error}</div>}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-4xl">
+      {error && <div role="alert" className="td-status-banner is-error td-case-error">{error}</div>}
+      <div className="td-case-content td-scroll-region" role="region" aria-label={t.caseArchiveTitle} tabIndex={0}>
+      <div className="td-case-grid grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-4xl">
         {ALL_CASES.map((c, i) => {
           const difficulty = DIFFICULTY_CONFIG[c.difficulty] || DIFFICULTY_CONFIG.NORMAL;
           const diff = { ...difficulty, color: noirColor(difficulty.color), bg: noirColor(difficulty.bg) };
@@ -115,9 +115,9 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
             <div
               className={`td-ui-card td-case-card ${isSel ? 'is-selected' : ''} ${!canStart ? 'is-disabled' : ''}`}
               key={c.case_id}
+              onClick={() => void handleStart(c)}
               onMouseEnter={() => setHovered(c.case_id)}
               onMouseLeave={() => setHovered(null)}
-              onClick={() => void handleStart(c)}
               style={{
                 borderRadius: 20,
                 border: `1.5px solid ${isHover || isSel ? diff.color : 'rgba(255,255,255,0.08)'}`,
@@ -243,6 +243,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
 
       <div style={{ marginTop: 40, fontSize: '0.55rem', color: 'rgba(255,255,255,0.18)', letterSpacing: '0.2em', textAlign: 'center' }}>
         <IconText text={t.caseArchiveFooter.replace('{count}', String(ALL_CASES.length))} />
+      </div>
       </div>
     </div>
   );

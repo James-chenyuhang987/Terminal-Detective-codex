@@ -36,10 +36,10 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
     setTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : prev.length >= 3 ? prev : [...prev, t]);
 
   return (
-    <div className="td-registration td-page-shell" style={{ minHeight: '100dvh', position: 'relative', background: '#07090e', fontFamily: 'monospace', overflowX: 'hidden' }}>
+    <div className="td-registration td-page-shell" style={{ position: 'relative', background: '#07090e', fontFamily: 'monospace' }}>
       <HomeBackdrop />
 
-      <div style={{ position: 'relative', zIndex: 2, padding: '24px 22px 40px', maxWidth: 1180, margin: '0 auto' }}>
+      <div className="td-registration-shell">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <button className="td-ui-button td-button-ghost td-button-compact" onClick={onBack} style={{
             background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'monospace',
@@ -57,7 +57,7 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
           <span style={{ width: 40 }} />
         </div>
 
-        <div className="td-registration-grid" style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(180px,210px) minmax(0,1fr) minmax(210px,250px)', alignItems: 'start' }}>
+        <div className="td-registration-grid td-scroll-region" role="region" aria-label={zh ? '身份注册资料' : 'Identity registration details'} tabIndex={0} style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(180px,210px) minmax(0,1fr) minmax(210px,250px)', alignItems: 'start' }}>
           <RegStepTracker current={step} />
 
           {/* Form */}
@@ -144,6 +144,11 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
                 }} />
             </Field>
 
+          </GlassPanel>
+          <RegPreviewPanel name={name.trim()} avatar={avatar} signature={signature.trim()} badge={badgeLabel} tags={tags} />
+        </div>
+
+        <div className="td-registration-actions">
             <button
               className="td-ui-button td-button-gold td-button-wide"
               onClick={() => onConfirm({
@@ -167,9 +172,6 @@ export default function DetectiveRegistration({ onConfirm, onBack, busy, error =
             <div style={{ textAlign: 'center', fontSize: '0.54rem', color: 'rgba(255,255,255,0.28)', marginTop: 10 }}>
               <Icon name="warning" size={13} /> {zh ? '侦探代号仅可修改 1 次，请谨慎确认' : 'Your codename can only be changed once. Confirm carefully.'}
             </div>
-          </GlassPanel>
-
-          <RegPreviewPanel name={name.trim()} avatar={avatar} signature={signature.trim()} badge={badgeLabel} tags={tags} />
         </div>
       </div>
     </div>
