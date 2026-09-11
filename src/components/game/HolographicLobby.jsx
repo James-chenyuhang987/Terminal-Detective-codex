@@ -1,4 +1,5 @@
 import { noirColor } from '@/components/ui/palette';
+import ScreenTabs from '@/components/ui/ScreenTabs.jsx';
 import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLang } from '@/lib/lang.jsx';
@@ -436,7 +437,7 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
   const { lang } = useLang();
   const lvls = agentDefs.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
   return (
-    <div className={`td-lobby-roster ${mobileActive ? 'td-mobile-active' : ''}`} style={{
+    <div id="lobby-panel-formation" role="tabpanel" aria-labelledby="lobby-tab-formation" tabIndex={0} className={`td-lobby-roster td-scroll-region ${mobileActive ? 'td-mobile-active' : ''}`} style={{
       width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10,
       padding: '12px 0 12px 12px',
     }}>
@@ -457,12 +458,12 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
           const isSelected = selectedIdx === i;
           const xpInfo = getXPToNextLevel(progression[i]?.xp || 0);
           return (
-            <div className={`td-roster-agent ${isSelected ? 'td-roster-agent-selected' : ''}`} key={i} onClick={() => onSelect(i)}
+            <button type="button" aria-pressed={isSelected} className={`td-roster-agent ${isSelected ? 'td-roster-agent-selected' : ''}`} key={i} onClick={() => onSelect(i)}
               onMouseEnter={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseMove={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseLeave={() => onHover?.(null)}
               style={{
-              display: 'flex', alignItems: 'center', gap: 8,
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', border: 0,
               padding: '10px 12px', cursor: 'pointer',
               borderLeft: `3px solid ${isSelected ? noirColor(def.color) : 'transparent'}`,
               background: isSelected ? `${noirColor(def.color)}12` : 'transparent',
@@ -488,7 +489,7 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
                   <div style={{ width: `${xpInfo.pct}%`, height: '100%', background: noirColor(def.color), borderRadius: 1, transition: 'width 0.5s ease' }}/>
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
         <button type="button" onClick={() => onOpenCoreMarket?.(selectedIdx)} style={{
@@ -519,7 +520,8 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
   const lvls = agentDefs.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
 
   return (
-    <div className={`td-lobby-stage td-lobby-panel ${mobileActive ? 'td-mobile-active' : ''}`} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div id="lobby-panel-briefing" role="tabpanel" aria-labelledby="lobby-tab-briefing" tabIndex={0} className={`td-lobby-stage td-lobby-panel td-scroll-region ${mobileActive ? 'td-mobile-active' : ''}`}>
+      <div className="td-lobby-stage-scene">
       {/* Grid bg */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 0,
@@ -552,7 +554,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
       )}
 
       {/* Agents on stage */}
-      <div style={{
+      <div className="td-stage-agents" style={{
         position: 'absolute', bottom: 118, left: 0, right: 0,
         display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end',
         padding: '0 30px', zIndex: 3,
@@ -595,6 +597,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
         <div><small>COMMAND</small><strong>{commanderName || (lang === 'zh' ? '侦探指挥席' : 'DETECTIVE')}</strong></div>
       </div>
 
+      </div>
       <style>{`
         @keyframes spin-ring { from{stroke-dashoffset:0} to{stroke-dashoffset:100} }
         @keyframes plat-dot { 0%,100%{opacity:0.3} 50%{opacity:1} }
@@ -615,7 +618,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
   ];
 
   return (
-    <div className={`td-lobby-attributes ${mobileActive ? 'td-mobile-active' : ''}`} style={{
+    <div id="lobby-panel-agent" role="tabpanel" aria-labelledby="lobby-tab-agent" className={`td-lobby-attributes ${mobileActive ? 'td-mobile-active' : ''}`} style={{
       width: 300, flexShrink: 0, padding: '12px 12px 12px 0',
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
@@ -651,7 +654,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
         </div>
 
         {/* Tab content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+        <div className="td-scroll-region" tabIndex={0} role="region" aria-label={tabs.find(item => item.key === tab).label} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px' }}>
           {tab === 'attrs' && (
             <>
               {/* Radar chart */}
@@ -756,6 +759,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
   const [flash, setFlash] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const prevSynergy = useRef(synergy);
+  const toolsToggleRef = useRef(null);
 
   // Flash animation whenever synergy changes
   useEffect(() => {
@@ -796,10 +800,16 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
       flexShrink: 0, transition: 'background 0.4s, border-color 0.4s',
     }}>
       <div className="td-lobby-tools-wrap">
-        <button className="td-lobby-tools-toggle" type="button" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
+        <button ref={toolsToggleRef} className="td-lobby-tools-toggle" type="button" aria-label={zh ? '编队工具' : 'Squad tools'} aria-controls="lobby-tools" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
           <span>☰</span><span>{zh ? '编队工具' : 'SQUAD TOOLS'}</span><small>{toolsOpen ? (zh ? '收起' : 'CLOSE') : (zh ? '预设 / 保存' : 'PRESETS / SAVE')}</small>
         </button>
-        {toolsOpen && <div className="td-lobby-tools-popover">
+        {toolsOpen && <div id="lobby-tools" className="td-lobby-tools-popover td-scroll-region" onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.stopPropagation();
+            setToolsOpen(false);
+            toolsToggleRef.current?.focus();
+          }
+        }}>
           <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: noirColor(button.color), borderColor: `${noirColor(button.color)}45`, background: `${noirColor(button.color)}0d` }}><span><Icon name={button.icon} /></span>{button.label}</button>)}</div>
           <PresetChips onApply={preset => { onApplyPreset(preset); setToolsOpen(false); }} />
         </div>}
@@ -1108,7 +1118,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           position: 'fixed', inset: 0, zIndex: 80, display: 'grid', placeItems: 'center',
           padding: 20, background: 'rgba(0,4,12,.82)', backdropFilter: 'blur(8px)',
         }}>
-          <div onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" style={{
+          <div className="td-lobby-guide td-scroll-region" onClick={event => event.stopPropagation()} role="dialog" aria-label={lang === 'zh' ? '探员大厅快速指南' : 'Agent hall quick guide'} aria-modal="true" style={{
             width: 'min(560px, 94vw)', padding: 24, borderRadius: 16,
             border: '1px solid rgba(112, 159, 154,.45)', background: '#101e2a',
             boxShadow: '0 0 45px rgba(112, 159, 154,.18)', fontFamily: 'monospace',
@@ -1169,16 +1179,13 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
         </div>
       </div>
 
-      <div className="td-lobby-mobile-tabs" role="tablist">
-        {[
-          ['briefing', lang === 'zh' ? '简报' : 'BRIEF'],
-          ['formation', lang === 'zh' ? '编组' : 'SQUAD'],
-          ['agent', lang === 'zh' ? '探员' : 'AGENT'],
-          ['command', lang === 'zh' ? '指挥' : 'COMMAND'],
-        ].map(([key, label]) => (
-          <button key={key} type="button" role="tab" aria-selected={mobileTab === key} onClick={() => setMobileTab(key)}>{label}</button>
-        ))}
-      </div>
+      <ScreenTabs id="lobby" className="td-lobby-mobile-tabs" label={lang === 'zh' ? '大厅栏目' : 'Hall sections'}
+        tabs={[
+          { key: 'briefing', label: lang === 'zh' ? '简报' : 'BRIEF' },
+          { key: 'formation', label: lang === 'zh' ? '编组' : 'SQUAD' },
+          { key: 'agent', label: lang === 'zh' ? '探员' : 'AGENT' },
+          { key: 'command', label: lang === 'zh' ? '指挥' : 'COMMAND' },
+        ]} value={mobileTab} onChange={setMobileTab} />
 
       {/* Main */}
       <div className="td-lobby-main" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
@@ -1223,7 +1230,8 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           mobileActive={mobileTab === 'agent'}
         />
         <CommandPlanPanel
-          className="td-command-plan-mobile"
+          className="td-command-plan-mobile td-scroll-region"
+          id="lobby-panel-command" labelledBy="lobby-tab-command"
           value={commandPlan}
           onChange={setCommandPlan}
           targetCase={targetCase}

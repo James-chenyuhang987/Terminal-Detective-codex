@@ -102,6 +102,8 @@ test('landing restores the original flowing gold title without sliced text or lo
         React.createElement(Landing, { onStart: () => {} })));
       assert.equal((markup.match(/<h1\b/g) || []).length, 1);
       assert.match(markup, /aria-label="Terminal Detective"/);
+      assert.match(markup, new RegExp(`<div class="td-page-shell td-landing" data-motion-reduced="${reducedMotion}" data-motion-paused="${!foreground}">`));
+      assert.equal((markup.match(/td-landing-gold-edge/g) || []).length, 7, 'case, action, identity and four feature cards carry gold edges');
       assert.match(markup, new RegExp(`data-motion-reduced="${reducedMotion}"`));
       assert.match(markup, new RegExp(`data-motion-paused="${!foreground}"`));
       assert.match(markup, /<span class="td-gold-flow-text td-landing-gold-title">TERMINAL<\/span>/);
@@ -121,6 +123,25 @@ test('landing restores the original flowing gold title without sliced text or lo
   assert.match(css, /\.td-landing-title-words\[data-motion-reduced="true"\] \.td-landing-gold-title \{ animation: none; \}/);
   assert.match(css, /\.td-landing-title-words\[data-motion-paused="true"\] \.td-landing-gold-title \{ animation-play-state: paused; \}/);
   assert.doesNotMatch(css, /\.td-landing-title \.td-sliced-title/);
+});
+
+test('the whole landing keeps warm gold surfaces, masked edge flow and motion safeguards', () => {
+  const css = read('index.css');
+  const landing = css.match(/\.td-landing \{([^}]+)\}/)?.[1];
+  assert.match(landing, /--landing-gold: #f0c76b/);
+  assert.match(landing, /#100d08 0%, #060605 48%, #0e0b06 100%/);
+  const edge = css.match(/\.td-landing \.td-landing-gold-edge::before \{([^}]+)\}/)?.[1];
+  assert.match(edge, /pointer-events: none/);
+  assert.match(edge, /inset: 0;/, 'the gold edge stays inside overflow-hidden panels');
+  assert.match(edge, /mask-composite: exclude/);
+  assert.match(edge, /-webkit-mask-composite: xor/);
+  assert.match(edge, /animation: td-gold-edge 8s linear infinite/);
+  assert.match(css, /\.td-landing\[data-motion-reduced="true"\][^{]+\{ animation: none !important; transition: none !important; \}/);
+  assert.match(css, /\.td-landing\[data-motion-paused="true"\][^{]+\{ animation-play-state: paused !important; \}/);
+  assert.match(css, /\.td-landing-title-words \{[^}]*display: grid;/, 'eyebrow and title cannot share a line on wide screens');
+  assert.equal((css.match(/\.td-gold-flow-text \{/g) || []).length, 1, 'gold text has a single source of truth');
+  const noirOverrides = css.slice(css.indexOf('/* Noir bureau presentation */'), css.indexOf('@keyframes td-noir-progress'));
+  assert.doesNotMatch(noirOverrides, /\.(?:td-landing\b|td-gold-flow-text\b|td-detective-(?:figure|identity|orbit|lens|silhouette)\b)[^{]*\{[^}]*(?:background:|animation: none)/, 'global noir styles must not turn the landing blue or disable gold flow');
 });
 
 test('canvas icons use the shared vector geometry rather than font emoji', () => {

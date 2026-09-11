@@ -263,7 +263,7 @@ test('suspending a run focuses the visible resume control without rerouting or m
   const effect = findNodes(home, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect'
     && node.arguments[0]?.getText().includes('resumeRef.current?.focus'))[0];
   assert.ok(effect);
-  assert.match(home.text, /<button ref=\{resumeRef\}[\s\S]*onClick=\{onResume\}/);
+  assert.match(home.text, /<button ref=\{resumeRef\}[^>]*onClick=\{suspendedCase \? onResume : named \? quickStart : onRegister\}/);
   const focusCalls = [];
   const resumeRef = { current: { focus: options => focusCalls.push(options) } };
   bind(effect.arguments[0], { resumeRef, suspendedCase: { case_id: 'Lvl_01' } })();

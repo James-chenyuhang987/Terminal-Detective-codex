@@ -19,6 +19,7 @@ import { transactionErrorMessage } from '@/game/transactionFeedback';
 import { useSettings } from '@/lib/settings.jsx';
 import StoryModeControl from '@/components/game/theater/StoryModeControl';
 import Icon from '@/components/ui/Icon.jsx';
+import ScreenTabs from '@/components/ui/ScreenTabs.jsx';
 
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
@@ -50,6 +51,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
   } = useProfile();
   const [busy, setBusy] = useState(false);
   const [module, setModule] = useState(null);
+  const [homeTab, setHomeTab] = useState('overview');
   const [toast, setToast] = useState(null);
   const [checkinCelebration, setCheckinCelebration] = useState(null);
   const toastTimerRef = useRef(null);
@@ -228,7 +230,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
 
   return (
     <div className="td-home td-page-shell" style={{
-      minHeight: '100dvh', position: 'relative', overflowX: 'hidden',
+      position: 'relative',
       background: '#07090e',
       fontFamily: 'monospace', display: 'flex', flexDirection: 'column',
     }}>
@@ -263,15 +265,22 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
         </div>
       </div>
 
+      <ScreenTabs id="home" className="td-home-tabs" label={lang === 'zh' ? '侦探之家栏目' : 'Detective home sections'}
+        tabs={[
+          { key: 'overview', label: lang === 'zh' ? '总览' : 'OVERVIEW' },
+          { key: 'intel', label: lang === 'zh' ? '情报' : 'INTEL' },
+          { key: 'services', label: lang === 'zh' ? '功能' : 'SERVICES' },
+        ]} value={homeTab} onChange={setHomeTab} />
+
       {/* Body */}
-      <div className="td-home-grid" style={{
+      <div className="td-home-grid" data-home-tab={homeTab} style={{
         position: 'relative', zIndex: 2,
         flex: 1, display: 'grid', gap: 20, padding: '26px 22px',
         gridTemplateColumns: 'minmax(190px, 220px) 1fr minmax(180px, 210px)',
         alignItems: 'start',
       }}>
         {/* Left column */}
-        <div className="td-home-left" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div id="home-panel-intel" className="td-home-left td-scroll-region" role="tabpanel" aria-labelledby="home-tab-intel" tabIndex={0} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <InfoCard icon="📰" title={lang === 'zh' ? '今日情报' : 'DAILY INTEL'} alert desc={lang === 'zh' ? '优先案件与今日额外奖励已更新' : 'Priority case and daily bonus updated'}
             btnLabel={lang === 'zh' ? '查看详情' : 'VIEW INTEL'} onClick={() => openModule('intel')} />
           <InfoCard icon="🗂" title={lang === 'zh' ? '未解案件' : 'OPEN CASES'} big={String(profile.unsolved_count).padStart(2, '0')}
@@ -281,7 +290,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
         </div>
 
         {/* Center */}
-        <div className="td-home-center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+        <div id="home-panel-overview" className="td-home-center td-scroll-region" role="tabpanel" aria-labelledby="home-tab-overview" tabIndex={0} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
           <div style={{ textAlign: 'center' }}>
             <h1 style={{
               margin: 0, fontSize: 'clamp(2.1rem, 5.4vw, 3.7rem)', fontWeight: 900, letterSpacing: '0.05em',
@@ -317,7 +326,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
                   ? '案件与编队已由云端保存。切换模式、刷新页面或重新登录后均可继续同一调查，不再扣费。镜头位置和未提交的草稿仅在当前页面保留。'
                   : 'Your case and squad are saved in the cloud. Resume the same investigation after switching modes, reloading, or signing in again without another charge. Camera position and unsent drafts remain only in this page.'}
               </p>
-              <button ref={resumeRef} type="button" className="td-ui-button td-button-gold" onClick={onResume} style={{
+              <button type="button" className="td-ui-button td-button-gold" onClick={onResume} style={{
                 minHeight: 44, padding: '10px 16px', borderRadius: 8, border: '1px solid #c5a66f',
                 background: '#c5a66f20', color: '#e1d0ac', cursor: 'pointer', fontFamily: 'monospace',
               }}>{lang === 'zh' ? '继续当前调查' : 'Resume current investigation'}</button>
@@ -376,11 +385,21 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
         </div>
 
         {/* Right column */}
-        <SideNavIcons items={sideItems} onPick={openModule} />
+        <div id="home-panel-services" className="td-home-services td-scroll-region" role="tabpanel" aria-labelledby="home-tab-services" tabIndex={0}>
+          <SideNavIcons items={sideItems} onPick={openModule} />
+        </div>
       </div>
 
       {/* Footer */}
-      <div style={{ position: 'relative', zIndex: 2, padding: '14px 22px 22px' }}>
+      <div className="td-home-footer" style={{ position: 'relative', zIndex: 2, padding: '14px 22px 22px' }}>
+        <div className="td-home-primary-actions">
+          <button ref={resumeRef} type="button" className="td-ui-button td-button-gold" onClick={suspendedCase ? onResume : named ? quickStart : onRegister} disabled={!named && !onRegister}>
+            <Icon name="search" /> {suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME') : named ? (lang === 'zh' ? '开始调查' : 'INVESTIGATE') : (lang === 'zh' ? '注册身份' : 'REGISTER')}
+          </button>
+          <button type="button" className="td-ui-button" onClick={() => enterLobby()} disabled={!named}>
+            <Icon name="users" /> {lang === 'zh' ? '探员大厅' : 'AGENT HALL'}
+          </button>
+        </div>
         <FooterShortcuts
           items={[
             { key: 'checkin', icon: '📅', label: lang === 'zh' ? '每日签到' : 'CHECK-IN', alert: canCheckin(profile) },
