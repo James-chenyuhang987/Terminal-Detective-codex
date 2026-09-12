@@ -363,7 +363,10 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-landing-stats small { color: rgba(197, 166, 111,.63); font-size: 7px; font-weight: 800; letter-spacing: .18em; }
 .td-landing-stats span { color: rgba(225, 208, 172,.32); font-size: 8px; }
 .td-landing-case-action { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(218px,.65fr); gap: 14px; align-items: stretch; }
-.td-landing-terminal { width: 100%; min-height: 205px; margin: 0; padding: 15px 17px; border: 1px solid rgba(197, 166, 111,.16); border-radius: 2px 13px 2px 13px; color: rgba(197, 166, 111,.66); font-size: 11px; line-height: 1.64; background: rgba(0,0,0,.48); box-shadow: inset 0 0 30px rgba(197, 166, 111,.025); }
+.td-landing-terminal { position: relative; width: 100%; min-height: 205px; margin: 0; padding: 15px 17px; border: 1px solid rgba(197, 166, 111,.16); border-radius: 2px 13px 2px 13px; color: rgba(197, 166, 111,.66); font-size: 11px; line-height: 1.64; background: rgba(0,0,0,.48); box-shadow: inset 0 0 30px rgba(197, 166, 111,.025); }
+.td-landing-terminal::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 0 47%, rgba(240,199,107,.08) 49%, transparent 51% 100%); background-size: 100% 220%; opacity: .42; animation: td-terminal-scan 6s linear infinite; }
+.td-landing-terminal > * { position: relative; z-index: 1; }
+@keyframes td-terminal-scan { from { background-position: 0 -100%; } to { background-position: 0 100%; } }
 .td-landing-terminal > div { margin-bottom: 10px; color: rgba(197, 166, 111,.42); font-size: 8px; font-weight: 700; letter-spacing: .19em; }
 .td-landing-terminal > div span { display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: #c5a66f; box-shadow: 0 0 9px #c5a66f; }
 .td-landing-terminal p { min-height: 18px; margin: 0; color: rgba(225, 208, 172,.7); }
@@ -467,6 +470,16 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-toast.is-success { --toast-color:#8aaa91; }
 .td-toast.is-error { --toast-color:#c77c78; }
 
+.td-home-topbar-tools { display: flex; align-items: center; gap: 14px; }
+.td-home-top-actions { position: relative; display: flex; align-items: center; gap: 10px; }
+.td-home-actions-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; }
+.td-home-actions-menu { position: absolute; z-index: 12; top: calc(100% + 8px); right: 0; display: grid; min-width: 170px; gap: 4px; padding: 7px; border: 1px solid rgba(197,166,111,.35); border-radius: 10px; background: rgba(7,12,18,.96); box-shadow: 0 18px 40px rgba(0,0,0,.5); backdrop-filter: blur(14px); animation: td-menu-in .18s ease-out both; }
+.td-home-actions-menu .td-home-top-action { width: 100%; justify-content: flex-start; }
+.td-home-actions-menu .td-home-top-action > span { display: inline; }
+.td-home-sync-status { color: var(--td-sync-color, #8aaa91); font-size: .7rem; }
+.td-home-sync-status small { color: rgba(180,220,235,.38); font-size: .46rem; }
+@keyframes td-menu-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .td-home-actions-menu { animation: none; } }
 .td-home-top-action {
   display: inline-flex;
   align-items: center;
@@ -1565,7 +1578,7 @@ button, input, textarea, select { box-sizing: border-box; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .td-assistant-avatar > i, .td-assistant-bubble, .td-onboarding-card, .td-onboarding-spotlight, .td-story-briefing, .td-decision-card, .td-decision-heading > small.is-urgent, .td-action-cinematic, .td-cinematic-progress i, .td-action-cinematic-fallback.is-loading .td-cinematic-fallback-card, .td-gold-flow-text, .td-landing-ambient, .td-landing-case-panel::before, .td-landing-start, .td-landing-start::after, .td-detective-figure, .td-detective-silhouette, .td-detective-lens, .td-detective-orbit, .td-landing-feature, .td-landing-terminal > i { animation: none !important; transition: none !important; }
+  .td-assistant-avatar > i, .td-assistant-bubble, .td-onboarding-card, .td-onboarding-spotlight, .td-story-briefing, .td-decision-card, .td-decision-heading > small.is-urgent, .td-action-cinematic, .td-cinematic-progress i, .td-action-cinematic-fallback.is-loading .td-cinematic-fallback-card, .td-gold-flow-text, .td-landing-ambient, .td-landing-case-panel::before, .td-landing-start, .td-landing-start::after, .td-detective-figure, .td-detective-silhouette, .td-detective-lens, .td-detective-orbit, .td-landing-feature, .td-landing-terminal::before, .td-landing-terminal > i { animation: none !important; transition: none !important; }
 }
 
 /* Viewport shells: only content panes scroll; navigation and primary actions stay visible. */
