@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import Icon, { IconText } from '@/components/ui/Icon';
+import ScreenTabs from '@/components/ui/ScreenTabs.jsx';
+import FittedPanel from '@/components/ui/FittedPanel.jsx';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 const GOLD = '#f0c76b';
@@ -306,6 +308,7 @@ function CaseLaunchPanel({ lang, t }) {
 export default function GameLanding({ busy = false, error = '', onStart }) {
   const { lang, t } = useLang();
   const { reducedMotion, foreground } = usePresentationMotion();
+  const [landingTab, setLandingTab] = useState('case');
 
   return (
     <div className="td-page-shell td-landing" data-motion-reduced={reducedMotion} data-motion-paused={!foreground}>
@@ -324,24 +327,45 @@ export default function GameLanding({ busy = false, error = '', onStart }) {
         </div>
       </div>
 
-      <div className="td-landing-content td-scroll-region" role="region" aria-label={lang === 'zh' ? '游戏介绍' : 'Game introduction'} tabIndex={0}>
-      <main className="td-landing-main">
-        <section className="td-landing-hero">
-          <div className="td-landing-copy">
-            <TitleLogo lang={lang} t={t} />
+      <div className="td-landing-content" role="region" aria-label={lang === 'zh' ? '游戏介绍' : 'Game introduction'}>
+        <ScreenTabs
+          id="landing"
+          className="td-landing-tabs"
+          label={lang === 'zh' ? '开始页栏目' : 'Landing sections'}
+          tabs={[
+            { key: 'case', label: lang === 'zh' ? '案件档案' : 'CASE DOSSIER' },
+            { key: 'detective', label: lang === 'zh' ? '侦探资料' : 'DETECTIVE' },
+            { key: 'features', label: lang === 'zh' ? '系统情报' : 'SYSTEM INTEL' },
+          ]}
+          value={landingTab}
+          onChange={setLandingTab}
+        />
+        <main className="td-landing-main" data-landing-tab={landingTab}>
+          <TitleLogo lang={lang} t={t} />
+          <FittedPanel id="landing-panel-case" className="td-landing-panel td-landing-case-view" labelledBy="landing-tab-case"
+            title={lang === 'zh' ? '案件档案 · 霓虹血迹' : 'CASE DOSSIER · NEON BLOOD'} icon="file" theme="landing"
+            summary={<StatRow t={t} />}>
             <CaseLaunchPanel lang={lang} t={t} />
-          </div>
-          <DetectiveFigure lang={lang} />
-        </section>
+          </FittedPanel>
 
-        <section className="td-landing-features">
-          {t.features.map((feature, index) => (
-            <FeatureCard key={feature.title} {...feature} delay={0.15 + index * 0.08} />
-          ))}
-        </section>
-      </main>
+          <FittedPanel id="landing-panel-detective" className="td-landing-panel td-landing-detective-view" labelledBy="landing-tab-detective"
+            title={lang === 'zh' ? '首席现场侦探' : 'LEAD FIELD DETECTIVE'} icon="detective" theme="landing"
+            summary={lang === 'zh' ? '探员编号 · TD-01 · 等待部署' : 'AGENT REGISTRY · TD-01 · AWAITING DEPLOYMENT'}>
+            <DetectiveFigure lang={lang} />
+          </FittedPanel>
 
-      <footer className="td-landing-footer"><IconText text={t.bottomBar} /></footer>
+          <FittedPanel id="landing-panel-features" className="td-landing-panel td-landing-features-view" labelledBy="landing-tab-features"
+            title={lang === 'zh' ? '系统情报' : 'SYSTEM INTEL'} icon="terminal" theme="landing"
+            summary={t.features.map(feature => feature.title).join(' · ')}>
+            <div className="td-landing-features">
+              {t.features.map((feature, index) => (
+                <FeatureCard key={feature.title} {...feature} delay={0.15 + index * 0.08} />
+              ))}
+            </div>
+          </FittedPanel>
+        </main>
+
+        <footer className="td-landing-footer"><IconText text={t.bottomBar} /></footer>
       </div>
       <div className="td-landing-dock">
         <StartButton busy={busy} error={error} lang={lang} onClick={onStart} t={t} />

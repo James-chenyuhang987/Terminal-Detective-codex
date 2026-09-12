@@ -20,6 +20,7 @@ import { useSettings } from '@/lib/settings.jsx';
 import StoryModeControl from '@/components/game/theater/StoryModeControl';
 import Icon from '@/components/ui/Icon.jsx';
 import ScreenTabs from '@/components/ui/ScreenTabs.jsx';
+import FittedPanel from '@/components/ui/FittedPanel.jsx';
 
 const loadHomeModules = () => import('@/components/game/home/HomeModules');
 const HomeModules = lazy(loadHomeModules);
@@ -265,6 +266,13 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
         </div>
       </div>
 
+      <header className="td-home-heading">
+        <h1>{lang === 'zh'
+          ? `侦探${named ? profile.detective_name : 'XXX'}的家`
+          : `${named ? profile.detective_name : 'XXX'}'S DETECTIVE HOME`}</h1>
+        <p><Icon name="search" size={15} /> {lang === 'zh' ? '每一个线索，都是揭开真相的钥匙' : 'EVERY CLUE IS A KEY TO THE TRUTH'}</p>
+      </header>
+
       <ScreenTabs id="home" className="td-home-tabs" label={lang === 'zh' ? '侦探之家栏目' : 'Detective home sections'}
         tabs={[
           { key: 'overview', label: lang === 'zh' ? '总览' : 'OVERVIEW' },
@@ -280,35 +288,32 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
         alignItems: 'start',
       }}>
         {/* Left column */}
-        <div id="home-panel-intel" className="td-home-left td-scroll-region" role="tabpanel" aria-labelledby="home-tab-intel" tabIndex={0} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <FittedPanel id="home-panel-intel" labelledBy="home-tab-intel" title={lang === 'zh' ? '今日情报' : 'DAILY INTEL'} icon="file"
+          summary={<>
+            <p>{lang === 'zh' ? '优先案件与今日额外奖励已更新' : 'Priority case and daily bonus updated'}</p>
+            <p>{lang === 'zh' ? '未解案件' : 'OPEN CASES'} · {profile.unsolved_count}</p>
+            <p>{lang === 'zh' ? '成就徽章' : 'ACHIEVEMENTS'} · {knownAchievementCount(profile)} / {ACHIEVEMENT_TOTAL}</p>
+          </>}
+          className="td-home-left" contentClassName="td-home-panel-stack">
           <InfoCard icon="📰" title={lang === 'zh' ? '今日情报' : 'DAILY INTEL'} alert desc={lang === 'zh' ? '优先案件与今日额外奖励已更新' : 'Priority case and daily bonus updated'}
             btnLabel={lang === 'zh' ? '查看详情' : 'VIEW INTEL'} onClick={() => openModule('intel')} />
           <InfoCard icon="🗂" title={lang === 'zh' ? '未解案件' : 'OPEN CASES'} big={String(profile.unsolved_count).padStart(2, '0')}
             unit={lang === 'zh' ? '个案件待调查' : 'cases pending'} btnLabel={lang === 'zh' ? '进入案件簿' : 'OPEN ARCHIVE'} onClick={() => openModule('cases')} />
           <InfoCard icon="🏅" title={lang === 'zh' ? '成就徽章' : 'ACHIEVEMENTS'} big={knownAchievementCount(profile)}
             unit={`/ ${ACHIEVEMENT_TOTAL}`} btnLabel={lang === 'zh' ? '查看成就' : 'VIEW'} onClick={() => openModule('achievements')} />
-        </div>
+        </FittedPanel>
 
         {/* Center */}
-        <div id="home-panel-overview" className="td-home-center td-scroll-region" role="tabpanel" aria-labelledby="home-tab-overview" tabIndex={0} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-          <div style={{ textAlign: 'center' }}>
-            <h1 style={{
-              margin: 0, fontSize: 'clamp(2.1rem, 5.4vw, 3.7rem)', fontWeight: 900, letterSpacing: '0.05em',
-              color: '#e6dfcf', textShadow: '0 3px 12px rgba(0,0,0,.5)',
-            }}>
-              {lang === 'zh'
-                ? `侦探${named ? profile.detective_name : 'XXX'}的家`
-                : `${named ? profile.detective_name : 'XXX'}'S DETECTIVE HOME`}
-            </h1>
-            <div style={{
-              width: 200, height: 1, margin: '10px auto 0',
-              background: 'linear-gradient(to right, transparent, rgba(112, 159, 154,0.7), transparent)',
-              opacity: .5,
-            }} />
-            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', marginTop: 8, letterSpacing: '0.14em' }}>
-              <Icon name="search" size={15} /> {lang === 'zh' ? '每一个线索，都是揭开真相的钥匙' : 'EVERY CLUE IS A KEY TO THE TRUTH'}
-            </div>
-          </div>
+        <FittedPanel id="home-panel-overview" labelledBy="home-tab-overview" title={lang === 'zh' ? '侦探之家总览' : 'DETECTIVE HOME OVERVIEW'} icon="search"
+          summary={<>
+            <div className="td-home-summary-emblem" aria-hidden="true"><Icon name="detective" size={54} /></div>
+            <strong>{settings.storyMode === 'terminal' ? (lang === 'zh' ? '终端模式' : 'TERMINAL MODE') : (lang === 'zh' ? '剧场模式' : 'THEATER MODE')}</strong>
+            <p>{suspendedCase
+              ? (lang === 'en' ? (suspendedCase.en?.title || suspendedCase.subtitle || suspendedCase.title) : suspendedCase.title)
+              : (named ? (lang === 'zh' ? '调查终端待命 · 随时出发' : 'INVESTIGATION TERMINAL · READY') : (lang === 'zh' ? '设定代号，建立侦探档案' : 'SET YOUR CODENAME TO BEGIN'))}</p>
+            <p>{lang === 'zh' ? '剧情模式 · 当前调查 · 身份档案 · 探员事务所' : 'Story mode · Investigation · Identity · Agent bureau'}</p>
+          </>}
+          className="td-home-center" contentClassName="td-home-panel-stack td-home-overview-stack">
 
           <div style={{ width: '100%', maxWidth: 600 }}>
             <StoryModeControl value={settings.storyMode} onChange={value => updateSetting('storyMode', value)} />
@@ -333,7 +338,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
             </section>
           )}
 
-          <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
+          <div className="td-home-overview-cards">
             {!named ? (
               onRegister
                 ? <div className="td-ui-card td-home-investigate-card" style={{
@@ -382,12 +387,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
             )}
             <HomePortal onEnter={() => openModule('agent_market')} />
           </div>
-        </div>
+        </FittedPanel>
 
         {/* Right column */}
-        <div id="home-panel-services" className="td-home-services td-scroll-region" role="tabpanel" aria-labelledby="home-tab-services" tabIndex={0}>
+        <FittedPanel id="home-panel-services" labelledBy="home-tab-services" title={lang === 'zh' ? '侦探之家功能' : 'HOME SERVICES'} icon="settings"
+          summary={sideItems.map(item => item.label).join(' · ')}
+          className="td-home-services" contentClassName="td-home-panel-stack">
           <SideNavIcons items={sideItems} onPick={openModule} />
-        </div>
+        </FittedPanel>
       </div>
 
       {/* Footer */}

@@ -97,6 +97,13 @@ test('landing restores the original flowing gold title without sliced text or lo
         react, '@/lib/lang.jsx': language, '@/components/ui/Icon': icons,
         '@/components/ui/SlicedTitle': load('components/ui/SlicedTitle.jsx', { react, './usePresentationMotion.js': motion }),
         '@/components/ui/usePresentationMotion': motion,
+        '@/components/ui/ScreenTabs.jsx': load('components/ui/ScreenTabs.jsx', { react }),
+        '@/components/ui/FittedPanel.jsx': load('components/ui/FittedPanel.jsx', {
+          react: { ...react, useLayoutEffect: React.useEffect },
+          'react-dom': { createPortal: () => assert.fail('No portal during server rendering') },
+          '@/components/game/home/HomeDrawer': { default: () => null },
+          '@/lib/lang.jsx': language, '@/components/ui/Icon.jsx': icons,
+        }),
       });
       const markup = renderToStaticMarkup(React.createElement(language.LangProvider, null,
         React.createElement(Landing, { onStart: () => {} })));
