@@ -4,11 +4,28 @@ import { useLang } from '@/lib/lang.jsx';
 import Icon, { IconText } from '@/components/ui/Icon.jsx';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion.js';
 
-export default function HomeDrawer({ title, subtitle, icon = undefined, children, onClose, busy = false, width = 620 }) {
+const drawerStack = [];
+let originalOverflow = '';
+
+function syncDrawerStack() {
+  drawerStack.forEach((layer, index) => {
+    layer.inert = index !== drawerStack.length - 1;
+    layer.style.zIndex = String(180 + index);
+  });
+}
+
+function canRestoreFocus(element) {
+  return element?.isConnected && element.getClientRects().length
+    && !element.closest('[inert], [hidden], [disabled]')
+    && window.getComputedStyle(element).visibility !== 'hidden';
+}
+
+export default function HomeDrawer({ title, subtitle, icon = undefined, children, onClose, busy = false, width = 620, className = '', returnFocusRef = undefined }) {
   const { lang } = useLang();
-  const { motionEnabled } = usePresentationMotion();
+  const { motionEnabled, reducedMotion, foreground } = usePresentationMotion();
   const closeRef = useRef(null);
   const drawerRef = useRef(null);
+  const layerRef = useRef(null);
   const previousFocusRef = useRef(null);
   const closeTimerRef = useRef(null);
   const [closing, setClosing] = useState(false);
@@ -22,27 +39,52 @@ export default function HomeDrawer({ title, subtitle, icon = undefined, children
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
+    const layer = layerRef.current;
+    if (!drawerStack.length) originalOverflow = document.body.style.overflow;
+    drawerStack.push(layer);
+    syncDrawerStack();
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    closeRef.current?.focus({ preventScroll: true });
     return () => {
       window.clearTimeout(closeTimerRef.current);
-      document.body.style.overflow = previousOverflow;
-      previousFocusRef.current?.focus?.();
+      const wasTop = drawerStack.at(-1) === layer;
+      drawerStack.splice(drawerStack.indexOf(layer), 1);
+      syncDrawerStack();
+      if (!drawerStack.length) document.body.style.overflow = originalOverflow;
+      if (wasTop) {
+        const target = [
+          previousFocusRef.current,
+          returnFocusRef?.current,
+          drawerStack.at(-1)?.querySelector('.td-home-drawer-close'),
+          ...Array.from(document.querySelectorAll('[role="tab"][aria-selected="true"]')),
+        ].find(canRestoreFocus);
+        target?.focus?.({ preventScroll: true });
+      }
     };
   }, []);
 
   useEffect(() => {
     const onKey = (event) => {
-      if (event.key === 'Escape') requestClose();
+      if (drawerStack.at(-1) !== layerRef.current || event.defaultPrevented) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        requestClose();
+      }
       if (event.key !== 'Tab') return;
       const focusable = [...(drawerRef.current?.querySelectorAll(
         'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-      ) || [])];
-      if (!focusable.length) return;
+      ) || [])].filter(canRestoreFocus);
+      if (!focusable.length) {
+        event.preventDefault();
+        drawerRef.current?.focus({ preventScroll: true });
+        return;
+      }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (!drawerRef.current?.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -55,9 +97,10 @@ export default function HomeDrawer({ title, subtitle, icon = undefined, children
   }, [requestClose]);
 
   const drawer = (
-    <div className={`td-home-drawer-layer ${closing ? 'is-closing' : ''}`} data-td-motion={motionEnabled ? 'active' : 'paused'}>
+    <div ref={layerRef} className={`td-home-drawer-layer ${closing ? 'is-closing' : ''}`} data-td-motion={motionEnabled ? 'active' : 'paused'}>
       <div className="td-drawer-backdrop" onClick={requestClose} />
-      <aside className="td-home-drawer" ref={drawerRef} role="dialog" aria-modal="true" aria-label={title} aria-busy={busy} style={{ width: `min(${width}px, 100vw)` }}>
+      <aside className={`td-home-drawer ${className}`.trim()} ref={drawerRef} role="dialog" aria-modal="true" aria-label={title} aria-busy={busy} tabIndex={-1}
+        data-motion-reduced={reducedMotion} data-motion-paused={!foreground} style={{ width: `min(${width}px, 100vw)` }}>
         <header className="td-home-drawer-header">
           <div>
             <div className="td-home-drawer-title">{icon && <Icon name={icon} size={20} />} <IconText text={title} /></div>

@@ -29,7 +29,7 @@ export default function HomePortal({ onEnter }) {
         {zh ? '查阅探员档案，签约支援成员并管理编队' : 'Review agent dossiers, recruit support, and manage your investigation squad'}
       </div>
 
-      <div aria-hidden="true" style={{ position: 'relative', height: 180, margin: '18px 0 14px', display: 'grid', placeItems: 'center' }}>
+      <div className="td-home-portal-art" aria-hidden="true" style={{ position: 'relative', height: 180, margin: '18px 0 14px', display: 'grid', placeItems: 'center' }}>
         <div style={{
           position: 'absolute', width: 164, height: 164, borderRadius: '50% 50% 8px 8px',
           border: '1px solid rgba(197,166,111,.26)',
