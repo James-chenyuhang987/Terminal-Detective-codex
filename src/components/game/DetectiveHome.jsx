@@ -12,6 +12,7 @@ import SideNavIcons from '@/components/game/home/SideNavIcons';
 import FooterShortcuts from '@/components/game/home/FooterShortcuts';
 import HomeBackdrop from '@/components/game/home/HomeBackdrop';
 import CheckinCelebration from '@/components/game/home/CheckinCelebration';
+import HomeTopbarActions from '@/components/game/home/HomeTopbarActions';
 import StatusToast from '@/components/game/StatusToast';
 import HomeDrawer from '@/components/game/home/HomeDrawer';
 import { getHomeModuleMeta } from '@/components/game/home/homeModuleMeta';
@@ -252,17 +253,9 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
           onClick={() => openModule('profile')}
           onOpenLevelRoad={() => openModule('level_road')}
         />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <ResourceBar profile={profile} onPick={openModule} />
-          <div style={{ display: 'flex', gap: 10, fontSize: 15 }}>
-            {topActions.map(({ icon, key, label }) => (
-              <button type="button" className="td-ui-button td-home-top-action" key={key}
-                onClick={() => openModule(key)} aria-label={label} title={label}>
-                <Icon name={icon} size={18} /><span>{label}</span>
-              </button>
-            ))}
-            <span title={`${syncLabel} · BUILD ${BUILD_ID}`} style={{ color: syncColor, fontSize: '0.7rem' }}><Icon name="signal" size={18} label={syncLabel} /> <small style={{ color: 'rgba(180,220,235,.38)', fontSize: '.46rem' }}>{BUILD_ID}</small></span>
-          </div>
+        <div className="td-home-topbar-tools">
+        <ResourceBar profile={profile} onPick={openModule} />
+        <HomeTopbarActions actions={topActions} onAction={openModule} syncLabel={syncLabel} syncColor={syncColor} buildId={BUILD_ID} lang={lang} />
         </div>
       </div>
 

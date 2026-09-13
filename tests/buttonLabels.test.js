@@ -5,6 +5,7 @@ import test from 'node:test';
 const readSource = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 const terminal = readSource('../src/components/game/InvestigationTerminal.jsx');
 const home = readSource('../src/components/game/DetectiveHome.jsx');
+const homeActions = readSource('../src/components/game/home/HomeTopbarActions.jsx');
 const lobby = readSource('../src/components/game/HolographicLobby.jsx');
 const registration = readSource('../src/components/game/DetectiveRegistration.jsx');
 const styles = readSource('../src/index.css');
@@ -19,7 +20,8 @@ test('investigation toolbar exposes visible localized names and minimap state', 
 
 test('other ambiguous icon actions include visible names or explicit accessible labels', () => {
   assert.match(home, /topActions[\s\S]*通讯[\s\S]*签到[\s\S]*设置/);
-  assert.match(home, /aria-label=\{label\}[\s\S]*\{icon\}[\s\S]*\{label\}/);
+  assert.match(homeActions, /role="menuitem"[\s\S]*\{label\}/);
+  assert.match(homeActions, /aria-label=\{lang === 'zh' \? '打开快捷操作' : 'Open quick actions'\}/);
   assert.match(lobby, /td-lobby-settings-button[\s\S]*设置[\s\S]*SETTINGS/);
   assert.match(registration, /td-registration-random[\s\S]*随机[\s\S]*RANDOM/);
   assert.match(registration, /label=\{zh \? '上一个头像' : 'Previous avatar'\}/);
