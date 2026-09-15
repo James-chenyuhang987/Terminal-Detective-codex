@@ -6,6 +6,12 @@ import {
 import { normalizeCommandPlan } from '@/game/commandSystem';
 import { DEFAULT_AGENT_IDS, getOwnedAgentIds, normalizeCoreAgentIds } from '@/game/agentMarket';
 
+function normalizeSelectedIndex(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(0, Math.min(AGENT_DEFS.length - 1, Math.floor(parsed)));
+}
+
 export function useTeamBuilder(profile) {
   const initialCoreIds = () => {
     const owned = new Set(getOwnedAgentIds(profile));
@@ -23,7 +29,7 @@ export function useTeamBuilder(profile) {
     const saved = profile?.saved_team_config;
     return Array.isArray(saved?.priorities) ? normalizePriorities(saved.priorities) : defaultPriorities();
   });
-  const [selectedIdx, setSelectedIdx] = useState(() => profile?.saved_team_config?.primary_agent_index ?? 1);
+  const [selectedIdx, setSelectedIdx] = useState(() => normalizeSelectedIndex(profile?.saved_team_config?.primary_agent_index));
   const [skillLoadout, setSkillLoadout] = useState(() => profile?.skill_loadout || []);
   const [commandPlan, setCommandPlan] = useState(() => normalizeCommandPlan(profile?.saved_team_config?.command_plan));
 
@@ -78,7 +84,7 @@ export function useTeamBuilder(profile) {
     if (!Array.isArray(saved?.specs)) return false;
     setSpecs(saved.specs.map(spec => ({ ...spec })));
     setPriorities(normalizePriorities(saved.priorities));
-    setSelectedIdx(saved.primary_agent_index ?? 1);
+    setSelectedIdx(normalizeSelectedIndex(saved.primary_agent_index));
     setCommandPlan(normalizeCommandPlan(saved.command_plan));
     setCoreAgentIds(initialCoreIds());
     return true;

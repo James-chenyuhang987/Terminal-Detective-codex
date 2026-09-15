@@ -1671,6 +1671,20 @@ button, input, textarea, select { box-sizing: border-box; }
   .td-registration-shell h1 { font-size: 20px !important; letter-spacing: .04em !important; }
   .td-registration-grid > :last-child { order: 0; }
 }
+@media (max-height: 560px) {
+  .td-lobby-stage { overflow: hidden !important; }
+  .td-lobby-stage-scene { min-height: 0 !important; }
+  .td-stage-agents { bottom: 82px !important; }
+  .td-holo-avatar { width: 52px !important; height: 84px !important; }
+  .td-holo-nameplate { margin-top: 3px !important; }
+  .td-holo-nameplate > div:nth-child(2), .td-holo-nameplate > div:nth-child(3) { display: none; }
+  .td-holo-platform { bottom: 34px !important; }
+  .td-support-node, .td-commander-node { display: none !important; }
+  .td-stage-focus { top: 8px !important; }
+  .td-mission-target { bottom: 8px !important; }
+  .td-lobby-controls { padding-block: 4px !important; }
+  .td-lobby-controls .td-lobby-synergy-compact { min-width: 120px; }
+}
 @media (max-height: 500px) {
   .td-home-topbar { padding-block: 4px !important; }
   .td-profile-badge-group { width: auto; flex: 1 1 0; min-width: 0; }
