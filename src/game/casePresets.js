@@ -136,10 +136,10 @@ export function getCaseMatchFeedback(agents, caseConfig = CASE_NEON_BLOOD, lang 
     ownerEn: ATTR_OWNER[key] || 'TACTICAL',
   })).sort((a, b) => (b.ratio * b.weight) - (a.ratio * a.weight));
   const strengths = entries.filter(item => item.ratio >= 0.62).slice(0, 2);
-  const risks = [...entries].sort((a, b) => a.ratio - b.ratio).filter(item => item.ratio < 0.72).slice(0, 2);
+  // Keep the two lists mutually exclusive: a middling attribute should not be
+  // presented as both a strength and a risk at the same time.
+  const risks = [...entries].sort((a, b) => a.ratio - b.ratio).filter(item => item.ratio < 0.62).slice(0, 2);
   if (!strengths.length && entries[0]) strengths.push(entries[0]);
-  const weakest = entries[entries.length - 1];
-  if (!risks.length && weakest) risks.push(weakest);
   return { score: match.score, strengths: strengths.map(item => ({ ...item, kind: 'strength' })), risks: risks.map(item => ({ ...item, kind: 'risk' })) };
 }
 

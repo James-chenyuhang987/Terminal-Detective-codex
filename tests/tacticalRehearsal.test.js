@@ -49,4 +49,10 @@ test('case feedback explains strengths and risks without a second score algorith
   assert.equal(feedback.risks[0].key, 'observation_focus');
   assert.equal(feedback.strengths[0].percent, 100);
   assert.equal(feedback.risks[0].percent, 20);
+
+  const balanced = getCaseMatchFeedback([
+    { hack_level: 28, observation_focus: 28 },
+  ], { weights: { hack_level: 0.5, observation_focus: 0.5 } });
+  assert.equal(balanced.strengths.length, 2);
+  assert.equal(balanced.risks.length, 0);
 });

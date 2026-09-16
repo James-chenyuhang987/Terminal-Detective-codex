@@ -33,8 +33,8 @@ function FeedbackList({ feedback, lang }) {
     <div><strong>{zh ? item.label : item.labelEn}</strong><small>{item.percent}% · {zh ? item.owner : item.ownerEn}</small></div>
   </li>;
   return <section className="td-rehearsal-feedback" aria-label={zh ? '案件优势与风险' : 'Case strengths and risks'}>
-    <div><small>{zh ? '当前案件 · 优势' : 'CASE READ · STRENGTHS'}</small><ul>{feedback.strengths.map(renderItem)}</ul></div>
-    <div><small>{zh ? '当前案件 · 风险' : 'CASE READ · RISKS'}</small><ul>{feedback.risks.map(renderItem)}</ul></div>
+    <div><small>{zh ? '当前案件 · 优势' : 'CASE READ · STRENGTHS'}</small><ul>{feedback.strengths.length ? feedback.strengths.map(renderItem) : <li className="td-rehearsal-empty">{zh ? '暂无明显优势' : 'NO CLEAR ADVANTAGE'}</li>}</ul></div>
+    <div><small>{zh ? '当前案件 · 风险' : 'CASE READ · RISKS'}</small><ul>{feedback.risks.length ? feedback.risks.map(renderItem) : <li className="td-rehearsal-empty">{zh ? '暂无暴露风险' : 'NO EXPOSED RISK'}</li>}</ul></div>
   </section>;
 }
 

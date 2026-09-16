@@ -807,6 +807,7 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-rehearsal-feedback ul { display: grid; gap: 6px; margin: 7px 0 0; padding: 0; list-style: none; }
 .td-rehearsal-feedback li { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .td-rehearsal-feedback li > span { font: 900 14px ui-monospace,monospace; }
+.td-rehearsal-empty { color: rgba(219,239,244,.34); font: 7px ui-monospace,monospace; }
 .td-rehearsal-feedback li div { display: grid; min-width: 0; }
 .td-rehearsal-feedback li strong { overflow: hidden; color: rgba(235,246,249,.72); font: 800 8px ui-monospace,monospace; text-overflow: ellipsis; white-space: nowrap; }
 .td-rehearsal-feedback li small { color: rgba(219,239,244,.34); font-size: 6px; letter-spacing: .03em; }
