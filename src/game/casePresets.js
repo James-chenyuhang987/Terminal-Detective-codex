@@ -115,6 +115,34 @@ export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD, lang = 
   return { score: pct, color, advice, ratios };
 }
 
+const ATTR_LABEL_EN = {
+  logic_power: 'Logic',
+  hack_level: 'Hacking',
+  observation_focus: 'Observation',
+  confusion_resistance: 'Anti-Chaos',
+  ap_cost_discount: 'AP Efficiency',
+};
+
+export function getCaseMatchFeedback(agents, caseConfig = CASE_NEON_BLOOD, lang = 'zh') {
+  const match = calcCaseMatchScore(agents, caseConfig, lang);
+  const entries = Object.entries(caseConfig.weights).map(([key, weight]) => ({
+    key,
+    weight,
+    ratio: match.ratios[key] || 0,
+    percent: Math.round((match.ratios[key] || 0) * 100),
+    label: ATTR_LABEL[key] || key,
+    labelEn: ATTR_LABEL_EN[key] || key,
+    owner: ATTR_OWNER[key] || 'TACTICAL',
+    ownerEn: ATTR_OWNER[key] || 'TACTICAL',
+  })).sort((a, b) => (b.ratio * b.weight) - (a.ratio * a.weight));
+  const strengths = entries.filter(item => item.ratio >= 0.62).slice(0, 2);
+  const risks = [...entries].sort((a, b) => a.ratio - b.ratio).filter(item => item.ratio < 0.72).slice(0, 2);
+  if (!strengths.length && entries[0]) strengths.push(entries[0]);
+  const weakest = entries[entries.length - 1];
+  if (!risks.length && weakest) risks.push(weakest);
+  return { score: match.score, strengths: strengths.map(item => ({ ...item, kind: 'strength' })), risks: risks.map(item => ({ ...item, kind: 'risk' })) };
+}
+
 // ── 预设方案 ────────────────────────────────────────────────────────────────
 // specs[i] 只允许该探员 specialty_slots 内的键
 // NEXUS: logic_power / confusion_resistance

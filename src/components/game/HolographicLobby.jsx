@@ -16,7 +16,7 @@ import AgentDossierPanel from '@/components/game/AgentDossierPanel';
 import PresetChips from '@/components/game/PresetChips';
 import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
-import { calcCaseMatchScore, getCaseMatchConfig } from '@/game/casePresets';
+import { calcCaseMatchScore, getCaseMatchConfig, getCaseMatchFeedback } from '@/game/casePresets';
 import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
 import {
   getActiveSupportAgent, getOwnedAgents, prepareCoreAgentReplacement,
@@ -27,6 +27,7 @@ import CommandPlanPanel from '@/components/game/lobby/CommandPlanPanel';
 import ParticleCanvas from '@/components/game/lobby/ParticleCanvas';
 import CoreAgentMarket from '@/components/game/lobby/CoreAgentMarket';
 import LobbyGuideModal from '@/components/game/lobby/LobbyGuideModal';
+import TacticalRehearsalModal from '@/components/game/lobby/TacticalRehearsalModal';
 import { CASE_ENERGY_COST } from '@/game/playerProfile';
 
 function getDisplayLore(agentDef, slot, lang) {
@@ -573,7 +574,7 @@ function StatusBar({ onBack, onOpenSettings, profile, readOnly, lighting }) {
 }
 
 // ── Deploy Controls ───────────────────────────────────────────────────────────
-function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerRef, synergyOver, synergy, onApplyPreset, disabled = false }) {
+function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerRef, onTacticalDesk, tacticalDeskTriggerRef, synergyOver, synergy, onApplyPreset, disabled = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [deploying, setDeploying] = useState(false);
@@ -585,7 +586,8 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerR
   const setToolsToggleRef = useCallback(node => {
     toolsToggleRef.current = node;
     if (tutorialTriggerRef) tutorialTriggerRef.current = node;
-  }, [tutorialTriggerRef]);
+    if (tacticalDeskTriggerRef) tacticalDeskTriggerRef.current = node;
+  }, [tacticalDeskTriggerRef, tutorialTriggerRef]);
 
   // Flash animation whenever synergy changes
   useEffect(() => {
@@ -613,6 +615,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerR
   const barPct = Math.min(synergy, 100);
 
   const btns = [
+    { label: zh ? '战术试演' : 'TACTICAL REHEARSAL', icon: '♢', onClick: () => { onTacticalDesk(); setToolsOpen(false); }, color: '#c5a66f' },
     { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#709f9a', disabled: saving || disabled },
     { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#9b9aae' },
     { label: zh ? '大厅教程' : 'HALL GUIDE', icon: '❓', onClick: () => { onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)' },
@@ -702,6 +705,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showTacticalDesk, setShowTacticalDesk] = useState(false);
   const [saveNotice, setSaveNotice] = useState(null);
   const noticeTimerRef = useRef(null);
   const {
@@ -717,6 +721,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   const corePurchaseBusyRef = useRef(false);
   const coreMarketTriggerRef = useRef(null);
   const tutorialTriggerRef = useRef(null);
+  const tacticalDeskTriggerRef = useRef(null);
   const [lightingNow, setLightingNow] = useState(() => new Date());
   const lighting = getLobbyLighting(lightingNow);
 
@@ -762,6 +767,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   const [showSequence, setShowSequence] = useState(false);
   const matchConfig = getCaseMatchConfig(targetCase?.case_id);
   const matchDetails = calcCaseMatchScore(agents, matchConfig, lang);
+  const matchFeedback = getCaseMatchFeedback(agents, matchConfig, lang);
   const matchForecast = matchDetails.score;
   const caseTitle = targetCase
     ? (lang === 'zh' ? targetCase.title : targetCase.en?.title || targetCase.title)
@@ -779,6 +785,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   }, []);
 
   const closeTutorial = useCallback(() => setShowTutorial(false), []);
+  const closeTacticalDesk = useCallback(() => setShowTacticalDesk(false), []);
 
   const prepareDeploy = async () => {
     const config = currentConfig();
@@ -872,6 +879,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
       {showTutorial && <LobbyGuideModal targetCase={targetCase} onClose={closeTutorial} restoreRef={tutorialTriggerRef} />}
+      {showTacticalDesk && <TacticalRehearsalModal agents={agents} agentDefs={agentDefs} feedback={matchFeedback} synergyCount={synergy.active.length} onClose={closeTacticalDesk} restoreRef={tacticalDeskTriggerRef} />}
 
       {saveNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${saveNotice.type}`}>
         <span>{saveNotice.type === 'error' ? '!' : '✓'}</span>
@@ -1041,6 +1049,8 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
         synergyOver={synergy.overload}
         onTutorial={() => setShowTutorial(true)}
         tutorialTriggerRef={tutorialTriggerRef}
+        onTacticalDesk={() => setShowTacticalDesk(true)}
+        tacticalDeskTriggerRef={tacticalDeskTriggerRef}
         disabled={readOnly}
       />
     </div>
