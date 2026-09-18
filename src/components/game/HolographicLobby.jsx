@@ -4,7 +4,6 @@ import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { useSettings } from '@/lib/settings.jsx';
-import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import { getLevelFromXP, getXPToNextLevel } from '@/game/agentProgression';
 import SkillTreePanel from '@/components/game/SkillTreePanel';
@@ -17,15 +16,18 @@ import AgentDossierPanel from '@/components/game/AgentDossierPanel';
 import PresetChips from '@/components/game/PresetChips';
 import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
-import { calcCaseMatchScore, getCaseMatchConfig } from '@/game/casePresets';
+import { calcCaseMatchScore, getCaseMatchConfig, getCaseMatchFeedback } from '@/game/casePresets';
 import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
 import {
-  getActiveSupportAgent, getAgentById, getCoreAgentsForSlot, getOwnedAgentIds, getOwnedAgents,
-  prepareCoreAgentReplacement,
+  getActiveSupportAgent, getOwnedAgents, prepareCoreAgentReplacement,
 } from '@/game/agentMarket';
 import { getLobbyLighting } from '@/game/lobbyLighting';
 import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
 import CommandPlanPanel from '@/components/game/lobby/CommandPlanPanel';
+import ParticleCanvas from '@/components/game/lobby/ParticleCanvas';
+import CoreAgentMarket from '@/components/game/lobby/CoreAgentMarket';
+import LobbyGuideModal from '@/components/game/lobby/LobbyGuideModal';
+import TacticalRehearsalModal from '@/components/game/lobby/TacticalRehearsalModal';
 import { CASE_ENERGY_COST } from '@/game/playerProfile';
 
 function getDisplayLore(agentDef, slot, lang) {
@@ -77,187 +79,6 @@ function LobbyAtmosphere() {
   </div>;
 }
 
-// ── Particle Canvas — neural network lines ────────────────────────────────────
-function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, accentColor: _accentColor, hasTarget = false }) {
-  const { settings } = useSettings();
-  const canvasRef = useRef(null);
-  const particles = useRef([]);
-  const frameRef = useRef(null);
-  const { motionEnabled } = usePresentationMotion();
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !motionEnabled || !settings.particles) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const startedAt = performance.now();
-
-    const resize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-
-    // Spawn floating particles
-    particles.current = Array.from({ length: 36 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: (Math.random() - 0.5) * 0.4,
-      r: 1 + Math.random() * 2,
-      opacity: 0.2 + Math.random() * 0.5,
-      color: noirColor(agentDefs[Math.floor(Math.random() * 3)].color),
-    }));
-
-    // Agent node positions (roughly center positions of holo figures)
-    const getNodePositions = () => {
-      const w = canvas.width, h = canvas.height;
-      return [
-        { x: w * 0.25, y: h * 0.55, color: noirColor(agentDefs[0].color) },
-        { x: w * 0.5,  y: h * 0.45, color: noirColor(agentDefs[1].color) },
-        { x: w * 0.75, y: h * 0.55, color: noirColor(agentDefs[2].color) },
-      ];
-    };
-
-    const draw = () => {
-      const w = canvas.width, h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      const nodes = getNodePositions();
-      const commandNode = { x: w * 0.5, y: h * 0.9, color: '#c5a66f' };
-      const targetNode = { x: w * 0.5, y: h * 0.16, color: hasTarget ? '#dda29a' : '#709f9a' };
-
-      // The player is a real fourth node in the command network. Target-case
-      // links are public tactical telemetry only; no hidden case data is used.
-      nodes.forEach((node, index) => {
-        const selected = index === selectedIdx;
-        const commandGradient = ctx.createLinearGradient(commandNode.x, commandNode.y, node.x, node.y);
-        commandGradient.addColorStop(0, commandNode.color + (selected ? 'a0' : '45'));
-        commandGradient.addColorStop(1, node.color + (selected ? 'a0' : '45'));
-        ctx.beginPath();
-        ctx.moveTo(commandNode.x, commandNode.y);
-        ctx.lineTo(node.x, node.y);
-        ctx.strokeStyle = commandGradient;
-        ctx.lineWidth = selected ? 1.8 : 0.75;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(node.x, node.y);
-        ctx.lineTo(targetNode.x, targetNode.y);
-        ctx.strokeStyle = node.color + (selected ? '6f' : '28');
-        ctx.lineWidth = selected ? 1.2 : 0.6;
-        ctx.setLineDash([4, 7]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      });
-
-      const pulseT = (Date.now() % 1900) / 1900;
-      [commandNode, targetNode].forEach((node, index) => {
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, 8 + Math.sin(pulseT * Math.PI * 2 + index) * 2, 0, Math.PI * 2);
-        ctx.strokeStyle = node.color + '80';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      });
-
-      // Draw inter-agent connection lines
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i], b = nodes[j];
-          const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-          grad.addColorStop(0, a.color + '60');
-          grad.addColorStop(1, b.color + '60');
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = (i === selectedIdx || j === selectedIdx) ? 1.5 : 0.7;
-          ctx.setLineDash([6, 8]);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Animated dot traveling along the line
-          const t = (Date.now() % 3000) / 3000;
-          const tx = a.x + (b.x - a.x) * t;
-          const ty = a.y + (b.y - a.y) * t;
-          ctx.beginPath();
-          ctx.arc(tx, ty, 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = noirColor(a.color);
-          ctx.shadowBlur = 8;
-          ctx.shadowColor = noirColor(a.color);
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
-      }
-
-      // Draw particles + connect nearby ones
-      particles.current.forEach(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < 0) p.x = w;
-        if (p.x > w) p.x = 0;
-        if (p.y < 0) p.y = h;
-        if (p.y > h) p.y = 0;
-
-        // Connect to nearest agent node
-        nodes.forEach(n => {
-          const dx = p.x - n.x, dy = p.y - n.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 140) {
-            const alpha = (1 - dist / 140) * 0.35;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(n.x, n.y);
-            ctx.strokeStyle = n.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        });
-
-        // Particle dot
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = p.color + Math.floor(p.opacity * 200).toString(16).padStart(2, '0');
-        ctx.fill();
-      });
-
-      // Selected agent halo
-      const selNode = nodes[selectedIdx];
-      if (selNode) {
-        const t = (Date.now() % 2000) / 2000;
-        const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
-        ctx.beginPath();
-        ctx.arc(selNode.x, selNode.y, 55 + pulse * 15, 0, Math.PI * 2);
-        ctx.strokeStyle = selNode.color + '30';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(selNode.x, selNode.y, 40 + pulse * 8, 0, Math.PI * 2);
-        ctx.strokeStyle = selNode.color + '50';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      if (performance.now() - startedAt < 2400) frameRef.current = requestAnimationFrame(draw);
-    };
-
-    frameRef.current = requestAnimationFrame(draw);
-    return () => {
-      window.removeEventListener('resize', resize);
-      cancelAnimationFrame(frameRef.current);
-    };
-  }, [agentDefs, hasTarget, selectedIdx, settings.particles, motionEnabled]);
-
-  if (!settings.particles || !motionEnabled) return null;
-
-  return (
-    <canvas ref={canvasRef} style={{
-      position: 'absolute', inset: 0, width: '100%', height: '100%',
-      pointerEvents: 'none', zIndex: 1,
-    }} />
-  );
-}
-
 // ── Holographic Agent Figure ──────────────────────────────────────────────────
 function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
   const { lang } = useLang();
@@ -289,7 +110,7 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
       )}
 
       {/* SVG figure */}
-      <div style={{
+      <div className="td-holo-avatar" style={{
         width: 76, height: 124,
         opacity: isSelected ? 1 : 0.72,
         transition: 'opacity 0.25s ease', position: 'relative', overflow: 'hidden',
@@ -320,7 +141,7 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
       </div>
 
       {/* Name plate */}
-      <div style={{ marginTop: 8, textAlign: 'center', fontFamily: 'monospace' }}>
+      <div className="td-holo-nameplate" style={{ marginTop: 8, textAlign: 'center', fontFamily: 'monospace' }}>
         <div style={{
           fontSize: '0.62rem', fontWeight: 900, color: noirColor(agentDef.color),
           letterSpacing: '0.08em', textShadow: 'none',
@@ -492,7 +313,7 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
             </button>
           );
         })}
-        <button type="button" onClick={() => onOpenCoreMarket?.(selectedIdx)} style={{
+        <button type="button" onClick={event => onOpenCoreMarket?.(selectedIdx, event.currentTarget)} style={{
           width: 'calc(100% - 20px)', margin: '8px 10px 10px', minHeight: 34, borderRadius: 8,
           border: '1px solid rgba(197, 166, 111,.48)', background: 'rgba(197, 166, 111,.08)',
           color: '#e1d0ac', fontFamily: 'monospace', fontSize: '.5rem', fontWeight: 900, cursor: 'pointer',
@@ -517,6 +338,8 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
 // ── Center: Holographic Stage ─────────────────────────────────────────────────
 function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive, targetCase, activeSupport, supportCount, commanderName }) {
   const { lang } = useLang();
+  const activeIdx = agentDefs[selectedIdx] ? selectedIdx : 0;
+  const activeDef = agentDefs[activeIdx];
   const lvls = agentDefs.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
 
   return (
@@ -531,11 +354,11 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
       }}/>
 
       {/* Particle network canvas */}
-      <ParticleCanvas agents={agents} agentDefs={agentDefs} selectedIdx={selectedIdx} accentColor={accentColor} hasTarget={Boolean(targetCase)} />
+      <ParticleCanvas agentDefs={agentDefs} selectedIdx={activeIdx} hasTarget={Boolean(targetCase)} />
 
       <div className="td-stage-focus">
         <span>{targetCase ? 'MISSION COMMAND UPLINK' : 'AGENT CONFIGURATION'}</span>
-        <strong style={{ color: noirColor(agentDefs[selectedIdx].color) }}><Icon name={agentDefs[selectedIdx].icon} /> {agentDefs[selectedIdx].id}</strong>
+        <strong style={{ color: noirColor(activeDef.color) }}><Icon name={activeDef.icon} /> {activeDef.id}</strong>
         <small>{synergy.active.length
           ? (lang === 'zh' ? `${synergy.active.length} 项协同已激活` : `${synergy.active.length} SYNERGIES ACTIVE`)
           : (lang === 'zh' ? '选择探员并调整专长' : 'SELECT AN AGENT AND TUNE SPECIALTIES')}</small>
@@ -568,7 +391,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
       </div>
 
       {/* Platform ellipse */}
-      <div style={{ position: 'absolute', bottom: 58, left: '10%', right: '10%', zIndex: 2 }}>
+      <div className="td-holo-platform" style={{ position: 'absolute', bottom: 58, left: '10%', right: '10%', zIndex: 2 }}>
         <svg viewBox="0 0 400 50" width="100%" style={{ overflow: 'visible' }}>
           <defs>
             <linearGradient id="plat-g" x1="0" y1="0" x2="0" y2="1">
@@ -751,7 +574,7 @@ function StatusBar({ onBack, onOpenSettings, profile, readOnly, lighting }) {
 }
 
 // ── Deploy Controls ───────────────────────────────────────────────────────────
-function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, synergy, onApplyPreset, disabled = false }) {
+function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerRef, onTacticalDesk, tacticalDeskTriggerRef, synergyOver, synergy, onApplyPreset, disabled = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [deploying, setDeploying] = useState(false);
@@ -760,6 +583,11 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
   const [toolsOpen, setToolsOpen] = useState(false);
   const prevSynergy = useRef(synergy);
   const toolsToggleRef = useRef(null);
+  const setToolsToggleRef = useCallback(node => {
+    toolsToggleRef.current = node;
+    if (tutorialTriggerRef) tutorialTriggerRef.current = node;
+    if (tacticalDeskTriggerRef) tacticalDeskTriggerRef.current = node;
+  }, [tacticalDeskTriggerRef, tutorialTriggerRef]);
 
   // Flash animation whenever synergy changes
   useEffect(() => {
@@ -787,6 +615,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
   const barPct = Math.min(synergy, 100);
 
   const btns = [
+    { label: zh ? '战术试演' : 'TACTICAL REHEARSAL', icon: '♢', onClick: () => { onTacticalDesk(); setToolsOpen(false); }, color: '#c5a66f' },
     { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#709f9a', disabled: saving || disabled },
     { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#9b9aae' },
     { label: zh ? '大厅教程' : 'HALL GUIDE', icon: '❓', onClick: () => { onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)' },
@@ -800,7 +629,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
       flexShrink: 0, transition: 'background 0.4s, border-color 0.4s',
     }}>
       <div className="td-lobby-tools-wrap">
-        <button ref={toolsToggleRef} className="td-lobby-tools-toggle" type="button" aria-label={zh ? '编队工具' : 'Squad tools'} aria-controls="lobby-tools" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
+        <button ref={setToolsToggleRef} className="td-lobby-tools-toggle" type="button" aria-label={zh ? '编队工具' : 'Squad tools'} aria-controls="lobby-tools" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
           <span>☰</span><span>{zh ? '编队工具' : 'SQUAD TOOLS'}</span><small>{toolsOpen ? (zh ? '收起' : 'CLOSE') : (zh ? '预设 / 保存' : 'PRESETS / SAVE')}</small>
         </button>
         {toolsOpen && <div id="lobby-tools" className="td-lobby-tools-popover td-scroll-region" onKeyDown={event => {
@@ -810,7 +639,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
             toolsToggleRef.current?.focus();
           }
         }}>
-          <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: noirColor(button.color), borderColor: `${noirColor(button.color)}45`, background: `${noirColor(button.color)}0d` }}><span><Icon name={button.icon} /></span>{button.label}</button>)}</div>
+          <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} type="button" onClick={button.onClick} disabled={button.disabled} style={{ color: noirColor(button.color), borderColor: `${noirColor(button.color)}45`, background: `${noirColor(button.color)}0d` }}><span><Icon name={button.icon} /></span>{button.label}</button>)}</div>
           <PresetChips onApply={preset => { onApplyPreset(preset); setToolsOpen(false); }} />
         </div>}
       </div>
@@ -870,94 +699,13 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, synergyOver, syn
   );
 }
 
-const CORE_ATTRIBUTE_LABELS = Object.freeze({
-  logic_power: ['逻辑', 'LOGIC'], observation_focus: ['观察', 'OBSERVATION'],
-  confusion_resistance: ['抗干扰', 'ANTI-CHAOS'], ap_cost_discount: ['AP 折扣', 'AP DISCOUNT'],
-  hack_level: ['黑客', 'HACK'],
-});
-
-function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose }) {
-  const { lang } = useLang();
-  const zh = lang === 'zh';
-  const [pendingId, setPendingId] = useState(null);
-  const owned = new Set(getOwnedAgentIds(profile));
-  const candidates = getCoreAgentsForSlot(slot);
-  const currentAgent = getAgentById(currentId) || candidates[0];
-  const pendingAgent = candidates.find(agent => agent.id === pendingId) || null;
-  const slotNames = zh ? ['调查核心席', '法证核心席', '技术核心席'] : ['INVESTIGATION CORE', 'FORENSIC CORE', 'TECHNICAL CORE'];
-
-  useEffect(() => { setPendingId(null); }, [currentId, slot]);
-  useEffect(() => {
-    const onKeyDown = event => {
-      if (event.key === 'Escape' && !busy) onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [busy, onClose]);
-
-  const bonusTags = agent => Object.entries(agent?.attribute_bonus || {}).map(([key, value]) => {
-    const label = CORE_ATTRIBUTE_LABELS[key]?.[zh ? 0 : 1] || key;
-    return `${label} +${value}${key === 'ap_cost_discount' ? '%' : ''}`;
-  });
-  const pendingOwned = pendingAgent ? owned.has(pendingAgent.id) : false;
-  const diamonds = Math.max(0, Number(profile?.diamonds) || 0);
-  const affordable = !pendingAgent || pendingOwned || diamonds >= pendingAgent.cost;
-
-  return <div role="dialog" aria-modal="true" aria-label={slotNames[slot]} onClick={onClose} style={{
-    position: 'fixed', inset: 0, zIndex: 120, display: 'grid', placeItems: 'center', padding: 18,
-    background: 'rgba(0,3,10,.84)', backdropFilter: 'blur(10px)',
-  }}>
-    <section onClick={event => event.stopPropagation()} style={{
-      width: 'min(920px, 96vw)', maxHeight: '88dvh', overflow: 'auto', padding: 18, borderRadius: 18,
-      border: '1px solid rgba(197, 166, 111,.48)', background: 'linear-gradient(145deg,rgba(8,18,34,.98),rgba(2,7,18,.98))',
-      boxShadow: '0 28px 80px rgba(0,0,0,.65),0 0 38px rgba(197, 166, 111,.12)',
-    }}>
-      <header style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div><small style={{ color: '#e1d0ac', letterSpacing: '.14em' }}>♛ CORE CONTRACT VAULT</small><h2 style={{ margin: '5px 0 0', color: '#e1d0ac', fontSize: '1rem' }}>{slotNames[slot]}</h2></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ color: '#a5c8c0', font: '800 .62rem monospace' }}><IconText text={"💎 "} />{diamonds.toLocaleString('en-US')}</span><button type="button" disabled={busy} onClick={onClose} aria-label={zh ? '关闭核心探员契约库' : 'Close core contract vault'} title={zh ? '关闭' : 'Close'} style={{ width: 44, height: 44, borderRadius: 10, border: '1px solid rgba(112, 159, 154,.35)', background: 'rgba(112, 159, 154,.08)', color: '#a5c8c0', cursor: busy ? 'wait' : 'pointer', opacity: busy ? .45 : 1 }}>×</button></div>
-      </header>
-      <p style={{ margin: '0 0 15px', color: 'rgba(235,247,255,.5)', fontSize: '.58rem', lineHeight: 1.7 }}>{zh
-        ? '核心探员价格高于普通支援。签约后永久拥有，可替换当前席位；原核心不会消失，经验、技能树与专长进度继续由该职业席位继承。'
-        : 'Core operatives cost more than support recruits. Once owned, they can replace this slot at any time; its role XP, skill tree and specialties are preserved.'}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 10 }}>
-        {candidates.map(agent => {
-          const copy = agent[lang] || agent.zh;
-          const isOwned = owned.has(agent.id);
-          const selected = currentId === agent.id;
-          const isPending = pendingId === agent.id;
-          return <article key={agent.id} style={{ position: 'relative', padding: 13, borderRadius: 13, border: `1px solid ${selected || isPending ? noirColor(agent.color) : noirColor(agent.color) + '45'}`, background: selected ? `${noirColor(agent.color)}18` : isPending ? `${noirColor(agent.color)}12` : `${noirColor(agent.color)}09`, boxShadow: selected || isPending ? `0 0 22px ${noirColor(agent.color)}22` : 'none', transition: 'border-color .18s, background .18s, transform .18s', transform: isPending ? 'translateY(-2px)' : 'none' }}>
-            <span style={{ position: 'absolute', top: 9, right: 9, padding: '2px 6px', borderRadius: 999, border: `1px solid ${selected ? noirColor(agent.color) + '75' : 'rgba(255,255,255,.12)'}`, color: selected ? noirColor(agent.color) : isOwned ? '#8aaa91' : '#e1d0ac', background: 'rgba(0,5,13,.72)', font: '800 .4rem monospace' }}>{selected ? (zh ? '当前席位' : 'ACTIVE') : isOwned ? (zh ? '已拥有' : 'OWNED') : (zh ? '待签约' : 'CONTRACT')}</span>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ width: 48, height: 48, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 24, border: `1px solid ${noirColor(agent.color)}80`, background: `${noirColor(agent.color)}18` }}><Icon name={agent.icon} /></span><div><strong style={{ display: 'block', color: noirColor(agent.color) }}>{agent.id}</strong><small style={{ color: 'rgba(255,255,255,.45)' }}>{copy.role} · {agent.tier}</small></div></div>
-            <div style={{ marginTop: 10, color: 'rgba(240,248,255,.62)', fontSize: '.55rem', lineHeight: 1.6 }}>{copy.ability}</div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 9 }}>{bonusTags(agent).map(tag => <span key={tag} style={{ padding: '3px 6px', borderRadius: 5, border: `1px solid ${noirColor(agent.color)}35`, background: `${noirColor(agent.color)}0b`, color: `${noirColor(agent.color)}dd`, font: '700 .42rem monospace' }}>{tag}</span>)}</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}><span style={{ color: '#e1d0ac', fontSize: '.58rem', fontWeight: 900 }}>POWER {agent.power}</span>{!isOwned && <span style={{ color: '#a5c8c0', font: '800 .5rem monospace' }}><IconText text={"💎 "} />{agent.cost}</span>}<button type="button" disabled={busy || selected} onClick={() => setPendingId(agent.id)} style={{ marginLeft: 'auto', minHeight: 38, padding: '7px 11px', borderRadius: 8, border: `1px solid ${noirColor(agent.color)}90`, background: `${noirColor(agent.color)}18`, color: noirColor(agent.color), fontFamily: 'monospace', fontSize: '.52rem', fontWeight: 900, cursor: busy ? 'wait' : 'pointer', opacity: busy || selected ? .48 : 1 }}>
-              {selected ? (zh ? '当前出战' : 'ACTIVE') : isPending ? (zh ? '已选中' : 'SELECTED') : (zh ? '预览替换' : 'PREVIEW')}
-            </button></div>
-          </article>;
-        })}
-      </div>
-      {pendingAgent && <div aria-live="polite" style={{ marginTop: 14, padding: 14, borderRadius: 13, border: `1px solid ${noirColor(pendingAgent.color)}55`, background: `linear-gradient(135deg,${noirColor(pendingAgent.color)}10,rgba(255,255,255,.02))` }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 12 }}>
-          <div><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '当前核心' : 'CURRENT CORE'}</small><strong style={{ display: 'block', color: noirColor(currentAgent.color), marginTop: 3 }}><Icon name={currentAgent.icon} /> {currentAgent.id}</strong><span style={{ color: 'rgba(255,255,255,.35)', font: '.48rem monospace' }}>POWER {currentAgent.power}</span></div>
-          <span style={{ color: '#e1d0ac', fontSize: '1.2rem', textShadow: 'none' }}>→</span>
-          <div style={{ textAlign: 'right' }}><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '替换目标' : 'REPLACEMENT'}</small><strong style={{ display: 'block', color: noirColor(pendingAgent.color), marginTop: 3 }}><Icon name={pendingAgent.icon} /> {pendingAgent.id}</strong><span style={{ color: '#8aaa91', font: '.48rem monospace' }}>POWER {pendingAgent.power} · {pendingAgent.power >= currentAgent.power ? '+' : ''}{pendingAgent.power - currentAgent.power}</span></div>
-        </div>
-        <p style={{ margin: '11px 0', color: 'rgba(240,248,255,.56)', font: '.52rem/1.65 monospace' }}>{zh
-          ? '确认后才会写入云端。原核心探员不会消失；该席位的等级、技能树、专长与行动优先级全部保留。'
-          : 'The replacement is saved to the cloud only after confirmation. The previous core remains owned, and this slot keeps its level, skills, specialties and priorities.'}</p>
-        {!affordable && <div style={{ marginBottom: 9, color: '#dda29a', font: '800 .52rem monospace' }}><IconText text={"⚠ "} />{zh ? `钻石不足，还差 ${pendingAgent.cost - diamonds}` : `NOT ENOUGH DIAMONDS · ${pendingAgent.cost - diamonds} MORE REQUIRED`}</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button type="button" disabled={busy} onClick={() => setPendingId(null)} style={{ minHeight: 42, padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.04)', color: 'rgba(255,255,255,.58)', cursor: busy ? 'wait' : 'pointer' }}>{zh ? '取消' : 'CANCEL'}</button><button type="button" disabled={busy || !affordable} onClick={() => onConfirm(pendingAgent, !pendingOwned)} style={{ minHeight: 42, minWidth: 150, padding: '8px 14px', borderRadius: 8, border: `1px solid ${noirColor(pendingAgent.color)}90`, background: `${noirColor(pendingAgent.color)}18`, color: noirColor(pendingAgent.color), font: '900 .56rem monospace', cursor: busy ? 'wait' : !affordable ? 'not-allowed' : 'pointer', opacity: busy || !affordable ? .48 : 1 }}><IconText text={busy ? (zh ? '正在同步…' : 'SYNCING…') : pendingOwned ? (zh ? '确认替换并保存' : 'CONFIRM & SAVE') : (zh ? `💎 ${pendingAgent.cost} · 签约并替换` : `💎 ${pendingAgent.cost} · RECRUIT & REPLACE`)} /></button></div>
-      </div>}
-    </section>
-  </div>;
-}
-
 // ── Main HolographicLobby ─────────────────────────────────────────────────────
 export default function HolographicLobby({ profile, readOnly = false, targetCase = null, onDeploy, onBack, onTeamSave, onSkillLoadout, onAgentPurchase }) {
   const { lang } = useLang();
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showTacticalDesk, setShowTacticalDesk] = useState(false);
   const [saveNotice, setSaveNotice] = useState(null);
   const noticeTimerRef = useRef(null);
   const {
@@ -971,6 +719,9 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   const [coreMarketSlot, setCoreMarketSlot] = useState(null);
   const [corePurchaseBusy, setCorePurchaseBusy] = useState(false);
   const corePurchaseBusyRef = useRef(false);
+  const coreMarketTriggerRef = useRef(null);
+  const tutorialTriggerRef = useRef(null);
+  const tacticalDeskTriggerRef = useRef(null);
   const [lightingNow, setLightingNow] = useState(() => new Date());
   const lighting = getLobbyLighting(lightingNow);
 
@@ -1016,11 +767,25 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   const [showSequence, setShowSequence] = useState(false);
   const matchConfig = getCaseMatchConfig(targetCase?.case_id);
   const matchDetails = calcCaseMatchScore(agents, matchConfig, lang);
+  const matchFeedback = getCaseMatchFeedback(agents, matchConfig, lang);
   const matchForecast = matchDetails.score;
   const caseTitle = targetCase
     ? (lang === 'zh' ? targetCase.title : targetCase.en?.title || targetCase.title)
     : (lang === 'zh' ? '通用编组' : 'GENERAL FORMATION');
   const threats = targetCase ? (lang === 'zh' ? matchConfig.threats : matchConfig.threatsEn) : [];
+
+  const openCoreMarket = useCallback((slot, trigger) => {
+    if (readOnly) return;
+    coreMarketTriggerRef.current = trigger || document.activeElement;
+    setCoreMarketSlot(slot);
+  }, [readOnly]);
+
+  const closeCoreMarket = useCallback(() => {
+    if (!corePurchaseBusyRef.current) setCoreMarketSlot(null);
+  }, []);
+
+  const closeTutorial = useCallback(() => setShowTutorial(false), []);
+  const closeTacticalDesk = useCallback(() => setShowTacticalDesk(false), []);
 
   const prepareDeploy = async () => {
     const config = currentConfig();
@@ -1113,38 +878,8 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
 
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
-      {showTutorial && (
-        <div onClick={() => setShowTutorial(false)} style={{
-          position: 'fixed', inset: 0, zIndex: 80, display: 'grid', placeItems: 'center',
-          padding: 20, background: 'rgba(0,4,12,.82)', backdropFilter: 'blur(8px)',
-        }}>
-          <div className="td-lobby-guide td-scroll-region" onClick={event => event.stopPropagation()} role="dialog" aria-label={lang === 'zh' ? '探员大厅快速指南' : 'Agent hall quick guide'} aria-modal="true" style={{
-            width: 'min(560px, 94vw)', padding: 24, borderRadius: 16,
-            border: '1px solid rgba(112, 159, 154,.45)', background: '#101e2a',
-            boxShadow: '0 0 45px rgba(112, 159, 154,.18)', fontFamily: 'monospace',
-          }}>
-            <div style={{ color: '#a5c8c0', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '探员大厅快速指南' : 'AGENT HALL QUICK GUIDE'}</div>
-            <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
-              {(lang === 'zh' ? [
-                '查看案件简报，再选择主探员并分配专长点数。',
-                '调整每名探员的行动优先级，决定其执行倾向。',
-                '在指挥方案台选择一项指挥学说和应急预案。',
-                targetCase ? '保存方案后部署，将直接开始目标案件。' : '保存方案后部署，将进入案件簿选择目标。',
-              ] : [
-                'Review the briefing, then select a primary agent and allocate specialty points.',
-                'Set each agent’s action priorities to define their execution style.',
-                'Choose one command doctrine and one contingency plan.',
-                targetCase ? 'Save and deploy to begin the target case directly.' : 'Save and deploy to choose a target in the case archive.',
-              ]).map(item => <li key={item}>{item}</li>)}
-            </ol>
-            <button onClick={() => setShowTutorial(false)} style={{
-              width: '100%', padding: 10, borderRadius: 8, cursor: 'pointer',
-              border: '1px solid #709f9a80', background: 'rgba(112, 159, 154,.12)', color: '#a5c8c0',
-              fontFamily: 'monospace', fontWeight: 900,
-            }}>{lang === 'zh' ? '明白了' : 'CONTINUE'}</button>
-          </div>
-        </div>
-      )}
+      {showTutorial && <LobbyGuideModal targetCase={targetCase} onClose={closeTutorial} restoreRef={tutorialTriggerRef} />}
+      {showTacticalDesk && <TacticalRehearsalModal agents={agents} agentDefs={agentDefs} feedback={matchFeedback} synergyCount={synergy.active.length} onClose={closeTacticalDesk} restoreRef={tacticalDeskTriggerRef} />}
 
       {saveNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${saveNotice.type}`}>
         <span>{saveNotice.type === 'error' ? '!' : '✓'}</span>
@@ -1194,7 +929,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           onSelect={setSelectedIdx} progression={progression}
           onPriorityChange={updatePriority}
           onHover={handleHover}
-          onOpenCoreMarket={slot => !readOnly && setCoreMarketSlot(slot)}
+          onOpenCoreMarket={openCoreMarket}
           mobileActive={mobileTab === 'formation'}
         />
         <HoloStage
@@ -1263,7 +998,8 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           slot={coreMarketSlot}
           currentId={coreAgentIds[coreMarketSlot]}
           busy={corePurchaseBusy}
-          onClose={() => !corePurchaseBusy && setCoreMarketSlot(null)}
+          onClose={closeCoreMarket}
+          restoreRef={coreMarketTriggerRef}
           onConfirm={commitCoreReplacement}
         />
       )}
@@ -1312,6 +1048,9 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
         synergy={Math.round(synergy.matchScore * 100)}
         synergyOver={synergy.overload}
         onTutorial={() => setShowTutorial(true)}
+        tutorialTriggerRef={tutorialTriggerRef}
+        onTacticalDesk={() => setShowTacticalDesk(true)}
+        tacticalDeskTriggerRef={tacticalDeskTriggerRef}
         disabled={readOnly}
       />
     </div>
