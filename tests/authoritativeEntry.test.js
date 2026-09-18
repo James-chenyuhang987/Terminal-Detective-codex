@@ -20,10 +20,10 @@ function harness({ activeRun = null, selectedCase = null, response, saved = rawC
   const state = { screen: 'HOME', run: null, strategy: null, selected: null, calls: [], narrative: null };
   const bindings = {
     ALL_CASES, selectedCase, activeRun, profile: { saved_team_config: saved }, settings: { storyMode: 'theater' }, lang: 'en',
-    teamIntentRef: { current: null }, caseStartRef: { current: false }, briefingRequestRef: { current: null }, briefedRunRef: { current: false }, preferredCaseId: null,
+    teamIntentRef: { current: null }, caseStartRef: { current: false }, briefingRequestRef: { current: null }, briefedRunRef: { current: false }, preferredCaseId: null, lobbyReturnScreen: 'HOME',
     setScreen: value => { state.screen = value; }, setAuthoritativeRun: value => { state.run = value; },
     setAgentStrategy: value => { state.strategy = value; }, setSelectedCase: value => { state.selected = value; },
-    setEntryNarrative: value => { state.narrative = value; }, setNarrativeError: () => {}, setPreferredCaseId: () => {}, setLobbyReturnScreen: () => {},
+    setEntryNarrative: value => { state.narrative = value; }, setNarrativeError: () => {}, setPreferredCaseId: () => {}, setLobbyReturnScreen: () => {}, setCaseSelectReturnScreen: () => {},
     loadInvestigationTerminal: async () => {}, loadCaseSelect: async () => {}, loadAgentLobby: async () => {},
     command: async (type, args) => { state.calls.push({ type, args }); return response ? response(type, args) : { profile: {}, active_run: serverRun, run: serverRun }; },
   };

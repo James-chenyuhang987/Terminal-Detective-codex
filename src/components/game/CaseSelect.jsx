@@ -13,18 +13,24 @@ const DIFFICULTY_CONFIG = {
 
 const CASE_COVER_ICONS = ['🏙️', '🔬', '🦋', '🧊', '🛰️', '🏛️', '🌊', '♾️'];
 
-export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId = null, profile, readOnly = false }) {
+export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => {}, onAbandonRun = null, returnToHome = false, preferredCaseId = null, profile, readOnly = false, activeRun = null, abandonBusy = false, abandonError = '' }) {
   const { lang, t } = useLang();
   const [hovered, setHovered] = useState(null);
   const [selected, setSelected] = useState(preferredCaseId);
   const [startingId, setStartingId] = useState(null);
   const [error, setError] = useState('');
+  const [runBlocked, setRunBlocked] = useState(Boolean(activeRun));
   const startingRef = useRef(false);
 
   useEffect(() => { setError(''); }, [readOnly]);
+  useEffect(() => { setRunBlocked(Boolean(activeRun)); }, [activeRun]);
 
   const handleStart = async (caseData) => {
     if (startingRef.current || readOnly) return;
+    if (runBlocked) {
+      setError(lang === 'zh' ? '当前调查仍在进行中。请继续当前调查，或先结束它再选择新的案件。' : 'An investigation is still in progress. Resume it or end it before choosing a new case.');
+      return;
+    }
     const energyCost = CASE_ENERGY_COST[caseData.difficulty] || 10;
     if ((profile?.energy || 0) < energyCost) {
       setError(lang === 'zh' ? `体力不足，需要 ${energyCost} 点体力。请返回侦探之家补给。` : `Not enough energy. This case requires ${energyCost}.`);
@@ -52,6 +58,15 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
     }
   };
 
+  const handleAbandon = async () => {
+    if (abandonBusy || !onAbandonRun) return;
+    const released = await onAbandonRun();
+    if (released) {
+      setRunBlocked(false);
+      setError('');
+    }
+  };
+
   // Get localised fields for a case
   const loc = (c, field) => (lang === 'en' && c.en && c.en[field] !== undefined) ? c.en[field] : c[field];
 
@@ -71,7 +86,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
         className="td-case-back td-ui-button td-button-ghost td-button-compact self-start text-xs opacity-70 hover:opacity-100 transition-opacity"
         style={{ color: '#709f9a', fontFamily: 'monospace' }}
       >
-        <IconText text={t.backToLobby} />
+        <IconText text={returnToHome ? t.backToHome : t.backToLobby} />
       </button>
 
       {/* Header */}
@@ -94,6 +109,21 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
         <div className="td-case-wallet"><span><Icon name="bolt" label={lang === 'zh' ? '体力' : 'Energy'} /> {profile?.energy || 0}</span><span><Icon name="coin" label={lang === 'zh' ? '金币' : 'Gold'} /> {(profile?.gold || 0).toLocaleString('en-US')}</span><span><Icon name="gem" label={lang === 'zh' ? '钻石' : 'Diamonds'} /> {(profile?.diamonds || 0).toLocaleString('en-US')}</span></div>
       </header>
 
+      {runBlocked && <section className="td-case-run-guard" role="alert" aria-label={lang === 'zh' ? '当前调查已暂存' : 'Investigation in progress'}>
+        <div>
+          <strong>{lang === 'zh' ? '当前调查已暂存' : 'INVESTIGATION IN PROGRESS'}</strong>
+          <p>{lang === 'zh' ? '新案件不会覆盖当前进度。继续原调查，或明确结束当前调查后再选择新的案件。' : 'A new case will not overwrite your saved progress. Resume the current investigation, or explicitly end it before selecting another case.'}</p>
+        </div>
+        <div className="td-case-run-guard-actions">
+          <button type="button" className="td-ui-button td-button-gold" onClick={onResume} disabled={abandonBusy || Boolean(startingId)}>
+            {lang === 'zh' ? '继续当前调查' : 'RESUME CURRENT CASE'}
+          </button>
+          <button type="button" className="td-ui-button td-button-danger" onClick={() => void handleAbandon()} disabled={abandonBusy || Boolean(startingId) || readOnly || !onAbandonRun}>
+            {abandonBusy ? (lang === 'zh' ? '正在结束…' : 'ENDING…') : (lang === 'zh' ? '结束并选择新案件' : 'END AND SELECT ANOTHER')}
+          </button>
+        </div>
+        {abandonError && <p className="td-case-run-guard-error">{abandonError}</p>}
+      </section>}
       {error && <div role="alert" className="td-status-banner is-error td-case-error">{error}</div>}
       <div className="td-case-content td-scroll-region" role="region" aria-label={t.caseArchiveTitle} tabIndex={0}>
       <div className="td-case-grid grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-4xl">
@@ -108,7 +138,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
           const energyCost = CASE_ENERGY_COST[c.difficulty] || 10;
           const firstClear = !profile?.solved_cases?.includes(c.case_id);
           const hasEnergy = (profile?.energy || 0) >= energyCost;
-          const canStart = !readOnly && hasEnergy;
+          const canStart = !readOnly && !runBlocked && hasEnergy;
           const isStarting = startingId !== null;
 
           return (
@@ -221,6 +251,8 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
                   ? t.loadingCase
                   : readOnly
                     ? (lang === 'zh' ? '等待档案恢复' : 'AWAITING PROFILE RECOVERY')
+                  : runBlocked
+                    ? (lang === 'zh' ? '请先处理当前调查' : 'RESOLVE CURRENT CASE FIRST')
                   : canStart
                     ? t.startCase
                     : (lang === 'zh' ? '体力不足' : 'LOW ENERGY')} />
@@ -228,10 +260,10 @@ export default function CaseSelect({ onSelect, onPlan, onBack, preferredCaseId =
               <button
                 type="button"
                 className="td-ui-button td-case-plan-button"
-                disabled={isStarting}
+                disabled={isStarting || runBlocked}
                 onClick={event => {
                   event.stopPropagation();
-                  onPlan?.(c.case_id);
+                  if (!runBlocked) onPlan?.(c.case_id);
                 }}
               >
                 <Icon name="compass" /> {lang === 'zh' ? '战术编组' : 'TACTICAL PLAN'}

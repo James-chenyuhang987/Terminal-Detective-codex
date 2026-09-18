@@ -39,7 +39,7 @@ function HomeModuleSkeleton({ lang }) {
   );
 }
 
-export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, onStartInvestigation = null, suspendedCase = null, onResume = () => {} }) {
+export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase, onRegister, onStartInvestigation = null, suspendedCase = null, onResume = () => {} }) {
   const { lang } = useLang();
   const { settings, updateSetting } = useSettings();
   const {
@@ -240,7 +240,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
 
       {/* Top bar */}
       <div className="td-home-topbar" style={{
-        position: 'relative', zIndex: 2,
+        position: 'relative', zIndex: 30,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
         padding: '12px 22px', borderBottom: '1px solid rgba(112, 159, 154,0.14)',
         background: 'linear-gradient(180deg, rgba(4,10,18,0.82), rgba(4,10,18,0.4))',
@@ -372,6 +372,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onRegister, o
                   border: '1px solid #c5a66f', background: 'rgba(197, 166, 111,0.22)',
                   color: '#e1d0ac', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
                 }}>{suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '开始调查' : 'START INVESTIGATION')}</button>
+                {onSelectCase && <button className="td-ui-button td-button-ghost td-button-compact" onClick={onSelectCase} style={{
+                  width: '100%', marginTop: 8, minHeight: 38, padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
+                  border: '1px solid rgba(197, 166, 111, .58)', background: 'rgba(197, 166, 111, .08)',
+                  color: '#d8c18a', fontFamily: 'monospace', fontWeight: 800, letterSpacing: '0.12em', fontSize: '0.68rem',
+                }}><Icon name="file" /> {suspendedCase ? (lang === 'zh' ? '选择其他案件' : 'SELECT ANOTHER CASE') : (lang === 'zh' ? '选择案件' : 'SELECT CASE')}</button>}
                 <button className="td-ui-button td-button-ghost td-button-compact" onClick={() => openModule('profile')} style={{
                   marginTop: 8, background: 'transparent', border: 'none', cursor: 'pointer',
                   color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', fontSize: '0.55rem',
