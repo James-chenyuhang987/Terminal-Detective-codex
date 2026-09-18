@@ -26,7 +26,7 @@ export const LANG = {
     // CaseSelect
     caseArchiveTitle: '案件档案库',
     caseArchiveSubtitle: '选择一个案件开始调查',
-    backToLobby: '← 返回大厅',
+    backToLobby: '← 返回大厅', backToHome: '← 返回首页',
     selectInvestigation: 'SELECT INVESTIGATION',
     clueStat: '线索', npcStat: 'NPC', zoneStat: '区域',
     startCase: '▶ 开始调查', loadingCase: '▶ 正在载入...',
@@ -110,7 +110,7 @@ export const LANG = {
     // CaseSelect
     caseArchiveTitle: 'CASE ARCHIVE',
     caseArchiveSubtitle: 'Select a case to begin your investigation',
-    backToLobby: '← BACK TO LOBBY',
+    backToLobby: '← BACK TO LOBBY', backToHome: '← BACK TO HOME',
     selectInvestigation: 'SELECT INVESTIGATION',
     clueStat: 'Clues', npcStat: 'NPCs', zoneStat: 'Zones',
     startCase: '▶ START CASE', loadingCase: '▶ LOADING...',

@@ -6,6 +6,8 @@ import { buildTeamConfig } from '@/game/teamConfig';
 import { getActiveSupportAgentId, getSelectedCoreAgentIds } from '@/game/agentMarket';
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError.js';
+import { createPlayerRunClient } from '@/game/playerRun';
+import { cloudflareApi } from '@/api/cloudflareClient';
 import { ALL_CASES } from '@/game/caseData';
 import { useSettings } from '@/lib/settings.jsx';
 import { normalizeStoryMode } from '@/game/storyMode';
@@ -33,7 +35,7 @@ function ScreenFallback() {
 
 export default function TerminalDetective() {
   const { lang } = useLang();
-  const { profile, activeRun, command, refresh, loadProfile, settle, isReadOnly } = useProfile();
+  const { profile, activeRun, command, refresh, loadProfile, settle, isReadOnly, account, sessionId } = useProfile();
   const { settings, updateSetting } = useSettings();
   const [screen, setScreen] = useState('LANDING');
   const [showModeChooser, setShowModeChooser] = useState(false);
@@ -51,6 +53,9 @@ export default function TerminalDetective() {
   const [regError, setRegError] = useState('');
   const [preferredCaseId, setPreferredCaseId] = useState(null);
   const [lobbyReturnScreen, setLobbyReturnScreen] = useState('HOME');
+  const [caseSelectReturnScreen, setCaseSelectReturnScreen] = useState('LOBBY');
+  const [abandonRunBusy, setAbandonRunBusy] = useState(false);
+  const [abandonRunError, setAbandonRunError] = useState('');
   const [entryNarrative, setEntryNarrative] = useState(null);
   const [narrativeBusy, setNarrativeBusy] = useState(false);
   const [narrativeError, setNarrativeError] = useState('');
@@ -168,6 +173,7 @@ export default function TerminalDetective() {
       if (targetCase) return requestCaseSelect(targetCase);
     }
     void loadCaseSelect();
+    if (lobbyReturnScreen !== 'CASE_SELECT') setCaseSelectReturnScreen('LOBBY');
     setScreen('CASE_SELECT');
     return { error: null };
   };
@@ -291,6 +297,52 @@ export default function TerminalDetective() {
     if (selectedCase) setScreen('GAME');
     else if (activeRun) resumeCloudRun(activeRun);
   };
+
+  const abandonActiveRun = async () => {
+    if (abandonRunBusy || !activeRun?.id) return false;
+    if (isReadOnly) {
+      setAbandonRunError(lang === 'zh' ? '档案当前为只读状态，请先恢复同步后重试。' : 'The profile is read-only. Restore sync before trying again.');
+      return false;
+    }
+    setAbandonRunBusy(true);
+    setAbandonRunError('');
+    try {
+      const client = createPlayerRunClient({
+        ownerUid: account?.id,
+        runId: activeRun.id,
+        sessionId,
+        invoke: cloudflareApi.functions.invoke,
+      });
+      await client.resume();
+      const response = await client.command({ type: 'abandon' });
+      if (response?.run?.status !== 'abandoned') throw new Error('The active investigation was not ended.');
+      await refresh();
+      return true;
+    } catch (cause) {
+      setAbandonRunError(publicErrorMessage(cause, lang));
+      return false;
+    } finally {
+      setAbandonRunBusy(false);
+    }
+  };
+
+  const openCaseSelection = () => {
+    if (selectedCase) {
+      setScreen('GAME');
+      return;
+    }
+    setAbandonRunError('');
+    setPreferredCaseId(null);
+    setLobbyReturnScreen('HOME');
+    setCaseSelectReturnScreen('HOME');
+    if (activeRun) {
+      void loadCaseSelect();
+      setScreen('CASE_SELECT');
+      return;
+    }
+    void openCasesWithSavedTeam();
+  };
+
   const leaveRun = (nextScreen) => {
     setSelectedCase(null);
     setAuthoritativeRun(null);
@@ -331,6 +383,8 @@ export default function TerminalDetective() {
       getActiveSupportAgentId(profile),
     ));
     setPreferredCaseId(caseId);
+    setLobbyReturnScreen('HOME');
+    setCaseSelectReturnScreen('HOME');
     setScreen('CASE_SELECT');
   };
 
@@ -351,6 +405,7 @@ export default function TerminalDetective() {
       <DetectiveHome
         onEnterLobby={openLobbyForCase}
         onOpenCases={openCasesWithSavedTeam}
+        onSelectCase={openCaseSelection}
         onStartInvestigation={settings.storyMode === 'theater' ? handleHomeStartInvestigation : null}
         onRegister={() => setScreen('REGISTRATION')}
         suspendedCase={selectedCase || ALL_CASES.find(item => item.case_id === activeRun?.case_id)}
@@ -379,8 +434,14 @@ export default function TerminalDetective() {
         onPlan={caseId => openLobbyForCase(caseId, 'CASE_SELECT')}
         onBack={() => {
           setPreferredCaseId(null);
-          setScreen('LOBBY');
+          setScreen(caseSelectReturnScreen);
         }}
+        onResume={handleResume}
+        onAbandonRun={abandonActiveRun}
+        abandonBusy={abandonRunBusy}
+        abandonError={abandonRunError}
+        activeRun={activeRun}
+        returnToHome={caseSelectReturnScreen === 'HOME'}
         preferredCaseId={preferredCaseId}
       />
     );
