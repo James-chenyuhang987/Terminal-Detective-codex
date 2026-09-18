@@ -68,6 +68,7 @@ export function getCaseMatchConfig(caseId) {
 }
 
 function finite(value, fallback = 0) {
+  if (typeof value === 'boolean') return fallback;
   try {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;

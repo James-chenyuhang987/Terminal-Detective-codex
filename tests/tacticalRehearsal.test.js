@@ -79,7 +79,9 @@ test('case matching keeps empty or malformed formations finite and honest', () =
     { hack_level: -10, observation_focus: Number.POSITIVE_INFINITY },
     null,
   ], null);
+  const booleanValues = calcCaseMatchScore([{ hack_level: true, logic_power: false, observation_focus: true }]);
   assert.equal(malformed.score, 0);
+  assert.equal(booleanValues.score, 0);
   assert.ok(Object.values(malformed.ratios).every(Number.isFinite));
 });
 
@@ -128,11 +130,13 @@ test('tactical rehearsal handles high, medium, low, and malformed choices', () =
   const medium = evaluateRehearsalChoice(REHEARSAL_EVENTS[1], { agent_id: 'NEXUS', logic_power: 20, confusion_resistance: 20 });
   const low = evaluateRehearsalChoice(REHEARSAL_EVENTS[0], {});
   const malformed = evaluateRehearsalChoice(null, { logic_power: -20 });
+  const booleanValues = evaluateRehearsalChoice(REHEARSAL_EVENTS[0], { observation_focus: true });
   const unknownEvent = evaluateRehearsalChoice({ actionTag: '__proto__', riskLevel: 'constructor' }, { observation_focus: Symbol(), agent_id: Symbol() });
 
   assert.deepEqual([high.expertise, high.outcome], [100, 'clean']);
   assert.deepEqual([medium.expertise, medium.outcome], [50, 'tradeoff']);
   assert.deepEqual([low.expertise, low.outcome], [0, 'exposed']);
+  assert.equal(booleanValues.expertise, 0);
   assert.equal(malformed.focusKeys[0], 'observation_focus');
   assert.equal(malformed.mitigation, 0);
   assert.ok(malformed.confusion.every(Number.isFinite));

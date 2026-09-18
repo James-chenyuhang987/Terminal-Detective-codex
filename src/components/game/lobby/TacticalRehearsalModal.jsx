@@ -107,7 +107,10 @@ export default function TacticalRehearsalModal({ agents, agentDefs, feedback, sy
     setResults(current => [...current.slice(0, step), result]);
   };
   const next = () => {
-    setStep(current => current + 1);
+    setStep(current => {
+      if (current >= REHEARSAL_EVENTS.length || !results[current]) return current;
+      return current + 1;
+    });
   };
   const retry = () => {
     setResults(current => current.slice(0, step));
