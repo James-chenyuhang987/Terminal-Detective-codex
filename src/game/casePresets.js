@@ -58,8 +58,74 @@ export const CASE_MATCH_CONFIGS = Object.freeze({
 
 export const CASE_NEON_BLOOD = CASE_MATCH_CONFIGS.Lvl_01;
 
+const DEFAULT_CASE_WEIGHTS = Object.freeze({ ...CASE_NEON_BLOOD.weights });
+const DEFAULT_ATTRIBUTE_MAX = 40;
+
 export function getCaseMatchConfig(caseId) {
-  return CASE_MATCH_CONFIGS[caseId] || CASE_NEON_BLOOD;
+  return typeof caseId === 'string' && Object.hasOwn(CASE_MATCH_CONFIGS, caseId)
+    ? CASE_MATCH_CONFIGS[caseId]
+    : CASE_NEON_BLOOD;
+}
+
+function finite(value, fallback = 0) {
+  try {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readValue(value, key) {
+  try {
+    return value?.[key];
+  } catch {
+    return undefined;
+  }
+}
+
+function mapValue(map, key, fallback) {
+  return Object.hasOwn(map, key) ? map[key] : fallback;
+}
+
+function setRecordValue(record, key, value) {
+  Object.defineProperty(record, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function normalizeCaseWeights(caseConfig) {
+  const rawWeights = readValue(caseConfig, 'weights');
+  const candidate = isRecord(rawWeights) ? rawWeights : null;
+  let rawEntries = [];
+  try {
+    rawEntries = candidate ? Object.entries(candidate) : [];
+  } catch {
+    rawEntries = [];
+  }
+
+  const validEntries = rawEntries
+    .map(([key, value]) => [key, finite(value)])
+    .filter(([, weight]) => weight > 0);
+  const total = validEntries.reduce((sum, [, weight]) => sum + weight, 0);
+  if (!validEntries.length || !Number.isFinite(total) || total <= 0) return DEFAULT_CASE_WEIGHTS;
+  if (total === 1) return Object.fromEntries(validEntries);
+  return Object.fromEntries(validEntries.map(([key, weight]) => [key, weight / total]));
+}
+
+function attributeRatio(agents, key) {
+  const max = Math.max(0, finite(readValue(ATTR_MAX, key), DEFAULT_ATTRIBUTE_MAX)) || DEFAULT_ATTRIBUTE_MAX;
+  return agents.reduce((best, agent) => {
+    const value = Math.max(0, finite(readValue(agent, key)));
+    return Math.max(best, Math.min(1, value / max));
+  }, 0);
 }
 
 const ATTR_LABEL = {
@@ -80,15 +146,15 @@ const ATTR_OWNER = {
 
 // agents: 三人有效属性数组；返回 { score, color, advice }
 export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD, lang = 'zh') {
-  const weights = caseConfig.weights;
+  const safeAgents = Array.isArray(agents) ? agents : [];
+  const weights = normalizeCaseWeights(caseConfig);
   let score = 0;
   const ratios = {};
 
-  Object.entries(weights).forEach(([key, w]) => {
-    const best = Math.max(...agents.map(a => a?.[key] || 0));
-    const ratio = Math.min(1, best / (ATTR_MAX[key] || 40));
-    ratios[key] = ratio;
-    score += ratio * w;
+  Object.entries(weights).forEach(([key, weight]) => {
+    const ratio = attributeRatio(safeAgents, key);
+    setRecordValue(ratios, key, ratio);
+    score += ratio * weight;
   });
 
   const pct = Math.round(Math.min(100, Math.max(0, score * 100)));
@@ -100,16 +166,21 @@ export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD, lang = 
   let advice;
   if (pct >= 90) {
     advice = lang === 'zh' ? '配置已接近满配，可直接部署。' : 'This configuration is nearly optimal and ready to deploy.';
-  } else if (ratios[weakest] >= 0.95) {
+  } else if (weakest && ratios[weakest] >= 0.95) {
     advice = lang === 'zh' ? '三项主要能力均已到顶，剩余专长点可自由分配。' : 'All primary capabilities are capped. Allocate remaining specialty points freely.';
-  } else {
+  } else if (weakest) {
     const labelEn = {
       logic_power: 'Logic', hack_level: 'Hacking', observation_focus: 'Observation',
       confusion_resistance: 'Anti-Chaos', ap_cost_discount: 'AP Efficiency',
     };
+    const label = mapValue(ATTR_LABEL, weakest, weakest);
+    const labelEnValue = mapValue(labelEn, weakest, weakest);
+    const owner = mapValue(ATTR_OWNER, weakest, 'TACTICAL');
     advice = lang === 'zh'
-      ? `${ATTR_LABEL[weakest]}能力不足，${ATTR_OWNER[weakest]} 专长可继续强化。`
-      : `${labelEn[weakest]} is underpowered. Improve ${ATTR_OWNER[weakest]}'s specialty.`;
+      ? `${label}能力不足，${owner} 专长可继续强化。`
+      : `${labelEnValue} is underpowered. Improve ${owner}'s specialty.`;
+  } else {
+    advice = lang === 'zh' ? '暂无可用案件能力要求。' : 'No case requirements are available.';
   }
 
   return { score: pct, color, advice, ratios };
@@ -125,21 +196,24 @@ const ATTR_LABEL_EN = {
 
 export function getCaseMatchFeedback(agents, caseConfig = CASE_NEON_BLOOD, lang = 'zh') {
   const match = calcCaseMatchScore(agents, caseConfig, lang);
-  const entries = Object.entries(caseConfig.weights).map(([key, weight]) => ({
-    key,
-    weight,
-    ratio: match.ratios[key] || 0,
-    percent: Math.round((match.ratios[key] || 0) * 100),
-    label: ATTR_LABEL[key] || key,
-    labelEn: ATTR_LABEL_EN[key] || key,
-    owner: ATTR_OWNER[key] || 'TACTICAL',
-    ownerEn: ATTR_OWNER[key] || 'TACTICAL',
-  })).sort((a, b) => (b.ratio * b.weight) - (a.ratio * a.weight));
+  const weights = normalizeCaseWeights(caseConfig);
+  const entries = Object.entries(weights).map(([key, weight]) => {
+    const ratio = Math.max(0, Math.min(1, finite(match.ratios[key])));
+    return {
+      key,
+      weight,
+      ratio,
+      percent: Math.round(ratio * 100),
+      label: mapValue(ATTR_LABEL, key, key),
+      labelEn: mapValue(ATTR_LABEL_EN, key, key),
+      owner: mapValue(ATTR_OWNER, key, 'TACTICAL'),
+      ownerEn: mapValue(ATTR_OWNER, key, 'TACTICAL'),
+    };
+  }).sort((a, b) => (b.ratio * b.weight) - (a.ratio * a.weight));
   const strengths = entries.filter(item => item.ratio >= 0.62).slice(0, 2);
   // Keep the two lists mutually exclusive: a middling attribute should not be
   // presented as both a strength and a risk at the same time.
   const risks = [...entries].sort((a, b) => a.ratio - b.ratio).filter(item => item.ratio < 0.62).slice(0, 2);
-  if (!strengths.length && entries[0]) strengths.push(entries[0]);
   return { score: match.score, strengths: strengths.map(item => ({ ...item, kind: 'strength' })), risks: risks.map(item => ({ ...item, kind: 'risk' })) };
 }
 

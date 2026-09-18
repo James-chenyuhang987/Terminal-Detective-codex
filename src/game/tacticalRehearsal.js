@@ -39,8 +39,40 @@ export const REHEARSAL_EVENTS = Object.freeze([
 ]);
 
 function finite(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
+  try {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readValue(value, key) {
+  try {
+    return value?.[key];
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeAgentId(agent) {
+  const value = readValue(agent, 'agent_id');
+  if (typeof value === 'string' && value) return value;
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : null;
+}
+
+function normalizeEvent(event) {
+  const actionTag = readValue(event, 'actionTag');
+  const configured = REHEARSAL_EVENTS.find(candidate => candidate.actionTag === actionTag) || REHEARSAL_EVENTS[0];
+  const riskLevel = readValue(event, 'riskLevel');
+  return {
+    actionTag: configured.actionTag,
+    riskLevel: ['low', 'medium', 'high'].includes(riskLevel) ? riskLevel : configured.riskLevel,
+  };
 }
 
 export function getRehearsalEvent(index = 0) {
@@ -48,17 +80,19 @@ export function getRehearsalEvent(index = 0) {
 }
 
 export function evaluateRehearsalChoice(event, agent) {
-  const expertise = agentExpertise(agent, event.actionTag);
+  const safeEvent = normalizeEvent(event);
+  const focusKeys = getActionFocus(safeEvent.actionTag);
+  const safeAgent = Object.fromEntries(focusKeys.map(key => [key, Math.max(0, finite(readValue(agent, key)))]));
+  const expertise = agentExpertise(safeAgent, safeEvent.actionTag);
   const confidence = confidenceFromExpertise(expertise);
-  const forecast = decisionForecast(event.actionTag, event.riskLevel);
-  const focusKeys = getActionFocus(event.actionTag);
-  const focusValue = Math.max(...focusKeys.map(key => finite(agent?.[key])));
-  const mitigation = Math.round(Math.min(12, focusValue / 4));
+  const forecast = decisionForecast(safeEvent.actionTag, safeEvent.riskLevel);
+  const focusValue = focusKeys.reduce((best, key) => Math.max(best, safeAgent[key]), 0);
+  const mitigation = Math.round(Math.max(0, Math.min(12, focusValue / 4)));
   const confusion = forecast.confusion.map((value, index) => Math.max(0, value - (index ? mitigation : Math.floor(mitigation / 2))));
   const outcome = expertise >= 75 ? 'clean' : expertise >= 45 ? 'tradeoff' : 'exposed';
 
   return {
-    agentId: agent?.agent_id || null,
+    agentId: normalizeAgentId(agent),
     expertise,
     confidence,
     forecast,
@@ -69,12 +103,22 @@ export function evaluateRehearsalChoice(event, agent) {
   };
 }
 
+function normalizeExpertise(result) {
+  const value = readValue(result, 'expertise');
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+  const expertise = finite(value, NaN);
+  return Number.isFinite(expertise) ? Math.max(0, Math.min(100, expertise)) : null;
+}
+
 export function summarizeRehearsal(results) {
-  const entries = Array.isArray(results) ? results : [];
-  const total = entries.reduce((sum, result) => sum + finite(result?.expertise), 0);
+  const entries = (Array.isArray(results) ? results : [])
+    .filter(isRecord)
+    .map(result => ({ result, expertise: normalizeExpertise(result) }))
+    .filter(entry => entry.expertise !== null);
+  const total = entries.reduce((sum, entry) => sum + entry.expertise, 0);
   const averageExpertise = entries.length ? Math.round(total / entries.length) : 0;
-  const clean = entries.filter(result => result?.outcome === 'clean').length;
-  const exposed = entries.filter(result => result?.outcome === 'exposed').length;
+  const clean = entries.filter(entry => readValue(entry.result, 'outcome') === 'clean').length;
+  const exposed = entries.filter(entry => readValue(entry.result, 'outcome') === 'exposed').length;
   return {
     averageExpertise,
     clean,
