@@ -21,7 +21,14 @@ test('investigation toolbar exposes visible localized names and minimap state', 
 test('other ambiguous icon actions include visible names or explicit accessible labels', () => {
   assert.match(home, /topActions[\s\S]*通讯[\s\S]*签到[\s\S]*设置/);
   assert.match(homeActions, /role="menuitem"[\s\S]*\{label\}/);
+  assert.match(homeActions, /event\.key === 'ArrowDown'[\s\S]*focusItem\(currentIndex \+ 1\)/);
+  assert.match(homeActions, /event\.key === 'ArrowUp'[\s\S]*focusItem\(currentIndex - 1\)/);
+  assert.match(homeActions, /event\.key === 'Home'[\s\S]*focusItem\(0\)/);
+  assert.match(homeActions, /event\.key === 'End'[\s\S]*focusItem\(menuActions\.length - 1\)/);
+  assert.match(homeActions, /onBlur=\{handleBlur\}/);
+  assert.match(homeActions, /disabled=\{!menuActions\.length\}/);
   assert.match(homeActions, /aria-label=\{lang === 'zh' \? '打开快捷操作' : 'Open quick actions'\}/);
+  assert.match(styles, /\.td-home-topbar \.td-home-actions-menu \.td-home-top-action > span \{ display: inline; \}/);
   assert.match(lobby, /td-lobby-settings-button[\s\S]*设置[\s\S]*SETTINGS/);
   assert.match(registration, /td-registration-random[\s\S]*随机[\s\S]*RANDOM/);
   assert.match(registration, /label=\{zh \? '上一个头像' : 'Previous avatar'\}/);

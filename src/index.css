@@ -1754,6 +1754,8 @@ button, input, textarea, select { box-sizing: border-box; }
   .td-home-topbar > div:last-child > div:last-child { min-width: 0; flex: 0 1 auto; gap: 4px !important; }
   .td-home-topbar .td-home-top-action { width: 32px; min-width: 32px; padding: 4px; }
   .td-home-top-action > span, .td-home-topbar small { display: none; }
+  .td-home-topbar .td-home-actions-menu .td-home-top-action { width: 100%; min-width: 0; padding: 5px 8px; }
+  .td-home-topbar .td-home-actions-menu .td-home-top-action > span { display: inline; }
   .td-home-footer { flex-direction: row; }
   .td-home-footer .td-home-shortcuts { overflow-x: auto; }
   .td-home-primary-actions button { padding-inline: 8px; font-size: 10px; }
