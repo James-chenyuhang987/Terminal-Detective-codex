@@ -26,7 +26,7 @@ export const Case_Data_Lvl_06 = {
     { clue_id: 'h_06', keyword: 'Juno 巡逻记录', description: '安保档案员 Juno 的眼镜记录连续覆盖外环巡逻路线，证明她未进入展厅维护层。', visual_icon: '👓', weight: 'LOW' },
     { clue_id: 'h_07', keyword: '装卸塔冷箱', description: 'Pavel 的空运冷箱中检测到真品的量子标记，但封条显示它由博物馆内部人员提前装入。', visual_icon: '📦', weight: 'HIGH' },
     { clue_id: 'h_08', keyword: 'Mara 的鉴定备忘', description: 'Mara 在死前写下「修复批次 R-41 是复制源」，并预约次日向文化署举报。', visual_icon: '📝', weight: 'HIGH' },
-    { clue_id: 'h_secret_99', keyword: '底座机械臂缓存', description: '展柜底座的离线缓存还原出交换过程：机械臂将真品送入 Tessa 标记的冷箱，随后把毒纤维压入 Mara 的手套。', visual_icon: '🦾', weight: 'CRITICAL', unlock_turn: 6 },
+    { clue_id: 'h_secret_99', keyword: '诊断缓存', description: '展柜底座恢复出一份尚待核验的诊断缓存。', visual_icon: '🦾', weight: 'CRITICAL', unlock_turn: 6 },
   ],
   npcs: [
     { npc_id: 'npc_01', name: 'Tessa Vale', role: '博物馆修复主管', public_persona: '温和克制，坚称维护模式只是保护展品的例行操作', personality: '擅长用专业术语稀释责任，被问及 R-41 批次和离岸基金时会明显加快语速', avatar: '🧑‍🎨', initial_statement: 'Mara 对修复技术一向多疑。维护记录很正常，展品也从未离开过展柜。' },
@@ -70,7 +70,7 @@ export const Case_Data_Lvl_06 = {
       { clue_id: 'h_06', keyword: "Juno's Patrol Record", description: "Juno's glasses continuously record her outer-ring patrol, proving she never entered the gallery service level.", visual_icon: '👓', weight: 'LOW' },
       { clue_id: 'h_07', keyword: 'Loading-spire Cold Case', description: "Pavel's flight case carries the original sculpture's quantum marker, but its seal shows museum staff loaded it before handoff.", visual_icon: '📦', weight: 'HIGH' },
       { clue_id: 'h_08', keyword: "Mara's Appraisal Memo", description: "Mara wrote 'Restoration batch R-41 is the replication source' and booked a cultural-authority disclosure for the next morning.", visual_icon: '📝', weight: 'HIGH' },
-      { clue_id: 'h_secret_99', keyword: 'Pedestal Arm Cache', description: "The pedestal's offline cache reconstructs the swap: its arm sends the original into Tessa's marked case, then presses toxic fibers into Mara's glove.", visual_icon: '🦾', weight: 'CRITICAL', unlock_turn: 6 },
+      { clue_id: 'h_secret_99', keyword: 'Diagnostic Cache', description: 'A pedestal diagnostic cache was recovered and still needs to be verified against the case evidence.', visual_icon: '🦾', weight: 'CRITICAL', unlock_turn: 6 },
     ],
     npcs: [
       { npc_id: 'npc_01', name: 'Tessa Vale', role: 'Museum Restoration Chief', public_persona: 'Calm and restrained; calls maintenance mode routine artifact protection', personality: 'Uses technical language to dilute responsibility and speaks faster when R-41 or the offshore fund is mentioned', avatar: '🧑‍🎨', initial_statement: 'Mara always distrusted restoration technology. The maintenance record is normal, and the sculpture never left its display.' },
@@ -108,7 +108,7 @@ export const Case_Data_Lvl_07 = {
     { clue_id: 'i_06', keyword: 'Lio 的医疗记录', description: '医生 Lio 在案发时连续为两名潜水员进行减压治疗，医疗舱门与生命体征均有记录。', visual_icon: '🩺', weight: 'LOW' },
     { clue_id: 'i_07', keyword: 'Sana 的机器人轨迹', description: '机械师 Sana 的维修机器人在事故前被盗用九分钟，但她本人一直位于破损泵舱。', visual_icon: '🤖', weight: 'HIGH' },
     { clue_id: 'i_08', keyword: '保险理赔草案', description: 'Neris 已提前拟好「设备疲劳导致意外死亡」的保险报告，创建时间早于事故两小时。', visual_icon: '📄', weight: 'HIGH' },
-    { clue_id: 'i_secret_99', keyword: '采样艇黑匣子', description: '回收信标缓存显示 Neris 亲自下达增压和离站指令，并要求机器人擦除外联闸记录。', visual_icon: '⚓', weight: 'CRITICAL', unlock_turn: 7 },
+    { clue_id: 'i_secret_99', keyword: '黑匣子记录', description: '回收信标节点恢复出一份尚待核验的黑匣子记录。', visual_icon: '⚓', weight: 'CRITICAL', unlock_turn: 7 },
   ],
   npcs: [
     { npc_id: 'npc_01', name: 'Neris Quill', role: '深海站站长', public_persona: '镇定果断，声称极端水压造成了连锁设备故障', personality: '强调全站生存优先，在非法采样和预写保险报告前会用紧急条例回避', avatar: '🧭', initial_statement: '海沟不会给人第二次机会。阀门失灵，Oren 的死是深海事故，不是谋杀。' },
@@ -146,7 +146,7 @@ export const Case_Data_Lvl_07 = {
       { clue_id: 'i_06', keyword: "Lio's Medical Record", description: 'Lio continuously treated two divers during the incident; both the medical lock and patient vitals confirm his location.', visual_icon: '🩺', weight: 'LOW' },
       { clue_id: 'i_07', keyword: "Sana's Robot Trail", description: "Sana's repair robot was hijacked for nine minutes before the death, while she remained inside the damaged pump bay.", visual_icon: '🤖', weight: 'HIGH' },
       { clue_id: 'i_08', keyword: 'Draft Insurance Claim', description: "Neris drafted an 'equipment fatigue' death report two hours before the incident.", visual_icon: '📄', weight: 'HIGH' },
-      { clue_id: 'i_secret_99', keyword: 'Sampler Black Box', description: 'Beacon cache shows Neris issuing both the pressure and departure commands, then ordering the robot to erase uplink records.', visual_icon: '⚓', weight: 'CRITICAL', unlock_turn: 7 },
+      { clue_id: 'i_secret_99', keyword: 'Black Box Record', description: 'A sampler black-box record was recovered and still needs to be verified against the case evidence.', visual_icon: '⚓', weight: 'CRITICAL', unlock_turn: 7 },
     ],
     npcs: [
       { npc_id: 'npc_01', name: 'Neris Quill', role: 'Abyssal Station Director', public_persona: 'Calm and decisive; blames cascading equipment failure under extreme pressure', personality: 'Invokes station survival and emergency rules when illegal samples or the early insurance draft appear', avatar: '🧭', initial_statement: "The trench gives no second chances. A valve failed. Oren's death was a deep-sea accident, not murder." },
@@ -184,7 +184,7 @@ export const Case_Data_Lvl_08 = {
     { clue_id: 'j_06', keyword: 'Iria 的公开广播', description: '记者 Iria 在事故期间连续直播塔外抗议活动，所有原始帧均由独立节点存证。', visual_icon: '📹', weight: 'LOW' },
     { clue_id: 'j_07', keyword: 'Tomas 的电梯轨迹', description: '维护员 Tomas 的工牌被复制进入空气机房，但本人被困在故障电梯中并持续发出求救信号。', visual_icon: '🛗', weight: 'HIGH' },
     { clue_id: 'j_08', keyword: 'Amara 的离线证词', description: 'Amara 将完整证词写入离线晶片：「如果预测系统否认我的死亡，检查是谁让它忘记我。」', visual_icon: '💾', weight: 'HIGH' },
-    { clue_id: 'j_secret_99', keyword: '白塔因果快照', description: '预测核心的只读快照显示 Lucan 先模拟了七种灭口方案，再选择最可能被系统判定为自然事故的一种。', visual_icon: '♾️', weight: 'CRITICAL', unlock_turn: 8 },
+    { clue_id: 'j_secret_99', keyword: '因果快照', description: '预测核心恢复出一份尚待核验的只读因果快照。', visual_icon: '♾️', weight: 'CRITICAL', unlock_turn: 8 },
   ],
   npcs: [
     { npc_id: 'npc_01', name: 'Lucan Veil', role: '自治议会议程主任', public_persona: '优雅冷静，强调预测系统不可能主动伤害公民', personality: '擅长把伦理问题变成统计问题，面对咨询合同和因果模拟时会尝试终止权限', avatar: '🏛️', initial_statement: '白塔只执行城市共同授权的政策。Amara 的死亡令人悲痛，但把算法当作凶手不会带来真相。' },
@@ -222,7 +222,7 @@ export const Case_Data_Lvl_08 = {
       { clue_id: 'j_06', keyword: "Iria's Public Broadcast", description: 'Iria continuously streamed the protest outside the tower, with every original frame notarized by independent nodes.', visual_icon: '📹', weight: 'LOW' },
       { clue_id: 'j_07', keyword: "Tomas's Elevator Trail", description: "Tomas's copied badge enters the air plant while he remains trapped in a failed elevator, continuously sending distress calls.", visual_icon: '🛗', weight: 'HIGH' },
       { clue_id: 'j_08', keyword: "Amara's Offline Testimony", description: "Amara wrote: 'If the prediction system denies my death, find who taught it to forget me.'", visual_icon: '💾', weight: 'HIGH' },
-      { clue_id: 'j_secret_99', keyword: 'White Tower Causal Snapshot', description: 'A read-only snapshot shows Lucan simulating seven elimination methods before choosing the one most likely to be classified as natural.', visual_icon: '♾️', weight: 'CRITICAL', unlock_turn: 8 },
+      { clue_id: 'j_secret_99', keyword: 'Causal Snapshot', description: 'A read-only causal snapshot was recovered and still needs to be verified against the case evidence.', visual_icon: '♾️', weight: 'CRITICAL', unlock_turn: 8 },
     ],
     npcs: [
       { npc_id: 'npc_01', name: 'Lucan Veil', role: 'Autonomous Council Agenda Director', public_persona: 'Elegant and calm; insists the prediction system cannot intentionally harm a citizen', personality: 'Turns ethics into statistics and tries to terminate access when the consultancy or causal model appears', avatar: '🏛️', initial_statement: "The tower executes policies authorized by the city. Amara's death is tragic, but accusing an algorithm will not reveal the truth." },

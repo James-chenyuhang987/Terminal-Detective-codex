@@ -26,7 +26,7 @@ export const Case_Data_Lvl_04 = {
     { clue_id: 'f_06', keyword: 'Mira 的维修影像', description: '外部机库摄像头连续记录工程师 Mira 在 02:50 至 03:35 修复风机，她无法进入冷库区。', visual_icon: '🎥', weight: 'LOW' },
     { clue_id: 'f_07', keyword: '阀门工具痕', description: '维护隧道的液氮旁路阀有新鲜电动扳手痕迹，扭矩设置与 D-4 无人机默认参数相同。', visual_icon: '🔧', weight: 'HIGH' },
     { clue_id: 'f_08', keyword: '审计预约信息', description: 'Dr. Noor 在遇害前预约了清晨审计，并写道「主管账户的外传记录足以定罪」。', visual_icon: '📨', weight: 'HIGH' },
-    { clue_id: 'f_secret_99', keyword: '无人机覆盖缓存', description: 'D-4 的隐藏缓存保留了一条被删除的路线：控制室—维护隧道—冷库顶部维护口，并带有 Elias 的令牌签名。', visual_icon: '🧊', weight: 'CRITICAL', unlock_turn: 7 },
+    { clue_id: 'f_secret_99', keyword: '覆盖缓存', description: '维护节点恢复出一份尚待核验的缓存记录。', visual_icon: '🧊', weight: 'CRITICAL', unlock_turn: 7 },
   ],
   npcs: [
     { npc_id: 'npc_01', name: 'Elias Venn', role: '档案站站务主管', public_persona: '沉着可靠，声称温控事故源于暴风雪导致的设备故障', personality: '习惯掌控谈话，在被问及管理员令牌时会迅速转向程序责任', avatar: '🧥', initial_statement: '这座站已经运行二十年。暴风雪让系统失常，Noor 的死是一场可怕的事故。' },
@@ -71,7 +71,7 @@ export const Case_Data_Lvl_04 = {
       { clue_id: 'f_06', keyword: "Mira's Repair Footage", description: 'Exterior hangar cameras continuously show Mira repairing a turbine from 02:50 to 03:35. She could not enter the vault sector.', visual_icon: '🎥', weight: 'LOW' },
       { clue_id: 'f_07', keyword: 'Valve Tool Marks', description: "Fresh powered-wrench marks on the nitrogen bypass valve use the D-4 drone's default torque setting.", visual_icon: '🔧', weight: 'HIGH' },
       { clue_id: 'f_08', keyword: 'Audit Appointment', description: "Before her death, Noor scheduled a dawn audit and wrote: 'The supervisor account's export record is enough to convict.'", visual_icon: '📨', weight: 'HIGH' },
-      { clue_id: 'f_secret_99', keyword: 'Drone Override Cache', description: "The D-4 hidden cache retains a deleted route from control to the tunnel and vault hatch, signed with Elias's token.", visual_icon: '🧊', weight: 'CRITICAL', unlock_turn: 7 },
+      { clue_id: 'f_secret_99', keyword: 'Override Cache', description: 'A maintenance cache was recovered and still needs to be verified against the case evidence.', visual_icon: '🧊', weight: 'CRITICAL', unlock_turn: 7 },
     ],
     npcs: [
       { npc_id: 'npc_01', name: 'Elias Venn', role: 'Archive Station Supervisor', public_persona: 'Calm and dependable; claims the blizzard caused a climate-control accident', personality: 'Controls every conversation and redirects questions about his token toward procedural responsibility', avatar: '🧥', initial_statement: "This station has operated for twenty years. The blizzard destabilized the system. Noor's death was a terrible accident." },
@@ -113,7 +113,7 @@ export const Case_Data_Lvl_05 = {
     { clue_id: 'g_06', keyword: 'Ivo 的影子航单', description: '快递员 Ivo 的腕端保存一份未上链航单，收货人代号与 Rook 私人公司的加密标识一致。', visual_icon: '📦', weight: 'HIGH' },
     { clue_id: 'g_07', keyword: '监控视差残影', description: '被循环播放的观测环影像中，星背景视差每 18 秒跳变一次，证明有人用短片覆盖真实监控。', visual_icon: '🎞️', weight: 'HIGH' },
     { clue_id: 'g_08', keyword: 'Jonah 紧急信标', description: '船长死亡前发出一段残缺信标：「主管在卖军用货……不要相信放行记录。」', visual_icon: '📡', weight: 'HIGH' },
-    { clue_id: 'g_secret_99', keyword: '离线货柜账本', description: '货仓维护节点中恢复出离线账本，记录 Rook 与 Ivo 连续六次转移军用货柜，以及本次的灭口指令。', visual_icon: '🌌', weight: 'CRITICAL', unlock_turn: 8 },
+    { clue_id: 'g_secret_99', keyword: '离线记录', description: '货仓节点恢复出一份尚待核验的离线记录。', visual_icon: '🌌', weight: 'CRITICAL', unlock_turn: 8 },
   ],
   npcs: [
     { npc_id: 'npc_01', name: 'Cassian Rook', role: '轨道电梯主管', public_persona: '冷静威严，强调事故发生时自己正在协调雷暴层避险', personality: '擅长引用安全条例压制质疑，对私人公司和主控账户异常极其敏感', avatar: '🧑‍✈️', initial_statement: 'Jonah 违反了救生舱规程。我们失去了一位船长，但不能让悲剧演变成毫无根据的指控。' },
@@ -158,7 +158,7 @@ export const Case_Data_Lvl_05 = {
       { clue_id: 'g_06', keyword: "Ivo's Shadow Manifest", description: "Ivo's wrist terminal holds an off-chain manifest whose recipient code matches Rook's private company.", visual_icon: '📦', weight: 'HIGH' },
       { clue_id: 'g_07', keyword: 'Camera Parallax Ghost', description: 'The looped observation footage makes the starfield parallax jump every eighteen seconds, proving a short clip replaced live cameras.', visual_icon: '🎞️', weight: 'HIGH' },
       { clue_id: 'g_08', keyword: "Jonah's Emergency Beacon", description: "Before dying, Jonah transmitted: 'The supervisor is selling military car—do not trust the release record.'", visual_icon: '📡', weight: 'HIGH' },
-      { clue_id: 'g_secret_99', keyword: 'Offline Container Ledger', description: 'A cargo maintenance node reveals six military-container transfers by Rook and Ivo, plus an elimination order for this run.', visual_icon: '🌌', weight: 'CRITICAL', unlock_turn: 8 },
+      { clue_id: 'g_secret_99', keyword: 'Offline Record', description: 'An offline cargo record was recovered and still needs to be verified against the case evidence.', visual_icon: '🌌', weight: 'CRITICAL', unlock_turn: 8 },
     ],
     npcs: [
       { npc_id: 'npc_01', name: 'Cassian Rook', role: 'Orbital Elevator Director', public_persona: 'Calm and imposing; says he was coordinating storm-layer safety during the incident', personality: 'Uses regulations to suppress questions and reacts sharply to his private company and master-account access', avatar: '🧑‍✈️', initial_statement: 'Jonah violated lifeboat procedure. We lost a captain, but grief cannot become a foundation for reckless accusations.' },

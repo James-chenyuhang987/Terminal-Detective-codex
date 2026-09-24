@@ -238,6 +238,9 @@ test('gateway rejects unknown API routes instead of proxying to another backend'
 
   const asset = await handleRequest(new Request('https://game.example/game/route'), env);
   assert.equal(await asset.text(), 'asset:/game/route');
+  assert.equal(asset.headers.get('content-security-policy')?.includes("default-src 'self'"), true);
+  assert.equal(asset.headers.get('x-frame-options'), 'DENY');
+  assert.equal(asset.headers.get('strict-transport-security'), 'max-age=31536000; includeSubDomains');
 });
 
 test('API CORS permits configured frontends and localhost development', async () => {
@@ -288,6 +291,8 @@ test('same-origin API responses keep security headers without requiring CORS', a
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
   assert.match(response.headers.get('permissions-policy'), /camera=\(\)/);
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('strict-transport-security'), 'max-age=31536000; includeSubDomains');
 });
 
 test('gateway failures retain CORS and security headers', async () => {

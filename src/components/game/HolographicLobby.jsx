@@ -1,7 +1,4 @@
-import { noirColor } from '@/components/ui/palette';
-import ScreenTabs from '@/components/ui/ScreenTabs.jsx';
-import Icon, { IconText } from '@/components/ui/Icon';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { useSettings } from '@/lib/settings.jsx';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
@@ -10,25 +7,24 @@ import SkillTreePanel from '@/components/game/SkillTreePanel';
 import AgentRadarChart from '@/components/game/AgentRadarChart';
 import SpecialtyAttrPanel from '@/components/game/SpecialtyAttrPanel';
 import SynergyUnlockFX from '@/components/game/SynergyUnlockFX';
-import { calcTeamSynergy } from '@/game/specialtySystem';
+import { calcTeamSynergy, getEquippedSkillEffects } from '@/game/specialtySystem';
 import AgentLoreTooltip from '@/components/game/AgentLoreTooltip';
 import AgentDossierPanel from '@/components/game/AgentDossierPanel';
 import PresetChips from '@/components/game/PresetChips';
 import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
-import { calcCaseMatchScore, getCaseMatchConfig, getCaseMatchFeedback } from '@/game/casePresets';
+import { GENERAL_FORMATION_CONFIG, buildCaseMatchReadout, calcCaseMatchScore, compareCaseMatchReadouts, getCaseMatchConfig } from '@/game/casePresets';
 import { AGENT_DEFS, PRIORITY_ACTIONS, buildTeamConfig } from '@/game/teamConfig';
 import {
-  getActiveSupportAgent, getOwnedAgents, prepareCoreAgentReplacement,
+  getActiveSupportAgent, getAgentById, getCoreAgentsForSlot, getOwnedAgentIds, getOwnedAgents,
+  prepareCoreAgentReplacement,
 } from '@/game/agentMarket';
 import { getLobbyLighting } from '@/game/lobbyLighting';
 import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
 import CommandPlanPanel from '@/components/game/lobby/CommandPlanPanel';
-import ParticleCanvas from '@/components/game/lobby/ParticleCanvas';
-import CoreAgentMarket from '@/components/game/lobby/CoreAgentMarket';
-import LobbyGuideModal from '@/components/game/lobby/LobbyGuideModal';
-import TacticalRehearsalModal from '@/components/game/lobby/TacticalRehearsalModal';
 import { CASE_ENERGY_COST } from '@/game/playerProfile';
+import TacticalRehearsalPanel from '@/components/game/TacticalRehearsalPanel';
+import { buildTacticalRehearsal } from '@/game/tacticalRehearsal';
 
 function getDisplayLore(agentDef, slot, lang) {
   const starter = AGENT_DEFS[slot];
@@ -69,6 +65,32 @@ function getDisplayLore(agentDef, slot, lang) {
   };
 }
 
+function cloneDeploymentConfig(config) {
+  return {
+    ...config,
+    specs: Array.isArray(config?.specs)
+      ? config.specs.map(spec => (spec && typeof spec === 'object' ? { ...spec } : {}))
+      : [],
+    priorities: Array.isArray(config?.priorities)
+      ? config.priorities.map(list => (Array.isArray(list) ? [...list] : []))
+      : [],
+    command_plan: config?.command_plan && typeof config.command_plan === 'object'
+      ? { ...config.command_plan }
+      : config?.command_plan,
+    core_agent_ids: Array.isArray(config?.core_agent_ids) ? [...config.core_agent_ids] : config?.core_agent_ids,
+  };
+}
+
+function cloneDeploymentLoadout(loadout) {
+  return Array.isArray(loadout)
+    ? loadout.map(row => Array.isArray(row)
+      ? [...row]
+      : row && typeof row === 'object'
+        ? { ...row, skill_ids: Array.isArray(row.skill_ids) ? [...row.skill_ids] : row.skill_ids }
+        : row)
+    : [];
+}
+
 function LobbyAtmosphere() {
   return <div className="td-lobby-atmosphere" aria-hidden="true">
     <i className="td-lobby-aurora td-lobby-aurora-a" />
@@ -79,23 +101,196 @@ function LobbyAtmosphere() {
   </div>;
 }
 
+// ── Particle Canvas — neural network lines ────────────────────────────────────
+function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, accentColor: _accentColor, hasTarget = false }) {
+  const { settings } = useSettings();
+  const canvasRef = useRef(null);
+  const particles = useRef([]);
+  const frameRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const resize = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Spawn floating particles
+    particles.current = Array.from({ length: 36 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r: 1 + Math.random() * 2,
+      opacity: 0.2 + Math.random() * 0.5,
+      color: agentDefs[Math.floor(Math.random() * 3)].color,
+    }));
+
+    // Agent node positions (roughly center positions of holo figures)
+    const getNodePositions = () => {
+      const w = canvas.width, h = canvas.height;
+      return [
+        { x: w * 0.25, y: h * 0.55, color: agentDefs[0].color },
+        { x: w * 0.5,  y: h * 0.45, color: agentDefs[1].color },
+        { x: w * 0.75, y: h * 0.55, color: agentDefs[2].color },
+      ];
+    };
+
+    const draw = () => {
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const nodes = getNodePositions();
+      const commandNode = { x: w * 0.5, y: h * 0.9, color: '#e8c98a' };
+      const targetNode = { x: w * 0.5, y: h * 0.16, color: hasTarget ? '#ff6685' : '#00e5ff' };
+
+      // The player is a real fourth node in the command network. Target-case
+      // links are public tactical telemetry only; no hidden case data is used.
+      nodes.forEach((node, index) => {
+        const selected = index === selectedIdx;
+        const commandGradient = ctx.createLinearGradient(commandNode.x, commandNode.y, node.x, node.y);
+        commandGradient.addColorStop(0, commandNode.color + (selected ? 'a0' : '45'));
+        commandGradient.addColorStop(1, node.color + (selected ? 'a0' : '45'));
+        ctx.beginPath();
+        ctx.moveTo(commandNode.x, commandNode.y);
+        ctx.lineTo(node.x, node.y);
+        ctx.strokeStyle = commandGradient;
+        ctx.lineWidth = selected ? 1.8 : 0.75;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(targetNode.x, targetNode.y);
+        ctx.strokeStyle = node.color + (selected ? '6f' : '28');
+        ctx.lineWidth = selected ? 1.2 : 0.6;
+        ctx.setLineDash([4, 7]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      const pulseT = (Date.now() % 1900) / 1900;
+      [commandNode, targetNode].forEach((node, index) => {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 8 + Math.sin(pulseT * Math.PI * 2 + index) * 2, 0, Math.PI * 2);
+        ctx.strokeStyle = node.color + '80';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+
+      // Draw inter-agent connection lines
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+          grad.addColorStop(0, a.color + '60');
+          grad.addColorStop(1, b.color + '60');
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = (i === selectedIdx || j === selectedIdx) ? 1.5 : 0.7;
+          ctx.setLineDash([6, 8]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Animated dot traveling along the line
+          const t = (Date.now() % 3000) / 3000;
+          const tx = a.x + (b.x - a.x) * t;
+          const ty = a.y + (b.y - a.y) * t;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = a.color;
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = a.color;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      // Draw particles + connect nearby ones
+      particles.current.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+
+        // Connect to nearest agent node
+        nodes.forEach(n => {
+          const dx = p.x - n.x, dy = p.y - n.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 140) {
+            const alpha = (1 - dist / 140) * 0.35;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(n.x, n.y);
+            ctx.strokeStyle = n.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        });
+
+        // Particle dot
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = p.color + Math.floor(p.opacity * 200).toString(16).padStart(2, '0');
+        ctx.fill();
+      });
+
+      // Selected agent halo
+      const selNode = nodes[selectedIdx];
+      if (selNode) {
+        const t = (Date.now() % 2000) / 2000;
+        const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+        ctx.beginPath();
+        ctx.arc(selNode.x, selNode.y, 55 + pulse * 15, 0, Math.PI * 2);
+        ctx.strokeStyle = selNode.color + '30';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(selNode.x, selNode.y, 40 + pulse * 8, 0, Math.PI * 2);
+        ctx.strokeStyle = selNode.color + '50';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      frameRef.current = requestAnimationFrame(draw);
+    };
+
+    frameRef.current = requestAnimationFrame(draw);
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(frameRef.current);
+    };
+  }, [agentDefs, hasTarget, selectedIdx, settings.particles]);
+
+  if (!settings.particles) return null;
+
+  return (
+    <canvas ref={canvasRef} style={{
+      position: 'absolute', inset: 0, width: '100%', height: '100%',
+      pointerEvents: 'none', zIndex: 1,
+    }} />
+  );
+}
+
 // ── Holographic Agent Figure ──────────────────────────────────────────────────
 function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
   const { lang } = useLang();
   return (
     <div className={`td-holo-figure ${isSelected ? 'td-holo-selected' : ''}`} onClick={onClick}
-      role="button" tabIndex={0} aria-pressed={isSelected}
-      aria-label={`${agentDef.id} · ${lang === 'zh' ? agentDef.roleZh : agentDef.role}`}
-      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick(); } }}
-      onFocus={event => { const box = event.currentTarget.getBoundingClientRect(); onHover?.(index, box.x + box.width / 2, box.y); }}
-      onBlur={() => onHover?.(null)}
       onMouseEnter={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseMove={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseLeave={() => onHover?.(null)}
       style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       cursor: 'pointer', position: 'relative', zIndex: 3,
-      transform: isSelected ? 'translateY(-4px)' : 'none',
+      transform: isSelected ? 'scale(1.12) translateY(-10px)' : 'scale(1)',
       transition: 'transform 0.35s cubic-bezier(.22,1,.36,1)',
     }}>
       {/* Selected glow aura */}
@@ -103,23 +298,23 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
         <div style={{
           position: 'absolute', inset: -18,
           borderRadius: '50%',
-          background: `radial-gradient(circle, ${noirColor(agentDef.color)}25 0%, transparent 70%)`,
-          animation: 'none',
+          background: `radial-gradient(circle, ${agentDef.color}25 0%, transparent 70%)`,
+          animation: 'aura-pulse 1.8s ease-in-out infinite',
           pointerEvents: 'none',
         }}/>
       )}
 
       {/* SVG figure */}
-      <div className="td-holo-avatar" style={{
-        width: 76, height: 124,
-        opacity: isSelected ? 1 : 0.72,
-        transition: 'opacity 0.25s ease', position: 'relative', overflow: 'hidden',
+      <div style={{
+        width: isSelected ? 86 : 66, height: isSelected ? 134 : 112,
+        filter: `drop-shadow(0 0 ${isSelected ? 24 : 10}px ${agentDef.color})`,
+        transition: 'all 0.35s ease', position: 'relative', overflow: 'hidden',
       }}>
         <svg viewBox="0 0 64 110" width="100%" height="100%">
           <defs>
             <linearGradient id={`hg-${index}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={noirColor(agentDef.color)} stopOpacity="0.95"/>
-              <stop offset="100%" stopColor={noirColor(agentDef.color)} stopOpacity="0.08"/>
+              <stop offset="0%" stopColor={agentDef.color} stopOpacity="0.95"/>
+              <stop offset="100%" stopColor={agentDef.color} stopOpacity="0.08"/>
             </linearGradient>
             <clipPath id={`clip-${index}`}><rect x="0" y="0" width="64" height="110"/></clipPath>
           </defs>
@@ -133,25 +328,38 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
           {/* Static scan lines */}
           {[18, 32, 46, 60, 74, 88].map((y, i) => (
             <line key={i} x1="6" y1={y} x2="58" y2={y}
-              stroke={noirColor(agentDef.color)} strokeWidth="0.5" opacity="0.18"/>
+              stroke={agentDef.color} strokeWidth="0.5" opacity="0.18"/>
           ))}
+          {/* Animated scan beam */}
+          <rect x="0" y="-3" width="64" height="3"
+            fill={agentDef.color} opacity="0.35" clipPath={`url(#clip-${index})`}
+            style={{ filter: `blur(1px)` }}>
+            <animate
+              attributeName="y"
+              from="-3"
+              to="110"
+              dur="3.52s"
+              begin={`${index * -0.55}s`}
+              repeatCount="indefinite"
+            />
+          </rect>
           {/* Grid overlay */}
-          <path d="M0 0 L64 0 M0 55 L64 55 M32 0 L32 110" stroke={noirColor(agentDef.color)} strokeWidth="0.3" opacity="0.12"/>
+          <path d="M0 0 L64 0 M0 55 L64 55 M32 0 L32 110" stroke={agentDef.color} strokeWidth="0.3" opacity="0.12"/>
         </svg>
       </div>
 
       {/* Name plate */}
-      <div className="td-holo-nameplate" style={{ marginTop: 8, textAlign: 'center', fontFamily: 'monospace' }}>
+      <div style={{ marginTop: 8, textAlign: 'center', fontFamily: 'monospace' }}>
         <div style={{
-          fontSize: '0.62rem', fontWeight: 900, color: noirColor(agentDef.color),
-          letterSpacing: '0.08em', textShadow: 'none',
+          fontSize: '0.62rem', fontWeight: 900, color: agentDef.color,
+          letterSpacing: '0.08em', textShadow: `0 0 10px ${agentDef.color}`,
         }}>{agentDef.id}</div>
         <div style={{ fontSize: '0.48rem', color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>{lang === 'zh' ? agentDef.roleZh : agentDef.role}</div>
         <div style={{
           display: 'inline-block', marginTop: 4,
-          fontSize: '0.42rem', color: noirColor(agentDef.color),
-          border: `1px solid ${noirColor(agentDef.color)}50`, borderRadius: 3,
-          padding: '1px 7px', background: `${noirColor(agentDef.color)}12`,
+          fontSize: '0.42rem', color: agentDef.color,
+          border: `1px solid ${agentDef.color}50`, borderRadius: 3,
+          padding: '1px 7px', background: `${agentDef.color}12`,
         }}>Lv.{level} · {agentDef.traitEn}</div>
       </div>
 
@@ -163,7 +371,7 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
 }
 
 // ── Draggable Priority List ───────────────────────────────────────────────────
-function PriorityList({ priorityList, onChange }) {
+function PriorityList({ priorityList, onChange, disabled = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [dragging, setDragging] = useState(null);
@@ -173,7 +381,7 @@ function PriorityList({ priorityList, onChange }) {
   const getAction = (id) => PRIORITY_ACTIONS.find(a => a.id === id);
 
   const handleDrop = (targetId) => {
-    if (!dragging || dragging === targetId) return;
+    if (disabled || !dragging || dragging === targetId) return;
     const next = [...priorityList];
     const from = next.indexOf(dragging);
     const to = next.indexOf(targetId);
@@ -185,6 +393,7 @@ function PriorityList({ priorityList, onChange }) {
   };
 
   const move = (id, offset) => {
+    if (disabled) return;
     const from = priorityList.indexOf(id);
     const to = Math.max(0, Math.min(priorityList.length - 1, from + offset));
     if (from === to) return;
@@ -211,20 +420,25 @@ function PriorityList({ priorityList, onChange }) {
         return (
           <div className="td-priority-row"
             key={id}
-            draggable
-            onDragStart={() => setDragging(id)}
-            onDragOver={e => { e.preventDefault(); setDragOver(id); }}
-            onDragLeave={() => setDragOver(null)}
+            draggable={!disabled}
+            onDragStart={() => !disabled && setDragging(id)}
+            onDragOver={e => { if (!disabled) { e.preventDefault(); setDragOver(id); } }}
+            onDragLeave={() => !disabled && setDragOver(null)}
             onDrop={() => handleDrop(id)}
-            onDragEnd={() => { setDragging(null); setDragOver(null); }}
+            onDragEnd={() => {
+              if (!disabled) {
+                setDragging(null);
+                setDragOver(null);
+              }
+            }}
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '6px 10px', marginBottom: 4, borderRadius: 8,
-              border: `1px solid ${isOver ? noirColor(action.color) : noirColor(action.color) + '25'}`,
-              background: isOver ? `${noirColor(action.color)}20` : dragging === id ? `${noirColor(action.color)}10` : 'rgba(255,255,255,0.03)',
-              cursor: 'grab', transition: 'all 0.15s',
+              border: `1px solid ${isOver ? action.color : action.color + '25'}`,
+              background: isOver ? `${action.color}20` : dragging === id ? `${action.color}10` : 'rgba(255,255,255,0.03)',
+              cursor: disabled ? 'default' : 'grab', transition: 'all 0.15s',
               transform: isOver ? 'translateX(4px)' : 'none',
-              boxShadow: isOver ? `0 0 10px ${noirColor(action.color)}40` : 'none',
+              boxShadow: isOver ? `0 0 10px ${action.color}40` : 'none',
               opacity: dragging === id ? 0.5 : 1,
             }}
           >
@@ -232,19 +446,19 @@ function PriorityList({ priorityList, onChange }) {
               fontSize: '0.48rem', color: 'rgba(255,255,255,0.25)',
               fontFamily: 'monospace', width: 16, textAlign: 'center',
             }}>#{idx + 1}</div>
-            <span style={{ fontSize: 14 }}><Icon name={action.icon} /></span>
-            <span style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: noirColor(action.color), fontWeight: 700, flex: 1 }}>
+            <span style={{ fontSize: 14 }}>{action.icon}</span>
+            <span style={{ fontSize: '0.6rem', fontFamily: 'monospace', color: action.color, fontWeight: 700, flex: 1 }}>
               {zh ? action.label : action.labelEn}
             </span>
             <span style={{ fontSize: '0.4rem', color: 'rgba(255,255,255,0.2)' }}>⠿⠿</span>
             <span className="td-mobile-only td-priority-mobile-buttons">
-              <button type="button" aria-label={zh ? '上移' : 'Move up'} disabled={idx === 0} onClick={event => { event.stopPropagation(); move(id, -1); }}>↑</button>
-              <button type="button" aria-label={zh ? '下移' : 'Move down'} disabled={priorityList.indexOf(id) === priorityList.length - 1} onClick={event => { event.stopPropagation(); move(id, 1); }}>↓</button>
+              <button type="button" aria-label={zh ? '上移' : 'Move up'} disabled={disabled || idx === 0} onClick={event => { event.stopPropagation(); move(id, -1); }}>↑</button>
+              <button type="button" aria-label={zh ? '下移' : 'Move down'} disabled={disabled || priorityList.indexOf(id) === priorityList.length - 1} onClick={event => { event.stopPropagation(); move(id, 1); }}>↓</button>
             </span>
           </div>
         );
       })}
-      <button className="td-priority-expand" type="button" onClick={() => setExpanded(value => !value)}>
+      <button className="td-priority-expand" type="button" disabled={disabled} onClick={() => setExpanded(value => !value)}>
         {expanded
           ? (zh ? '收起次要行动 ↑' : 'HIDE SECONDARY ACTIONS ↑')
           : (zh ? `查看其余 ${Math.max(0, priorityList.length - 3)} 项 ↓` : `SHOW ${Math.max(0, priorityList.length - 3)} MORE ↓`)}
@@ -254,23 +468,23 @@ function PriorityList({ priorityList, onChange }) {
 }
 
 // ── Left: Team Roster + Priority ──────────────────────────────────────────────
-function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression, onPriorityChange, onHover, onOpenCoreMarket, mobileActive }) {
+function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression, onPriorityChange, onHover, onOpenCoreMarket, mobileActive, locked = false }) {
   const { lang } = useLang();
   const lvls = agentDefs.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
   return (
-    <div id="lobby-panel-formation" role="tabpanel" aria-labelledby="lobby-tab-formation" tabIndex={0} className={`td-lobby-roster td-scroll-region ${mobileActive ? 'td-mobile-active' : ''}`} style={{
+    <div className={`td-lobby-roster ${mobileActive ? 'td-mobile-active' : ''}`} style={{
       width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10,
       padding: '12px 0 12px 12px',
     }}>
       {/* Roster card */}
       <div className="td-lobby-panel td-lobby-roster-card" style={{
-        border: '1px solid rgba(112, 159, 154,0.2)', borderRadius: 12, overflow: 'hidden',
+        border: '1px solid rgba(0,229,255,0.2)', borderRadius: 12, overflow: 'hidden',
         background: 'rgba(0,8,24,0.85)', backdropFilter: 'blur(10px)',
       }}>
         <div style={{
-          padding: '7px 12px', borderBottom: '1px solid rgba(112, 159, 154,0.12)',
-          background: 'rgba(112, 159, 154,0.05)',
-          fontSize: '0.52rem', color: '#709f9a', fontWeight: 700,
+          padding: '7px 12px', borderBottom: '1px solid rgba(0,229,255,0.12)',
+          background: 'rgba(0,229,255,0.05)',
+          fontSize: '0.52rem', color: '#00e5ff', fontWeight: 700,
           letterSpacing: '0.12em', fontFamily: 'monospace',
         }}>
           {lang === 'zh' ? '探员编组' : 'TEAM ROSTER'}
@@ -279,72 +493,128 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
           const isSelected = selectedIdx === i;
           const xpInfo = getXPToNextLevel(progression[i]?.xp || 0);
           return (
-            <button type="button" aria-pressed={isSelected} className={`td-roster-agent ${isSelected ? 'td-roster-agent-selected' : ''}`} key={i} onClick={() => onSelect(i)}
+            <div className={`td-roster-agent ${isSelected ? 'td-roster-agent-selected' : ''}`} key={i} onClick={() => !locked && onSelect(i)}
               onMouseEnter={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseMove={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseLeave={() => onHover?.(null)}
               style={{
-              display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', border: 0,
-              padding: '10px 12px', cursor: 'pointer',
-              borderLeft: `3px solid ${isSelected ? noirColor(def.color) : 'transparent'}`,
-              background: isSelected ? `${noirColor(def.color)}12` : 'transparent',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '10px 12px', cursor: locked ? 'default' : 'pointer',
+              borderLeft: `3px solid ${isSelected ? def.color : 'transparent'}`,
+              background: isSelected ? `${def.color}12` : 'transparent',
               borderBottom: '1px solid rgba(255,255,255,0.05)',
               transition: 'all 0.2s',
             }}>
               <div style={{
                 width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                border: `1.5px solid ${noirColor(def.color)}70`,
-                background: isSelected ? `${noirColor(def.color)}30` : 'transparent',
+                border: `1.5px solid ${def.color}70`,
+                background: isSelected ? `${def.color}30` : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.52rem', color: noirColor(def.color), fontWeight: 900, fontFamily: 'monospace',
-                boxShadow: isSelected ? `0 0 10px ${noirColor(def.color)}80` : 'none',
+                fontSize: '0.52rem', color: def.color, fontWeight: 900, fontFamily: 'monospace',
+                boxShadow: isSelected ? `0 0 10px ${def.color}80` : 'none',
               }}>{lvls[i]}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 11 }}><Icon name={def.icon} /></span>
-                  <span style={{ fontSize: '0.58rem', fontWeight: 700, color: noirColor(def.color), fontFamily: 'monospace', letterSpacing: '0.04em' }}>{def.id}</span>
+                  <span style={{ fontSize: 11 }}>{def.icon}</span>
+                  <span style={{ fontSize: '0.58rem', fontWeight: 700, color: def.color, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{def.id}</span>
                 </div>
                 <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{lang === 'zh' ? def.roleZh : def.role}</div>
                 {/* XP mini bar */}
                 <div style={{ marginTop: 3, height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1 }}>
-                  <div style={{ width: `${xpInfo.pct}%`, height: '100%', background: noirColor(def.color), borderRadius: 1, transition: 'width 0.5s ease' }}/>
+                  <div style={{ width: `${xpInfo.pct}%`, height: '100%', background: def.color, borderRadius: 1, transition: 'width 0.5s ease' }}/>
                 </div>
               </div>
-            </button>
+            </div>
           );
         })}
-        <button type="button" onClick={event => onOpenCoreMarket?.(selectedIdx, event.currentTarget)} style={{
+        <button type="button" disabled={locked} onClick={() => !locked && onOpenCoreMarket?.(selectedIdx)} style={{
           width: 'calc(100% - 20px)', margin: '8px 10px 10px', minHeight: 34, borderRadius: 8,
-          border: '1px solid rgba(197, 166, 111,.48)', background: 'rgba(197, 166, 111,.08)',
-          color: '#e1d0ac', fontFamily: 'monospace', fontSize: '.5rem', fontWeight: 900, cursor: 'pointer',
+          border: '1px solid rgba(232,201,138,.48)', background: 'rgba(232,201,138,.08)',
+          color: '#f0d28b', fontFamily: 'monospace', fontSize: '.5rem', fontWeight: 900, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.45 : 1,
         }}>♛ {lang === 'zh' ? '核心签约 / 替换' : 'CORE RECRUIT / REPLACE'}</button>
       </div>
 
       {/* Priority list card */}
       <div className="td-lobby-panel td-lobby-priority-card" style={{
-        border: '1px solid rgba(155, 154, 174,0.2)', borderRadius: 12,
+        border: '1px solid rgba(167,139,250,0.2)', borderRadius: 12,
         background: 'rgba(0,4,20,0.85)', backdropFilter: 'blur(10px)',
         padding: '10px 12px', flex: 1,
       }}>
         <PriorityList
           priorityList={agents[selectedIdx]?.priority_list || PRIORITY_ACTIONS.map(p => p.id)}
           onChange={(list) => onPriorityChange(selectedIdx, list)}
+          disabled={locked}
         />
       </div>
     </div>
   );
 }
 
-// ── Center: Holographic Stage ─────────────────────────────────────────────────
-function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive, targetCase, activeSupport, supportCount, commanderName }) {
+function MatchReadoutStrip({ matchDetails, hasTarget = false }) {
   const { lang } = useLang();
-  const activeIdx = agentDefs[selectedIdx] ? selectedIdx : 0;
-  const activeDef = agentDefs[activeIdx];
+  const zh = lang === 'zh';
+  const readout = matchDetails?.readout || {};
+  const strengths = (readout.strengths || []).slice(0, 2);
+  const risks = (readout.risks || []).slice(0, 2);
+  const describe = item => {
+    const action = zh
+      ? (item.action || item.label || item.key)
+      : (item.actionEn || item.labelEn || item.action || item.label || item.key);
+    const owner = zh
+      ? (item.owner || item.agentId || '—')
+      : (item.ownerEn || item.owner || item.agentId || '—');
+    const weight = Number.isFinite(Number(item.weight))
+      ? ` · ${zh ? `权重 ${Math.round(Number(item.weight) * 100)}%` : `${Math.round(Number(item.weight) * 100)}% WEIGHT`}`
+      : '';
+    return `${action} · ${owner}${weight}`;
+  };
+  return <div className="td-lobby-match-readout" aria-label={hasTarget ? (zh ? '案件优势与风险' : 'Case strengths and risks') : (zh ? '编组优势与风险' : 'Squad strengths and risks')}>
+    <div className="td-lobby-match-score">
+      <small>{hasTarget ? (zh ? '案件适配度' : 'CASE FIT') : (zh ? '编组适配度' : 'SQUAD FIT')}</small>
+      <strong style={{ color: matchDetails.color }}>{matchDetails.score}<em>%</em></strong>
+    </div>
+    <div className="td-lobby-match-column is-strength">
+      <span>{zh ? '优势' : 'STRENGTHS'}</span>
+      <p>{strengths.length ? strengths.map(describe).join(' / ') : (zh ? '暂无明显优势，可调整专长补强' : 'NO CLEAR STRENGTH — TUNE SPECIALTIES')}</p>
+    </div>
+    <div className="td-lobby-match-column is-risk">
+      <span>{zh ? '风险' : 'RISKS'}</span>
+      <p>{risks.length ? risks.map(describe).join(' / ') : (zh ? '暂无明显短板' : 'NO DOMINANT GAP')}</p>
+    </div>
+  </div>;
+}
+
+function FormationChangeFeedback({ change }) {
+  const { lang } = useLang();
+  if (!change) return null;
+  const zh = lang === 'zh';
+  const capability = item => zh ? item.actionZh : item.actionEn;
+  const describe = items => items.map(item => `${capability(item)} ${item.delta > 0 ? '+' : ''}${item.delta}`).join(' / ');
+  const summary = [
+    change.gains.length ? `${zh ? '获得' : 'GAIN'}: ${describe(change.gains)}` : '',
+    change.losses.length ? `${zh ? '减少' : 'LOSS'}: ${describe(change.losses)}` : '',
+  ].filter(Boolean).join(' · ');
+  return <details className="td-lobby-change-feedback">
+    <summary><strong>{zh ? '本次调整' : 'FORMATION CHANGE'}</strong><span>{summary || (change.handling.length
+      ? (zh ? '能力覆盖不变，试演处理效果已更新' : 'COVERAGE UNCHANGED; REHEARSAL RESPONSE UPDATED')
+      : (zh ? '能力覆盖与当前试演效果不变' : 'COVERAGE AND CURRENT REHEARSAL RESPONSE UNCHANGED'))}</span></summary>
+    <div>
+      {change.handling.length ? change.handling.map(item => <p key={item.key}>
+        <b>{item.agentId} · {zh ? item.action : item.actionEn}</b>
+        <span>{zh ? '处理适配' : 'HANDLING FIT'} {item.previous.fitScore} → {item.fitScore} · {zh ? '节奏' : 'TEMPO'} {item.previous.impact.tempo} → {item.impact.tempo} · {zh ? '风险变化' : 'RISK CHANGE'} {item.previous.riskDelta} → {item.riskDelta}</span>
+      </p>) : <p>{zh ? '这次调整没有改变三段试演的处理指标。' : 'This adjustment did not change the three rehearsal response metrics.'}</p>}
+      {Boolean(change.gains.length) && !change.losses.length && <p>{zh ? '本次补强未降低其他公开能力覆盖。' : 'This improvement did not reduce other public capability coverage.'}</p>}
+    </div>
+  </details>;
+}
+
+// ── Center: Holographic Stage ─────────────────────────────────────────────────
+function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive, targetCase, activeSupport, supportCount, commanderName, matchDetails, locked = false }) {
+  const { lang } = useLang();
   const lvls = agentDefs.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
 
   return (
-    <div id="lobby-panel-briefing" role="tabpanel" aria-labelledby="lobby-tab-briefing" tabIndex={0} className={`td-lobby-stage td-lobby-panel td-scroll-region ${mobileActive ? 'td-mobile-active' : ''}`}>
-      <div className="td-lobby-stage-scene">
+    <div className={`td-lobby-stage td-lobby-panel ${mobileActive ? 'td-mobile-active' : ''}`} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {/* Grid bg */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 0,
@@ -354,11 +624,11 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
       }}/>
 
       {/* Particle network canvas */}
-      <ParticleCanvas agentDefs={agentDefs} selectedIdx={activeIdx} hasTarget={Boolean(targetCase)} />
+      <ParticleCanvas agents={agents} agentDefs={agentDefs} selectedIdx={selectedIdx} accentColor={accentColor} hasTarget={Boolean(targetCase)} />
 
       <div className="td-stage-focus">
         <span>{targetCase ? 'MISSION COMMAND UPLINK' : 'AGENT CONFIGURATION'}</span>
-        <strong style={{ color: noirColor(activeDef.color) }}><Icon name={activeDef.icon} /> {activeDef.id}</strong>
+        <strong style={{ color: agentDefs[selectedIdx].color }}>{agentDefs[selectedIdx].icon} {agentDefs[selectedIdx].id}</strong>
         <small>{synergy.active.length
           ? (lang === 'zh' ? `${synergy.active.length} 项协同已激活` : `${synergy.active.length} SYNERGIES ACTIVE`)
           : (lang === 'zh' ? '选择探员并调整专长' : 'SELECT AN AGENT AND TUNE SPECIALTIES')}</small>
@@ -370,14 +640,16 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
         <small>{targetCase ? targetCase.difficulty : (lang === 'zh' ? '通用编组模式' : 'GENERAL FORMATION')}</small>
       </div>
 
+      <MatchReadoutStrip matchDetails={matchDetails} hasTarget={Boolean(targetCase)} />
+
       {activeSupport && (
-        <div className="td-support-node" style={/** @type {React.CSSProperties & {'--support-color': string}} */ ({ '--support-color': activeSupport.color || '#c5a66f' })}>
-          <span><Icon name={activeSupport.icon} /></span><div><small>{lang === 'zh' ? `支援链路 · 后备 ${Math.max(0, supportCount - 1)}` : `SUPPORT LINK · ${Math.max(0, supportCount - 1)} RESERVE`}</small><strong>{activeSupport.id}</strong></div>
+        <div className="td-support-node" style={/** @type {React.CSSProperties & {'--support-color': string}} */ ({ '--support-color': activeSupport.color || '#e8c98a' })}>
+          <span>{activeSupport.icon}</span><div><small>{lang === 'zh' ? `支援链路 · 后备 ${Math.max(0, supportCount - 1)}` : `SUPPORT LINK · ${Math.max(0, supportCount - 1)} RESERVE`}</small><strong>{activeSupport.id}</strong></div>
         </div>
       )}
 
       {/* Agents on stage */}
-      <div className="td-stage-agents" style={{
+      <div style={{
         position: 'absolute', bottom: 118, left: 0, right: 0,
         display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end',
         padding: '0 30px', zIndex: 3,
@@ -385,13 +657,13 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
         {agentDefs.map((def, i) => (
           <HoloFigure
             key={i} agentDef={def} isSelected={selectedIdx === i}
-            index={i} level={lvls[i]} onClick={() => onSelect(i)} onHover={onHover}
+            index={i} level={lvls[i]} onClick={locked ? undefined : () => onSelect(i)} onHover={onHover}
           />
         ))}
       </div>
 
       {/* Platform ellipse */}
-      <div className="td-holo-platform" style={{ position: 'absolute', bottom: 58, left: '10%', right: '10%', zIndex: 2 }}>
+      <div style={{ position: 'absolute', bottom: 58, left: '10%', right: '10%', zIndex: 2 }}>
         <svg viewBox="0 0 400 50" width="100%" style={{ overflow: 'visible' }}>
           <defs>
             <linearGradient id="plat-g" x1="0" y1="0" x2="0" y2="1">
@@ -402,11 +674,11 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
           <ellipse cx="200" cy="14" rx="198" ry="16" fill="url(#plat-g)" opacity="0.85"/>
           <ellipse cx="200" cy="14" rx="198" ry="16" fill="none" stroke={accentColor} strokeWidth="1.2" opacity="0.6"/>
           <ellipse cx="200" cy="14" rx="148" ry="12" fill="none" stroke={accentColor} strokeWidth="0.6" strokeDasharray="6 5" opacity="0.3"
-            style={{ animation: 'none', transformOrigin: '200px 14px' }}/>
+            style={{ animation: 'spin-ring 10s linear infinite', transformOrigin: '200px 14px' }}/>
           {[0, 72, 144, 216, 288].map((angle, i) => {
             const r = (angle * Math.PI) / 180;
             return <circle key={i} cx={200 + 180 * Math.cos(r)} cy={14 + 14 * Math.sin(r)} r="3"
-              fill={accentColor} opacity="0.8" style={{ animation: 'none' }}/>;
+              fill={accentColor} opacity="0.8" style={{ animation: `plat-dot 2.5s ${i * 0.5}s ease-in-out infinite` }}/>;
           })}
           <text x="200" y="38" textAnchor="middle" fill={accentColor} fontSize="6"
             fontFamily="monospace" opacity="0.4" letterSpacing="4">
@@ -420,7 +692,6 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
         <div><small>COMMAND</small><strong>{commanderName || (lang === 'zh' ? '侦探指挥席' : 'DETECTIVE')}</strong></div>
       </div>
 
-      </div>
       <style>{`
         @keyframes spin-ring { from{stroke-dashoffset:0} to{stroke-dashoffset:100} }
         @keyframes plat-dot { 0%,100%{opacity:0.3} 50%{opacity:1} }
@@ -430,7 +701,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
 }
 
 // ── Right: Attribute Config + Skill Tree ─────────────────────────────────────
-function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive }) {
+function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive, locked = false, readOnly = false, skillSyncPending = false }) {
   const { lang } = useLang();
   const [tab, setTab] = useState('attrs'); // 'attrs' | 'skills' | 'dossier'
 
@@ -441,21 +712,21 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
   ];
 
   return (
-    <div id="lobby-panel-agent" role="tabpanel" aria-labelledby="lobby-tab-agent" className={`td-lobby-attributes ${mobileActive ? 'td-mobile-active' : ''}`} style={{
+    <div className={`td-lobby-attributes ${mobileActive ? 'td-mobile-active' : ''}`} style={{
       width: 300, flexShrink: 0, padding: '12px 12px 12px 0',
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <div className="td-lobby-panel td-lobby-attribute-card" style={{
-        border: `1px solid ${noirColor(agentDef.color)}35`, borderRadius: 12, overflow: 'hidden',
+        border: `1px solid ${agentDef.color}35`, borderRadius: 12, overflow: 'hidden',
         background: 'rgba(0,8,24,0.85)', backdropFilter: 'blur(10px)',
         flex: 1, display: 'flex', flexDirection: 'column',
       }}>
         {/* Agent identity header */}
-        <div style={{ padding: '7px 12px', borderBottom: `1px solid ${noirColor(agentDef.color)}20`, background: `${noirColor(agentDef.color)}07` }}>
+        <div style={{ padding: '7px 12px', borderBottom: `1px solid ${agentDef.color}20`, background: `${agentDef.color}07` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-            <span style={{ fontSize: 16 }}><Icon name={agentDef.icon} /></span>
+            <span style={{ fontSize: 16 }}>{agentDef.icon}</span>
             <div>
-              <div style={{ fontSize: '0.6rem', color: noirColor(agentDef.color), fontWeight: 900, fontFamily: 'monospace' }}>{agentDef.id}</div>
+              <div style={{ fontSize: '0.6rem', color: agentDef.color, fontWeight: 900, fontFamily: 'monospace' }}>{agentDef.id}</div>
               <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{lang === 'zh' ? agentDef.roleZh : agentDef.role}</div>
             </div>
           </div>
@@ -465,30 +736,30 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
               <button key={t.key} onClick={() => setTab(t.key)} style={{
                 flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
                 fontFamily: 'monospace', fontSize: '0.5rem', fontWeight: 700,
-                background: tab === t.key ? noirColor(agentDef.color) + '22' : 'rgba(255,255,255,0.04)',
-                color: tab === t.key ? noirColor(agentDef.color) : 'rgba(255,255,255,0.35)',
-                borderBottom: `2px solid ${tab === t.key ? noirColor(agentDef.color) : 'transparent'}`,
+                background: tab === t.key ? agentDef.color + '22' : 'rgba(255,255,255,0.04)',
+                color: tab === t.key ? agentDef.color : 'rgba(255,255,255,0.35)',
+                borderBottom: `2px solid ${tab === t.key ? agentDef.color : 'transparent'}`,
                 transition: 'all 0.2s',
               }}>
-                <Icon name={t.icon} /> <IconText text={t.label} />
+                {t.icon} {t.label}
               </button>
             ))}
           </div>
         </div>
 
         {/* Tab content */}
-        <div className="td-scroll-region" tabIndex={0} role="region" aria-label={tabs.find(item => item.key === tab).label} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
           {tab === 'attrs' && (
             <>
               {/* Radar chart */}
               <div style={{
                 display: 'flex', justifyContent: 'center',
                 padding: '8px 0 4px', marginBottom: 6,
-                borderBottom: `1px solid ${noirColor(agentDef.color)}20`,
+                borderBottom: `1px solid ${agentDef.color}20`,
               }}>
                 <AgentRadarChart
                   agent={agent}
-                  agentColor={noirColor(agentDef.color)}
+                  agentColor={agentDef.color}
                   allAgents={allAgents}
                   size={150}
                 />
@@ -496,23 +767,28 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
               <SpecialtyAttrPanel
                 agentIdx={agentIdx}
                 spec={spec}
-                onSpecChange={onSpecChange}
-                agentColor={noirColor(agentDef.color)}
+                onSpecChange={locked ? () => {} : onSpecChange}
+                agentColor={agentDef.color}
                 attributeBonus={agentDef.attribute_bonus}
               />
-              <div style={{ marginTop: 8, padding: '8px 10px', border: `1px solid ${noirColor(agentDef.color)}25`, borderRadius: 8, background: `${noirColor(agentDef.color)}07` }}>
-                <div style={{ fontSize: '0.48rem', color: noirColor(agentDef.color), fontWeight: 700, fontFamily: 'monospace', marginBottom: 4 }}>◎ AGENT TRAIT</div>
+              <div style={{ marginTop: 8, padding: '8px 10px', border: `1px solid ${agentDef.color}25`, borderRadius: 8, background: `${agentDef.color}07` }}>
+                <div style={{ fontSize: '0.48rem', color: agentDef.color, fontWeight: 700, fontFamily: 'monospace', marginBottom: 4 }}>◎ AGENT TRAIT</div>
                 <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', lineHeight: 1.55 }}>{lang === 'zh' ? agentDef.desc : agentDef.descEn}</div>
               </div>
             </>
           )}
           {tab === 'skills' && (
-            <SkillTreePanel agentIdx={agentIdx} progression={progression} loadout={skillLoadout} onChange={onSkillLoadout} />
+            <>
+              {(readOnly || skillSyncPending) && <p role="status" className="td-lobby-skill-status">{skillSyncPending
+                ? (lang === 'zh' ? '正在同步技能，完成后可继续部署…' : 'SYNCING SKILLS. DEPLOYMENT WILL BE AVAILABLE WHEN COMPLETE…')
+                : (lang === 'zh' ? '只读模式：可查看技能和进行战术试演。' : 'READ ONLY: INSPECT SKILLS AND TRY A TACTICAL REHEARSAL.')}</p>}
+              <SkillTreePanel agentIdx={agentIdx} progression={progression} loadout={skillLoadout} disabled={readOnly || locked} onChange={onSkillLoadout} />
+            </>
           )}
           {tab === 'dossier' && (
             <AgentDossierPanel
               agentIdx={agentIdx}
-              color={noirColor(agentDef.color)}
+              color={agentDef.color}
               icon={agentDef.icon}
               roleZh={agentDef.roleZh}
               lore={getDisplayLore(agentDef, agentIdx, lang)}
@@ -525,56 +801,56 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
 }
 
 // ── Status Bar ────────────────────────────────────────────────────────────────
-function StatusBar({ onBack, onOpenSettings, profile, readOnly, lighting }) {
+function StatusBar({ onBack, backLabel, onOpenSettings, profile, readOnly, lighting }) {
   const [time, setTime] = useState(new Date());
   const { lang } = useLang();
   useEffect(() => { const id = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(id); }, []);
   return (
     <div className="td-lobby-status" style={{
       height: 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 16px', borderBottom: '1px solid rgba(112, 159, 154,0.15)',
+      padding: '0 16px', borderBottom: '1px solid rgba(0,229,255,0.15)',
       background: 'rgba(0,0,0,0.65)', fontFamily: 'monospace', fontSize: '0.5rem', flexShrink: 0,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {onBack && (
           <button onClick={onBack} style={{
             padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
-            border: '1px solid rgba(112, 159, 154,0.45)', background: 'rgba(112, 159, 154,0.1)',
-            color: '#709f9a', fontFamily: 'monospace', fontSize: '0.5rem', letterSpacing: '0.12em',
+            border: '1px solid rgba(0,229,255,0.45)', background: 'rgba(0,229,255,0.1)',
+            color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.5rem', letterSpacing: '0.12em',
             whiteSpace: 'nowrap',
-          }}>◄ {lang === 'zh' ? '侦探之家' : 'HOME'}</button>
+          }}>◄ {backLabel || (lang === 'zh' ? '侦探之家' : 'HOME')}</button>
         )}
         <span className="td-lobby-brand">TD<span>//</span>07</span>
         <span className="td-lobby-user">
-          <Icon name={profile?.avatar || '🕵️'} /> <strong>{profile?.detective_name || (lang === 'zh' ? '未命名侦探' : 'UNNAMED')}</strong>
+          {profile?.avatar || '🕵️'} <strong>{profile?.detective_name || (lang === 'zh' ? '未命名侦探' : 'UNNAMED')}</strong>
           <em>LV.{profile?.level || 1}</em>
         </span>
       </div>
       <div className="td-lobby-status-right" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <span className="td-lobby-light-state" title={lang === 'zh' ? `大厅亮度会随本地时间自动变化 · 当前 ${Math.round(lighting.brightness * 100)}%` : `Lobby lighting follows local time · ${Math.round(lighting.brightness * 100)}%`}>
-          <IconText text={lighting.phase === 'day' ? '☀' : lighting.phase === 'dawn' ? '🌤' : lighting.phase === 'evening' ? '🌆' : '🌙'} />
+          {lighting.phase === 'day' ? '☀' : lighting.phase === 'dawn' ? '🌤' : lighting.phase === 'evening' ? '🌆' : '🌙'}
           <b>{lang === 'zh' ? ({ dawn: '清晨', day: '日间', evening: '傍晚', night: '夜间' }[lighting.phase]) : lighting.phase.toUpperCase()}</b>
         </span>
-        <span className="td-lobby-wallet-pill td-lobby-wallet-energy"><IconText text={"⚡ "} /><b>{profile?.energy || 0}</b></span>
-        <span className="td-lobby-wallet-pill td-lobby-wallet-diamonds"><IconText text={"💎 "} /><b>{(profile?.diamonds || 0).toLocaleString('en-US')}</b></span>
-        <span className="td-lobby-wallet-pill td-lobby-wallet-gold"><IconText text={"🪙 "} /><b>{(profile?.gold || 0).toLocaleString('en-US')}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-energy">⚡ <b>{profile?.energy || 0}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-diamonds">💎 <b>{(profile?.diamonds || 0).toLocaleString('en-US')}</b></span>
+        <span className="td-lobby-wallet-pill td-lobby-wallet-gold">🪙 <b>{(profile?.gold || 0).toLocaleString('en-US')}</b></span>
         <span className={`td-lobby-link-state ${readOnly ? 'is-readonly' : ''}`}>● {readOnly ? (lang === 'zh' ? '只读' : 'READ ONLY') : (lang === 'zh' ? '云端在线' : 'CLOUD ONLINE')}</span>
-        <span style={{ color: '#709f9a', fontWeight: 700 }}>
+        <span style={{ color: '#00e5ff', fontWeight: 700 }}>
           {time.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
         <button type="button" className="td-lobby-settings-button" onClick={onOpenSettings}
           aria-label={lang === 'zh' ? '打开设置' : 'Open settings'}
           title={lang === 'zh' ? '设置' : 'Settings'} style={{
           padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
-          border: '1px solid rgba(112, 159, 154,0.4)', background: 'rgba(112, 159, 154,0.1)', color: '#709f9a',
-        }}><span aria-hidden="true"><IconText text={"⚙️"} /></span><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span></button>
+          border: '1px solid rgba(0,229,255,0.4)', background: 'rgba(0,229,255,0.1)', color: '#00e5ff',
+        }}><span aria-hidden="true">⚙️</span><span>{lang === 'zh' ? '设置' : 'SETTINGS'}</span></button>
       </div>
     </div>
   );
 }
 
 // ── Deploy Controls ───────────────────────────────────────────────────────────
-function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerRef, onTacticalDesk, tacticalDeskTriggerRef, synergyOver, synergy, onApplyPreset, disabled = false }) {
+function DeployControls({ onDeploy, onSave, onLoad, onTutorial, onRehearsal, synergyOver, synergy, onApplyPreset, disabled = false, locked = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [deploying, setDeploying] = useState(false);
@@ -582,12 +858,10 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerR
   const [flash, setFlash] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const prevSynergy = useRef(synergy);
-  const toolsToggleRef = useRef(null);
-  const setToolsToggleRef = useCallback(node => {
-    toolsToggleRef.current = node;
-    if (tutorialTriggerRef) tutorialTriggerRef.current = node;
-    if (tacticalDeskTriggerRef) tacticalDeskTriggerRef.current = node;
-  }, [tacticalDeskTriggerRef, tutorialTriggerRef]);
+
+  useEffect(() => {
+    if (locked) setToolsOpen(false);
+  }, [locked]);
 
   // Flash animation whenever synergy changes
   useEffect(() => {
@@ -600,60 +874,60 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerR
   }, [synergy]);
 
   const handleDeploy = async () => {
-    if (disabled || deploying) return;
+    if (disabled || locked || deploying || saving) return;
     setDeploying(true);
     try { await onDeploy(); } catch { /* parent displays the sync failure */ } finally { setDeploying(false); }
   };
 
   const handleSave = async () => {
-    if (saving || disabled) return;
+    if (saving || deploying || disabled || locked) return;
     setSaving(true);
     try { await onSave(); } catch { /* parent displays the sync failure */ } finally { setSaving(false); }
   };
 
-  const c = synergyOver ? '#c77c78' : '#709f9a';
+  const c = synergyOver ? '#ff3860' : '#00e5ff';
   const barPct = Math.min(synergy, 100);
 
   const btns = [
-    { label: zh ? '战术试演' : 'TACTICAL REHEARSAL', icon: '♢', onClick: () => { onTacticalDesk(); setToolsOpen(false); }, color: '#c5a66f' },
-    { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#709f9a', disabled: saving || disabled },
-    { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { onLoad(); setToolsOpen(false); }, color: '#9b9aae' },
-    { label: zh ? '大厅教程' : 'HALL GUIDE', icon: '❓', onClick: () => { onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)' },
+    { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#00e5ff', disabled: saving || deploying || disabled || locked },
+    { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { if (!locked) onLoad(); setToolsOpen(false); }, color: '#a78bfa', disabled: saving || deploying || locked },
+    { label: zh ? '战术台指南' : 'TACTICAL DESK GUIDE', icon: '❓', onClick: () => { if (!locked) onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)', disabled: saving || deploying || locked },
   ];
 
   return (
     <div className="td-lobby-controls" style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
-      borderTop: `1px solid ${synergyOver ? '#c77c7840' : 'rgba(112, 159, 154,0.15)'}`,
+      borderTop: `1px solid ${synergyOver ? '#ff386040' : 'rgba(0,229,255,0.15)'}`,
       background: synergyOver ? 'rgba(30,0,8,0.85)' : 'rgba(0,0,0,0.75)',
       flexShrink: 0, transition: 'background 0.4s, border-color 0.4s',
     }}>
       <div className="td-lobby-tools-wrap">
-        <button ref={setToolsToggleRef} className="td-lobby-tools-toggle" type="button" aria-label={zh ? '编队工具' : 'Squad tools'} aria-controls="lobby-tools" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>
+        <button className="td-lobby-tools-toggle" type="button" aria-expanded={toolsOpen} disabled={locked} onClick={() => setToolsOpen(value => !value)}>
           <span>☰</span><span>{zh ? '编队工具' : 'SQUAD TOOLS'}</span><small>{toolsOpen ? (zh ? '收起' : 'CLOSE') : (zh ? '预设 / 保存' : 'PRESETS / SAVE')}</small>
         </button>
-        {toolsOpen && <div id="lobby-tools" className="td-lobby-tools-popover td-scroll-region" onKeyDown={event => {
-          if (event.key === 'Escape') {
-            event.stopPropagation();
-            setToolsOpen(false);
-            toolsToggleRef.current?.focus();
-          }
-        }}>
-          <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} type="button" onClick={button.onClick} disabled={button.disabled} style={{ color: noirColor(button.color), borderColor: `${noirColor(button.color)}45`, background: `${noirColor(button.color)}0d` }}><span><Icon name={button.icon} /></span>{button.label}</button>)}</div>
-          <PresetChips onApply={preset => { onApplyPreset(preset); setToolsOpen(false); }} />
+        {toolsOpen && <div className="td-lobby-tools-popover">
+          <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: button.color, borderColor: `${button.color}45`, background: `${button.color}0d` }}><span>{button.icon}</span>{button.label}</button>)}</div>
+          <PresetChips onApply={preset => { if (!locked) onApplyPreset(preset); setToolsOpen(false); }} />
         </div>}
       </div>
 
       <div className="td-lobby-synergy-compact" style={/** @type {React.CSSProperties & {'--synergy-color': string}} */ ({ '--synergy-color': c })}>
-        <span><IconText text={synergyOver ? (zh ? '⚠ 专长过载' : '⚠ SPECIALTY OVERLOAD') : (zh ? '队伍协同' : 'TEAM SYNERGY')} /></span>
+        <span>{synergyOver ? (zh ? '⚠ 专长过载' : '⚠ SPECIALTY OVERLOAD') : (zh ? '队伍协同' : 'TEAM SYNERGY')}</span>
         <strong style={{ transform: flash ? 'scale(1.08)' : 'scale(1)' }}>{synergy}<small>%</small></strong>
         <i><b style={{ width: `${barPct}%` }} /></i>
       </div>
 
+      <button type="button" className="td-lobby-rehearsal-button" onClick={onRehearsal}
+        disabled={locked || deploying || saving}
+        aria-label={zh ? '开始战术试演' : 'Start tactical rehearsal'}
+        title={zh ? '免费模拟，不消耗体力或档案资源' : 'Free simulation. No energy or profile resources are used.'}>
+        <span aria-hidden="true">◈</span><strong>{zh ? '战术试演' : 'TACTICAL REHEARSAL'}</strong>
+      </button>
+
       {/* Main deploy */}
       <button
         onClick={handleDeploy}
-        disabled={deploying || disabled}
+        disabled={locked || deploying || saving || disabled}
         title={disabled
           ? (zh ? '当前设备为只读，请先接管此设备' : 'This device is read-only. Take over this session first.')
           : synergyOver
@@ -662,33 +936,33 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerR
         style={{
           flex: 1, maxWidth: 330, marginLeft: 'auto',
           padding: '11px 24px', borderRadius: 10,
-          border: `2px solid ${synergyOver ? '#c77c7870' : deploying ? 'rgba(112, 159, 154,0.3)' : '#709f9aaa'}`,
+          border: `2px solid ${synergyOver ? '#ff386070' : deploying ? 'rgba(0,229,255,0.3)' : '#00e5ffaa'}`,
           background: synergyOver
-            ? 'rgba(199, 124, 120,0.12)'
+            ? 'rgba(255,56,96,0.12)'
             : deploying
-            ? 'rgba(112, 159, 154,0.15)'
-            : 'linear-gradient(135deg, rgba(0,80,160,0.7) 0%, rgba(112, 159, 154,0.45) 100%)',
-          color: synergyOver ? '#c77c78' : '#fff',
-          cursor: disabled ? 'not-allowed' : deploying ? 'wait' : 'pointer',
+            ? 'rgba(0,229,255,0.15)'
+            : 'linear-gradient(135deg, rgba(0,80,160,0.7) 0%, rgba(0,200,255,0.45) 100%)',
+          color: synergyOver ? '#ff3860' : '#fff',
+          cursor: locked || disabled || saving ? 'not-allowed' : deploying ? 'wait' : 'pointer',
           fontFamily: 'monospace', fontWeight: 900, fontSize: '0.78rem', letterSpacing: '0.2em',
-          textShadow: 'none',
+          textShadow: synergyOver ? '0 0 12px rgba(255,56,96,0.9)' : '0 0 12px rgba(0,229,255,0.9)',
           boxShadow: synergyOver
-            ? '0 0 24px rgba(199, 124, 120,0.3)'
-            : '0 0 24px rgba(112, 159, 154,0.35), 0 0 50px rgba(112, 159, 154,0.1)',
+            ? '0 0 24px rgba(255,56,96,0.3)'
+            : '0 0 24px rgba(0,200,255,0.35), 0 0 50px rgba(0,200,255,0.1)',
           transition: 'all 0.3s', position: 'relative', overflow: 'hidden',
-          opacity: disabled ? .42 : synergyOver ? 0.85 : 1,
+          opacity: disabled ? .42 : locked ? .58 : saving ? .58 : synergyOver ? 0.85 : 1,
         }}>
         {!synergyOver && (
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(to right, transparent, rgba(112, 159, 154,0.12), transparent)',
-            animation: 'none',
+            background: 'linear-gradient(to right, transparent, rgba(0,229,255,0.12), transparent)',
+            animation: 'btn-shimmer 2.2s linear infinite',
           }}/>
         )}
         <span style={{ position: 'relative', zIndex: 1 }}>
-          <IconText text={synergyOver
+          {synergyOver
             ? (zh ? '⚠ 专长过载 · 仍可部署' : '⚠ OVERLOAD · DEPLOY ANYWAY')
-            : deploying ? (zh ? '⟳ 正在部署…' : '⟳ DEPLOYING...') : (zh ? '▶ 部署探员' : '▶ DEPLOY AGENTS')} />
+            : deploying ? (zh ? '⟳ 正在部署…' : '⟳ DEPLOYING...') : (zh ? '▶ 部署探员' : '▶ DEPLOY AGENTS')}
         </span>
       </button>
       <style>{`
@@ -699,13 +973,94 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, tutorialTriggerR
   );
 }
 
+const CORE_ATTRIBUTE_LABELS = Object.freeze({
+  logic_power: ['逻辑', 'LOGIC'], observation_focus: ['观察', 'OBSERVATION'],
+  confusion_resistance: ['抗干扰', 'ANTI-CHAOS'], ap_cost_discount: ['AP 折扣', 'AP DISCOUNT'],
+  hack_level: ['黑客', 'HACK'],
+});
+
+function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose }) {
+  const { lang } = useLang();
+  const zh = lang === 'zh';
+  const [pendingId, setPendingId] = useState(null);
+  const owned = new Set(getOwnedAgentIds(profile));
+  const candidates = getCoreAgentsForSlot(slot);
+  const currentAgent = getAgentById(currentId) || candidates[0];
+  const pendingAgent = candidates.find(agent => agent.id === pendingId) || null;
+  const slotNames = zh ? ['调查核心席', '法证核心席', '技术核心席'] : ['INVESTIGATION CORE', 'FORENSIC CORE', 'TECHNICAL CORE'];
+
+  useEffect(() => { setPendingId(null); }, [currentId, slot]);
+  useEffect(() => {
+    const onKeyDown = event => {
+      if (event.key === 'Escape' && !busy) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [busy, onClose]);
+
+  const bonusTags = agent => Object.entries(agent?.attribute_bonus || {}).map(([key, value]) => {
+    const label = CORE_ATTRIBUTE_LABELS[key]?.[zh ? 0 : 1] || key;
+    return `${label} +${value}${key === 'ap_cost_discount' ? '%' : ''}`;
+  });
+  const pendingOwned = pendingAgent ? owned.has(pendingAgent.id) : false;
+  const diamonds = Math.max(0, Number(profile?.diamonds) || 0);
+  const affordable = !pendingAgent || pendingOwned || diamonds >= pendingAgent.cost;
+
+  return <div role="dialog" aria-modal="true" aria-label={slotNames[slot]} onClick={onClose} style={{
+    position: 'fixed', inset: 0, zIndex: 120, display: 'grid', placeItems: 'center', padding: 18,
+    background: 'rgba(0,3,10,.84)', backdropFilter: 'blur(10px)',
+  }}>
+    <section onClick={event => event.stopPropagation()} style={{
+      width: 'min(920px, 96vw)', maxHeight: '88dvh', overflow: 'auto', padding: 18, borderRadius: 18,
+      border: '1px solid rgba(232,201,138,.48)', background: 'linear-gradient(145deg,rgba(8,18,34,.98),rgba(2,7,18,.98))',
+      boxShadow: '0 28px 80px rgba(0,0,0,.65),0 0 38px rgba(232,201,138,.12)',
+    }}>
+      <header style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div><small style={{ color: '#f0d28b', letterSpacing: '.14em' }}>♛ CORE CONTRACT VAULT</small><h2 style={{ margin: '5px 0 0', color: '#f8e5b8', fontSize: '1rem' }}>{slotNames[slot]}</h2></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ color: '#7de8ff', font: '800 .62rem monospace' }}>💎 {diamonds.toLocaleString('en-US')}</span><button type="button" disabled={busy} onClick={onClose} aria-label={zh ? '关闭核心探员契约库' : 'Close core contract vault'} title={zh ? '关闭' : 'Close'} style={{ width: 44, height: 44, borderRadius: 10, border: '1px solid rgba(0,229,255,.35)', background: 'rgba(0,229,255,.08)', color: '#7df1ff', cursor: busy ? 'wait' : 'pointer', opacity: busy ? .45 : 1 }}>×</button></div>
+      </header>
+      <p style={{ margin: '0 0 15px', color: 'rgba(235,247,255,.5)', fontSize: '.58rem', lineHeight: 1.7 }}>{zh
+        ? '核心探员价格高于普通支援。签约后永久拥有，可替换当前席位；原核心不会消失，经验、技能树与专长进度继续由该职业席位继承。'
+        : 'Core operatives cost more than support recruits. Once owned, they can replace this slot at any time; its role XP, skill tree and specialties are preserved.'}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 10 }}>
+        {candidates.map(agent => {
+          const copy = agent[lang] || agent.zh;
+          const isOwned = owned.has(agent.id);
+          const selected = currentId === agent.id;
+          const isPending = pendingId === agent.id;
+          return <article key={agent.id} style={{ position: 'relative', padding: 13, borderRadius: 13, border: `1px solid ${selected || isPending ? agent.color : agent.color + '45'}`, background: selected ? `${agent.color}18` : isPending ? `${agent.color}12` : `${agent.color}09`, boxShadow: selected || isPending ? `0 0 22px ${agent.color}22` : 'none', transition: 'border-color .18s, background .18s, transform .18s', transform: isPending ? 'translateY(-2px)' : 'none' }}>
+            <span style={{ position: 'absolute', top: 9, right: 9, padding: '2px 6px', borderRadius: 999, border: `1px solid ${selected ? agent.color + '75' : 'rgba(255,255,255,.12)'}`, color: selected ? agent.color : isOwned ? '#6fffc0' : '#f0d28b', background: 'rgba(0,5,13,.72)', font: '800 .4rem monospace' }}>{selected ? (zh ? '当前席位' : 'ACTIVE') : isOwned ? (zh ? '已拥有' : 'OWNED') : (zh ? '待签约' : 'CONTRACT')}</span>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ width: 48, height: 48, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 24, border: `1px solid ${agent.color}80`, background: `${agent.color}18` }}>{agent.icon}</span><div><strong style={{ display: 'block', color: agent.color }}>{agent.id}</strong><small style={{ color: 'rgba(255,255,255,.45)' }}>{copy.role} · {agent.tier}</small></div></div>
+            <div style={{ marginTop: 10, color: 'rgba(240,248,255,.62)', fontSize: '.55rem', lineHeight: 1.6 }}>{copy.ability}</div>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 9 }}>{bonusTags(agent).map(tag => <span key={tag} style={{ padding: '3px 6px', borderRadius: 5, border: `1px solid ${agent.color}35`, background: `${agent.color}0b`, color: `${agent.color}dd`, font: '700 .42rem monospace' }}>{tag}</span>)}</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}><span style={{ color: '#f0d28b', fontSize: '.58rem', fontWeight: 900 }}>POWER {agent.power}</span>{!isOwned && <span style={{ color: '#7de8ff', font: '800 .5rem monospace' }}>💎 {agent.cost}</span>}<button type="button" disabled={busy || selected} onClick={() => setPendingId(agent.id)} style={{ marginLeft: 'auto', minHeight: 38, padding: '7px 11px', borderRadius: 8, border: `1px solid ${agent.color}90`, background: `${agent.color}18`, color: agent.color, fontFamily: 'monospace', fontSize: '.52rem', fontWeight: 900, cursor: busy ? 'wait' : 'pointer', opacity: busy || selected ? .48 : 1 }}>
+              {selected ? (zh ? '当前出战' : 'ACTIVE') : isPending ? (zh ? '已选中' : 'SELECTED') : (zh ? '预览替换' : 'PREVIEW')}
+            </button></div>
+          </article>;
+        })}
+      </div>
+      {pendingAgent && <div aria-live="polite" style={{ marginTop: 14, padding: 14, borderRadius: 13, border: `1px solid ${pendingAgent.color}55`, background: `linear-gradient(135deg,${pendingAgent.color}10,rgba(255,255,255,.02))` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 12 }}>
+          <div><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '当前核心' : 'CURRENT CORE'}</small><strong style={{ display: 'block', color: currentAgent.color, marginTop: 3 }}>{currentAgent.icon} {currentAgent.id}</strong><span style={{ color: 'rgba(255,255,255,.35)', font: '.48rem monospace' }}>POWER {currentAgent.power}</span></div>
+          <span style={{ color: '#f0d28b', fontSize: '1.2rem', textShadow: '0 0 14px rgba(240,210,139,.55)' }}>→</span>
+          <div style={{ textAlign: 'right' }}><small style={{ color: 'rgba(255,255,255,.38)' }}>{zh ? '替换目标' : 'REPLACEMENT'}</small><strong style={{ display: 'block', color: pendingAgent.color, marginTop: 3 }}>{pendingAgent.icon} {pendingAgent.id}</strong><span style={{ color: '#78ffc0', font: '.48rem monospace' }}>POWER {pendingAgent.power} · {pendingAgent.power >= currentAgent.power ? '+' : ''}{pendingAgent.power - currentAgent.power}</span></div>
+        </div>
+        <p style={{ margin: '11px 0', color: 'rgba(240,248,255,.56)', font: '.52rem/1.65 monospace' }}>{zh
+          ? '确认后才会写入云端。原核心探员不会消失；该席位的等级、技能树、专长与行动优先级全部保留。'
+          : 'The replacement is saved to the cloud only after confirmation. The previous core remains owned, and this slot keeps its level, skills, specialties and priorities.'}</p>
+        {!affordable && <div style={{ marginBottom: 9, color: '#ff718f', font: '800 .52rem monospace' }}>⚠ {zh ? `钻石不足，还差 ${pendingAgent.cost - diamonds}` : `NOT ENOUGH DIAMONDS · ${pendingAgent.cost - diamonds} MORE REQUIRED`}</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button type="button" disabled={busy} onClick={() => setPendingId(null)} style={{ minHeight: 42, padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,.18)', background: 'rgba(255,255,255,.04)', color: 'rgba(255,255,255,.58)', cursor: busy ? 'wait' : 'pointer' }}>{zh ? '取消' : 'CANCEL'}</button><button type="button" disabled={busy || !affordable} onClick={() => onConfirm(pendingAgent, !pendingOwned)} style={{ minHeight: 42, minWidth: 150, padding: '8px 14px', borderRadius: 8, border: `1px solid ${pendingAgent.color}90`, background: `${pendingAgent.color}18`, color: pendingAgent.color, font: '900 .56rem monospace', cursor: busy ? 'wait' : !affordable ? 'not-allowed' : 'pointer', opacity: busy || !affordable ? .48 : 1 }}>{busy ? (zh ? '正在同步…' : 'SYNCING…') : pendingOwned ? (zh ? '确认替换并保存' : 'CONFIRM & SAVE') : (zh ? `💎 ${pendingAgent.cost} · 签约并替换` : `💎 ${pendingAgent.cost} · RECRUIT & REPLACE`)}</button></div>
+      </div>}
+    </section>
+  </div>;
+}
+
 // ── Main HolographicLobby ─────────────────────────────────────────────────────
-export default function HolographicLobby({ profile, readOnly = false, targetCase = null, onDeploy, onBack, onTeamSave, onSkillLoadout, onAgentPurchase }) {
+export default function HolographicLobby({ profile, readOnly = false, targetCase = null, onDeploy, onBack, backLabel, onTeamSave, onSkillLoadout, onAgentPurchase }) {
   const { lang } = useLang();
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showTacticalDesk, setShowTacticalDesk] = useState(false);
   const [saveNotice, setSaveNotice] = useState(null);
   const noticeTimerRef = useRef(null);
   const {
@@ -719,9 +1074,9 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   const [coreMarketSlot, setCoreMarketSlot] = useState(null);
   const [corePurchaseBusy, setCorePurchaseBusy] = useState(false);
   const corePurchaseBusyRef = useRef(false);
-  const coreMarketTriggerRef = useRef(null);
-  const tutorialTriggerRef = useRef(null);
-  const tacticalDeskTriggerRef = useRef(null);
+  const [skillSyncPending, setSkillSyncPending] = useState(false);
+  const skillSyncLockRef = useRef(false);
+  const [showRehearsal, setShowRehearsal] = useState(false);
   const [lightingNow, setLightingNow] = useState(() => new Date());
   const lighting = getLobbyLighting(lightingNow);
 
@@ -737,7 +1092,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
     };
   }, []);
 
-  const accentColor = '#709f9a';
+  const accentColor = '#00e5ff';
 
   const showNotice = useCallback((message, duration = 1800, type = 'success') => {
     window.clearTimeout(noticeTimerRef.current);
@@ -765,41 +1120,113 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
   }, []);
 
   const [showSequence, setShowSequence] = useState(false);
-  const matchConfig = getCaseMatchConfig(targetCase?.case_id);
-  const matchDetails = calcCaseMatchScore(agents, matchConfig, lang);
-  const matchFeedback = getCaseMatchFeedback(agents, matchConfig, lang);
+  const [deploymentSnapshot, setDeploymentSnapshot] = useState(null);
+  const [deploymentPending, setDeploymentPending] = useState(false);
+  const deploymentLockRef = useRef(false);
+  const deploymentLocked = deploymentPending || showSequence || corePurchaseBusy || skillSyncPending;
+  const matchConfig = targetCase ? getCaseMatchConfig(targetCase.case_id) : GENERAL_FORMATION_CONFIG;
+  const matchScoreDetails = calcCaseMatchScore(agents, matchConfig, lang);
+  const matchDetails = {
+    ...matchScoreDetails,
+    readout: buildCaseMatchReadout(agents, matchConfig, lang),
+  };
   const matchForecast = matchDetails.score;
+  // calcTeamSynergy returns a fresh object on every render.  A primitive key
+  // keeps the local rehearsal session stable during unrelated lobby updates.
+  const activeSynergyKey = synergy.active.map(skill => skill.id).join(',');
+  const rehearsalSkillEffects = useMemo(() => {
+    const effects = { ...getEquippedSkillEffects(skillLoadout) };
+    Object.entries(activeSupport?.effects || {}).forEach(([key, value]) => {
+      if (key === 'initial_ap_bonus') return;
+      effects[key] = typeof value === 'number'
+        ? (Number(effects[key]) || 0) + value
+        : value || effects[key];
+    });
+    return effects;
+  }, [activeSupport, skillLoadout]);
+  const rehearsal = useMemo(() => buildTacticalRehearsal({
+    caseConfig: matchConfig,
+    agents,
+    synergySkills: activeSynergyKey ? activeSynergyKey.split(',') : [],
+    commandPlan,
+    skillEffects: rehearsalSkillEffects,
+    priorities: agents.map(agent => agent.priority_list),
+  }), [activeSynergyKey, agents, commandPlan, matchConfig, rehearsalSkillEffects]);
+  const previousRehearsalRef = useRef(rehearsal);
+  const [formationChange, setFormationChange] = useState(null);
+  useEffect(() => {
+    const previous = previousRehearsalRef.current;
+    previousRehearsalRef.current = rehearsal;
+    if (previous === rehearsal) return;
+    if (previous.caseId !== rehearsal.caseId) {
+      setFormationChange(null);
+      return;
+    }
+    const handling = rehearsal.scenes.flatMap((scene, index) => scene.options.flatMap((option, slot) => {
+      const before = previous.scenes[index]?.options[slot];
+      if (!before || (before.fitScore === option.fitScore && before.impact.tempo === option.impact.tempo && before.riskDelta === option.riskDelta)) return [];
+      return [{ ...option, key: `${scene.id}:${option.id}`, previous: before }];
+    }));
+    setFormationChange({
+      ...compareCaseMatchReadouts(previous.summary, rehearsal.summary),
+      handling: handling.slice(0, 3),
+    });
+  }, [rehearsal]);
   const caseTitle = targetCase
     ? (lang === 'zh' ? targetCase.title : targetCase.en?.title || targetCase.title)
     : (lang === 'zh' ? '通用编组' : 'GENERAL FORMATION');
   const threats = targetCase ? (lang === 'zh' ? matchConfig.threats : matchConfig.threatsEn) : [];
 
-  const openCoreMarket = useCallback((slot, trigger) => {
-    if (readOnly) return;
-    coreMarketTriggerRef.current = trigger || document.activeElement;
-    setCoreMarketSlot(slot);
-  }, [readOnly]);
-
-  const closeCoreMarket = useCallback(() => {
-    if (!corePurchaseBusyRef.current) setCoreMarketSlot(null);
+  const clearDeployment = useCallback(() => {
+    deploymentLockRef.current = false;
+    setShowSequence(false);
+    setDeploymentSnapshot(null);
+    setDeploymentPending(false);
   }, []);
 
-  const closeTutorial = useCallback(() => setShowTutorial(false), []);
-  const closeTacticalDesk = useCallback(() => setShowTacticalDesk(false), []);
-
   const prepareDeploy = async () => {
-    const config = currentConfig();
+    if (readOnly || deploymentLockRef.current || corePurchaseBusyRef.current || skillSyncLockRef.current) return;
+    deploymentLockRef.current = true;
+    setDeploymentPending(true);
+    setShowRehearsal(false);
+    setShowTutorial(false);
+    setCoreMarketSlot(null);
+
+    const config = cloneDeploymentConfig(currentConfig());
+    const snapshot = {
+      config,
+      selectedIdx,
+      skillLoadout: cloneDeploymentLoadout(skillLoadout),
+      supportAgentId: activeSupport?.id || null,
+      targetCaseId: targetCase?.case_id || null,
+      matchScore: matchForecast,
+      squad: agentDefs.map(agent => agent.id),
+      squadAgents: agentDefs.map(agent => ({
+        id: agent.id,
+        icon: agent.icon,
+        color: agent.color,
+        role: agent.role,
+        roleZh: agent.roleZh,
+      })),
+      caseBrief: targetCase ? {
+        title: caseTitle,
+        threat: targetCase.difficulty,
+        doctrine: config.command_plan?.doctrine_id,
+      } : null,
+    };
+    setDeploymentSnapshot(snapshot);
     try {
       await onTeamSave?.(config);
       setShowSequence(true);
     } catch (cause) {
+      clearDeployment();
       showNotice(lang === 'zh' ? '⚠ 编队同步失败，请重试' : '⚠ SQUAD SYNC FAILED. PLEASE RETRY.', 2400, 'error');
       throw cause;
     }
   };
 
   const commitCoreReplacement = async (agent, requiresPurchase) => {
-    if (corePurchaseBusyRef.current || readOnly || coreMarketSlot === null) return;
+    if (corePurchaseBusyRef.current || deploymentLockRef.current || skillSyncLockRef.current || readOnly || coreMarketSlot === null) return;
     corePurchaseBusyRef.current = true;
     setCorePurchaseBusy(true);
     const slot = coreMarketSlot;
@@ -845,12 +1272,34 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
     }
   };
 
+  const saveSkillLoadout = async next => {
+    if (readOnly || deploymentLocked || deploymentLockRef.current || skillSyncLockRef.current) return;
+    skillSyncLockRef.current = true;
+    setSkillSyncPending(true);
+    const previous = cloneDeploymentLoadout(skillLoadout);
+    const pending = cloneDeploymentLoadout(next);
+    setSkillLoadout(pending);
+    try {
+      await onSkillLoadout?.(pending);
+    } catch {
+      // Writes are serialized, so rollback restores the latest confirmed local
+      // selection, even if the profile prop still contains an older response.
+      setSkillLoadout(previous);
+      showNotice(lang === 'zh' ? '⚠ 技能同步失败，已恢复上次配置，请重试' : '⚠ SKILL SYNC FAILED. PREVIOUS LOADOUT RESTORED. PLEASE RETRY.', 3200, 'error');
+    } finally {
+      skillSyncLockRef.current = false;
+      setSkillSyncPending(false);
+    }
+  };
+
   return (
     <div className={`td-lobby td-lobby-light-${lighting.phase}`} style={/** @type {React.CSSProperties & Record<string, string | number>} */ ({
       height: '100dvh', display: 'flex', flexDirection: 'column',
-      background: 'radial-gradient(ellipse at 30% 15%, #08121c 0%, #08121c 55%, #08121c 100%)',
+      background: 'radial-gradient(ellipse at 30% 15%, #050e22 0%, #020810 55%, #010408 100%)',
       fontFamily: "'Courier New', monospace", color: 'white',
       overflow: 'hidden', position: 'relative',
+      '--td-lobby-brightness': lighting.brightness,
+      '--td-lobby-saturation': lighting.saturation,
       '--td-lobby-day-glow': lighting.dayGlow,
       '--td-lobby-night-veil': lighting.nightVeil,
     })}>
@@ -866,24 +1315,54 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
 
       {/* Corner brackets */}
       {[
-        { top: 0, left: 0, borderTop: '2px solid #709f9a40', borderLeft: '2px solid #709f9a40' },
-        { top: 0, right: 0, borderTop: '2px solid #9b9aae40', borderRight: '2px solid #9b9aae40' },
-        { bottom: 54, left: 0, borderBottom: '2px solid #709f9a40', borderLeft: '2px solid #709f9a40' },
-        { bottom: 54, right: 0, borderBottom: '2px solid #9b9aae40', borderRight: '2px solid #9b9aae40' },
+        { top: 0, left: 0, borderTop: '2px solid #00e5ff40', borderLeft: '2px solid #00e5ff40' },
+        { top: 0, right: 0, borderTop: '2px solid #a78bfa40', borderRight: '2px solid #a78bfa40' },
+        { bottom: 54, left: 0, borderBottom: '2px solid #00e5ff40', borderLeft: '2px solid #00e5ff40' },
+        { bottom: 54, right: 0, borderBottom: '2px solid #a78bfa40', borderRight: '2px solid #a78bfa40' },
       ].map((s, i) => (
         <div key={i} style={{ position: 'absolute', width: 36, height: 36, pointerEvents: 'none', zIndex: 10, ...s }}/>
       ))}
 
-      <StatusBar profile={profile} readOnly={readOnly} lighting={lighting} onBack={onBack} onOpenSettings={() => setShowSettings(true)} />
+      <StatusBar profile={profile} readOnly={readOnly} lighting={lighting} onBack={onBack} backLabel={backLabel} onOpenSettings={() => setShowSettings(true)} />
 
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
-      {showTutorial && <LobbyGuideModal targetCase={targetCase} onClose={closeTutorial} restoreRef={tutorialTriggerRef} />}
-      {showTacticalDesk && <TacticalRehearsalModal agents={agents} agentDefs={agentDefs} feedback={matchFeedback} synergyCount={synergy.active.length} onClose={closeTacticalDesk} restoreRef={tacticalDeskTriggerRef} />}
+      {showTutorial && (
+        <div onClick={() => setShowTutorial(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 80, display: 'grid', placeItems: 'center',
+          padding: 20, background: 'rgba(0,4,12,.82)', backdropFilter: 'blur(8px)',
+        }}>
+          <div onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" style={{
+            width: 'min(560px, 94vw)', padding: 24, borderRadius: 16,
+            border: '1px solid rgba(0,229,255,.45)', background: '#06101d',
+            boxShadow: '0 0 45px rgba(0,229,255,.18)', fontFamily: 'monospace',
+          }}>
+            <div style={{ color: '#7df1ff', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '战术台快速指南' : 'TACTICAL DESK QUICK GUIDE'}</div>
+            <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
+              {(lang === 'zh' ? [
+                '查看案件简报，再选择主探员并分配专长点数。',
+                '调整每名探员的行动优先级，决定其执行倾向。',
+                '在指挥方案台选择一项指挥学说和应急预案。',
+                targetCase ? '保存方案后部署，将直接开始目标案件。' : '保存方案后部署，将进入案件簿选择目标。',
+              ] : [
+                'Review the briefing, then select a primary agent and allocate specialty points.',
+                'Set each agent’s action priorities to define their execution style.',
+                'Choose one command doctrine and one contingency plan.',
+                targetCase ? 'Save and deploy to begin the target case directly.' : 'Save and deploy to choose a target in the case archive.',
+              ]).map(item => <li key={item}>{item}</li>)}
+            </ol>
+            <button onClick={() => setShowTutorial(false)} style={{
+              width: '100%', padding: 10, borderRadius: 8, cursor: 'pointer',
+              border: '1px solid #00e5ff80', background: 'rgba(0,229,255,.12)', color: '#7df1ff',
+              fontFamily: 'monospace', fontWeight: 900,
+            }}>{lang === 'zh' ? '明白了' : 'CONTINUE'}</button>
+          </div>
+        </div>
+      )}
 
       {saveNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${saveNotice.type}`}>
         <span>{saveNotice.type === 'error' ? '!' : '✓'}</span>
-        <strong><IconText text={saveNotice.message.replace(/^[✓⚠]\s*/, '')} /></strong>
+        <strong>{saveNotice.message.replace(/^[✓⚠]\s*/, '')}</strong>
       </div>}
 
       {/* 协同技能解锁特效 */}
@@ -895,46 +1374,52 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
       {/* Title */}
       <div className="td-lobby-title" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '7px 20px', borderBottom: '1px solid rgba(112, 159, 154,0.1)',
+        padding: '7px 20px', borderBottom: '1px solid rgba(0,229,255,0.1)',
         background: 'rgba(0,0,0,0.35)', flexShrink: 0, zIndex: 1,
       }}>
       <div className="td-lobby-title-copy">
           <span className="td-lobby-eyebrow">{targetCase ? (lang === 'zh' ? '◆ 目标案件战术简报' : '◆ TARGET-CASE BRIEFING') : (lang === 'zh' ? '◇ 全息指挥中心' : '◇ HOLOGRAPHIC COMMAND')}</span>
-          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#709f9a', textShadow: 'none', fontFamily: 'monospace', letterSpacing: '0.06em' }}>{caseTitle}</span>
-          <small><IconText text={targetCase
+          <span className="td-lobby-heading" style={{ fontSize: '1.05rem', fontWeight: 900, color: '#00e5ff', textShadow: '0 0 14px #00e5ff80', fontFamily: 'monospace', letterSpacing: '0.06em' }}>{caseTitle}</span>
+          <small>{targetCase
             ? `${targetCase.difficulty} · ⚡ ${CASE_ENERGY_COST[targetCase.difficulty] || 10} · ${threats.join(' / ')} · ${matchDetails.advice}`
             : activeSupport
               ? (lang === 'zh' ? `支援 ${activeSupport.icon} ${activeSupport.id} 已接入 · 部署后进入案件簿` : `SUPPORT ${activeSupport.icon} ${activeSupport.id} ONLINE · DEPLOY TO CASE ARCHIVE`)
-              : (lang === 'zh' ? '配置通用编组，部署后进入案件簿' : 'CONFIGURE A GENERAL SQUAD, THEN OPEN THE CASE ARCHIVE')} /></small>
+              : (lang === 'zh' ? '配置通用编组，部署后进入案件簿' : 'CONFIGURE A GENERAL SQUAD, THEN OPEN THE CASE ARCHIVE')}</small>
         </div>
         <div className="td-lobby-readiness">
-          <div title={matchDetails.advice}><small>{targetCase ? 'CASE MATCH' : 'READINESS'}</small><strong style={{ color: noirColor(matchDetails.color) }}>{matchForecast}<em>%</em></strong></div>
+          <div title={matchDetails.advice}><small>{targetCase ? (lang === 'zh' ? '案件适配度' : 'CASE FIT') : (lang === 'zh' ? '编组适配度' : 'SQUAD FIT')}</small><strong style={{ color: matchDetails.color }}>{matchForecast}<em>%</em></strong></div>
           <i />
-          <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: noirColor(agentDefs[selectedIdx].color) }}><Icon name={agentDefs[selectedIdx].icon} /> {agentDefs[selectedIdx].id}</strong></div>
+          <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: agentDefs[selectedIdx].color }}>{agentDefs[selectedIdx].icon} {agentDefs[selectedIdx].id}</strong></div>
         </div>
       </div>
 
-      <ScreenTabs id="lobby" className="td-lobby-mobile-tabs" label={lang === 'zh' ? '大厅栏目' : 'Hall sections'}
-        tabs={[
-          { key: 'briefing', label: lang === 'zh' ? '简报' : 'BRIEF' },
-          { key: 'formation', label: lang === 'zh' ? '编组' : 'SQUAD' },
-          { key: 'agent', label: lang === 'zh' ? '探员' : 'AGENT' },
-          { key: 'command', label: lang === 'zh' ? '指挥' : 'COMMAND' },
-        ]} value={mobileTab} onChange={setMobileTab} />
+      <FormationChangeFeedback change={formationChange} />
+
+      <div className="td-lobby-mobile-tabs" role="tablist">
+        {[
+          ['briefing', lang === 'zh' ? '简报' : 'BRIEF'],
+          ['formation', lang === 'zh' ? '编组' : 'SQUAD'],
+          ['agent', lang === 'zh' ? '探员' : 'AGENT'],
+          ['command', lang === 'zh' ? '指挥' : 'COMMAND'],
+        ].map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={mobileTab === key} onClick={() => setMobileTab(key)}>{label}</button>
+        ))}
+      </div>
 
       {/* Main */}
       <div className="td-lobby-main" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
         <TeamRosterPanel
           agents={agents} agentDefs={agentDefs} selectedIdx={selectedIdx}
-          onSelect={setSelectedIdx} progression={progression}
-          onPriorityChange={updatePriority}
+          onSelect={idx => !deploymentLocked && setSelectedIdx(idx)} progression={progression}
+          onPriorityChange={(idx, list) => !deploymentLocked && updatePriority(idx, list)}
           onHover={handleHover}
-          onOpenCoreMarket={openCoreMarket}
+          onOpenCoreMarket={slot => !readOnly && !deploymentLocked && setCoreMarketSlot(slot)}
           mobileActive={mobileTab === 'formation'}
+          locked={deploymentLocked}
         />
         <HoloStage
           agents={agents} agentDefs={agentDefs} selectedIdx={selectedIdx}
-          onSelect={setSelectedIdx} accentColor={accentColor}
+          onSelect={idx => !deploymentLocked && setSelectedIdx(idx)} accentColor={accentColor}
           progression={progression}
           synergy={synergy}
           onHover={handleHover}
@@ -943,32 +1428,28 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           activeSupport={activeSupport}
           supportCount={supportCount}
           commanderName={profile?.detective_name}
+          matchDetails={matchDetails}
+          locked={deploymentLocked}
         />
         <AttributePanel
           agent={agents[selectedIdx]}
           agentDef={agentDefs[selectedIdx]}
           agentIdx={selectedIdx}
           spec={specs[selectedIdx]}
-          onSpecChange={updateSpec}
+          onSpecChange={spec => !deploymentLocked && updateSpec(spec)}
           allAgents={agents}
           progression={progression}
           skillLoadout={skillLoadout}
-          onSkillLoadout={async next => {
-            if (readOnly) return;
-            try {
-              const result = await onSkillLoadout?.(next);
-              setSkillLoadout(result.profile.skill_loadout || []);
-            } catch {
-              showNotice(lang === 'zh' ? '⚠ 技能配置尚未确认，请重试' : '⚠ SKILL LOADOUT NOT CONFIRMED. PLEASE RETRY.', 2400, 'error');
-            }
-          }}
+          onSkillLoadout={saveSkillLoadout}
           mobileActive={mobileTab === 'agent'}
+          locked={deploymentLocked}
+          readOnly={readOnly}
+          skillSyncPending={skillSyncPending}
         />
         <CommandPlanPanel
-          className="td-command-plan-mobile td-scroll-region"
-          id="lobby-panel-command" labelledBy="lobby-tab-command"
+          className="td-command-plan-mobile"
           value={commandPlan}
-          onChange={setCommandPlan}
+          onChange={value => !deploymentLocked && setCommandPlan(value)}
           targetCase={targetCase}
           mobileActive={mobileTab === 'command'}
         />
@@ -977,7 +1458,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
       <CommandPlanPanel
         className="td-command-plan-desktop"
         value={commandPlan}
-        onChange={setCommandPlan}
+        onChange={value => !deploymentLocked && setCommandPlan(value)}
         targetCase={targetCase}
       />
 
@@ -985,7 +1466,7 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
       {hover && (
         <AgentLoreTooltip
           lore={getDisplayLore(agentDefs[hover.idx], hover.idx, lang)}
-          color={noirColor(agentDefs[hover.idx].color)}
+          color={agentDefs[hover.idx].color}
           icon={agentDefs[hover.idx].icon}
           roleZh={lang === 'zh' ? agentDefs[hover.idx].roleZh : agentDefs[hover.idx].role}
           x={hover.x} y={hover.y}
@@ -998,42 +1479,53 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           slot={coreMarketSlot}
           currentId={coreAgentIds[coreMarketSlot]}
           busy={corePurchaseBusy}
-          onClose={closeCoreMarket}
-          restoreRef={coreMarketTriggerRef}
+          onClose={() => !corePurchaseBusy && setCoreMarketSlot(null)}
           onConfirm={commitCoreReplacement}
         />
       )}
 
       {/* 部署过场动画 */}
-      {showSequence && (
+      {showSequence && deploymentSnapshot && (
         <DeploySequence
-          matchScore={matchForecast}
-          caseBrief={targetCase ? {
-            title: caseTitle,
-            threat: targetCase.difficulty,
-            doctrine: commandPlan.doctrine_id,
-          } : null}
+          matchScore={deploymentSnapshot.matchScore}
+          squad={deploymentSnapshot.squad}
+          squadAgents={deploymentSnapshot.squadAgents}
+          caseBrief={deploymentSnapshot.caseBrief}
           onComplete={async () => {
             try {
-              const result = await onDeploy(buildTeamConfig(currentConfig(), selectedIdx, skillLoadout, activeSupport?.id, targetCase?.case_id), currentConfig());
+              const result = await onDeploy(buildTeamConfig(
+                deploymentSnapshot.config,
+                deploymentSnapshot.selectedIdx,
+                deploymentSnapshot.skillLoadout,
+                deploymentSnapshot.supportAgentId,
+                deploymentSnapshot.targetCaseId,
+              ));
               if (result?.error) {
-                setShowSequence(false);
+                clearDeployment();
                 const message = result.error === 'insufficient_energy'
                   ? (lang === 'zh' ? `体力不足，需要 ${result.cost} 点体力` : `Not enough energy. ${result.cost} required.`)
                   : (lang === 'zh' ? '案件启动失败，请重试' : 'Unable to start case. Please retry.');
                 showNotice(`⚠ ${message}`, 2800, 'error');
               }
             } catch {
-              setShowSequence(false);
+              clearDeployment();
               showNotice(lang === 'zh' ? '⚠ 案件启动失败，请检查网络' : '⚠ CASE START FAILED. CHECK YOUR CONNECTION.', 2800, 'error');
             }
           }}
         />
       )}
 
+      {showRehearsal && !showSequence && (
+        <TacticalRehearsalPanel
+          rehearsal={rehearsal}
+          onClose={() => setShowRehearsal(false)}
+        />
+      )}
+
       <DeployControls
-        onApplyPreset={applyPreset}
+        onApplyPreset={preset => !deploymentLocked && applyPreset(preset)}
         onDeploy={prepareDeploy}
+        onRehearsal={() => !deploymentLocked && setShowRehearsal(true)}
         onSave={async () => {
           const config = currentConfig();
           try {
@@ -1044,14 +1536,12 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
             throw cause;
           }
         }}
-        onLoad={loadSaved}
+        onLoad={() => !deploymentLocked && loadSaved()}
         synergy={Math.round(synergy.matchScore * 100)}
         synergyOver={synergy.overload}
-        onTutorial={() => setShowTutorial(true)}
-        tutorialTriggerRef={tutorialTriggerRef}
-        onTacticalDesk={() => setShowTacticalDesk(true)}
-        tacticalDeskTriggerRef={tacticalDeskTriggerRef}
+        onTutorial={() => !deploymentLocked && setShowTutorial(true)}
         disabled={readOnly}
+        locked={deploymentLocked}
       />
     </div>
   );

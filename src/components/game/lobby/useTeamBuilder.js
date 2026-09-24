@@ -37,7 +37,11 @@ export function useTeamBuilder(profile) {
 
   const agents = useMemo(() => specs.map((spec, index) => ({
     agent_id: agentDefs[index].id,
+    name: agentDefs[index].name || agentDefs[index].id,
+    icon: agentDefs[index].icon,
+    color: agentDefs[index].color,
     role: agentDefs[index].roleZh,
+    roleZh: agentDefs[index].roleZh,
     base_stance: agentDefs[index].stance,
     ...effectiveAttrs(index, spec, agentDefs[index].attribute_bonus),
     priority_list: priorities[index],

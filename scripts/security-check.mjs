@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -10,6 +10,7 @@ const allowedRegistry = 'registry.npmjs.org';
 const secretPatterns = [
   { label: 'private key', expression: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
   { label: 'OpenAI-style API key', expression: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
+  { label: 'Stripe secret key', expression: /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
   { label: 'GitHub token', expression: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{30,}\b/ },
   { label: 'Slack token', expression: /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/ },
   { label: 'AWS access key', expression: /\bAKIA[0-9A-Z]{16}\b/ },
@@ -52,11 +53,59 @@ for (const relative of listed) {
   }
 }
 
+// Ignored local env files are intentionally absent from `git ls-files`, but a
+// developer can still accidentally place a real credential there before a
+// build or a diagnostic archive captures it. Inspect root-level env files while
+// keeping the normal ignore rule intact.
+const localEnvFiles = readdirSync(root, { withFileTypes: true })
+  .filter(entry => entry.isFile()
+    && /^(?:\.env(?:\..*)?|\.dev\.vars(?:\..*)?)$/.test(entry.name)
+    && entry.name !== '.env.example')
+  .map(entry => entry.name);
+for (const relative of localEnvFiles) {
+  const absolute = path.join(root, relative);
+  if (statSync(absolute).size > 1024 * 1024) continue;
+  const content = readFileSync(absolute);
+  if (content.includes(0)) continue;
+  const text = content.toString('utf8');
+  for (const pattern of secretPatterns) {
+    if (pattern.expression.test(text)) fail(`${pattern.label} pattern found in local environment file ${relative}`);
+  }
+}
+
 const historyPatch = execFileSync('git', [
   'log', '--all', '-p', '--', '.', ':(exclude)package-lock.json',
 ], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 for (const pattern of secretPatterns) {
   if (pattern.expression.test(historyPatch)) fail(`${pattern.label} pattern found in Git history`);
+}
+
+// A force-push, rebase, or deleted branch can leave sensitive blobs unreachable
+// from refs. Scan those objects as well so a later recovery does not resurrect a
+// credential that passed the reachable-history check.
+let unreachableObjects = [];
+try {
+  unreachableObjects = execFileSync('git', [
+    'fsck', '--full', '--no-reflogs', '--unreachable',
+  ], { cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+    .split(/\r?\n/)
+    .map(line => line.match(/^unreachable blob ([0-9a-f]{40})$/)?.[1])
+    .filter(Boolean);
+} catch {
+  // A repository without a complete object database cannot provide this check.
+}
+for (const objectId of unreachableObjects) {
+  let content;
+  try {
+    content = execFileSync('git', ['cat-file', 'blob', objectId], {
+      cwd: root, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024,
+    });
+  } catch {
+    continue;
+  }
+  for (const pattern of secretPatterns) {
+    if (pattern.expression.test(content)) fail(`${pattern.label} pattern found in unreachable Git object ${objectId}`);
+  }
 }
 
 const lock = JSON.parse(readFileSync(path.join(root, 'package-lock.json'), 'utf8'));

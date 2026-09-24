@@ -58,75 +58,29 @@ export const CASE_MATCH_CONFIGS = Object.freeze({
 
 export const CASE_NEON_BLOOD = CASE_MATCH_CONFIGS.Lvl_01;
 
-const DEFAULT_CASE_WEIGHTS = Object.freeze({ ...CASE_NEON_BLOOD.weights });
-const DEFAULT_ATTRIBUTE_MAX = 40;
+export const GENERAL_FORMATION_CONFIG = Object.freeze({
+  id: 'GENERAL',
+  name: '通用编组',
+  nameEn: 'GENERAL FORMATION',
+  threat: 'OPEN',
+  weights: {
+    logic_power: 0.25,
+    observation_focus: 0.25,
+    confusion_resistance: 0.25,
+    hack_level: 0.25,
+  },
+  threats: ['逻辑复原', '现场重建', '冲突降噪', '终端封锁'],
+  threatsEn: ['Logic reconstruction', 'Scene reconstruction', 'Conflict stabilization', 'Terminal lockdown'],
+});
 
 export function getCaseMatchConfig(caseId) {
-  return typeof caseId === 'string' && Object.hasOwn(CASE_MATCH_CONFIGS, caseId)
-    ? CASE_MATCH_CONFIGS[caseId]
-    : CASE_NEON_BLOOD;
+  if (caseId === GENERAL_FORMATION_CONFIG.id) return GENERAL_FORMATION_CONFIG;
+  return CASE_MATCH_CONFIGS[caseId] || CASE_NEON_BLOOD;
 }
 
-function finite(value, fallback = 0) {
-  if (typeof value === 'boolean') return fallback;
-  try {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function isRecord(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function readValue(value, key) {
-  try {
-    return value?.[key];
-  } catch {
-    return undefined;
-  }
-}
-
-function mapValue(map, key, fallback) {
-  return Object.hasOwn(map, key) ? map[key] : fallback;
-}
-
-function setRecordValue(record, key, value) {
-  Object.defineProperty(record, key, {
-    configurable: true,
-    enumerable: true,
-    value,
-    writable: true,
-  });
-}
-
-function normalizeCaseWeights(caseConfig) {
-  const rawWeights = readValue(caseConfig, 'weights');
-  const candidate = isRecord(rawWeights) ? rawWeights : null;
-  let rawEntries = [];
-  try {
-    rawEntries = candidate ? Object.entries(candidate) : [];
-  } catch {
-    rawEntries = [];
-  }
-
-  const validEntries = rawEntries
-    .map(([key, value]) => [key, finite(value)])
-    .filter(([, weight]) => weight > 0);
-  const total = validEntries.reduce((sum, [, weight]) => sum + weight, 0);
-  if (!validEntries.length || !Number.isFinite(total) || total <= 0) return DEFAULT_CASE_WEIGHTS;
-  if (total === 1) return Object.fromEntries(validEntries);
-  return Object.fromEntries(validEntries.map(([key, weight]) => [key, weight / total]));
-}
-
-function attributeRatio(agents, key) {
-  const max = Math.max(0, finite(readValue(ATTR_MAX, key), DEFAULT_ATTRIBUTE_MAX)) || DEFAULT_ATTRIBUTE_MAX;
-  return agents.reduce((best, agent) => {
-    const value = Math.max(0, finite(readValue(agent, key)));
-    return Math.max(best, Math.min(1, value / max));
-  }, 0);
+function normalizeAttributeValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
 }
 
 const ATTR_LABEL = {
@@ -145,17 +99,41 @@ const ATTR_OWNER = {
   ap_cost_discount: 'CIPHER',
 };
 
+const ATTR_LABEL_EN = {
+  logic_power: 'Logic',
+  hack_level: 'Hacking',
+  observation_focus: 'Observation',
+  confusion_resistance: 'Anti-chaos',
+  ap_cost_discount: 'Action efficiency',
+};
+
+const ATTR_ACTION = {
+  logic_power: { zh: '逻辑复原', en: 'logic reconstruction' },
+  hack_level: { zh: '终端封锁', en: 'terminal lockdown' },
+  observation_focus: { zh: '现场重建', en: 'scene reconstruction' },
+  confusion_resistance: { zh: '冲突降噪', en: 'conflict stabilization' },
+  ap_cost_discount: { zh: '快速调度', en: 'rapid dispatch' },
+};
+
 // agents: 三人有效属性数组；返回 { score, color, advice }
 export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD, lang = 'zh') {
-  const safeAgents = Array.isArray(agents) ? agents : [];
-  const weights = normalizeCaseWeights(caseConfig);
+  const roster = Array.isArray(agents) ? agents : [];
+  const weights = caseConfig?.weights || CASE_NEON_BLOOD.weights;
   let score = 0;
   const ratios = {};
+  const owners = {};
 
-  Object.entries(weights).forEach(([key, weight]) => {
-    const ratio = attributeRatio(safeAgents, key);
-    setRecordValue(ratios, key, ratio);
-    score += ratio * weight;
+  Object.entries(weights).forEach(([key, w]) => {
+    const candidates = roster.map((agent, index) => {
+      const value = normalizeAttributeValue(agent?.[key]);
+      return { agent, index, value };
+    });
+    const bestEntry = candidates.reduce((winner, entry) => entry.value > winner.value ? entry : winner, { value: 0, agent: null, index: -1 });
+    const best = bestEntry.value;
+    const ratio = Math.min(1, best / (ATTR_MAX[key] || 40));
+    ratios[key] = ratio;
+    owners[key] = bestEntry.agent?.agent_id || ATTR_OWNER[key];
+    score += ratio * w;
   });
 
   const pct = Math.round(Math.min(100, Math.max(0, score * 100)));
@@ -166,56 +144,128 @@ export function calcCaseMatchScore(agents, caseConfig = CASE_NEON_BLOOD, lang = 
 
   let advice;
   if (pct >= 90) {
-    advice = lang === 'zh' ? '配置已接近满配，可直接部署。' : 'This configuration is nearly optimal and ready to deploy.';
-  } else if (weakest && ratios[weakest] >= 0.95) {
-    advice = lang === 'zh' ? '三项主要能力均已到顶，剩余专长点可自由分配。' : 'All primary capabilities are capped. Allocate remaining specialty points freely.';
-  } else if (weakest) {
-    const labelEn = {
-      logic_power: 'Logic', hack_level: 'Hacking', observation_focus: 'Observation',
-      confusion_resistance: 'Anti-Chaos', ap_cost_discount: 'AP Efficiency',
-    };
-    const label = mapValue(ATTR_LABEL, weakest, weakest);
-    const labelEnValue = mapValue(labelEn, weakest, weakest);
-    const owner = mapValue(ATTR_OWNER, weakest, 'TACTICAL');
-    advice = lang === 'zh'
-      ? `${label}能力不足，${owner} 专长可继续强化。`
-      : `${labelEnValue} is underpowered. Improve ${owner}'s specialty.`;
+    advice = lang === 'zh' ? '公开能力覆盖充分；仍请根据现场事件选择处理者。' : 'Public capability coverage is strong; choose the handler for each event carefully.';
+  } else if (ratios[weakest] >= 0.95) {
+    advice = lang === 'zh' ? '主要能力覆盖均衡；不同处理者仍会带来不同风险。' : 'Primary coverage is balanced; each handler still carries a different risk.';
   } else {
-    advice = lang === 'zh' ? '暂无可用案件能力要求。' : 'No case requirements are available.';
+    advice = lang === 'zh'
+      ? `${ATTR_LABEL[weakest]}准备不足，可继续强化 ${owners[weakest]} 的对应专长。`
+      : `${ATTR_LABEL_EN[weakest]} needs more preparation. Improve the matching specialty on ${owners[weakest]}.`;
   }
 
-  return { score: pct, color, advice, ratios };
+  return { score: pct, color, advice, ratios, owners };
 }
 
-const ATTR_LABEL_EN = {
-  logic_power: 'Logic',
-  hack_level: 'Hacking',
-  observation_focus: 'Observation',
-  confusion_resistance: 'Anti-Chaos',
-  ap_cost_discount: 'AP Efficiency',
-};
-
-export function getCaseMatchFeedback(agents, caseConfig = CASE_NEON_BLOOD, lang = 'zh') {
-  const match = calcCaseMatchScore(agents, caseConfig, lang);
-  const weights = normalizeCaseWeights(caseConfig);
-  const entries = Object.entries(weights).map(([key, weight]) => {
-    const ratio = Math.max(0, Math.min(1, finite(match.ratios[key])));
-    return {
+/**
+ * Turn the public match weights into readable strengths, risks and trade-offs.
+ * This deliberately uses only public agent attributes; it must never infer a
+ * case answer or read protected case data.
+ */
+export function buildCaseMatchReadout(agents = [], caseConfig = CASE_NEON_BLOOD, lang = 'zh') {
+  const roster = Array.isArray(agents) ? agents : [];
+  const weights = caseConfig?.weights || CASE_NEON_BLOOD.weights;
+  const strengths = [];
+  const risks = [];
+  const coverage = Object.entries(weights).map(([key, weight]) => {
+    const entries = roster.map((agent, index) => ({
+      agent,
+      index,
+      value: normalizeAttributeValue(agent?.[key]),
+    }));
+    const best = entries.reduce((winner, entry) => entry.value > winner.value ? entry : winner, { value: 0, index: -1, agent: null });
+    const ratio = Math.min(1, best.value / (ATTR_MAX[key] || 40));
+    const labelZh = ATTR_LABEL[key] || key;
+    const labelEn = ATTR_LABEL_EN[key] || key;
+    const actionZh = ATTR_ACTION[key]?.zh || labelZh;
+    const actionEn = ATTR_ACTION[key]?.en || labelEn;
+    const label = lang === 'zh' ? labelZh : labelEn;
+    const action = lang === 'en' ? actionEn : actionZh;
+    const owner = best.agent?.agent_id || ATTR_OWNER[key];
+    const item = {
       key,
-      weight,
+      label,
+      labelZh,
+      labelEn,
+      action,
+      actionZh,
+      actionEn,
+      owner,
+      agentIndex: best.index,
       ratio,
-      percent: Math.round(ratio * 100),
-      label: mapValue(ATTR_LABEL, key, key),
-      labelEn: mapValue(ATTR_LABEL_EN, key, key),
-      owner: mapValue(ATTR_OWNER, key, 'TACTICAL'),
-      ownerEn: mapValue(ATTR_OWNER, key, 'TACTICAL'),
+      weight,
+      value: best.value,
+      weightedPct: Math.round(ratio * weight * 100),
     };
-  }).sort((a, b) => (b.ratio * b.weight) - (a.ratio * a.weight));
-  const strengths = entries.filter(item => item.ratio >= 0.62).slice(0, 2);
-  // Keep the two lists mutually exclusive: a middling attribute should not be
-  // presented as both a strength and a risk at the same time.
-  const risks = [...entries].sort((a, b) => a.ratio - b.ratio).filter(item => item.ratio < 0.62).slice(0, 2);
-  return { score: match.score, strengths: strengths.map(item => ({ ...item, kind: 'strength' })), risks: risks.map(item => ({ ...item, kind: 'risk' })) };
+    if (ratio >= 0.72) strengths.push(item);
+    if (ratio < 0.58) risks.push(item);
+    return item;
+  });
+
+  const sorted = [...coverage].sort((a, b) => (b.ratio * b.weight) - (a.ratio * a.weight));
+  const best = sorted[0] || null;
+  const weakest = [...coverage].sort((a, b) => a.ratio - b.ratio)[0] || null;
+  const tradeoffs = best && weakest && best.key !== weakest.key
+    ? [{
+      key: `${best.key}->${weakest.key}`,
+      conditional: true,
+      gain: {
+        key: weakest.key,
+        agentId: weakest.owner,
+        action: weakest.actionZh,
+        actionEn: weakest.actionEn,
+      },
+      sacrifice: {
+        key: best.key,
+        agentId: best.owner,
+        action: best.actionZh,
+        actionEn: best.actionEn,
+        conditional: true,
+      },
+      text: `可尝试换人或重配专长补强${weakest.actionZh}；调整后检查 ${best.owner} 的${best.actionZh}覆盖是否下降，只有实际下降时才需要权衡这项损失。`,
+      textEn: `Try a swap or specialty shift to strengthen ${weakest.actionEn}. Check whether ${best.actionEn} coverage from ${best.owner} actually decreases before weighing that loss.`,
+    }]
+    : [];
+
+  return {
+    coverage,
+    strengths: strengths.sort((a, b) => (b.ratio * b.weight) - (a.ratio * a.weight)),
+    risks: risks.sort((a, b) => ((1 - b.ratio) * b.weight) - ((1 - a.ratio) * a.weight)),
+    tradeoffs,
+    tradeoff: tradeoffs[0] || null,
+  };
+}
+
+/** Compare actual capability coverage under the same public case weights. */
+export function compareCaseMatchReadouts(previous, next) {
+  const before = Array.isArray(previous?.coverage) ? previous.coverage : [];
+  const after = Array.isArray(next?.coverage) ? next.coverage : [];
+  const gains = [];
+  const losses = [];
+  const previousByKey = new Map(before.map(item => [item.key, item]));
+
+  // A different case changes the meaning of the comparison, not the squad.
+  if (!before.length || before.length !== after.length || after.some(item => {
+    const prior = previousByKey.get(item.key);
+    return !prior || prior.weight !== item.weight;
+  })) return { gains, losses };
+
+  for (const item of after) {
+    const prior = previousByKey.get(item.key);
+    const ratioDelta = item.ratio - prior.ratio;
+    // Ignore owner-only changes and values above the shared capability cap.
+    if (!Number.isFinite(ratioDelta) || Math.abs(ratioDelta) < 1e-9) continue;
+    const change = {
+      ...item,
+      previousValue: prior.value,
+      previousRatio: prior.ratio,
+      previousOwner: prior.owner,
+      delta: item.value - prior.value,
+      ratioDelta,
+    };
+    (ratioDelta > 0 ? gains : losses).push(change);
+  }
+
+  return { gains, losses };
 }
 
 // ── 预设方案 ────────────────────────────────────────────────────────────────

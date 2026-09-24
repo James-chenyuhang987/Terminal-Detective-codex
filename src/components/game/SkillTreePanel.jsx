@@ -93,8 +93,14 @@ function SkillConnectorCanvas({ skills, equippedIds, unlockedByLevel, positions,
 }
 
 // ── Single skill node ─────────────────────────────────────────────────────────
-function SkillNode({ skill, position, color, state, onClick, onHover, onFocus, onDismiss, tooltipId }) {
+function SkillNode({ skill, position, color, state, onClick, onHover, onFocus, onDismiss, tooltipId, disabled = false }) {
   const { lang } = useLang();
+  const name = lang === 'zh' ? skill.name : (skill.nameEn || skill.name);
+  const action = disabled
+    ? (lang === 'zh' ? '当前不可更改' : 'CHANGES UNAVAILABLE')
+    : state === 'locked'
+      ? (lang === 'zh' ? `需要等级 ${skill.unlock_level}` : `REQUIRES LEVEL ${skill.unlock_level}`)
+      : state === 'equipped' ? (lang === 'zh' ? '卸下技能' : 'UNEQUIP SKILL') : (lang === 'zh' ? '装备技能' : 'EQUIP SKILL');
   // state: 'locked' | 'available' | 'equipped'
   const stateConfig = {
     locked:    { border: 'rgba(255,255,255,0.12)', bg: 'rgba(255,255,255,0.03)', opacity: 0.45, glow: 0 },
@@ -104,8 +110,9 @@ function SkillNode({ skill, position, color, state, onClick, onHover, onFocus, o
   const cfg = stateConfig[state];
 
   return (
-    <button type="button" className="td-skill-node" disabled={state === 'locked'}
-      aria-label={lang === 'zh' ? skill.name : (skill.nameEn || skill.name)}
+    <button type="button" className="td-skill-node" disabled={disabled || state === 'locked'}
+      aria-label={name}
+      title={`${name} · ${action}`}
       aria-pressed={state === 'equipped'}
       aria-describedby={tooltipId}
       onClick={() => onClick(skill)}
@@ -216,7 +223,7 @@ function SkillTooltip({ id, skill, position, color, state }) {
 }
 
 // ── Main SkillTreePanel ────────────────────────────────────────────────────────
-export default function SkillTreePanel({ agentIdx, progression = [], loadout = [], onChange }) {
+export default function SkillTreePanel({ agentIdx, progression = [], loadout = [], onChange, disabled = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const color = AGENT_COLORS[agentIdx];
@@ -238,6 +245,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
   const equippedIds = equipped[agentIdx] || [];
 
   const handleSkillClick = useCallback((skill) => {
+    if (disabled) return;
     const current = [...(equipped[agentIdx] || [])];
       const idx = current.indexOf(skill.id);
       let next;
@@ -256,7 +264,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
       const ids = ['NEXUS-01', 'AURORA-09', 'CIPHER-47'];
       const updated = ids.map((agentId, i) => ({ agent_id: agentId, skill_ids: i === agentIdx ? next : equipped[i] }));
       onChange?.(updated);
-  }, [agentIdx, equipped, onChange, skills]);
+  }, [agentIdx, disabled, equipped, onChange, skills]);
 
   // Determine node state
   const getNodeState = (skill, idx) => {
@@ -349,6 +357,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
             onFocus={id => { setFocusedId(id); if (id) setDismissedId(null); }}
             onDismiss={setDismissedId}
             tooltipId={activeSkill?.id === skill.id ? tooltipId : undefined}
+            disabled={disabled}
           />
         ))}
 

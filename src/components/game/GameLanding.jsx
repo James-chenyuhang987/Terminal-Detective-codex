@@ -281,8 +281,20 @@ function LangToggle() {
 
 function CaseLaunchPanel({ lang, t }) {
   const copy = lang === 'zh'
-    ? { dossier: '最高机密案件档案', state: '案件通道已加密', caseName: '霓虹血迹', danger: 'Ω 级高危案件' }
-    : { dossier: 'TOP SECRET CASE DOSSIER', state: 'CASE CHANNEL ENCRYPTED', caseName: 'NEON BLOOD', danger: 'OMEGA-CLASS THREAT' };
+    ? {
+      dossier: '最高机密案件档案',
+      state: '案件通道已加密',
+      caseName: '霓虹血迹',
+      terminalLabel: '霓虹血迹案件调查终端',
+      danger: 'Ω 级高危案件',
+    }
+    : {
+      dossier: 'TOP SECRET CASE DOSSIER',
+      state: 'CASE CHANNEL ENCRYPTED',
+      caseName: 'NEON BLOOD',
+      terminalLabel: 'NEON BLOOD CASE INVESTIGATION TERMINAL',
+      danger: 'OMEGA-CLASS THREAT',
+    };
 
   return (
     <section className="td-landing-case-panel td-landing-gold-edge">
@@ -290,6 +302,7 @@ function CaseLaunchPanel({ lang, t }) {
         <div>
           <small>{copy.dossier}</small>
           <strong className="td-gold-flow-text">{copy.caseName}</strong>
+          <span className="td-landing-case-terminal-label">{copy.terminalLabel}</span>
         </div>
         <span><i />{copy.state}</span>
       </header>

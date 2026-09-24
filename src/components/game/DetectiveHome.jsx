@@ -191,9 +191,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
 
   const quickStart = () => {
     if (suspendedCase) { onResume(); return; }
-    if (onStartInvestigation) { onStartInvestigation(); return; }
-    if (profile.saved_team_config) openModule('cases');
-    else void enterLobby();
+    openModule('cases');
   };
 
   if (!profile) {
@@ -360,7 +358,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
               }}>
                 <div style={{ color: '#c5a66f' }}><Icon name="search" size={28} /></div>
                 <div style={{ color: '#c5a66f', fontWeight: 900, letterSpacing: '0.2em', fontSize: '1rem', margin: '8px 0 6px' }}>
-                  {suspendedCase ? (lang === 'zh' ? '「继续调查」' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '「开始调查」' : 'START INVESTIGATION')}
+                  {suspendedCase ? (lang === 'zh' ? '「继续调查」' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '「调取案件卷宗」' : 'RETRIEVE CASE DOSSIER')}
                 </div>
                 <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
                   {lang === 'zh'
@@ -371,7 +369,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
                   width: '100%', padding: '11px', cursor: 'pointer', borderRadius: 10,
                   border: '1px solid #c5a66f', background: 'rgba(197, 166, 111,0.22)',
                   color: '#e1d0ac', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
-                }}>{suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '开始调查' : 'START INVESTIGATION')}</button>
+                }}>{suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER')}</button>
                 {onSelectCase && <button className="td-ui-button td-button-ghost td-button-compact" onClick={onSelectCase} style={{
                   width: '100%', marginTop: 8, minHeight: 38, padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
                   border: '1px solid rgba(197, 166, 111, .58)', background: 'rgba(197, 166, 111, .08)',
@@ -383,7 +381,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
                 }}><Icon name="edit" /> {lang === 'zh' ? '修改档案' : 'EDIT PROFILE'}</button>
               </div>
             )}
-            <HomePortal onEnter={() => openModule('agent_market')} />
+            <HomePortal onEnterLobby={enterLobby} />
           </div>
         </FittedPanel>
 

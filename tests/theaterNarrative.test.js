@@ -142,14 +142,11 @@ function entryHarness(mode = 'theater') {
 }
 
 test('only explicit theater Home Start uses prologue; resume and ordinary case navigation bypass it', () => {
-  let starts = 0;
-  handler(home, 'quickStart', { suspendedCase: null, onStartInvestigation: () => starts++ })();
-  assert.equal(starts, 1);
   let resumes = 0;
   handler(home, 'quickStart', { suspendedCase: {}, onResume: () => resumes++ })();
   assert.equal(resumes, 1);
   let modules = 0;
-  handler(home, 'quickStart', { suspendedCase: null, onStartInvestigation: null, profile: { saved_team_config: {} }, openModule: () => modules++ })();
+  handler(home, 'quickStart', { suspendedCase: null, openModule: () => modules++ })();
   assert.equal(modules, 1, 'text flow stays unchanged');
   for (const name of ['openCasesWithSavedTeam', 'openLobbyForCase', 'handleResume']) {
     assert.doesNotMatch(nodes(page, n => ts.isVariableDeclaration(n) && n.name.getText() === name)[0].getText(), /setEntryNarrative/);

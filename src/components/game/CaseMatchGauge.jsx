@@ -30,7 +30,7 @@ export default function CaseMatchGauge({ agents }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em' }}>
-          {zh ? '当前案件匹配度' : 'CURRENT CASE MATCH'}<br/>
+          {zh ? '案件适配度' : 'CASE FIT'}<br/>
           <span style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.38rem' }}>NEON BLOOD</span>
         </div>
         <div style={{

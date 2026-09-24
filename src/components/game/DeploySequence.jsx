@@ -1,26 +1,28 @@
-import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLang } from '@/lib/lang.jsx';
-import SlicedTitle from '@/components/ui/SlicedTitle';
-import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
-import { useSettings } from '@/lib/settings.jsx';
 
 // 部署过场动画 — 三段式：探员召唤 → 任务简报 → 出发倒计时
 const AGENTS = [
-  { id: 'NEXUS-01', roleZh: '首席调查员', roleEn: 'Lead Investigator', color: '#709f9a', icon: '👁️' },
-  { id: 'AURORA-09', roleZh: '法证分析师', roleEn: 'Forensic Analyst', color: '#9b9aae', icon: '🔬' },
-  { id: 'CIPHER-47', roleZh: '技术专家', roleEn: 'Tech Specialist', color: '#c19a63', icon: '💻' },
+  { id: 'NEXUS-01', roleZh: '首席调查员', roleEn: 'Lead Investigator', color: '#00e5ff', icon: '👁️' },
+  { id: 'AURORA-09', roleZh: '法证分析师', roleEn: 'Forensic Analyst', color: '#a78bfa', icon: '🔬' },
+  { id: 'CIPHER-47', roleZh: '技术专家', roleEn: 'Tech Specialist', color: '#ff6b35', icon: '💻' },
 ];
 
-function HoloBody({ color, index }) {
+function HoloBody({ agent = AGENTS[0], index }) {
   const { lang } = useLang();
-  const { motionEnabled } = usePresentationMotion();
+  const fallback = AGENTS[index] || AGENTS[0];
+  const color = agent?.color || fallback.color;
+  const id = agent?.id || fallback.id;
+  const icon = agent?.icon || fallback.icon;
+  const roleZh = agent?.roleZh || agent?.role || fallback.roleZh;
+  const roleEn = agent?.roleEn || agent?.role || fallback.roleEn;
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0, flex: '1 1 0',
-      animation: motionEnabled ? `ds-fly-in 0.75s ${index * 0.32}s cubic-bezier(.2,.9,.25,1) both` : 'none',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      flex: '1 1 0', minWidth: 0, maxWidth: 110,
+      animation: `ds-fly-in 0.75s ${index * 0.32}s cubic-bezier(.2,.9,.25,1) both`,
     }}>
-      <div style={{ width: 'min(90px, 23vw)', height: 150 }}>
+      <div style={{ width: 90, maxWidth: '100%', height: 150, filter: `drop-shadow(0 0 22px ${color})` }}>
         <svg viewBox="0 0 64 110" width="100%" height="100%">
           <defs>
             <linearGradient id={`ds-g${index}`} x1="0" y1="0" x2="0" y2="1">
@@ -39,13 +41,13 @@ function HoloBody({ color, index }) {
           ))}
         </svg>
       </div>
-      <div style={{ textAlign: 'center', fontFamily: 'monospace', marginTop: 4 }}>
-        <div style={{ fontSize: '0.7rem', fontWeight: 900, color, textShadow: 'none' }}><Icon name={AGENTS[index].icon} /> {AGENTS[index].id}</div>
-        <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)' }}>{lang === 'zh' ? AGENTS[index].roleZh : AGENTS[index].roleEn}</div>
+      <div style={{ maxWidth: '100%', overflowWrap: 'anywhere', textAlign: 'center', fontFamily: 'monospace', marginTop: 4 }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 900, color, textShadow: `0 0 12px ${color}` }}>{icon} {id}</div>
+        <div style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)' }}>{lang === 'zh' ? roleZh : roleEn}</div>
       </div>
       {/* 平台光环 */}
       <div style={{
-        marginTop: 6, width: 'min(110px, 25vw)', height: 14, borderRadius: '50%',
+        marginTop: 6, width: 110, maxWidth: '100%', height: 14, borderRadius: '50%',
         border: `1px solid ${color}90`,
         background: `radial-gradient(ellipse, ${color}45, transparent 70%)`,
         boxShadow: `0 0 20px ${color}70`,
@@ -62,7 +64,7 @@ function DataParticles() {
           position: 'absolute',
           left: `${(i * 3.9) % 100}%`,
           width: 1.5, height: 40 + (i % 5) * 18,
-          background: 'linear-gradient(to bottom, transparent, #709f9a)',
+          background: 'linear-gradient(to bottom, transparent, #00e5ff)',
           animation: `ds-rain ${1.4 + (i % 6) * 0.25}s ${(i % 9) * 0.13}s linear infinite`,
           opacity: 0.35,
         }} />
@@ -71,11 +73,9 @@ function DataParticles() {
   );
 }
 
-export default function DeploySequence({ matchScore = 0, caseBrief = null, onComplete }) {
+export default function DeploySequence({ matchScore = 0, caseBrief = null, squad = null, squadAgents = null, onComplete }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
-  const { reducedMotion, motionEnabled } = usePresentationMotion();
-  const { settings } = useSettings();
   const [phase, setPhase] = useState(1); // 1 召唤 · 2 简报 · 3 倒计时
   const [count, setCount] = useState(3);
   const completedRef = useRef(false);
@@ -88,16 +88,11 @@ export default function DeploySequence({ matchScore = 0, caseBrief = null, onCom
   }, []);
 
   useEffect(() => {
-    if (reducedMotion) {
-      setPhase(2);
-      const timer = setTimeout(complete, 1200);
-      return () => clearTimeout(timer);
-    }
     const t1 = setTimeout(() => setPhase(2), 1600);
     const t2 = setTimeout(() => setPhase(3), 3100);
     const t3 = setTimeout(complete, 4400);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [complete, reducedMotion]);
+  }, [complete]);
 
   useEffect(() => {
     if (phase !== 3) return;
@@ -110,18 +105,24 @@ export default function DeploySequence({ matchScore = 0, caseBrief = null, onCom
     rapid_pursuit: zh ? '快速追击' : 'RAPID PURSUIT',
     steady_control: zh ? '稳态控制' : 'STEADY CONTROL',
   };
+  const displayAgents = Array.isArray(squadAgents) && squadAgents.length
+    ? squadAgents.slice(0, AGENTS.length).map((agent, index) => ({ ...AGENTS[index], ...agent }))
+    : AGENTS;
+  const squadLabel = Array.isArray(squad) && squad.length
+    ? squad.filter(Boolean).join(' + ')
+    : displayAgents.map(agent => agent.id).join(' + ');
   const brief = [
-    { label: zh ? '案件' : 'CASE', value: caseBrief?.title || (zh ? '部署后选择' : 'SELECT AFTER DEPLOYMENT'), color: '#c19a63' },
-    { label: zh ? '威胁等级' : 'THREAT', value: caseBrief?.threat || (zh ? '待定' : 'PENDING'), color: '#c77c78' },
-    { label: zh ? '预测成功率' : 'FORECAST', value: `${matchScore}%`, color: matchScore < 50 ? '#c77c78' : matchScore <= 75 ? '#c19a63' : '#8aaa91' },
-    { label: zh ? '指挥学说' : 'DOCTRINE', value: doctrineNames[caseBrief?.doctrine] || (zh ? '通用方案' : 'GENERAL PLAN'), color: '#c5a66f' },
-    { label: zh ? '编组' : 'SQUAD', value: 'NEXUS-01 + AURORA-09 + CIPHER-47', color: '#709f9a' },
+    { label: zh ? '案件' : 'CASE', value: caseBrief?.title || (zh ? '部署后选择' : 'SELECT AFTER DEPLOYMENT'), color: '#ff6b35' },
+    { label: zh ? '威胁等级' : 'THREAT', value: caseBrief?.threat || (zh ? '待定' : 'PENDING'), color: '#ff3860' },
+    { label: caseBrief ? (zh ? '案件适配度' : 'CASE FIT') : (zh ? '编组适配度' : 'SQUAD FIT'), value: `${matchScore}%`, color: matchScore < 50 ? '#ff3860' : matchScore <= 75 ? '#ffaa00' : '#00ff88' },
+    { label: zh ? '指挥学说' : 'DOCTRINE', value: doctrineNames[caseBrief?.doctrine] || (zh ? '通用方案' : 'GENERAL PLAN'), color: '#e8c98a' },
+    { label: zh ? '编组' : 'SQUAD', value: squadLabel, color: '#00e5ff' },
   ];
 
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      background: 'radial-gradient(ellipse at 50% 45%, #101e2a 0%, #08121c 70%, #000 100%)',
+      background: 'radial-gradient(ellipse at 50% 45%, #04121f 0%, #010509 70%, #000 100%)',
       fontFamily: "'Courier New', monospace", color: 'white',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       overflow: 'hidden',
@@ -131,25 +132,25 @@ export default function DeploySequence({ matchScore = 0, caseBrief = null, onCom
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5,
         backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.16) 2px, rgba(0,0,0,0.16) 4px)',
       }} />
-      {motionEnabled && settings.particles && <DataParticles />}
+      <DataParticles />
 
       {/* SKIP */}
       <button onClick={complete} style={{
         position: 'absolute', top: 18, right: 20, zIndex: 20,
-        padding: '10px 14px', minHeight: 44, borderRadius: 8, cursor: 'pointer',
-        border: '1px solid rgba(112, 159, 154,0.45)', background: 'rgba(112, 159, 154,0.08)',
-        color: '#709f9a', fontFamily: 'monospace', fontSize: '0.55rem', letterSpacing: '0.14em',
-      }}>{zh ? '跳过' : 'SKIP'}<IconText text={" ▶"} /></button>
+        padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
+        border: '1px solid rgba(0,229,255,0.45)', background: 'rgba(0,229,255,0.08)',
+        color: '#00e5ff', fontFamily: 'monospace', fontSize: '0.55rem', letterSpacing: '0.14em',
+      }}>{zh ? '跳过' : 'SKIP'} ▶</button>
 
       {/* Phase 1 — 探员召唤 */}
       {phase === 1 && (
-        <div style={{ animation: motionEnabled ? 'ds-fade 0.3s ease both' : 'none', zIndex: 6 }}>
+        <div style={{ animation: 'ds-fade 0.3s ease both', zIndex: 6 }}>
           <div style={{
             textAlign: 'center', fontSize: '0.6rem', letterSpacing: '0.4em',
-            color: 'rgba(112, 159, 154,0.6)', marginBottom: 28,
+            color: 'rgba(0,229,255,0.6)', marginBottom: 28,
           }}>{zh ? '正在召唤探员' : 'SUMMONING AGENTS'}</div>
-          <div style={{ display: 'flex', gap: 'clamp(4px, 4vw, 46px)', alignItems: 'flex-end', maxWidth: '94vw' }}>
-            {AGENTS.map((a, i) => <HoloBody key={a.id} color={a.color} index={i} />)}
+          <div className="td-deploy-squad" style={{ display: 'flex', width: 'min(422px, calc(100vw - 32px))', gap: 'clamp(8px, 6vw, 46px)', justifyContent: 'center', alignItems: 'flex-end' }}>
+            {displayAgents.map((agent, i) => <HoloBody key={agent.id || i} agent={agent} index={i} />)}
           </div>
         </div>
       )}
@@ -158,22 +159,22 @@ export default function DeploySequence({ matchScore = 0, caseBrief = null, onCom
       {phase === 2 && (
         <div style={{
           zIndex: 6, width: 520, maxWidth: '90vw',
-          border: '1px solid rgba(112, 159, 154,0.4)', borderRadius: 14,
+          border: '1px solid rgba(0,229,255,0.4)', borderRadius: 14,
           background: 'rgba(2,10,22,0.9)', padding: '20px 24px',
-          boxShadow: '0 20px 60px #0006',
-          animation: motionEnabled ? 'ds-brief 0.4s ease both' : 'none',
+          boxShadow: '0 0 50px rgba(0,229,255,0.2)',
+          animation: 'ds-brief 0.4s ease both',
         }}>
-          <SlicedTitle style={{ fontSize: '1.25rem', color: '#e1d0ac', margin: '0 0 16px' }}>
+          <div style={{ fontSize: '0.55rem', letterSpacing: '0.3em', color: 'rgba(0,229,255,0.65)', marginBottom: 16 }}>
             {zh ? '任务简报' : 'MISSION BRIEFING'}
-          </SlicedTitle>
+          </div>
           {brief.map((b, i) => (
             <div key={b.label} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 14,
+              display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'center',
               padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)',
-              animation: motionEnabled ? `ds-row 0.32s ${i * 0.16}s ease both` : 'none',
+              animation: `ds-row 0.32s ${i * 0.16}s ease both`,
             }}>
-              <span style={{ fontSize: '0.6rem', color: '#9caaa9', letterSpacing: '0.05em', flexShrink: 0 }}>{b.label}</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: b.color, minWidth: 0, overflowWrap: 'anywhere', textAlign: 'right' }}>{b.value}</span>
+              <span style={{ flexShrink: 0, fontSize: '0.5rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em' }}>{b.label}</span>
+              <span style={{ minWidth: 0, overflowWrap: 'anywhere', textAlign: 'right', fontSize: '0.72rem', fontWeight: 900, color: b.color, textShadow: `0 0 12px ${b.color}70` }}>{b.value}</span>
             </div>
           ))}
         </div>
@@ -182,12 +183,12 @@ export default function DeploySequence({ matchScore = 0, caseBrief = null, onCom
       {/* Phase 3 — 倒计时 */}
       {phase === 3 && (
         <div style={{ zIndex: 6, textAlign: 'center' }}>
-          <div style={{ fontSize: '0.62rem', letterSpacing: '0.4em', color: 'rgba(112, 159, 154,0.6)', marginBottom: 14 }}>
+          <div style={{ fontSize: '0.62rem', letterSpacing: '0.4em', color: 'rgba(0,229,255,0.6)', marginBottom: 14 }}>
             {zh ? '即将部署' : 'DEPLOYING IN'}
           </div>
           <div key={count} style={{
-            fontSize: '6rem', fontWeight: 900, lineHeight: 1, color: '#709f9a',
-            animation: motionEnabled ? 'ds-count 0.36s ease both' : 'none',
+            fontSize: '6rem', fontWeight: 900, lineHeight: 1, color: '#00e5ff',
+            textShadow: '0 0 40px #00e5ff', animation: 'ds-count 0.36s ease both',
           }}>{count}</div>
         </div>
       )}
@@ -196,15 +197,15 @@ export default function DeploySequence({ matchScore = 0, caseBrief = null, onCom
       <div style={{
         position: 'absolute', inset: 0, background: '#000', zIndex: 10,
         pointerEvents: 'none', opacity: 0,
-        animation: motionEnabled ? 'ds-blackout 0.5s 3.95s ease-in both' : 'none',
+        animation: 'ds-blackout 0.5s 3.95s ease-in both',
       }} />
 
       <style>{`
-        @keyframes ds-fly-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+        @keyframes ds-fly-in { from{opacity:0;transform:translateX(-52vw) scale(0.8)} to{opacity:1;transform:none} }
         @keyframes ds-fade { from{opacity:0} to{opacity:1} }
         @keyframes ds-brief { from{opacity:0;transform:scale(0.94)} to{opacity:1;transform:none} }
         @keyframes ds-row { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:none} }
-        @keyframes ds-count { from{opacity:.5;transform:translateY(8px)} to{opacity:1;transform:none} }
+        @keyframes ds-count { from{opacity:0;transform:scale(1.7)} to{opacity:1;transform:scale(1)} }
         @keyframes ds-rain { from{transform:translateY(-120px)} to{transform:translateY(105vh)} }
         @keyframes ds-blackout { from{opacity:0} to{opacity:1} }
       `}</style>

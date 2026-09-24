@@ -420,6 +420,9 @@ export default function TerminalDetective() {
         targetCase={ALL_CASES.find(item => item.case_id === preferredCaseId) || null}
         onDeploy={handleDeploy}
         onBack={() => setScreen(lobbyReturnScreen)}
+        backLabel={lobbyReturnScreen === 'CASE_SELECT'
+          ? (lang === 'zh' ? '案件选择' : 'CASE SELECT')
+          : (lang === 'zh' ? '侦探之家' : 'HOME')}
         onTeamSave={handleTeamSave}
         onSkillLoadout={handleSkillLoadout}
         onAgentPurchase={handleAgentPurchase}

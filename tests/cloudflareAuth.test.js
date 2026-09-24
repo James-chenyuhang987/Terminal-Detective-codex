@@ -130,6 +130,10 @@ test('Firebase claims reject missing identity fields and future authentication t
     error => error.code === 'INVALID_FIREBASE_TOKEN',
   );
   assert.throws(
+    () => authInternals.validateClaims({ ...claims, iat: NOW + 300, auth_time: NOW + 301 }, PROJECT_ID, NOW),
+    error => error.code === 'INVALID_FIREBASE_TOKEN',
+  );
+  assert.throws(
     () => authInternals.validateClaims({ ...claims, iat: 0 }, PROJECT_ID, NOW),
     error => error.code === 'INVALID_FIREBASE_TOKEN',
   );

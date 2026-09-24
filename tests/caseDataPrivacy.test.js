@@ -36,3 +36,20 @@ test('public dramatic narrative library contains no server-only answer fields or
   const serialized = JSON.stringify(CASE_NARRATIVE_LIBRARY);
   assert.doesNotMatch(serialized, /\b(?:clue|c|d|e|f|g|h|i|j)_secret_[a-z0-9_:-]+\b/i);
 });
+
+test('hidden clue copy stays generic so answer text cannot ship in the client bundle', () => {
+  const hiddenCopy = new Set([
+    '匿名线索', '遗留数据', '离线账本', '覆盖缓存', '离线记录', '诊断缓存', '黑匣子记录', '因果快照',
+    'Anonymous Lead', 'Residual Data', 'Offline Ledger', 'Override Cache', 'Offline Record',
+    'Diagnostic Cache', 'Black Box Record', 'Causal Snapshot',
+  ]);
+  for (const caseData of ALL_CASES) {
+    const hiddenIds = new Set((caseData.hidden_clues || []).map(item => item.clue_id));
+    const hiddenEntries = (caseData.clue_dictionary || []).filter(item => hiddenIds.has(item.clue_id));
+    assert.equal(hiddenEntries.length, hiddenIds.size, `${caseData.case_id} hidden clue mapping is incomplete`);
+    for (const clue of hiddenEntries) {
+      assert.ok(hiddenCopy.has(clue.keyword), `${caseData.case_id}/${clue.clue_id} exposes answer-like keyword`);
+      assert.match(clue.description, /(?:待验证|尚待核验|still needs to be verified)/i);
+    }
+  }
+});

@@ -65,7 +65,7 @@ export default function RegPreviewPanel({ name, avatar, signature, badge, tags }
           }} />
         </div>
         <div style={{ fontSize: '0.52rem', color: 'rgba(255,255,255,0.3)', marginTop: 10, lineHeight: 1.7 }}>
-          {zh ? '注册完成后即可在探员大厅中编队部署，开启首桩案件。' : 'Complete registration to assemble your squad and begin your first case.'}
+          {zh ? '注册完成后即可进入战术台编队部署，开启首桩案件。' : 'Complete registration to enter the tactical desk, assemble your squad and begin your first case.'}
         </div>
       </GlassPanel>
     </div>

@@ -153,6 +153,7 @@ function validateClaims(payload, projectId, nowSeconds = Math.floor(Date.now() /
     throw authError('INVALID_FIREBASE_TOKEN');
   }
   if (!Number.isInteger(payload.auth_time) || payload.auth_time <= 0
+    || payload.auth_time > nowSeconds + CLOCK_TOLERANCE_SECONDS
     || payload.auth_time > payload.iat + CLOCK_TOLERANCE_SECONDS) {
     throw authError('INVALID_FIREBASE_TOKEN');
   }

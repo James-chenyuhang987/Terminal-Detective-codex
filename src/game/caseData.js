@@ -76,7 +76,7 @@ export const Case_Data_Lvl_01 = {
     { clue_id: "c_06", keyword: "Mei 的姐姐档案", description: "医院记录：Mei Lin 的姐姐是 NovaCorp 神经接口实验的受害者，目前处于植物人状态。", visual_icon: "🏥", weight: "HIGH" },
     { clue_id: "c_07", keyword: "抹除的监控", description: "案发时间段的所有摄像头数据均已损毁，符合 EMP 设备的干扰特征。", visual_icon: "📷", weight: "MEDIUM" },
     { clue_id: "c_08", keyword: "Kenji 不在场证明", description: "保安 Kenji 的刷卡记录证实他全程在地下停车场值班，不可能在案发时间出现在47层。", visual_icon: "🛡️", weight: "LOW" },
-    { clue_id: "c_secret_99", keyword: "匿名黑客情报", description: "系统收到匿名加密信息：'Check maintenance shaft log at 23:17. She always hated him for what he did to her sister.'", visual_icon: "🔐", weight: "CRITICAL", unlock_turn: 8 }
+    { clue_id: "c_secret_99", keyword: "匿名线索", description: "系统收到一条待验证的加密线索，需要和其他证据交叉核对。", visual_icon: "🔐", weight: "CRITICAL", unlock_turn: 8 }
   ],
 
   npcs: [
@@ -120,7 +120,7 @@ export const Case_Data_Lvl_01 = {
       { clue_id: "c_06", keyword: "Mei's Sister File", description: "Hospital records: Mei Lin's sister is a victim of NovaCorp's neural interface experiments, currently in a vegetative state.", visual_icon: "🏥", weight: "HIGH" },
       { clue_id: "c_07", keyword: "Wiped Surveillance", description: "All camera footage during the incident window was destroyed — consistent with EMP interference signatures.", visual_icon: "📷", weight: "MEDIUM" },
       { clue_id: "c_08", keyword: "Kenji's Alibi", description: "Security guard Kenji's card log confirms he was on duty in the underground parking lot throughout — impossible to be on the 47th floor.", visual_icon: "🛡️", weight: "LOW" },
-      { clue_id: "c_secret_99", keyword: "Anonymous Hacker Intel", description: "System received an anonymous encrypted message: 'Check maintenance shaft log at 23:17. She always hated him for what he did to her sister.'", visual_icon: "🔐", weight: "CRITICAL", unlock_turn: 8 }
+      { clue_id: "c_secret_99", keyword: "Anonymous Lead", description: "The system received an encrypted lead that still needs to be cross-checked against the other evidence.", visual_icon: "🔐", weight: "CRITICAL", unlock_turn: 8 }
     ],
     npcs: [
       { npc_id: "npc_01", name: "Mei Lin", role: "Victor's Personal Assistant", public_persona: "Loyal, efficient assistant — appears devastated by Victor's death", personality: "Outwardly composed, inwardly terrified — breaks down when confronted with evidence", avatar: "👩‍💼", initial_statement: "I... I don't know what to say. Victor is gone — it's so sudden. I left the building before 11 PM last night. I swear." },
@@ -163,7 +163,7 @@ export const Case_Data_Lvl_02 = {
     { clue_id: "d_06", keyword: "屋顶重量传感器", description: "逃生通道屋顶出口的压力传感器记录在 02:34 检测到一个成人体重的压力，随后归零。", visual_icon: "📊", weight: "HIGH" },
     { clue_id: "d_07", keyword: "同步宕机记录", description: "所有外部摄像头在 02:17 同时断电，与实验室内部的供电控制器联动——这是内部人员操作。", visual_icon: "📷", weight: "MEDIUM" },
     { clue_id: "d_08", keyword: "Harlan 的通话记录", description: "Harlan 在案发当晚 23:40 拨打了一个加密号码，通话时长 18 分钟，接收方 IP 指向境外。", visual_icon: "📞", weight: "HIGH" },
-    { clue_id: "d_secret_99", keyword: "Aria 的遗留信息", description: "服务器垃圾回收站中找到未彻底删除的文本：「If you find this, I'm safe. The real criminal is Harlan. Check the lounge fridge.」", visual_icon: "📨", weight: "CRITICAL", unlock_turn: 7 }
+    { clue_id: "d_secret_99", keyword: "遗留数据", description: "服务器垃圾回收站中找到一条尚待核验的残留数据。", visual_icon: "📨", weight: "CRITICAL", unlock_turn: 7 }
   ],
   npcs: [
     { npc_id: "npc_01", name: "Dr. Harlan", role: "研究所所长", public_persona: "忧心忡忡的领导，声称竭尽全力寻找 Aria", personality: "老练权威，极善于用官僚话语转移焦点，被追问时会引用「正当程序」", avatar: "🧑‍🔬", initial_statement: "这太不可思议了。Aria 是我最优秀的研究员。我们正在全力配合调查，请相信机构会给出答案。" },
@@ -205,7 +205,7 @@ export const Case_Data_Lvl_02 = {
       { clue_id: "d_06", keyword: "Roof Weight Sensor", description: "The pressure sensor at the emergency shaft's roof exit recorded adult-weight pressure at 02:34, then immediately dropped to zero.", visual_icon: "📊", weight: "HIGH" },
       { clue_id: "d_07", keyword: "Synchronized Outage", description: "All external cameras powered off simultaneously at 02:17, linked to the lab's internal power controller — an inside job.", visual_icon: "📷", weight: "MEDIUM" },
       { clue_id: "d_08", keyword: "Harlan's Call Log", description: "Harlan made an encrypted call at 23:40 on the night of the incident — 18 minutes long. The receiving IP traces to an overseas location.", visual_icon: "📞", weight: "HIGH" },
-      { clue_id: "d_secret_99", keyword: "Aria's Hidden Message", description: "Recovered from server trash (not fully overwritten): 'If you find this, I'm safe. The real criminal is Harlan. Check the lounge fridge.'", visual_icon: "📨", weight: "CRITICAL", unlock_turn: 7 }
+      { clue_id: "d_secret_99", keyword: "Residual Data", description: "A residual record was recovered from server trash and still needs to be verified against the case evidence.", visual_icon: "📨", weight: "CRITICAL", unlock_turn: 7 }
     ],
     npcs: [
       { npc_id: "npc_01", name: "Dr. Harlan", role: "Institute Director", public_persona: "Concerned leader, claims to be doing everything to find Aria", personality: "Authoritative, skilled at deflecting with bureaucratic language — cites 'due process' when pressed", avatar: "🧑‍🔬", initial_statement: "This is unbelievable. Aria was my finest researcher. We are cooperating fully with the investigation. Trust that this institution will provide answers." },
@@ -248,7 +248,7 @@ export const Case_Data_Lvl_03 = {
     { clue_id: "e_06", keyword: "改装神经芯片", description: "后巷收货区的一个隐藏箱子里发现12枚改装神经芯片，型号与 Sable 供应商账单不符——这是非法走私货。", visual_icon: "💿", weight: "HIGH" },
     { clue_id: "e_07", keyword: "吧台酒精分析", description: "Riku 杯中残留物显示他被灌入了大量神经抑制剂，这会降低他对过载信号的防御反应——配合过载效果致命。", visual_icon: "🍸", weight: "MEDIUM" },
     { clue_id: "e_08", keyword: "俱乐部老板 Ren 证词", description: "老板 Ren 声称案发时他在VIP包厢陪客户，有5名客人可作证，时间段完全吻合。他与本案无直接关联。", visual_icon: "🤵", weight: "LOW" },
-    { clue_id: "e_secret_99", keyword: "Sable 的走私账本", description: "解密后巷箱子底部夹层：一本手写账本记录了 Sable 三年来的非法芯片交易，以及 Riku 的姓名旁标注「威胁清除」。", visual_icon: "📒", weight: "CRITICAL", unlock_turn: 6 }
+    { clue_id: "e_secret_99", keyword: "离线账本", description: "后巷节点恢复出一份尚待核验的离线账本。", visual_icon: "📒", weight: "CRITICAL", unlock_turn: 6 }
   ],
   npcs: [
     { npc_id: "npc_01", name: "Sable", role: "首席调酒师", public_persona: "冷静专业，对 Riku 的死表示遗憾，声称自己一直在吧台忙碌", personality: "极度冷静，几乎没有情绪波动，但面对具体时间线追问时会有短暂停顿", avatar: "🦋", initial_statement: "Riku 是我们的老客户了。今晚生意很忙，我一直在吧台。这种事太不幸了。" },
@@ -290,7 +290,7 @@ export const Case_Data_Lvl_03 = {
       { clue_id: "e_06", keyword: "Modified Neural Chips", description: "A hidden crate in the back alley yielded 12 modified neural chips — model numbers don't match Sable's supplier invoices. Illegal contraband.", visual_icon: "💿", weight: "HIGH" },
       { clue_id: "e_07", keyword: "Bar Chemical Analysis", description: "Residue in Riku's glass shows a heavy neural suppressant dose — lowering his defensive response to overload signals. In combination: lethal.", visual_icon: "🍸", weight: "MEDIUM" },
       { clue_id: "e_08", keyword: "Club Owner Ren's Statement", description: "Owner Ren claims he was in the VIP lounge with clients when the incident occurred. Five guests can vouch for him. No direct connection to the case.", visual_icon: "🤵", weight: "LOW" },
-      { clue_id: "e_secret_99", keyword: "Sable's Smuggling Ledger", description: "Decrypted from a hidden compartment in the alley crate: a handwritten ledger of Sable's three-year illegal chip trade, with Riku's name annotated 'Threat Eliminated'.", visual_icon: "📒", weight: "CRITICAL", unlock_turn: 6 }
+      { clue_id: "e_secret_99", keyword: "Offline Ledger", description: "An offline ledger was recovered from the alley node and still needs to be verified against the case evidence.", visual_icon: "📒", weight: "CRITICAL", unlock_turn: 6 }
     ],
     npcs: [
       { npc_id: "npc_01", name: "Sable", role: "Head Bartender", public_persona: "Calm and professional — expresses regret about Riku's death, claims she was busy at the bar all evening", personality: "Ice-cold, almost no emotional fluctuation — brief pauses when pressed on the specific timeline", avatar: "🦋", initial_statement: "Riku was a regular here. It was a busy night — I was at the bar the whole time. Such a tragedy." },

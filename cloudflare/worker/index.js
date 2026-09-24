@@ -15,6 +15,19 @@ import { validateRuleEnvelope } from './requestSecurity.js';
 const RULE_BODY_LIMIT = 96 * 1024;
 const CORS_METHODS = 'GET, POST, OPTIONS';
 const CORS_HEADERS = 'Authorization, Content-Type, Accept';
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.workers.dev https://*.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com",
+  "worker-src 'self' blob:",
+].join('; ');
 const KNOWN_SERVER_ERRORS = new Set([
   'DATABASE_UNAVAILABLE',
   'FIREBASE_KEYS_UNAVAILABLE',
@@ -36,10 +49,17 @@ const PUBLIC_RULE_ERRORS = new Set([
   'UNKNOWN_TASK',
 ]);
 
-function securityHeaders(headers = new Headers()) {
+function securityHeaders(headers = new Headers(), request = null, { page = false } = {}) {
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  headers.set('X-Permitted-Cross-Domain-Policies', 'none');
+  if (page) headers.set('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+  if (request && new URL(request.url).protocol === 'https:') {
+    headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   return headers;
 }
 
@@ -85,7 +105,7 @@ function requestedOrigin(request, env) {
 }
 
 function withApiHeaders(response, request, env) {
-  const headers = securityHeaders(new Headers(response.headers));
+  const headers = securityHeaders(new Headers(response.headers), request);
   const origin = requestedOrigin(request, env);
   if (origin) {
     headers.set('Access-Control-Allow-Origin', origin);
@@ -109,7 +129,16 @@ function handlePreflight(request, env) {
     'Cache-Control': 'no-store',
     Vary: 'Origin',
   });
-  return new Response(null, { status: 204, headers: securityHeaders(headers) });
+  return new Response(null, { status: 204, headers: securityHeaders(headers, request) });
+}
+
+function withPageHeaders(response, request) {
+  const headers = securityHeaders(new Headers(response.headers), request, { page: true });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 async function handleRules(request) {
@@ -219,7 +248,9 @@ export async function handleRequest(request, env) {
     return handlePreflight(request, env);
   }
   const response = await routeRequest(request, env);
-  return url.pathname.startsWith('/api/') ? withApiHeaders(response, request, env) : response;
+  return url.pathname.startsWith('/api/')
+    ? withApiHeaders(response, request, env)
+    : withPageHeaders(response, request);
 }
 
 export default {
@@ -238,7 +269,7 @@ export default {
       const response = errorResponse(code, status, undefined, reference ? { fault_reference: reference } : {});
       return new URL(request.url).pathname.startsWith('/api/')
         ? withApiHeaders(response, request, env)
-        : response;
+        : withPageHeaders(response, request);
     }
   },
 };
