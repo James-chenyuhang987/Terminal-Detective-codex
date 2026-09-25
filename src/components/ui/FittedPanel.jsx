@@ -4,7 +4,7 @@ import HomeDrawer from '@/components/game/home/HomeDrawer';
 import { useLang } from '@/lib/lang.jsx';
 import Icon from '@/components/ui/Icon.jsx';
 
-export default function FittedPanel({ id, labelledBy, title, summary, children, className = '', contentClassName = '', theme = 'default', icon = 'file' }) {
+export default function FittedPanel({ id, labelledBy, title, summary, children, className = '', contentClassName = '', theme = 'default', icon = 'file', openLabel = null, onOpen = null }) {
   const { lang } = useLang();
   const panelRef = useRef(null);
   const inlineRef = useRef(null);
@@ -70,8 +70,11 @@ export default function FittedPanel({ id, labelledBy, title, summary, children, 
       {condensed && <div className="td-fit-panel-summary">
         <h2><Icon name={icon} /> {title}</h2>
         <div className="td-fit-panel-excerpt">{summary}</div>
-        <button ref={buttonRef} type="button" className="td-ui-button td-fit-panel-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>
-          <Icon name="file" /> {lang === 'zh' ? '展开完整内容' : 'OPEN FULL CONTENT'}
+        <button ref={buttonRef} type="button" className="td-ui-button td-fit-panel-open" aria-haspopup="dialog" onClick={() => {
+          if (onOpen) { onOpen(); return; }
+          setOpen(true);
+        }}>
+          <Icon name="file" /> {openLabel || (lang === 'zh' ? '展开完整内容' : 'OPEN FULL CONTENT')}
           <span className="td-visually-hidden"> · {title}</span>
         </button>
       </div>}

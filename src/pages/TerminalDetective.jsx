@@ -53,6 +53,7 @@ export default function TerminalDetective() {
   const [regError, setRegError] = useState('');
   const [preferredCaseId, setPreferredCaseId] = useState(null);
   const [lobbyReturnScreen, setLobbyReturnScreen] = useState('HOME');
+  const [lobbyPreviewRun, setLobbyPreviewRun] = useState(false);
   const [caseSelectReturnScreen, setCaseSelectReturnScreen] = useState('LOBBY');
   const [abandonRunBusy, setAbandonRunBusy] = useState(false);
   const [abandonRunError, setAbandonRunError] = useState('');
@@ -351,15 +352,16 @@ export default function TerminalDetective() {
     setScreen(nextScreen);
   };
 
-  const openLobbyForCase = (caseId = null, returnScreen = 'HOME') => {
+  const openLobbyForCase = (caseId = null, returnScreen = 'HOME', options = {}) => {
     if (selectedCase) {
       setScreen('GAME');
       return;
     }
-    if (activeRun) { resumeCloudRun(activeRun); return; }
+    if (activeRun && !options.previewActiveRun) { resumeCloudRun(activeRun); return; }
     void loadAgentLobby();
     setPreferredCaseId(caseId);
     setLobbyReturnScreen(returnScreen);
+    setLobbyPreviewRun(Boolean(options.previewActiveRun && activeRun));
     setScreen('LOBBY');
   };
 
@@ -415,11 +417,18 @@ export default function TerminalDetective() {
   } else if (screen === 'LOBBY') {
     content = (
       <AgentLobby
-        profile={profile}
-        readOnly={isReadOnly}
+        profile={lobbyPreviewRun && activeRun
+          ? {
+            ...profile,
+            saved_team_config: activeRun.team_config || profile?.saved_team_config,
+            skill_loadout: activeRun.skill_loadout || profile?.skill_loadout,
+          }
+          : profile}
+        readOnly={isReadOnly || lobbyPreviewRun}
+        previewActiveRun={lobbyPreviewRun}
         targetCase={ALL_CASES.find(item => item.case_id === preferredCaseId) || null}
         onDeploy={handleDeploy}
-        onBack={() => setScreen(lobbyReturnScreen)}
+        onBack={() => { setLobbyPreviewRun(false); setScreen(lobbyReturnScreen); }}
         backLabel={lobbyReturnScreen === 'CASE_SELECT'
           ? (lang === 'zh' ? '案件选择' : 'CASE SELECT')
           : (lang === 'zh' ? '侦探之家' : 'HOME')}

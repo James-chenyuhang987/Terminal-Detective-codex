@@ -318,6 +318,26 @@ function CaseLaunchPanel({ lang, t }) {
   );
 }
 
+/**
+ * The detective artwork is part of the landing composition, rather than a
+ * dossier that needs to collapse into a drawer. Keeping it as a plain
+ * tabpanel means the figure remains visible in the right-hand frame at every
+ * desktop height and on the compact tab view.
+ */
+function DetectivePanel({ lang }) {
+  return (
+    <section
+      id="landing-panel-detective"
+      className="td-landing-panel td-landing-detective-view td-landing-detective-direct"
+      aria-labelledby="landing-tab-detective"
+      role="tabpanel"
+      tabIndex={-1}
+    >
+      <DetectiveFigure lang={lang} />
+    </section>
+  );
+}
+
 export default function GameLanding({ busy = false, error = '', onStart }) {
   const { lang, t } = useLang();
   const { reducedMotion, foreground } = usePresentationMotion();
@@ -357,15 +377,12 @@ export default function GameLanding({ busy = false, error = '', onStart }) {
           <TitleLogo lang={lang} t={t} />
           <FittedPanel id="landing-panel-case" className="td-landing-panel td-landing-case-view" labelledBy="landing-tab-case"
             title={lang === 'zh' ? '案件档案 · 霓虹血迹' : 'CASE DOSSIER · NEON BLOOD'} icon="file" theme="landing"
+            openLabel={lang === 'zh' ? '霓虹血迹案件调查终端' : 'NEON BLOOD CASE INVESTIGATION TERMINAL'}
             summary={<StatRow t={t} />}>
             <CaseLaunchPanel lang={lang} t={t} />
           </FittedPanel>
 
-          <FittedPanel id="landing-panel-detective" className="td-landing-panel td-landing-detective-view" labelledBy="landing-tab-detective"
-            title={lang === 'zh' ? '首席现场侦探' : 'LEAD FIELD DETECTIVE'} icon="detective" theme="landing"
-            summary={lang === 'zh' ? '探员编号 · TD-01 · 等待部署' : 'AGENT REGISTRY · TD-01 · AWAITING DEPLOYMENT'}>
-            <DetectiveFigure lang={lang} />
-          </FittedPanel>
+          <DetectivePanel lang={lang} />
 
           <FittedPanel id="landing-panel-features" className="td-landing-panel td-landing-features-view" labelledBy="landing-tab-features"
             title={lang === 'zh' ? '系统情报' : 'SYSTEM INTEL'} icon="terminal" theme="landing"

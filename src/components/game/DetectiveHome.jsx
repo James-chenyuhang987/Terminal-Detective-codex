@@ -165,8 +165,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
   };
 
   const enterLobby = (targetCaseId = null) => {
-    if (suspendedCase) { onResume(); return; }
-    onEnterLobby(targetCaseId);
+    // The routed app always supplies onEnterLobby; retain the old embedded
+    // caller fallback for integrations that only expose a resume action.
+    if (suspendedCase && typeof onEnterLobby !== 'function') { onResume(); return; }
+    onEnterLobby(targetCaseId, 'HOME', { previewActiveRun: Boolean(suspendedCase) });
     if (!isReadOnly) {
       void command('visit_lobby').catch(cause => notify(publicErrorMessage(cause, lang), 'error'));
     }
@@ -296,13 +298,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
 
         {/* Center */}
         <FittedPanel id="home-panel-overview" labelledBy="home-tab-overview" title={lang === 'zh' ? '侦探之家总览' : 'DETECTIVE HOME OVERVIEW'} icon="search"
+          openLabel={lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER'} onOpen={() => openModule('cases')}
           summary={<>
             <div className="td-home-summary-emblem" aria-hidden="true"><Icon name="detective" size={54} /></div>
             <strong>{settings.storyMode === 'terminal' ? (lang === 'zh' ? '终端模式' : 'TERMINAL MODE') : (lang === 'zh' ? '剧场模式' : 'THEATER MODE')}</strong>
             <p>{suspendedCase
               ? (lang === 'en' ? (suspendedCase.en?.title || suspendedCase.subtitle || suspendedCase.title) : suspendedCase.title)
               : (named ? (lang === 'zh' ? '调查终端待命 · 随时出发' : 'INVESTIGATION TERMINAL · READY') : (lang === 'zh' ? '设定代号，建立侦探档案' : 'SET YOUR CODENAME TO BEGIN'))}</p>
-            <p>{lang === 'zh' ? '剧情模式 · 当前调查 · 身份档案 · 探员事务所' : 'Story mode · Investigation · Identity · Agent bureau'}</p>
+            <p>{lang === 'zh' ? '剧情模式 · 当前调查 · 身份档案 · 战术台' : 'Story mode · Investigation · Identity · Tactical desk'}</p>
           </>}
           className="td-home-center" contentClassName="td-home-panel-stack td-home-overview-stack">
 
@@ -358,18 +361,18 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
               }}>
                 <div style={{ color: '#c5a66f' }}><Icon name="search" size={28} /></div>
                 <div style={{ color: '#c5a66f', fontWeight: 900, letterSpacing: '0.2em', fontSize: '1rem', margin: '8px 0 6px' }}>
-                  {suspendedCase ? (lang === 'zh' ? '「继续调查」' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '「调取案件卷宗」' : 'RETRIEVE CASE DOSSIER')}
+                  {lang === 'zh' ? '「调取案件卷宗」' : 'RETRIEVE CASE DOSSIER'}
                 </div>
                 <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: 14 }}>
                   {lang === 'zh'
                     ? `代号 ${profile.detective_name} · 侦探之旅已启程`
                     : `CODENAME ${profile.detective_name} · YOUR INVESTIGATION BEGINS`}
                 </div>
-                <button className="td-ui-button td-button-gold td-button-wide" onClick={quickStart} style={{
+                <button className="td-ui-button td-button-gold td-button-wide" onClick={() => openModule('cases')} style={{
                   width: '100%', padding: '11px', cursor: 'pointer', borderRadius: 10,
                   border: '1px solid #c5a66f', background: 'rgba(197, 166, 111,0.22)',
                   color: '#e1d0ac', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
-                }}>{suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME INVESTIGATION') : (lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER')}</button>
+                }}>{lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER'}</button>
                 {onSelectCase && <button className="td-ui-button td-button-ghost td-button-compact" onClick={onSelectCase} style={{
                   width: '100%', marginTop: 8, minHeight: 38, padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
                   border: '1px solid rgba(197, 166, 111, .58)', background: 'rgba(197, 166, 111, .08)',
@@ -400,7 +403,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
             <Icon name="search" /> {suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME') : named ? (lang === 'zh' ? '开始调查' : 'INVESTIGATE') : (lang === 'zh' ? '注册身份' : 'REGISTER')}
           </button>
           <button type="button" className="td-ui-button" onClick={() => enterLobby()} disabled={!named}>
-            <Icon name="users" /> {lang === 'zh' ? '探员大厅' : 'AGENT HALL'}
+            <Icon name="users" /> {lang === 'zh' ? '战术台' : 'TACTICAL DESK'}
           </button>
         </div>
         <FooterShortcuts

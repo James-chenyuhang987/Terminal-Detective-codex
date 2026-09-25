@@ -1056,7 +1056,7 @@ function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose })
 }
 
 // ── Main HolographicLobby ─────────────────────────────────────────────────────
-export default function HolographicLobby({ profile, readOnly = false, targetCase = null, onDeploy, onBack, backLabel, onTeamSave, onSkillLoadout, onAgentPurchase }) {
+export default function HolographicLobby({ profile, readOnly = false, previewActiveRun = false, targetCase = null, onDeploy, onBack, backLabel, onTeamSave, onSkillLoadout, onAgentPurchase }) {
   const { lang } = useLang();
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
@@ -1325,6 +1325,13 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
 
       <StatusBar profile={profile} readOnly={readOnly} lighting={lighting} onBack={onBack} backLabel={backLabel} onOpenSettings={() => setShowSettings(true)} />
 
+      {previewActiveRun && <div role="status" className="td-lobby-preview-banner" style={{
+        position: 'relative', zIndex: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: 30, padding: '6px 14px', borderBottom: '1px solid rgba(232,201,138,.28)',
+        background: 'linear-gradient(90deg,rgba(57,38,12,.88),rgba(10,18,28,.94),rgba(57,38,12,.88))',
+        color: '#f0d28b', font: '800 9px/1.45 ui-monospace,monospace', letterSpacing: '.05em', textAlign: 'center',
+      }}>{lang === 'zh' ? '当前调查已暂存 · 战术预览只读，部署将继续原调查' : 'CURRENT INVESTIGATION PAUSED · TACTICAL PREVIEW IS READ ONLY; DEPLOYMENT RESUMES THE ACTIVE CASE'}</div>}
+
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
       {showTutorial && (
@@ -1493,13 +1500,18 @@ export default function HolographicLobby({ profile, readOnly = false, targetCase
           caseBrief={deploymentSnapshot.caseBrief}
           onComplete={async () => {
             try {
-              const result = await onDeploy(buildTeamConfig(
+              const renderedStrategy = buildTeamConfig(
                 deploymentSnapshot.config,
                 deploymentSnapshot.selectedIdx,
                 deploymentSnapshot.skillLoadout,
                 deploymentSnapshot.supportAgentId,
                 deploymentSnapshot.targetCaseId,
-              ));
+              );
+              // Keep the raw public squad intent alongside the rendered
+              // strategy. The terminal uses it to start the exact formation
+              // shown in the briefing instead of falling back to an older
+              // profile snapshot.
+              const result = await onDeploy(renderedStrategy, deploymentSnapshot.config);
               if (result?.error) {
                 clearDeployment();
                 const message = result.error === 'insufficient_energy'

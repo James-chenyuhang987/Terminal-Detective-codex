@@ -15,12 +15,13 @@ function navigationHarness() {
     setScreen(value) { state.screen = value; },
     setPreferredCaseId(value) { state.preferredCaseId = value; },
     setLobbyReturnScreen(value) { state.lobbyReturnScreen = value; },
+    setLobbyPreviewRun(value) { state.previewActiveRun = value; },
     get lobbyReturnScreen() { return state.lobbyReturnScreen; },
   });
   const openLobby = terminal.match(/const openLobbyForCase = ([\s\S]*?);\n\n/);
   assert.ok(openLobby, 'lobby navigation callback exists');
   vm.runInContext(`var openLobbyForCase = ${openLobby[1]};`, context);
-  assert.match(terminal, /onBack=\{\(\) => setScreen\(lobbyReturnScreen\)\}/);
+  assert.match(terminal, /onBack=\{\(\) => \{ setLobbyPreviewRun\(false\); setScreen\(lobbyReturnScreen\); \}\}/);
   assert.match(terminal, /onBack=\{\(\) => \{\s*setPreferredCaseId\(null\);\s*setScreen\(caseSelectReturnScreen\);\s*\}/);
   return {
     state,
