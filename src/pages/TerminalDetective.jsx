@@ -62,6 +62,7 @@ export default function TerminalDetective() {
   const [narrativeError, setNarrativeError] = useState('');
   const briefingRequestRef = useRef(null);
   const briefedRunRef = useRef(false);
+  const entryReturnScreenRef = useRef('HOME');
 
   useEffect(() => () => {
     briefingRequestRef.current?.resolve({ error: 'cancelled' });
@@ -231,6 +232,7 @@ export default function TerminalDetective() {
     if (activeRun) { resumeCloudRun(activeRun); return Promise.resolve({ run: activeRun }); }
     if (briefingRequestRef.current || caseStartRef.current) return Promise.resolve({ error: 'busy' });
     briefedRunRef.current = false;
+    entryReturnScreenRef.current = screen;
     if (settings.storyMode !== 'theater') return handleCaseSelect(caseData);
     setNarrativeError('');
     setEntryNarrative({ kind: 'briefing', caseData });
@@ -247,7 +249,7 @@ export default function TerminalDetective() {
     setEntryNarrative(null);
     setNarrativeError('');
     setPreferredCaseId(null);
-    setScreen('HOME');
+    setScreen(entryReturnScreenRef.current || 'HOME');
   };
 
   const completeEntryNarrative = async () => {
@@ -285,6 +287,7 @@ export default function TerminalDetective() {
   const handleHomeStartInvestigation = () => {
     if (selectedCase) { setScreen('GAME'); return; }
     if (activeRun) { resumeCloudRun(activeRun); return; }
+    entryReturnScreenRef.current = 'HOME';
     setNarrativeError('');
     setEntryNarrative({ kind: 'prologue' });
   };
@@ -353,13 +356,13 @@ export default function TerminalDetective() {
   };
 
   const openLobbyForCase = (caseId = null, returnScreen = 'HOME', options = {}) => {
-    if (selectedCase) {
+    if (selectedCase && !options.previewActiveRun) {
       setScreen('GAME');
       return;
     }
     if (activeRun && !options.previewActiveRun) { resumeCloudRun(activeRun); return; }
     void loadAgentLobby();
-    setPreferredCaseId(caseId);
+    setPreferredCaseId(caseId || (options.previewActiveRun ? activeRun?.case_id || null : null));
     setLobbyReturnScreen(returnScreen);
     setLobbyPreviewRun(Boolean(options.previewActiveRun && activeRun));
     setScreen('LOBBY');
@@ -411,6 +414,7 @@ export default function TerminalDetective() {
         onStartInvestigation={settings.storyMode === 'theater' ? handleHomeStartInvestigation : null}
         onRegister={() => setScreen('REGISTRATION')}
         suspendedCase={selectedCase || ALL_CASES.find(item => item.case_id === activeRun?.case_id)}
+        hasLocalSelectedCase={Boolean(selectedCase)}
         onResume={handleResume}
       />
     );

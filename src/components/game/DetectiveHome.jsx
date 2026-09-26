@@ -39,7 +39,7 @@ function HomeModuleSkeleton({ lang }) {
   );
 }
 
-export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase, onRegister, onStartInvestigation = null, suspendedCase = null, onResume = () => {} }) {
+export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase, onRegister, onStartInvestigation = null, suspendedCase = null, hasLocalSelectedCase = false, onResume = () => {} }) {
   const { lang } = useLang();
   const { settings, updateSetting } = useSettings();
   const {
@@ -167,6 +167,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
   const enterLobby = (targetCaseId = null) => {
     // The routed app always supplies onEnterLobby; retain the old embedded
     // caller fallback for integrations that only expose a resume action.
+    if (typeof profile !== 'undefined' && !profile?.detective_name) { onRegister?.(); return; }
     if (suspendedCase && typeof onEnterLobby !== 'function') { onResume(); return; }
     onEnterLobby(targetCaseId, 'HOME', { previewActiveRun: Boolean(suspendedCase) });
     if (!isReadOnly) {
@@ -299,6 +300,14 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
         {/* Center */}
         <FittedPanel id="home-panel-overview" labelledBy="home-tab-overview" title={lang === 'zh' ? '侦探之家总览' : 'DETECTIVE HOME OVERVIEW'} icon="search"
           openLabel={lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER'} onOpen={() => openModule('cases')}
+          summaryActions={<div className="td-fit-panel-actions">
+            <button type="button" className="td-ui-button td-fit-panel-open" aria-haspopup="dialog" aria-label={lang === 'zh' ? '打开探员市场' : 'Open agent market'} onClick={() => openModule('agent_market')}>
+              <Icon name="users" /> {lang === 'zh' ? '探员市场' : 'AGENT MARKET'}
+            </button>
+            <button type="button" className="td-ui-button td-fit-panel-open" aria-haspopup="dialog" aria-label={lang === 'zh' ? '调取案件卷宗' : 'Retrieve case dossier'} onClick={() => openModule('cases')}>
+              <Icon name="file" /> {lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER'}
+            </button>
+          </div>}
           summary={<>
             <div className="td-home-summary-emblem" aria-hidden="true"><Icon name="detective" size={54} /></div>
             <strong>{settings.storyMode === 'terminal' ? (lang === 'zh' ? '终端模式' : 'TERMINAL MODE') : (lang === 'zh' ? '剧场模式' : 'THEATER MODE')}</strong>
@@ -329,10 +338,28 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
                 minHeight: 44, padding: '10px 16px', borderRadius: 8, border: '1px solid #c5a66f',
                 background: '#c5a66f20', color: '#e1d0ac', cursor: 'pointer', fontFamily: 'monospace',
               }}>{lang === 'zh' ? '继续当前调查' : 'Resume current investigation'}</button>
-            </section>
+          </section>
           )}
 
           <div className="td-home-overview-cards">
+            <div className="td-ui-card td-home-investigate-card td-home-market-card" style={{
+              width: 300, border: '1px solid rgba(112, 159, 154,0.46)', borderRadius: 14, padding: '20px',
+              background: 'linear-gradient(160deg, rgba(112, 159, 154,0.14), rgba(0,0,0,0.8))', textAlign: 'center',
+              boxShadow: '0 14px 28px rgba(0,0,0,.3)',
+            }}>
+              <div style={{ color: '#a5c8c0' }}><Icon name="users" size={28} /></div>
+              <div style={{ color: '#a5c8c0', fontWeight: 900, letterSpacing: '0.2em', fontSize: '1rem', margin: '8px 0 6px' }}>
+                {lang === 'zh' ? '探员市场' : 'AGENT MARKET'}
+              </div>
+              <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.44)', marginBottom: 14 }}>
+                {lang === 'zh' ? '签约核心与支援探员，扩展战术选择' : 'Recruit core and support operatives to expand your tactical options'}
+              </div>
+              <button type="button" className="td-ui-button td-button-primary td-button-wide" onClick={() => openModule('agent_market')} style={{
+                width: '100%', padding: '11px', cursor: 'pointer', borderRadius: 10,
+                border: '1px solid rgba(165, 200, 192, .72)', background: 'rgba(112, 159, 154, .16)',
+                color: '#e6dfcf', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.12em', fontSize: '0.72rem',
+              }}>{lang === 'zh' ? '进入探员市场' : 'OPEN AGENT MARKET'}</button>
+            </div>
             {!named ? (
               onRegister
                 ? <div className="td-ui-card td-home-investigate-card" style={{
@@ -373,7 +400,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
                   border: '1px solid #c5a66f', background: 'rgba(197, 166, 111,0.22)',
                   color: '#e1d0ac', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
                 }}>{lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER'}</button>
-                {onSelectCase && <button className="td-ui-button td-button-ghost td-button-compact" onClick={onSelectCase} style={{
+                {onSelectCase && !hasLocalSelectedCase && <button className="td-ui-button td-button-ghost td-button-compact" onClick={onSelectCase} style={{
                   width: '100%', marginTop: 8, minHeight: 38, padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
                   border: '1px solid rgba(197, 166, 111, .58)', background: 'rgba(197, 166, 111, .08)',
                   color: '#d8c18a', fontFamily: 'monospace', fontWeight: 800, letterSpacing: '0.12em', fontSize: '0.68rem',

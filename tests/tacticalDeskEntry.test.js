@@ -23,6 +23,8 @@ test('landing copy keeps the terminal label bilingual and the detective identity
 test('home dossier action opens the case archive and tactical desk enters the lobby', () => {
   assert.match(home, /const quickStart = \(\) => \{[\s\S]*?openModule\('cases'\);[\s\S]*?\n  \};/);
   assert.match(home, /调取案件卷宗/);
+  assert.match(home, /summaryActions=\{<div className="td-fit-panel-actions">/);
+  assert.match(home, /openModule\('agent_market'\)/);
   assert.match(home, /<HomePortal onEnterLobby=\{enterLobby\} \/>/);
   assert.match(portal, /const handleEnter = onEnterLobby \|\| onEnter/);
   assert.match(portal, /战术台/);

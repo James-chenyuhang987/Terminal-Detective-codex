@@ -131,7 +131,9 @@ function entryHarness(mode = 'theater') {
   const state = { screen: 'CASE_SELECT', narrative: null, busy: false, error: '', charges: 0, routes: 0 };
   const bindings = {
     selectedCase: null, activeRun: null, settings: { storyMode: mode }, lang: 'en',
+    get screen() { return state.screen; },
     briefingRequestRef: { current: null }, briefedRunRef: { current: false }, caseStartRef: { current: false },
+    entryReturnScreenRef: { current: 'HOME' },
     setScreen: value => { state.screen = value; }, setEntryNarrative: value => { state.narrative = value; },
     setNarrativeBusy: value => { state.busy = value; }, setNarrativeError: value => { state.error = value; }, setPreferredCaseId: () => {},
     publicErrorMessage: e => e.message,

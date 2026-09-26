@@ -283,13 +283,15 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
 function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
   const { lang } = useLang();
   return (
-    <div className={`td-holo-figure ${isSelected ? 'td-holo-selected' : ''}`} onClick={onClick}
+    <div className={`td-holo-figure td-stage-agent ${isSelected ? 'td-holo-selected' : ''}`} onClick={onClick}
+      role="button" tabIndex={onClick ? 0 : -1} aria-pressed={isSelected}
+      onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && onClick) { event.preventDefault(); onClick(); } }}
       onMouseEnter={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseMove={e => onHover?.(index, e.clientX, e.clientY)}
       onMouseLeave={() => onHover?.(null)}
       style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
-      cursor: 'pointer', position: 'relative', zIndex: 3,
+      cursor: onClick ? 'pointer' : 'default', position: 'relative', zIndex: 3,
       transform: isSelected ? 'scale(1.12) translateY(-10px)' : 'scale(1)',
       transition: 'transform 0.35s cubic-bezier(.22,1,.36,1)',
     }}>
@@ -305,7 +307,7 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
       )}
 
       {/* SVG figure */}
-      <div style={{
+      <div className="td-holo-avatar" style={{
         width: isSelected ? 86 : 66, height: isSelected ? 134 : 112,
         filter: `drop-shadow(0 0 ${isSelected ? 24 : 10}px ${agentDef.color})`,
         transition: 'all 0.35s ease', position: 'relative', overflow: 'hidden',
@@ -349,7 +351,7 @@ function HoloFigure({ agentDef, isSelected, onClick, index, level, onHover }) {
       </div>
 
       {/* Name plate */}
-      <div style={{ marginTop: 8, textAlign: 'center', fontFamily: 'monospace' }}>
+      <div className="td-holo-nameplate" style={{ marginTop: 8, textAlign: 'center', fontFamily: 'monospace' }}>
         <div style={{
           fontSize: '0.62rem', fontWeight: 900, color: agentDef.color,
           letterSpacing: '0.08em', textShadow: `0 0 10px ${agentDef.color}`,
@@ -649,7 +651,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
       )}
 
       {/* Agents on stage */}
-      <div style={{
+      <div className="td-stage-agents" style={{
         position: 'absolute', bottom: 118, left: 0, right: 0,
         display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end',
         padding: '0 30px', zIndex: 3,
@@ -663,7 +665,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
       </div>
 
       {/* Platform ellipse */}
-      <div style={{ position: 'absolute', bottom: 58, left: '10%', right: '10%', zIndex: 2 }}>
+      <div className="td-holo-platform" style={{ position: 'absolute', bottom: 58, left: '10%', right: '10%', zIndex: 2 }}>
         <svg viewBox="0 0 400 50" width="100%" style={{ overflow: 'visible' }}>
           <defs>
             <linearGradient id="plat-g" x1="0" y1="0" x2="0" y2="1">
@@ -1409,7 +1411,19 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
           ['agent', lang === 'zh' ? '探员' : 'AGENT'],
           ['command', lang === 'zh' ? '指挥' : 'COMMAND'],
         ].map(([key, label]) => (
-          <button key={key} type="button" role="tab" aria-selected={mobileTab === key} onClick={() => setMobileTab(key)}>{label}</button>
+          <button key={key} id={`td-lobby-tab-${key}`} type="button" role="tab" tabIndex={mobileTab === key ? 0 : -1}
+            aria-selected={mobileTab === key}
+            onClick={() => setMobileTab(key)}
+            onKeyDown={event => {
+              if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const keys = ['briefing', 'formation', 'agent', 'command'];
+              const current = keys.indexOf(key);
+              const next = event.key === 'Home' ? 0 : event.key === 'End' ? keys.length - 1
+                : (current + (event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1) + keys.length) % keys.length;
+              setMobileTab(keys[next]);
+              document.getElementById(`td-lobby-tab-${keys[next]}`)?.focus();
+            }}>{label}</button>
         ))}
       </div>
 
