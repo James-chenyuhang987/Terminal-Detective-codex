@@ -23,6 +23,7 @@ function evaluate(node, bindings) {
 
 const canvas = findNodes(source, node => ts.isJsxOpeningElement(node) && node.tagName.getText() === 'Canvas')[0];
 const fallback = canvas.attributes.properties.find(attribute => attribute.name?.getText() === 'fallback').initializer.expression;
+const assetBoundaryNode = findNodes(source, node => ts.isClassDeclaration(node) && node.name?.text === 'TheaterAssetErrorBoundary')[0];
 
 test('Canvas fallback is inert native content, even though fiber mounts it on working WebGL devices', () => {
   const tags = findNodes(fallback, node => ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node));
@@ -84,4 +85,32 @@ test('renderer initialization does not report failure; actual context loss does 
   cleanups.forEach(cleanup => cleanup());
   assert.equal(input.current.invalidate, null);
   for (const events of [canvasEvents, documentEvents, windowEvents]) assert.equal(events.listeners.size, 0);
+});
+
+test('failed public 3D assets are cleared before the scene fallback is reported', () => {
+  const { outputText } = ts.transpileModule(`${assetBoundaryNode.getText()}; return TheaterAssetErrorBoundary;`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
+  });
+  class BaseComponent {
+    constructor(props) { this.props = props; }
+  }
+  const Boundary = compileFunction(outputText, ['Component'])(BaseComponent);
+  const cleared = [];
+  const failures = [];
+  const boundary = new Boundary({
+    assetUrls: ['/assets/theater/office.glb', '/assets/theater/detective.glb'],
+    clear: url => cleared.push(url),
+    onFailure: error => failures.push(error),
+  });
+  const error = new Error('broken GLB');
+  assert.deepEqual(Boundary.getDerivedStateFromError(error), { failed: true });
+  boundary.componentDidCatch(error);
+  assert.deepEqual(cleared, ['/assets/theater/office.glb', '/assets/theater/detective.glb']);
+  assert.deepEqual(failures, [error]);
+  boundary.state = { failed: false };
+  boundary.props.children = 'scene';
+  assert.equal(boundary.render(), 'scene');
+  boundary.state = { failed: true };
+  assert.equal(boundary.render(), null);
+  assert.match(source.getText(), /clear=\{useGLTF\.clear\}/);
 });

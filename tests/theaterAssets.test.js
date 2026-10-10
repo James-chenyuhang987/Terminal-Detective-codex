@@ -161,7 +161,7 @@ function posedVertex({ mesh, index }, target = new Vector3()) {
 }
 
 for (const [name, asset] of Object.entries(manifest.characters)) {
-  test(`${name} has continuous planted IK soles, exact loops and independent poses in Three.js`, async () => {
+  test(`${name} has heel-to-toe contacts, continuous limbs, exact loops and independent poses in Three.js`, async () => {
     const { buffer } = glb(asset.file);
     const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
     const model = clone(gltf.scene);
@@ -172,6 +172,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
     const soles = { L: [], R: [] };
     const jointBlends = new Set();
     const continuousLegs = new Set();
+    const continuousArms = new Set();
     model.traverse((mesh) => {
       if (!mesh.isSkinnedMesh) return;
       const { position, skinIndex, skinWeight } = mesh.geometry.attributes;
@@ -199,17 +200,20 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         for (const side of ['L', 'R']) {
           if (influences.some((i) => i.bone === `Shin${side}`) && influences.some((i) => i.bone === `Thigh${side}`)) jointBlends.add(`knee${side}`);
           if (influences.some((i) => i.bone === `Shin${side}`) && influences.some((i) => i.bone === `Foot${side}`)) jointBlends.add(`ankle${side}`);
-          if (influences.length === 1 && influences[0].bone === `Foot${side}` && posedVertex(point).y < 0.001) soles[side].push(point);
+          if (influences.some((i) => i.bone === `UpperArm${side}`) && influences.some((i) => i.bone === `Forearm${side}`)) jointBlends.add(`elbow${side}`);
+          if (influences.length === 1 && influences[0].bone === `Foot${side}` && posedVertex(point).y < 0.001) soles[side].push({ ...point, restZ: posedVertex(point).z });
         }
       }
       for (const bones of components.values()) {
         for (const side of ['L', 'R']) {
           if (['Thigh', 'Shin', 'Foot'].every((joint) => bones.has(joint + side))) continuousLegs.add(side);
+          if (['UpperArm', 'Forearm'].every((joint) => bones.has(joint + side))) continuousArms.add(side);
         }
       }
     });
-    assert.deepEqual([...jointBlends].sort(), ['ankleL', 'ankleR', 'kneeL', 'kneeR']);
+    assert.deepEqual([...jointBlends].sort(), ['ankleL', 'ankleR', 'elbowL', 'elbowR', 'kneeL', 'kneeR']);
     assert.deepEqual([...continuousLegs].sort(), ['L', 'R'], 'Each leg is a connected surface through hip, knee and ankle, not floating segments');
+    assert.deepEqual([...continuousArms].sort(), ['L', 'R'], 'Cloth must bend continuously through the elbow without separating sleeve pieces');
     for (const side of ['L', 'R']) {
       assert.ok(soles[side].length >= 8, 'Measure actual deformed sole vertices, not just bone origins');
       const zs = soles[side].map((point) => posedVertex(point).z);
@@ -249,10 +253,18 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         const bounds = new Box3().setFromObject(model, true);
         assert.ok(bounds.min.y >= -0.002 && bounds.max.y < 1.9, `${name}/${clip.name}: tight deformed ground bounds`);
         assert.ok(bounds.min.x > -1 && bounds.max.x < 1 && Number.isFinite(bounds.max.z));
+        if (clip.name !== 'Walk') {
+          for (const side of ['L', 'R']) {
+            const [hip, knee, ankle] = ['Thigh', 'Shin', 'Foot'].map(joint => model.getObjectByName(joint + side).getWorldPosition(new Vector3()));
+            const extension = hip.distanceTo(ankle) / (hip.distanceTo(knee) + knee.distanceTo(ankle));
+            assert.ok(extension > .975 && extension < .999, `${name}/${clip.name}: relaxed standing knees, without crouching or locking`);
+            assert.ok(soles[side].every(point => Math.abs(posedVertex(point).y) < .002), `${name}/${clip.name}: both standing soles stay planted`);
+          }
+        }
       }
       if (clip.name !== 'Walk') continue;
       for (const side of ['L', 'R']) {
-        for (const boundary of (side === 'L' ? [0, 0.52] : [0.02, 0.5])) {
+        for (const boundary of [0, asset.gait.heelEnd, asset.gait.toeStart, asset.gait.stance].map(time => (time + (side === 'R' ? .5 : 0)) % 1)) {
           const h = 1 / 2400;
           const values = [-h, 0, h].map((offset) => {
             sample((boundary + offset + clip.duration) % clip.duration);
@@ -265,35 +277,50 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
       }
       const anchors = new Map();
       const maxLift = { L: 0, R: 0 };
+      const hips = model.getObjectByName('Hips');
+      let minHipX = Infinity, maxHipX = -Infinity, maxTilt = 0;
       for (let frame = 0; frame <= 480; frame += 1) {
         const time = frame / 480;
         sample(time);
+        minHipX = Math.min(minHipX, hips.position.x); maxHipX = Math.max(maxHipX, hips.position.x);
         for (const side of ['L', 'R']) {
           const phase = (time / clip.duration + (side === 'R' ? 0.5 : 0)) % 1;
           const contact = soles[side].map((point) => posedVertex(point));
           const ys = contact.map((point) => point.y);
-          assert.ok(Math.max(...ys) - Math.min(...ys) < 0.001, 'Counter-rotated boot stays flat during stance and swing');
+          maxTilt = Math.max(maxTilt, Math.max(...ys) - Math.min(...ys));
           assert.ok(Math.min(...ys) > -0.002, 'Sole penetration must stay below 2mm');
           maxLift[side] = Math.max(maxLift[side], Math.min(...ys));
-          if (phase > 0.52) {
+          if (phase > asset.gait.stance) {
             anchors.delete(side);
             continue;
           }
-          assert.ok(ys.every((y) => Math.abs(y) < 0.002), 'Every planted sole vertex contacts the floor');
-          const translated = contact.map((point) => point.add(new Vector3(0, 0, asset.locomotion.speed * time)));
+          const section = phase < asset.gait.heelEnd ? 'heel' : phase > asset.gait.toeStart ? 'toe' : 'flat';
+          const selected = soles[side].map((point, i) => ({ point, posed: contact[i] })).filter(({point}) => section === 'flat' || (section === 'heel' ? point.restZ < -.065 : point.restZ > .18));
+          assert.ok(selected.length >= 2, 'Measure physical heel/toe vertices');
+          assert.ok(selected.every(({posed}) => Math.abs(posed.y) < .002), 'The weight-bearing edge remains grounded while the boot rolls');
+          if (section === 'flat') assert.ok(Math.max(...ys) - Math.min(...ys) < .001, 'Mid-stance supports the entire sole');
+          const translated = selected.map(({posed}) => posed.add(new Vector3(0, 0, asset.locomotion.speed * time)));
           const prior = anchors.get(side);
-          if (!prior || phase < prior.phase) anchors.set(side, { phase, points: translated });
+          if (!prior || phase < prior.phase || prior.section !== section) anchors.set(side, { phase, section, points: translated });
           else translated.forEach((point, i) => {
             assert.ok(point.distanceTo(prior.points[i]) < 0.002, `${name}/${side}: world-space stance sliding exceeds 2mm`);
           });
         }
       }
-      assert.ok(maxLift.L > 0.10 && maxLift.R > 0.10, 'Both feet must visibly clear the floor during recovery');
+      assert.ok(maxLift.L > .06 && maxLift.R > .06 && maxLift.L < .09 && maxLift.R < .09, 'Relaxed walking clears the floor without an exaggerated high step');
+      assert.ok(maxTilt > .035 && maxTilt < .065, 'Boots visibly roll through contact rather than remaining rigidly horizontal');
+      assert.ok(maxHipX - minHipX > .035 && maxHipX - minHipX < .065, 'The pelvis transfers weight between legs without excessive swaying');
+      for (const [time, rising] of [[0, 'toe'], [.53, 'heel']]) {
+        sample(time);
+        const heel = soles.L.filter(point => point.restZ < -.065).map(point => posedVertex(point).y);
+        const toe = soles.L.filter(point => point.restZ > .18).map(point => posedVertex(point).y);
+        assert.ok(rising === 'toe' ? Math.min(...toe) > Math.max(...heel) + .03 : Math.min(...heel) > Math.max(...toe) + .03, 'Heel strike and toe-off rotate in opposite directions');
+      }
       for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
         model.rotation.y = yaw;
         const heading = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
         let reference;
-        for (const time of [0.05, 0.15, 0.30, 0.45]) {
+        for (const time of [.15, .23, .30, .38]) {
           model.position.copy(heading).multiplyScalar(asset.locomotion.speed * time);
           sample(time);
           const contact = soles.L.map((point) => posedVertex(point));

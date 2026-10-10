@@ -30,7 +30,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
   const action = mixer.clipAction(clip).setLoop(LoopOnce, 1);
   action.clampWhenFinished = true;
   action.play();
-  let minimum = Infinity, maxStanceHeight = 0, maxSoleTilt = 0, maxSlide = 0, maxStepSlide = 0;
+  let minimum = Infinity, maxStanceHeight = 0, maxSoleTilt = 0, maxSlide = 0, maxStepSlide = 0, maxSwingLift = 0;
   const anchors = new Map();
   let first, last;
   for (let frame = 0; frame <= 480; frame++) {
@@ -45,14 +45,17 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
     last = deformed;
     for (const side of ['L', 'R']) {
       const phase = (t / clip.duration + (side === 'R' ? .5 : 0)) % 1;
-      const stance = phase <= .52;
-      const contact = deformed.filter((_, i) => points[i].side === side);
+      const stance = phase <= (asset.gait?.stance ?? .52);
+      const section = phase < (asset.gait?.heelEnd ?? 0) ? 'heel' : phase > (asset.gait?.toeStart ?? .52) ? 'toe' : 'flat';
+      const sole = deformed.filter((_, i) => points[i].side === side);
+      maxSoleTilt = Math.max(maxSoleTilt, Math.max(...sole.map(p => p.y)) - Math.min(...sole.map(p => p.y)));
+      if (!stance) maxSwingLift = Math.max(maxSwingLift, Math.min(...sole.map(p => p.y)));
+      const contact = deformed.filter((_, i) => points[i].side === side && (!asset.gait || section === 'flat' || (section === 'heel' ? points[i].rest.z < -.065 : points[i].rest.z > .18)));
       if (stance && contact.length) {
         const ys = contact.map(p => p.y);
         maxStanceHeight = Math.max(maxStanceHeight, ...ys.map(Math.abs));
-        maxSoleTilt = Math.max(maxSoleTilt, Math.max(...ys) - Math.min(...ys));
         contact.forEach((p, i) => {
-          const key = `${side}/${i}`;
+          const key = `${side}/${section}/${i}`;
           const translated = p.clone().add(new Vector3(0, 0, 1.4 * t));
           const prior = anchors.get(key);
           if (prior && phase > prior.phase) {
@@ -61,12 +64,12 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
             anchors.set(key, { ...prior, position: translated, phase });
           } else anchors.set(key, { start: translated, position: translated, phase });
         });
-      } else contact.forEach((_, i) => anchors.delete(`${side}/${i}`));
+      } else { for (const key of anchors.keys()) if (key.startsWith(`${side}/`)) anchors.delete(key); }
     }
   }
   report[name] = { durations: Object.fromEntries(gltf.animations.map(a => [a.name, a.duration])), soleVertices: points.length,
     minAnimatedY: minimum, maxStanceSoleHeight: maxStanceHeight, maxStanceSoleTilt: maxSoleTilt,
-    maxStanceSliding: maxSlide, maxSampleSliding: maxStepSlide,
+    maxStanceSliding: maxSlide, maxSampleSliding: maxStepSlide, maxSwingLift,
     loopSoleDiscontinuity: Math.max(...last.map((p, i) => p.distanceTo(first[i]))) };
   if (name !== 'detective') continue;
   let before = 0, after = 0;

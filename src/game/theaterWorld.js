@@ -5,6 +5,32 @@ export const WALK_SPEED = 1.4;
 export const SCENE_FILES = Object.freeze({ office: 'office.glb', datacenter: 'datacenter.glb', lobby: 'lobby.glb', laboratory: 'laboratory.glb', balcony: 'balcony.glb' });
 export const CHARACTER_FILES = Object.freeze({ detective: 'detective.glb', witness: 'witness.glb', security: 'security.glb', scientist: 'scientist.glb' });
 
+// Public presentation metadata keeps the same intent contract while giving
+// each room a different investigative identity. These labels describe what
+// is visible in the room; they do not encode case answers or hidden clues.
+export const SCENE_INTERACTION_PROFILES = Object.freeze({
+  office: Object.freeze({
+    workstation: Object.freeze({ type: 'terminal', label: '案卷归档终端', labelEn: 'CASE ARCHIVE TERMINAL', accent: '#d6ad63', markerOffsets: [[-.24, .08], [0, 0], [.24, -.06]] }),
+    evidence: Object.freeze({ type: 'evidence', label: '证物归档桌', labelEn: 'EVIDENCE ARCHIVE TABLE', accent: '#c5a66f', markerOffsets: [[-.28, .12], [0, 0], [.26, -.10]] }),
+  }),
+  datacenter: Object.freeze({
+    workstation: Object.freeze({ type: 'terminal', label: 'EMP 诊断节点', labelEn: 'EMP DIAGNOSTIC NODE', accent: '#69b4c2', markerOffsets: [[-.18, -.14], [.06, .02], [.26, .16]] }),
+    evidence: Object.freeze({ type: 'evidence', label: '碎片芯片阵列', labelEn: 'SHATTERED CHIP ARRAY', accent: '#7fd3df', markerOffsets: [[-.34, .04], [-.05, -.16], [.28, .10]] }),
+  }),
+  lobby: Object.freeze({
+    workstation: Object.freeze({ type: 'terminal', label: '监控回放台', labelEn: 'SURVEILLANCE REPLAY DESK', accent: '#cfab69', markerOffsets: [[-.25, .08], [.02, -.02], [.28, .12]] }),
+    evidence: Object.freeze({ type: 'evidence', label: '门禁证物箱', labelEn: 'ACCESS-LOG CUSTODY BOX', accent: '#e4bd73', markerOffsets: [[-.20, -.14], [.06, .02], [.30, .16]] }),
+  }),
+  laboratory: Object.freeze({
+    workstation: Object.freeze({ type: 'terminal', label: '协议分析台', labelEn: 'PROTOCOL ANALYSIS BENCH', accent: '#7fb5a9', markerOffsets: [[-.24, .04], [0, -.10], [.24, .08]] }),
+    evidence: Object.freeze({ type: 'evidence', label: '神经接口样本台', labelEn: 'NEURAL INTERFACE SAMPLE RACK', accent: '#9bd5bd', markerOffsets: [[-.30, .10], [-.04, -.08], [.25, .12]] }),
+  }),
+  balcony: Object.freeze({
+    workstation: Object.freeze({ type: 'terminal', label: '气象中继', labelEn: 'WEATHER RELAY', accent: '#d4a05f', markerOffsets: [[-.26, -.06], [0, .11], [.26, -.04]] }),
+    evidence: Object.freeze({ type: 'evidence', label: '湿地面勘验区', labelEn: 'WET DECK SURVEY AREA', accent: '#d7b574', markerOffsets: [[-.34, .12], [-.06, -.04], [.26, .14]] }),
+  }),
+});
+
 export function sceneForZone(zoneId) {
   const id = String(zoneId || '').toLowerCase();
   const exact = { zone_datacenter: 'datacenter', zone_lobby: 'lobby', zone_lab: 'laboratory', zone_balcony: 'balcony' };
@@ -14,6 +40,13 @@ export function sceneForZone(zoneId) {
   if (/lobby/.test(id)) return 'lobby';
   if (/balcony/.test(id)) return 'balcony';
   return 'office';
+}
+
+export function sceneInteractionProfile(sceneName, hotspotId) {
+  const scene = Object.hasOwn(SCENE_INTERACTION_PROFILES, sceneName) ? SCENE_INTERACTION_PROFILES[sceneName] : null;
+  return scene?.[hotspotId]
+    || SCENE_INTERACTION_PROFILES.office[hotspotId]
+    || SCENE_INTERACTION_PROFILES.office.evidence;
 }
 
 function check(condition, message) {
@@ -99,7 +132,12 @@ export function validateTheaterManifest(input) {
       return { id, min, max };
     }), `${key}.colliders`);
     const doors = unique(list(source.doors, `${key}.doors`, 16).map(door => ({ id: identifier(door?.id, `${key}.door`), position: inside(door.position, `${key}.door.position`), width: positive(door.width, `${key}.door.width`) })), `${key}.doors`);
-    const hotspots = unique(list(source.hotspots, `${key}.hotspots`, 32).map(hotspot => ({ id: identifier(hotspot?.id, `${key}.hotspot`), position: inside(hotspot.position, `${key}.hotspot.position`), radius: positive(hotspot.radius, `${key}.hotspot.radius`, 4) })), `${key}.hotspots`);
+    const hotspots = unique(list(source.hotspots, `${key}.hotspots`, 32).map(hotspot => {
+      const position = inside(hotspot.position, `${key}.hotspot.position`);
+      const focusPosition = hotspot.focusPosition === undefined ? [position[0], 1.15, position[2] - .8] : vector(hotspot.focusPosition, 3, `${key}.hotspot.focusPosition`);
+      check(focusPosition[0] >= bounds.min[0] && focusPosition[0] <= bounds.max[0] && focusPosition[2] >= bounds.min[2] && focusPosition[2] <= bounds.max[2] && focusPosition[1] >= .3 && focusPosition[1] <= 2.2, `${key}.hotspot.focusPosition must be a visible prop inside the room`);
+      return { id: identifier(hotspot?.id, `${key}.hotspot`), position, radius: positive(hotspot.radius, `${key}.hotspot.radius`, 4), focusPosition };
+    }), `${key}.hotspots`);
     const npcs = list(source.npcs, `${key}.npcs`, 32).map(npc => {
       check(['witness', 'security', 'scientist'].includes(npc?.role), `${key}.npc.role is not an authored character`);
       check(Number.isFinite(npc.rotationY) && Math.abs(npc.rotationY) <= Math.PI * 2, `${key}.npc.rotationY must be finite radians`);
@@ -205,10 +243,18 @@ export function stageNpcs(npcs, room, caseId = '') {
   });
 }
 
-export function interactionTargets(room, npcs) {
+export function interactionTargets(room, npcs, sceneName = 'office') {
   return [
     ...npcs.map(npc => ({ kind: 'npc', npcId: npc.npcId, position: [...npc.position], radius: 1.6, label: 'Talk / 交谈' })),
-    ...room.hotspots.map(hotspot => ({ kind: 'investigate', id: hotspot.id, position: [...hotspot.position], radius: hotspot.radius, label: hotspot.id === 'workstation' ? 'Inspect workstation / 调查工作台' : 'Inspect scene / 调查现场' })),
+    ...room.hotspots.map(hotspot => {
+      const profile = sceneInteractionProfile(sceneName, hotspot.id);
+      return {
+        kind: 'investigate', id: hotspot.id, position: [...hotspot.position], radius: hotspot.radius,
+        label: hotspot.id === 'workstation' ? 'Inspect workstation / 调查工作台' : 'Inspect scene / 调查现场',
+        hotspotType: profile.type, presentationLabel: profile.label, presentationLabelEn: profile.labelEn,
+        accent: profile.accent,
+      };
+    }),
     ...room.doors.map(door => ({ kind: 'door', id: door.id, position: [...door.position], radius: Math.max(1.4, door.width * 0.7), label: 'Room routes / 区域通道' })),
   ];
 }

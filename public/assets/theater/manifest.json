@@ -103,12 +103,12 @@
         {
           "id": "workstation",
           "min": [
-            -4.975,
-            -3.32
+            -4.425,
+            -3.17
           ],
           "max": [
-            -2.325,
-            -2.18
+            -1.775,
+            -2.03
           ]
         },
         {
@@ -182,20 +182,30 @@
         {
           "id": "workstation",
           "position": [
-            -3.6,
+            -3.1,
             0,
             -1.55
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            -3.1,
+            1.34,
+            -2.6
+          ]
         },
         {
           "id": "evidence",
           "position": [
-            3.7,
+            3.75,
             0,
-            -1.7
+            -1.75
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            3.75,
+            1.075,
+            -2.85
+          ]
         }
       ],
       "npcs": [
@@ -211,7 +221,7 @@
         {
           "role": "security",
           "position": [
-            2.1,
+            2.0,
             0,
             1.35
           ],
@@ -220,15 +230,15 @@
         {
           "role": "scientist",
           "position": [
-            2.1,
+            1.8,
             0,
             -2.25
           ],
           "rotationY": -0.25
         }
       ],
-      "bytes": 706016,
-      "triangles": 11728,
+      "bytes": 980604,
+      "triangles": 16410,
       "bounds": {
         "min": [
           -6.0,
@@ -242,7 +252,7 @@
         ]
       },
       "meshes": 1,
-      "materials": 14
+      "materials": 16
     },
     "datacenter": {
       "file": "datacenter.glb",
@@ -322,22 +332,22 @@
           "id": "workstation",
           "min": [
             -4.975,
-            -3.32
+            -3.07
           ],
           "max": [
             -2.325,
-            -2.18
+            -1.93
           ]
         },
         {
           "id": "evidence-island",
           "min": [
-            2.74,
-            -3.485
+            2.09,
+            -1.335
           ],
           "max": [
-            4.76,
-            -2.215
+            4.11,
+            -0.065
           ]
         },
         {
@@ -418,6 +428,28 @@
           ]
         },
         {
+          "id": "forensics-transit-case",
+          "min": [
+            -5.15,
+            2.17
+          ],
+          "max": [
+            -4.55,
+            2.67
+          ]
+        },
+        {
+          "id": "portable-worklight",
+          "min": [
+            -4.865,
+            2.01
+          ],
+          "max": [
+            -4.495,
+            2.29
+          ]
+        },
+        {
           "id": "plant--4.8",
           "min": [
             -5.425,
@@ -455,27 +487,37 @@
         {
           "id": "workstation",
           "position": [
-            -3.6,
+            -3.65,
             0,
-            -1.55
+            -1.45
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            -3.65,
+            1.34,
+            -2.5
+          ]
         },
         {
           "id": "evidence",
           "position": [
-            3.7,
+            3.1,
             0,
-            -1.7
+            0.4
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            3.1,
+            1.075,
+            -0.7
+          ]
         }
       ],
       "npcs": [
         {
           "role": "witness",
           "position": [
-            -2.1,
+            -1.8,
             0,
             0.25
           ],
@@ -484,24 +526,24 @@
         {
           "role": "security",
           "position": [
-            2.1,
+            2.0,
             0,
-            1.35
+            1.8
           ],
           "rotationY": -0.35
         },
         {
           "role": "scientist",
           "position": [
-            2.1,
+            1.85,
             0,
             -2.25
           ],
           "rotationY": -0.25
         }
       ],
-      "bytes": 1401552,
-      "triangles": 21908,
+      "bytes": 1555424,
+      "triangles": 23994,
       "bounds": {
         "min": [
           -6.0,
@@ -515,7 +557,7 @@
         ]
       },
       "meshes": 1,
-      "materials": 13
+      "materials": 15
     },
     "lobby": {
       "file": "lobby.glb",
@@ -594,23 +636,23 @@
         {
           "id": "workstation",
           "min": [
-            -4.975,
-            -3.32
+            -4.025,
+            -3.67
           ],
           "max": [
-            -2.325,
-            -2.18
+            -1.375,
+            -2.53
           ]
         },
         {
           "id": "evidence-island",
           "min": [
-            2.74,
-            -3.485
+            2.29,
+            -3.435
           ],
           "max": [
-            4.76,
-            -2.215
+            4.31,
+            -2.165
           ]
         },
         {
@@ -644,6 +686,17 @@
           "max": [
             4.375,
             3.605
+          ]
+        },
+        {
+          "id": "custody-cartons",
+          "min": [
+            4.54,
+            -2.855
+          ],
+          "max": [
+            5.26,
+            -2.285
           ]
         },
         {
@@ -684,20 +737,30 @@
         {
           "id": "workstation",
           "position": [
-            -3.6,
+            -2.7,
             0,
-            -1.55
+            -2.05
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            -2.7,
+            1.34,
+            -3.1
+          ]
         },
         {
           "id": "evidence",
           "position": [
-            3.7,
+            3.3,
             0,
             -1.7
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            3.3,
+            1.075,
+            -2.8
+          ]
         }
       ],
       "npcs": [
@@ -713,7 +776,7 @@
         {
           "role": "security",
           "position": [
-            2.1,
+            2.0,
             0,
             1.35
           ],
@@ -722,15 +785,15 @@
         {
           "role": "scientist",
           "position": [
-            2.1,
+            1.8,
             0,
             -2.25
           ],
           "rotationY": -0.25
         }
       ],
-      "bytes": 719576,
-      "triangles": 12644,
+      "bytes": 780012,
+      "triangles": 13294,
       "bounds": {
         "min": [
           -6.0,
@@ -744,7 +807,7 @@
         ]
       },
       "meshes": 1,
-      "materials": 12
+      "materials": 16
     },
     "laboratory": {
       "file": "laboratory.glb",
@@ -823,23 +886,23 @@
         {
           "id": "workstation",
           "min": [
-            -4.975,
-            -3.32
+            -4.525,
+            -3.27
           ],
           "max": [
-            -2.325,
-            -2.18
+            -1.875,
+            -2.13
           ]
         },
         {
           "id": "evidence-island",
           "min": [
-            2.74,
-            -3.485
+            2.19,
+            -2.435
           ],
           "max": [
-            4.76,
-            -2.215
+            4.21,
+            -1.165
           ]
         },
         {
@@ -946,20 +1009,30 @@
         {
           "id": "workstation",
           "position": [
-            -3.6,
+            -3.2,
             0,
-            -1.55
+            -1.65
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            -3.2,
+            1.34,
+            -2.7
+          ]
         },
         {
           "id": "evidence",
           "position": [
-            3.7,
+            3.2,
             0,
-            -1.7
+            -0.7
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            3.2,
+            1.075,
+            -1.8
+          ]
         }
       ],
       "npcs": [
@@ -975,7 +1048,7 @@
         {
           "role": "security",
           "position": [
-            2.1,
+            2.0,
             0,
             1.35
           ],
@@ -984,15 +1057,15 @@
         {
           "role": "scientist",
           "position": [
-            2.1,
+            1.85,
             0,
             -2.25
           ],
           "rotationY": -0.25
         }
       ],
-      "bytes": 766416,
-      "triangles": 14064,
+      "bytes": 855988,
+      "triangles": 15102,
       "bounds": {
         "min": [
           -6.0,
@@ -1006,7 +1079,7 @@
         ]
       },
       "meshes": 1,
-      "materials": 12
+      "materials": 15
     },
     "balcony": {
       "file": "balcony.glb",
@@ -1085,23 +1158,23 @@
         {
           "id": "workstation",
           "min": [
-            -4.975,
+            -4.425,
             -3.32
           ],
           "max": [
-            -2.325,
+            -1.775,
             -2.18
           ]
         },
         {
           "id": "evidence-island",
           "min": [
-            2.74,
-            -3.485
+            1.84,
+            -3.535
           ],
           "max": [
-            4.76,
-            -2.215
+            3.86,
+            -2.265
           ]
         },
         {
@@ -1169,6 +1242,28 @@
             3.21,
             -4.03
           ]
+        },
+        {
+          "id": "roof-cordon",
+          "min": [
+            3.38,
+            -3.75
+          ],
+          "max": [
+            4.72,
+            -3.45
+          ]
+        },
+        {
+          "id": "roof-field-case",
+          "min": [
+            -4.62,
+            -2.64
+          ],
+          "max": [
+            -3.98,
+            -2.12
+          ]
         }
       ],
       "doors": [
@@ -1186,20 +1281,30 @@
         {
           "id": "workstation",
           "position": [
-            -3.6,
+            -3.1,
             0,
-            -1.55
+            -1.7
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            -3.1,
+            1.34,
+            -2.75
+          ]
         },
         {
           "id": "evidence",
           "position": [
-            3.7,
+            2.85,
             0,
-            -1.7
+            -1.8
           ],
-          "radius": 1.15
+          "radius": 1.15,
+          "focusPosition": [
+            2.85,
+            1.075,
+            -2.9
+          ]
         }
       ],
       "npcs": [
@@ -1215,7 +1320,7 @@
         {
           "role": "security",
           "position": [
-            2.1,
+            2.0,
             0,
             1.35
           ],
@@ -1224,15 +1329,15 @@
         {
           "role": "scientist",
           "position": [
-            2.1,
+            1.35,
             0,
             -2.25
           ],
           "rotationY": -0.25
         }
       ],
-      "bytes": 619644,
-      "triangles": 11788,
+      "bytes": 733484,
+      "triangles": 13262,
       "bounds": {
         "min": [
           -6.0,
@@ -1246,7 +1351,7 @@
         ]
       },
       "meshes": 1,
-      "materials": 13
+      "materials": 16
     }
   },
   "characters": {
@@ -1257,30 +1362,36 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
       },
+      "gait": {
+        "stance": 0.56,
+        "heelEnd": 0.1,
+        "toeStart": 0.4,
+        "swingLift": 0.068
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 460540,
-      "triangles": 7291,
+      "bytes": 591940,
+      "triangles": 8045,
       "bounds": {
         "min": [
-          -0.38,
+          -0.37352,
           0.0,
-          -0.15284
+          -0.21519
         ],
         "max": [
-          0.38,
-          1.77795,
+          0.37352,
+          1.80872,
           0.235
         ]
       },
       "meshes": 1,
-      "materials": 10,
-      "height": 1.7779
+      "materials": 14,
+      "height": 1.8087
     },
     "witness": {
       "file": "witness.glb",
@@ -1289,30 +1400,36 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
       },
+      "gait": {
+        "stance": 0.56,
+        "heelEnd": 0.1,
+        "toeStart": 0.4,
+        "swingLift": 0.068
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 493384,
-      "triangles": 7824,
+      "bytes": 505732,
+      "triangles": 6968,
       "bounds": {
         "min": [
-          -0.38,
+          -0.37352,
           0.0,
-          -0.205
+          -0.1804
         ],
         "max": [
-          0.38,
-          1.818,
+          0.37352,
+          1.79612,
           0.235
         ]
       },
       "meshes": 1,
-      "materials": 12,
-      "height": 1.818
+      "materials": 14,
+      "height": 1.7961
     },
     "security": {
       "file": "security.glb",
@@ -1321,30 +1438,36 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
       },
+      "gait": {
+        "stance": 0.56,
+        "heelEnd": 0.1,
+        "toeStart": 0.4,
+        "swingLift": 0.068
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 502064,
-      "triangles": 8072,
+      "bytes": 502524,
+      "triangles": 6856,
       "bounds": {
         "min": [
-          -0.38,
+          -0.37352,
           0.0,
-          -0.15284
+          -0.13608
         ],
         "max": [
-          0.38,
-          1.77795,
+          0.37352,
+          1.76247,
           0.235
         ]
       },
       "meshes": 1,
       "materials": 10,
-      "height": 1.7779
+      "height": 1.7625
     },
     "scientist": {
       "file": "scientist.glb",
@@ -1353,31 +1476,37 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "60fps exact loops: Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, Talk 2s. Connected blended knee/ankle rings, flat planted soles, 19 joints. Left stance phase [0,.52], right phase +.5; quintic swing recovery and 10.5cm lift. Constant 5.5cm walking hip compression, no root bob.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
       },
+      "gait": {
+        "stance": 0.56,
+        "heelEnd": 0.1,
+        "toeStart": 0.4,
+        "swingLift": 0.068
+      },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 503336,
-      "triangles": 7772,
+      "bytes": 521536,
+      "triangles": 7340,
       "bounds": {
         "min": [
-          -0.38,
+          -0.37352,
           0.0,
-          -0.15284
+          -0.21519
         ],
         "max": [
-          0.38,
-          1.77795,
+          0.37352,
+          1.76247,
           0.235
         ]
       },
       "meshes": 1,
-      "materials": 12,
-      "height": 1.7779
+      "materials": 13,
+      "height": 1.7625
     }
   },
-  "totalBytes": 6172528
+  "totalBytes": 7027244
 }

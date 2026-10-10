@@ -168,3 +168,80 @@ The integrated local SQLite-backed browser fixture additionally verified switchi
 ### Remaining limits
 
 Software-rendered desktop Chrome and viewport emulation do **not** establish real mobile GPU performance, Safari behavior, screen-reader usability or a complete visual art review. The first and eighth cases were exercised in-browser; all eight have automated scene/interaction mapping coverage, not complete bespoke browser playthroughs. The successful report/ending test does not claim every story branch or every valid evidence link was manually traversed. Home suspension preserves presentation details in memory; paid gameplay state is now durably resumed from D1, as described above. Production Firebase/D1 write success requires a separately authorized environment test.
+
+
+## 3D visual polish v3
+
+Five rooms now have distinct key/fill lighting and furnishing positions, public
+scene dressing, material grain, inexpensive contact shadows and a balcony skyline.
+The detective has a noir coat, hat, gold scarf and lens; NPC role silhouettes are
+preserved with deterministic wardrobe/phase variation and bounded visible-emotion
+postures. One-second Walk loops use heel-to-toe support, 6.8cm recovery, lateral
+weight transfer, chest counterrotation and delayed opposing arm/coat motion.
+
+Exploration lenses can use the open cutaway front, preserving furniture/wall
+collision. Arrival, prop and dialogue framing are distinct. Portrait panels lift
+the view above bottom sheets without moving actors or authoritative zone state.
+The toolbelt keeps five primary controls; Contacts, Link, Command (with CP), Guide
+and End remain under More. Escape and outside press dismiss More. Confirmed clues
+leave preservation tags; inspection names only already-unlocked clues.
+
+Final isolated Chrome/SwiftShader checks use real GLBs, the actual presentation
+and NPC dialogue component, with local public-data fixtures. They cover five
+rooms at 1440×900, Chinese/English at 375×812, low/auto/high quality, arrival,
+dialogue, prop inspection, menu dismissal, keyboard movement and panel closure.
+Fixtures do not authenticate or write production profiles; this is layout and
+interaction validation, not production-network or real-mobile-GPU testing.
+See the asset document for reproducible physical and camera measurements.
+
+
+Review artifacts are in `art/theater/validation-polish-v3`: a desktop field
+screenshot, the corrected portrait evidence inspection, a short recorded walking
+video, and `checks.json` with physical/camera/browser measurements. Final checks:
+616 Node tests, typecheck, lint and build pass. The additional security scan is
+blocked by a pre-existing token-format match in an unreachable local Git object;
+this revision does not alter Git history or credentials.
+
+## Human and environment models v4
+
+All four humans now use smaller adult head proportions, a continuous face/jaw
+surface, connected sleeves with blended elbow weights, and distinct role builds.
+The detective has a pinched fedora, storm collar, vented coat, gloves and leather
+notebook; security has uniform epaulettes, the witness a slimmer jacket, and the
+scientist a vented lab coat with aligned glasses. The coat fronts flare clear of
+the moving thighs. Idle and Talk solve a relaxed planted stance instead of holding
+the crouched walking bind pose. Existing heel-to-toe Walk contact and delayed
+arm/coat movement remain intact.
+
+The five rooms now carry investigation props: anonymous threaded dossiers and
+night blinds in the bureau, a damaged drive and portable worklight in the data
+vault, a visitor register and custody cartons in the lobby, slides and sealed
+samples in the lab, and a cordon/field case on the balcony. Evidence stations use
+metric scales and numbered markers instead of the same decorative orb. Floor
+props have navigation colliders; all authored interaction points remain reachable.
+These public decorative props do not disclose case solutions or grant evidence.
+
+Portrait inspection now looks down and past the actor onto the evidence surface,
+keeping it visible above the bottom panel. Browser inspection also exposed an
+initialization race: a frame could publish a nearby target before passive room
+setup cleared it. Resetting the target cache during setup restores the interaction
+without requiring the player to move. A regression first failed against the old
+ordering and passes with the fix.
+
+Final v4 verification (2026-10-09): **617 Node tests**, typecheck, lint, production
+build and the nine-asset validator pass. The build retains its existing lazy
+Three.js chunk-size warning. There are **29 isolated Chrome/SwiftShader checks**:
+five room views, evidence/console inspection in every room at 1440×900 and 375×812,
+movement/stop at 320/375px with low/auto/high quality and reduced motion, and
+desktop walking, turning, stopping and movement after panel closure. The three
+NPC dialogue views were also reviewed. They use the real components/GLBs with
+local public-state fixtures; navigation and inspection leave game resources
+unchanged. No production network writes or real mobile GPU performance are
+claimed. Foot contact, standing pose, connected elbows, crossfade grounding and
+8,280 camera-ray checks use the actual final GLBs.
+
+Review images, a walking video and measurements are in
+`art/theater/validation-model-v4/`. The new editable source is
+`art/theater/terminal-detective-model-v4.blend`; SHA-256 verification confirms all
+four earlier Blender sources/backups remain unchanged. Temporary local browser
+fixtures and intermediate model studies are removed after validation.

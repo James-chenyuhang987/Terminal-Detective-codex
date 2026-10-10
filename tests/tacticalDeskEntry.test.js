@@ -57,6 +57,11 @@ test('rehearsal keeps formation context and exposes the selected risk', () => {
   assert.match(rehearsalPanel, /当前战术上下文/);
   assert.match(rehearsalPanel, /暴露短板/);
   assert.match(rehearsalPanel, /稳定度/);
+  assert.match(rehearsalPanel, /usePresentationMotion/);
+  assert.match(rehearsalPanel, /const waiting = processing && !reducedMotion/);
+  assert.match(rehearsalPanel, /if \(!processing \|\| reducedMotion\) return undefined/);
+  assert.match(rehearsalPanel, /Finish an active rehearsal event/);
+  assert.doesNotMatch(rehearsalPanel, /const animate = !window\.matchMedia/);
   assert.match(lobby, /getEquippedSkillEffects/);
   assert.match(lobby, /skillEffects: rehearsalSkillEffects/);
 });

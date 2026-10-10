@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLang } from '@/lib/lang.jsx';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 import { resolveTacticalChoice } from '@/game/tacticalRehearsal';
 
 function localize(value, lang, fallback = '') {
@@ -78,6 +79,7 @@ function TacticalContext({ rehearsal, lang }) {
 
 export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
   const { lang } = useLang();
+  const { reducedMotion } = usePresentationMotion();
   const zh = lang === 'zh';
   const [session, setSession] = useState(() => rehearsal);
   const [sceneIndex, setSceneIndex] = useState(0);
@@ -91,6 +93,7 @@ export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
   const resultRef = useRef(null);
   const completeRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const waiting = processing && !reducedMotion;
 
   const scenes = Array.isArray(session?.scenes) ? session.scenes : [];
   const scene = scenes[sceneIndex] || null;
@@ -123,7 +126,7 @@ export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
   // identity. A lobby rerender must never cancel a running event's timer.
   const durationSeconds = Math.max(6, Math.min(20, Number(scene?.durationSeconds) || 15));
   useEffect(() => {
-    if (!processing) return undefined;
+    if (!processing || reducedMotion) return undefined;
     const deadline = Date.now() + durationSeconds * 1000;
     const update = () => {
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
@@ -133,7 +136,15 @@ export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
     update();
     const timer = window.setInterval(update, 250);
     return () => window.clearInterval(timer);
-  }, [durationSeconds, processing]);
+  }, [durationSeconds, processing, reducedMotion]);
+
+  // Finish an active rehearsal event as soon as the player enables reduced
+  // motion in-game or the operating system preference changes.
+  useEffect(() => {
+    if (!processing || !reducedMotion) return;
+    setProcessing(false);
+    setRemainingSeconds(0);
+  }, [processing, reducedMotion]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
@@ -185,12 +196,11 @@ export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
         : briefRef.current;
     if (!target) return undefined;
     const frame = window.requestAnimationFrame(() => {
-      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       target.scrollIntoView?.({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' });
       target.focus?.({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [choiceResult, isComplete, sceneIndex]);
+  }, [choiceResult, isComplete, reducedMotion, sceneIndex]);
 
   const choose = option => {
     if (!scene || choiceResult || processing) return;
@@ -199,7 +209,7 @@ export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
     if (result.error || !result.rehearsal) return;
     setSession(result.rehearsal);
     setChoiceResult({ ...result, optionId: option.id, agentId: option.agentId || result.agentId });
-    const animate = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const animate = !reducedMotion;
     setRemainingSeconds(animate ? durationSeconds : 0);
     setProcessing(animate);
   };
@@ -278,9 +288,9 @@ export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
             </button>;
           })}
         </div>
-        {choiceResult && <div className={`td-rehearsal-result ${processing ? 'is-processing' : ''}`} ref={resultRef} tabIndex={-1}>
-          <div className="td-rehearsal-result-heading" role="status"><span>{processing ? '◌' : '✓'}</span><strong>{processing ? (zh ? '正在模拟处理链…' : 'SIMULATING RESPONSE…') : (zh ? '处理链已完成' : 'RESPONSE CHAIN COMPLETE')}</strong></div>
-          {processing && <div className="td-rehearsal-countdown">
+        {choiceResult && <div className={`td-rehearsal-result ${waiting ? 'is-processing' : ''}`} ref={resultRef} tabIndex={-1}>
+          <div className="td-rehearsal-result-heading" role="status"><span>{waiting ? '◌' : '✓'}</span><strong>{waiting ? (zh ? '正在模拟处理链…' : 'SIMULATING RESPONSE…') : (zh ? '处理链已完成' : 'RESPONSE CHAIN COMPLETE')}</strong></div>
+          {waiting && <div className="td-rehearsal-countdown">
             <progress max={durationSeconds} value={durationSeconds - remainingSeconds} aria-label={zh ? '事件模拟进度' : 'Event simulation progress'} />
             <span role="timer" aria-live="off">{remainingSeconds}s</span>
           </div>}
@@ -299,7 +309,7 @@ export default function TacticalRehearsalPanel({ rehearsal, onClose }) {
           </div>
           <div className="td-rehearsal-result-actions">
             <button type="button" className="td-rehearsal-continue is-secondary" onClick={retryScene}>{zh ? '换人重试' : 'TRY ANOTHER HANDLER'}</button>
-            <button type="button" className="td-rehearsal-continue" onClick={continueScene}>{processing ? (zh ? '跳过等待 →' : 'SKIP WAIT →') : sceneIndex + 1 < scenes.length ? (zh ? '进入下一事件 →' : 'NEXT EVENT →') : (zh ? '查看本次总结 →' : 'VIEW SUMMARY →')}</button>
+            <button type="button" className="td-rehearsal-continue" onClick={continueScene}>{waiting ? (zh ? '跳过等待 →' : 'SKIP WAIT →') : sceneIndex + 1 < scenes.length ? (zh ? '进入下一事件 →' : 'NEXT EVENT →') : (zh ? '查看本次总结 →' : 'VIEW SUMMARY →')}</button>
           </div>
         </div>}
       </>}

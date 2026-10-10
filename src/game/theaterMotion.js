@@ -49,6 +49,7 @@ export function stopLocomotion(state) {
   state.speed = 0;
   state.distance = 0;
   state.walking = false;
+  state.turnRate = 0;
 }
 
 /** Presentation-only velocity; actual collision-resolved distance drives the gait. */
@@ -82,10 +83,13 @@ export function stepLocomotion(state, direction, rawDelta, room, { allowed = tru
     state.position = next;
     const angle = Math.atan2(dx, dz);
     const difference = Math.atan2(Math.sin(angle - state.rotationY), Math.cos(angle - state.rotationY));
-    state.rotationY += difference * (reducedMotion ? 1 : 1 - Math.exp(-delta * 18));
+    const turn = difference * (reducedMotion ? 1 : 1 - Math.exp(-delta * 18));
+    state.rotationY += turn;
+    state.turnRate = turn / delta;
   } else {
     state.speed = 0;
     state.distance = 0;
+    state.turnRate = 0;
   }
   // Remove velocity into blocked axes; held keys cannot accumulate a release lurch.
   if (Math.abs(dx) < Math.abs(averageX * delta) * 0.1) state.velocityX = 0;
@@ -96,7 +100,7 @@ export function stepLocomotion(state, direction, rawDelta, room, { allowed = tru
 export function createAvatarAnimation(mixer, clips) {
   const actions = Object.fromEntries(clips.map(clip => [clip.name, mixer.clipAction(clip)]));
   for (const [name, action] of Object.entries(actions)) action.setEffectiveWeight(name === 'Idle' ? 1 : 0).play();
-  return { mixer, actions, walkWeight: 0, talkWeight: 0 };
+  return { mixer, actions, walkWeight: 0, talkWeight: 0, talking: false };
 }
 
 /** Walk never resets: phase is advanced only by traversed distance, not wall-clock stalls. */
@@ -105,10 +109,14 @@ export function updateAvatarAnimation(animation, rawDelta, { speed = 0, authored
   if (frozen) return;
   const walking = speed > 0.015 && !reducedMotion;
   const blend = reducedMotion ? 1 : 1 - Math.exp(-delta * 18);
-  animation.walkWeight += (Number(walking) - animation.walkWeight) * blend;
-  animation.talkWeight += (Number(talking && !walking && !reducedMotion) - animation.talkWeight) * blend;
+  const targetWeight = walking ? Math.min(1, speed / authoredSpeed * 1.35) : 0;
+  const activeTalk = Boolean(talking && !walking && !reducedMotion);
+  if (activeTalk && !animation.talking) animation.actions.Talk.reset().play();
+  animation.talking = activeTalk;
+  animation.walkWeight += (targetWeight - animation.walkWeight) * blend;
+  animation.talkWeight += (Number(activeTalk) - animation.talkWeight) * blend;
   animation.actions.Walk.setEffectiveWeight(animation.walkWeight).setEffectiveTimeScale(walking ? speed / authoredSpeed : 0).play();
-  animation.actions.Talk.setEffectiveWeight(animation.talkWeight).play();
+  animation.actions.Talk.setEffectiveWeight(animation.talkWeight).setEffectiveTimeScale(activeTalk ? 1 : 0).play();
   animation.actions.Idle.setEffectiveWeight(Math.max(0, 1 - animation.walkWeight - animation.talkWeight)).play();
   animation.mixer.update(reducedMotion ? 0 : delta);
 }

@@ -1,0 +1,266 @@
+{
+  "scope": "Original 3D presentation polish and human walking; isolated local visual fixtures, no production profile or case mutation.",
+  "renderer": "Installed Chrome, headless SwiftShader; does not measure real mobile GPU performance.",
+  "assets": {
+    "count": 9,
+    "totalBytes": 6561904,
+    "validation": "passed",
+    "source": "art/theater/terminal-detective-polish-v3.blend"
+  },
+  "protectedSources": {
+    "art/theater/terminal-detective-library.blend": "39d57a0ed02b1e6b81bbd0669081f34e9ec9d1c445de41ebd1ca75779f6d7dca",
+    "art/theater/terminal-detective-library.blend1": "72ea1e95839eb1a6a5234c22aa882346aa9ab4d541c425ffb3a3d751af0b870e",
+    "art/theater/terminal-detective-motion-v2.blend": "1a6da4f7ce4d8d54886d74b41b6cab4eed603d082ff1266395529dd3f7d57bda"
+  },
+  "checks": {
+    "tests": {
+      "passed": 616,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed (existing Three.js chunk-size warning)",
+    "security": "failed: GitHub token format in an existing unreachable local Git object; Git history not modified"
+  },
+  "motion": {
+    "detective": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -5.7632910351157474e-05,
+      "maxStanceSoleHeight": 0.0005004089248757293,
+      "maxStanceSoleTilt": 0.05273975690140041,
+      "maxStanceSliding": 5.864425511409472e-05,
+      "maxSampleSliding": 4.4034502740180045e-05,
+      "maxSwingLift": 0.06795352575491301,
+      "loopSoleDiscontinuity": 2.7755575615628914e-17,
+      "blendedStartStop": {
+        "samples": 1200,
+        "minYBefore": -0.024060792717629502,
+        "minYAfter": -1.6491731483041228e-16,
+        "groundingMedianUs": 6.792000000018561,
+        "groundingP95Us": 9.708999999986645
+      }
+    },
+    "witness": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -5.7632910351157474e-05,
+      "maxStanceSoleHeight": 0.0005004089248757293,
+      "maxStanceSoleTilt": 0.05273975690140041,
+      "maxStanceSliding": 5.864425511409472e-05,
+      "maxSampleSliding": 4.4034502740180045e-05,
+      "maxSwingLift": 0.06795352575491301,
+      "loopSoleDiscontinuity": 2.7755575615628914e-17
+    },
+    "security": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -5.7632910351157474e-05,
+      "maxStanceSoleHeight": 0.0005004089248757293,
+      "maxStanceSoleTilt": 0.05273975690140041,
+      "maxStanceSliding": 5.864425511409472e-05,
+      "maxSampleSliding": 4.4034502740180045e-05,
+      "maxSwingLift": 0.06795352575491301,
+      "loopSoleDiscontinuity": 2.7755575615628914e-17
+    },
+    "scientist": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -5.7632910351157474e-05,
+      "maxStanceSoleHeight": 0.0005004089248757293,
+      "maxStanceSoleTilt": 0.05273975690140041,
+      "maxStanceSliding": 5.864425511409472e-05,
+      "maxSampleSliding": 4.4034502740180045e-05,
+      "maxSwingLift": 0.06795352575491301,
+      "loopSoleDiscontinuity": 2.7755575615628914e-17
+    }
+  },
+  "camera": [
+    {
+      "name": "office",
+      "rays": 1704,
+      "triangles": 12100,
+      "buildMs": 50.956208000000004,
+      "recursiveUs": 268.9225845070422,
+      "proxyUs": 9.196522887324091,
+      "lensUs": 78.81276877934266,
+      "speedup": 3.4121702443922834,
+      "hits": 45,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "datacenter",
+      "rays": 1632,
+      "triangles": 22888,
+      "buildMs": 44.114541999999346,
+      "recursiveUs": 510.19357659313755,
+      "proxyUs": 12.94679350490255,
+      "lensUs": 112.12704289215702,
+      "speedup": 4.550138516395532,
+      "hits": 186,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "lobby",
+      "rays": 1872,
+      "triangles": 12884,
+      "buildMs": 18.484292000001005,
+      "recursiveUs": 310.3465769230767,
+      "proxyUs": 11.59864636752107,
+      "lensUs": 101.22271207264892,
+      "speedup": 3.06597768987198,
+      "hits": 17,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "laboratory",
+      "rays": 1560,
+      "triangles": 14260,
+      "buildMs": 20.138582999999926,
+      "recursiveUs": 402.14123910256416,
+      "proxyUs": 10.278498717947608,
+      "lensUs": 90.19738269230751,
+      "speedup": 4.458457962958838,
+      "hits": 32,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "balcony",
+      "rays": 1584,
+      "triangles": 12028,
+      "buildMs": 21.22112500000003,
+      "recursiveUs": 165.64464962121204,
+      "proxyUs": 9.01836047979955,
+      "lensUs": 78.71338383838427,
+      "speedup": 2.104402600214934,
+      "hits": 26,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    }
+  ],
+  "browser": {
+    "rooms": [
+      "office",
+      "datacenter",
+      "lobby",
+      "laboratory",
+      "balcony"
+    ],
+    "viewports": [
+      "1440x900",
+      "375x812",
+      "320x568",
+      "812x375"
+    ],
+    "languages": [
+      "zh",
+      "en"
+    ],
+    "quality": [
+      "low",
+      "auto",
+      "high"
+    ],
+    "inspection": [
+      {
+        "name": "desktop-evidence",
+        "errors": [],
+        "failed": [],
+        "focus": true,
+        "noGameWrite": true
+      },
+      {
+        "name": "desktop-workstation",
+        "errors": [],
+        "failed": [],
+        "focus": true,
+        "noGameWrite": true
+      },
+      {
+        "name": "mobile-evidence",
+        "errors": [],
+        "failed": [],
+        "focus": true,
+        "noGameWrite": true
+      },
+      {
+        "name": "mobile-workstation",
+        "errors": [],
+        "failed": [],
+        "focus": true,
+        "noGameWrite": true
+      }
+    ],
+    "narrow": [
+      {
+        "viewport": {
+          "width": 320,
+          "height": 568
+        },
+        "errors": [],
+        "panelFocused": true,
+        "switchedPanelFocused": true,
+        "dimensions": {
+          "width": 320,
+          "scrollWidth": 320,
+          "height": 568,
+          "scrollHeight": 568
+        }
+      },
+      {
+        "viewport": {
+          "width": 812,
+          "height": 375
+        },
+        "errors": [],
+        "panelFocused": true,
+        "switchedPanelFocused": true,
+        "dimensions": {
+          "width": 812,
+          "scrollWidth": 812,
+          "height": 375,
+          "scrollHeight": 375
+        }
+      },
+      {
+        "name": "app-entry",
+        "errors": [],
+        "title": "Terminal Detective · Logic Architect"
+      }
+    ],
+    "cinematic": {
+      "errors": [],
+      "completed": "skipped"
+    }
+  }
+}

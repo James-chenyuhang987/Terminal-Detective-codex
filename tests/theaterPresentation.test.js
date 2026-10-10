@@ -79,7 +79,8 @@ test('theater is a lazy presentation child of the single authoritative investiga
   assert.match(presentation, /lazy\(\(\) => import\('\.\/TheaterScene'\)\)/);
   assert.doesNotMatch(presentation, /from ['"](?:three|@react-three)|setGameState|startCase|applySettlementResult|resolveNextZone|fetch\(/);
   assert.match(presentation, /const intent = resolveTheaterInteraction\(target, caseData.npcs, movementPaused\)/);
-  assert.match(presentation, /if \(intent\?\.type === 'talk'\) onTalk\(intent.npc\)/);
+  assert.match(presentation, /if \(intent\?\.type === 'talk'\) \{[\s\S]*?setInteractionNpcId\(intent.npc.npc_id\);[\s\S]*?onTalk\(intent.npc\);/);
+  assert.match(presentation, /closePanel\(\); setInteractionNpcId\(npc\.npc_id\); onTalk\(npc\);/);
   assert.match(owner, /onQuestion=\{handleNPCQuestion\}/);
   assert.match(owner, /onSubmit=\{handleSubmitReport\}/);
   assert.match(owner, /onLink=\{handleLink\}/);

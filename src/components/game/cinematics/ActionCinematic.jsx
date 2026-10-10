@@ -6,8 +6,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useLang } from '@/lib/lang.jsx';
 import { getCinematicActionLabel } from '@/game/actionCinematic';
+import { createAvatarAnimation, updateAvatarAnimation } from '@/game/theaterMotion.js';
+import { fieldMaterial } from '@/game/theaterMaterials.js';
+import { FootShadow } from '@/components/game/theater/FieldAtmosphere.jsx';
 
 const AGENT_COLORS = {
   'NEXUS-01': '#709f9a',
@@ -31,38 +35,38 @@ const OUTCOME_COPY = {
   no_yield: { zh: '本轮未获得新证据', en: 'NO NEW EVIDENCE' },
 };
 
-/** @param {{ color: string, position?: [number, number, number], scale?: number, active?: boolean }} props */
-function HoloAgent({ color, position = [0, 0, 0], scale = 1, active = false }) {
-  const ref = useRef(/** @type {THREE.Group | null} */ (null));
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    ref.current.position.y = position[1] + Math.sin(clock.elapsedTime * 2.4) * 0.045;
-    ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.65) * 0.12;
-  });
-  return (
-    <group ref={ref} position={position} scale={scale}>
-      <mesh position={[0, 1.62, 0]}>
-        <icosahedronGeometry args={[0.24, 1]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 2.2 : 1.25} transparent opacity={0.88} wireframe />
-      </mesh>
-      <mesh position={[0, 0.82, 0]}>
-        <cylinderGeometry args={[0.32, 0.48, 1.25, 6]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 1.8 : 1} transparent opacity={0.5} wireframe />
-      </mesh>
-      <mesh position={[-0.42, 0.86, 0]} rotation={[0, 0, -0.2]}>
-        <cylinderGeometry args={[0.07, 0.09, 0.92, 5]} />
-        <meshBasicMaterial color={color} transparent opacity={0.45} wireframe />
-      </mesh>
-      <mesh position={[0.42, 0.86, 0]} rotation={[0, 0, 0.2]}>
-        <cylinderGeometry args={[0.07, 0.09, 0.92, 5]} />
-        <meshBasicMaterial color={color} transparent opacity={0.45} wireframe />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.12, 0]}>
-        <ringGeometry args={[0.46, 0.52, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={active ? 0.9 : 0.42} side={THREE.DoubleSide} />
-      </mesh>
-    </group>
-  );
+/** @param {{ color: string, position?: [number, number, number], scale?: number, active?: boolean, phase?: string, quality?: string }} props */
+function HoloAgent({ color, position = [0, 0, 0], scale = 1, active = false, phase = 'establish', quality = 'high' }) {
+  const { motionEnabled } = usePresentationMotion();
+  const gltf = useGLTF(`${import.meta.env.BASE_URL}assets/theater/detective.glb`);
+  const model = useMemo(() => {
+    const clone = cloneSkeleton(gltf.scene);
+    const materials = new Map();
+    clone.traverse(node => {
+      if (!(node instanceof THREE.Mesh)) return;
+      const copy = source => {
+        if (!materials.has(source)) {
+          const material = fieldMaterial(source);
+          if (source.name === 'amber') material.color.set(color);
+          materials.set(source, material);
+        }
+        return materials.get(source);
+      };
+      node.material = Array.isArray(node.material) ? node.material.map(copy) : copy(node.material);
+    });
+    return clone;
+  }, [gltf.scene, color]);
+  useEffect(() => { model.traverse(node => { if (node instanceof THREE.Mesh) node.castShadow = quality === 'high'; }); }, [model, quality]);
+  const animation = useMemo(() => createAvatarAnimation(new THREE.AnimationMixer(model), gltf.animations), [model, gltf.animations]);
+  useFrame((_, delta) => updateAvatarAnimation(animation, delta, { talking: active && phase === 'action', reducedMotion: !motionEnabled }));
+  useEffect(() => () => {
+    animation.mixer.stopAllAction();
+    model.traverse(node => {
+      if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose();
+      if (node instanceof THREE.Mesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose());
+    });
+  }, [model, animation]);
+  return <group position={position} scale={scale} rotation={[0, .35, 0]} dispose={null}><FootShadow position={[0, 0, 0]} /><primitive object={model} dispose={null} /></group>;
 }
 
 /** @param {{ template: string, accent: string }} props */
@@ -79,9 +83,9 @@ function LocalProp({ template, accent }) {
       const material = sourceMaterial.clone();
       material.color.set('#172936');
       material.emissive.set(accent);
-      material.emissiveIntensity = 0.58;
+      material.emissiveIntensity = 0.12;
       material.metalness = 0.68;
-      material.roughness = 0.28;
+      material.roughness = 0.42;
       child.material = material;
     });
     return copy;
@@ -630,18 +634,19 @@ function Scene({ event, phase, quality }) {
       <color attach="background" args={['#08121c']} />
       <fog attach="fog" args={['#08121c', 7, 19]} />
       <ambientLight intensity={0.34} />
+      <directionalLight position={[-3, 6, 4]} color="#f0d9b0" intensity={1.9} castShadow={quality === 'high'} shadow-mapSize-width={512} shadow-mapSize-height={512} shadow-camera-left={-6} shadow-camera-right={6} shadow-camera-top={5} shadow-camera-bottom={-5} shadow-normalBias={.03} />
       <pointLight position={[0, 4, 2]} color={accent} intensity={phase === 'result' ? 34 : 18} distance={13} />
       <pointLight position={[-4, 2, 1]} color={executorColor} intensity={12} distance={9} />
 
       <gridHelper args={[18, 24, accent, '#123043']} position={[0, 0, -1]} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, -1]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, -1]} receiveShadow>
         <planeGeometry args={[20, 20]} />
         <meshStandardMaterial color="#08121c" metalness={0.42} roughness={0.62} />
       </mesh>
 
-      <HoloAgent color={executorColor} position={[-2.35, 0, 0.3]} active scale={0.94} />
+      <HoloAgent color={executorColor} position={[-2.35, 0, 0.3]} active scale={0.94} phase={phase} quality={quality} />
       {event.assistAgentId && (
-        <HoloAgent color={AGENT_COLORS[event.assistAgentId] || '#a5c8c0'} position={[-3.55, 0, -1.25]} scale={0.68} />
+        <HoloAgent color={AGENT_COLORS[event.assistAgentId] || '#a5c8c0'} position={[-3.55, 0, -1.25]} scale={0.88} phase={phase} quality={quality} />
       )}
       <ActionSetPiece event={event} phase={phase} quality={quality} />
       {['data-tunnel', 'archive-cascade', 'firewall-breach', 'cipher-shatter', 'camera-matrix', 'frame-rewind'].includes(event.animationId) && (

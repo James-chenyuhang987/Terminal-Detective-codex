@@ -26,6 +26,21 @@ test('accelerated walking integrates consistently at 30/60/144 Hz and never exce
   close(distances[0], WALK_SPEED * (2 - (1 - Math.exp(-24)) / 12));
 });
 
+test('interaction Talk clips start at a clear beat and pause when the conversation ends', () => {
+  const instance = animation();
+  updateAvatarAnimation(instance, 1 / 60, { speed: 0, talking: false });
+  close(instance.actions.Talk.time, 0);
+  updateAvatarAnimation(instance, 1 / 60, { speed: 0, talking: true });
+  assert.ok(instance.actions.Talk.time > 0 && instance.actions.Talk.time < .05);
+  assert.ok(instance.actions.Talk.getEffectiveWeight() > 0);
+  const endTime = instance.actions.Talk.time;
+  for (let frame = 0; frame < 30; frame++) updateAvatarAnimation(instance, 1 / 60, { speed: 0, talking: false });
+  assert.ok(instance.actions.Talk.getEffectiveWeight() < .01);
+  close(instance.actions.Talk.time, endTime, 1e-6);
+  updateAvatarAnimation(instance, 1 / 60, { speed: 0, talking: true });
+  assert.ok(instance.actions.Talk.time > 0 && instance.actions.Talk.time < .05, 'a new interaction restarts the greeting beat');
+});
+
 test('released/cancelled input, pause and suspend stop immediately with no stale velocity on resuming', () => {
   for (const cancel of ['released', 'not-allowed', 'clear']) {
     const state = player();

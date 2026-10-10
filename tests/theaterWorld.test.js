@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ALL_CASES } from '../src/game/caseData.js';
 import { createInitialGameState } from '../src/game/gameState.js';
-import { SCENE_FILES, CHARACTER_FILES, PLAYER_RADIUS, MAX_FRAME_DELTA, WALK_SPEED, sceneForZone, validateTheaterManifest, withNpcColliders, isWalkable, cameraRelativeMovement, movePlayer, characterRole, stageNpcs, interactionTargets, targetKey, nearestTarget, interactionIntent, restoreSpatial, isViewportKeyTarget } from '../src/game/theaterWorld.js';
+import { SCENE_FILES, SCENE_INTERACTION_PROFILES, CHARACTER_FILES, PLAYER_RADIUS, MAX_FRAME_DELTA, WALK_SPEED, sceneForZone, sceneInteractionProfile, validateTheaterManifest, withNpcColliders, isWalkable, cameraRelativeMovement, movePlayer, characterRole, stageNpcs, interactionTargets, targetKey, nearestTarget, interactionIntent, restoreSpatial, isViewportKeyTarget } from '../src/game/theaterWorld.js';
 
 function manifest() {
   return {
@@ -229,6 +229,25 @@ test('back-wall routes remain reachable before the capsule touches perimeter geo
   assert.ok(isWalkable(player, geometry));
   assert.equal(nearestTarget(player, targets), door);
   assert.deepEqual(interactionIntent(door), { kind: 'door', id: 'exit' });
+});
+
+test('each authored room exposes distinct public interaction copy and accents', () => {
+  const labels = [];
+  for (const sceneName of Object.keys(SCENE_FILES)) {
+    const profile = SCENE_INTERACTION_PROFILES[sceneName];
+    labels.push(profile.workstation.label, profile.evidence.label);
+    assert.notEqual(profile.workstation.type, profile.evidence.type);
+    for (const hotspot of [profile.workstation, profile.evidence]) {
+      assert.equal(hotspot.markerOffsets.length, 3);
+      assert.ok(hotspot.markerOffsets.every(offset => offset.length === 2 && offset.every(Number.isFinite)));
+    }
+    assert.equal(sceneInteractionProfile(sceneName, 'workstation'), profile.workstation);
+    assert.equal(sceneInteractionProfile(sceneName, 'evidence'), profile.evidence);
+    assert.equal(sceneInteractionProfile('__proto__', 'evidence').type, 'evidence');
+  }
+  assert.equal(new Set(labels).size, labels.length);
+  const target = interactionTargets(room(), [], 'datacenter').find(item => item.id === 'workstation');
+  assert.deepEqual({ type: target.hotspotType, label: target.presentationLabel, accent: target.accent }, { type: 'terminal', label: 'EMP 诊断节点', accent: '#69b4c2' });
 });
 
 test('keyboard ownership excludes form fields, editable content, buttons and page-level targets', () => {

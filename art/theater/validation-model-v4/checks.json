@@ -1,0 +1,1016 @@
+{
+  "date": "2026-10-09",
+  "checks": {
+    "npm test": "617 passed",
+    "npm run typecheck": "passed",
+    "npm run lint": "passed",
+    "npm run build": "passed; existing lazy Three.js chunk warning",
+    "asset validation": "9 GLBs passed",
+    "browser": {
+      "renderer": "Chrome / SwiftShader; real components and GLBs, local public-state fixture",
+      "results": [
+        {
+          "check": "room",
+          "zone": "office",
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "room",
+          "zone": "datacenter",
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "room",
+          "zone": "lobby",
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "room",
+          "zone": "laboratory",
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "room",
+          "zone": "balcony",
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "office",
+          "spot": "evidence",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "office",
+          "spot": "workstation",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "datacenter",
+          "spot": "evidence",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "datacenter",
+          "spot": "workstation",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "lobby",
+          "spot": "evidence",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "lobby",
+          "spot": "workstation",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "laboratory",
+          "spot": "evidence",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "laboratory",
+          "spot": "workstation",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "balcony",
+          "spot": "evidence",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "balcony",
+          "spot": "workstation",
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "scrollWidth": 1440,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 1440,
+              "height": 900,
+              "top": 0,
+              "right": 1440,
+              "bottom": 900,
+              "left": 0
+            },
+            "panel": {
+              "x": 916,
+              "y": 155,
+              "width": 500,
+              "height": 406.75,
+              "top": 155,
+              "right": 1416,
+              "bottom": 561.75,
+              "left": 916
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "office",
+          "spot": "evidence",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "office",
+          "spot": "workstation",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "datacenter",
+          "spot": "evidence",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "datacenter",
+          "spot": "workstation",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "lobby",
+          "spot": "evidence",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "lobby",
+          "spot": "workstation",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "laboratory",
+          "spot": "evidence",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "laboratory",
+          "spot": "workstation",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "balcony",
+          "spot": "evidence",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "inspection",
+          "zone": "balcony",
+          "spot": "workstation",
+          "width": 375,
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            },
+            "panel": {
+              "x": 8,
+              "y": 313.15625,
+              "width": 359,
+              "height": 412.84375,
+              "top": 313.15625,
+              "right": 367,
+              "bottom": 726,
+              "left": 8
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "mobile-movement-stop",
+          "width": 375,
+          "quality": "low",
+          "lang": "zh",
+          "reducedMotion": "no-preference",
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "mobile-movement-stop",
+          "width": 320,
+          "quality": "auto",
+          "lang": "en",
+          "reducedMotion": "no-preference",
+          "layout": {
+            "width": 320,
+            "scrollWidth": 320,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 320,
+              "height": 812,
+              "top": 0,
+              "right": 320,
+              "bottom": 812,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "mobile-movement-stop",
+          "width": 375,
+          "quality": "high",
+          "lang": "en",
+          "reducedMotion": "reduce",
+          "layout": {
+            "width": 375,
+            "scrollWidth": 375,
+            "canvas": {
+              "x": 0,
+              "y": 0,
+              "width": 375,
+              "height": 812,
+              "top": 0,
+              "right": 375,
+              "bottom": 812,
+              "left": 0
+            }
+          },
+          "errors": []
+        },
+        {
+          "check": "walk-turn-stop-panel-resume",
+          "start": [
+            0,
+            0,
+            3
+          ],
+          "end": [
+            -6.938893903907228e-17,
+            0.001251047932675455,
+            2.7608581753570824
+          ],
+          "errors": []
+        }
+      ]
+    }
+  },
+  "motion": {
+    "detective": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -6.544582506580118e-05,
+      "maxStanceSoleHeight": 0.0005003278530386236,
+      "maxStanceSoleTilt": 0.05273978956066876,
+      "maxStanceSliding": 6.689002947075176e-05,
+      "maxSampleSliding": 5.022486676506362e-05,
+      "maxSwingLift": 0.06795342891268694,
+      "loopSoleDiscontinuity": 1.1102230246251565e-16,
+      "blendedStartStop": {
+        "samples": 1200,
+        "minYBefore": -0.021779547420123266,
+        "minYAfter": -2.5326962749261384e-16,
+        "groundingMedianUs": 7.249999999885404,
+        "groundingP95Us": 22.333000000003267
+      }
+    },
+    "witness": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -6.544582506580118e-05,
+      "maxStanceSoleHeight": 0.0005003278530386236,
+      "maxStanceSoleTilt": 0.05273978956066876,
+      "maxStanceSliding": 6.689002947075176e-05,
+      "maxSampleSliding": 5.022486676506362e-05,
+      "maxSwingLift": 0.06795342891268694,
+      "loopSoleDiscontinuity": 1.1102230246251565e-16
+    },
+    "security": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -6.544582506580118e-05,
+      "maxStanceSoleHeight": 0.0005003278530386236,
+      "maxStanceSoleTilt": 0.05273978956066876,
+      "maxStanceSliding": 6.689002947075176e-05,
+      "maxSampleSliding": 5.022486676506362e-05,
+      "maxSwingLift": 0.06795342891268694,
+      "loopSoleDiscontinuity": 1.1102230246251565e-16
+    },
+    "scientist": {
+      "durations": {
+        "Idle": 2,
+        "Walk": 1,
+        "Talk": 2
+      },
+      "soleVertices": 64,
+      "minAnimatedY": -6.544582506580118e-05,
+      "maxStanceSoleHeight": 0.0005003278530386236,
+      "maxStanceSoleTilt": 0.05273978956066876,
+      "maxStanceSliding": 6.689002947075176e-05,
+      "maxSampleSliding": 5.022486676506362e-05,
+      "maxSwingLift": 0.06795342891268694,
+      "loopSoleDiscontinuity": 1.1102230246251565e-16
+    }
+  },
+  "camera": [
+    {
+      "name": "office",
+      "rays": 1704,
+      "triangles": 16410,
+      "buildMs": 41.090167,
+      "recursiveUs": 400.12001173708904,
+      "proxyUs": 10.353311032863552,
+      "lensUs": 105.45522769953062,
+      "speedup": 3.794216943679028,
+      "hits": 48,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "datacenter",
+      "rays": 1608,
+      "triangles": 23994,
+      "buildMs": 52.75537500000064,
+      "recursiveUs": 914.5321828358199,
+      "proxyUs": 13.92747201492541,
+      "lensUs": 149.93172139303346,
+      "speedup": 6.0996577264557,
+      "hits": 179,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "lobby",
+      "rays": 1848,
+      "triangles": 13294,
+      "buildMs": 38.83641600000192,
+      "recursiveUs": 369.8488230519481,
+      "proxyUs": 9.42834577922263,
+      "lensUs": 86.99264935064814,
+      "speedup": 4.251495106916094,
+      "hits": 17,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "laboratory",
+      "rays": 1560,
+      "triangles": 15102,
+      "buildMs": 32.418165999999474,
+      "recursiveUs": 617.143456410257,
+      "proxyUs": 18.70203012820359,
+      "lensUs": 116.28442884615512,
+      "speedup": 5.3071891269874225,
+      "hits": 32,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    },
+    {
+      "name": "balcony",
+      "rays": 1560,
+      "triangles": 13262,
+      "buildMs": 22.29570800000147,
+      "recursiveUs": 269.4486108974394,
+      "proxyUs": 15.045325641026116,
+      "lensUs": 129.01191282051468,
+      "speedup": 2.0885560488689485,
+      "hits": 25,
+      "extraConservative": 0,
+      "meanExtraMeters": 0,
+      "maxExtraMeters": 0,
+      "portalClearMeters": 2
+    }
+  ],
+  "assets": {
+    "office": {
+      "bytes": 980604,
+      "triangles": 16410,
+      "sha256": "5843bea5b5a377a62d9f5599e96c6c0c4d0b18a51d234cecac2ba5ffaeb879dc"
+    },
+    "datacenter": {
+      "bytes": 1555424,
+      "triangles": 23994,
+      "sha256": "97e553f6284e524e18aea5fec2a0b29f79a0c5f2af2d4138a194d05e5b144fb1"
+    },
+    "lobby": {
+      "bytes": 780012,
+      "triangles": 13294,
+      "sha256": "ceb48673015b58bb9d7564492cdc0fa7cdacd7abe19c056f65741776dd3e5389"
+    },
+    "laboratory": {
+      "bytes": 855988,
+      "triangles": 15102,
+      "sha256": "80fdfedb03dcecfe4a7080b3175e2419a394d861358beedf4ac184a022d12238"
+    },
+    "balcony": {
+      "bytes": 733484,
+      "triangles": 13262,
+      "sha256": "d56d55ac32cc021480076d832e5c53cac78209160cbb46d963b596a00eecfe51"
+    },
+    "detective": {
+      "bytes": 591940,
+      "triangles": 8045,
+      "sha256": "759f6b99d1eaa03121320f7028f4d4c87a07a05497d1ed17f7e223d7f3b8459e"
+    },
+    "witness": {
+      "bytes": 505732,
+      "triangles": 6968,
+      "sha256": "e6708739d3014c2a256fd0c49c7abd61c35ca7bb538ef03db9432327ff0909b8"
+    },
+    "security": {
+      "bytes": 502524,
+      "triangles": 6856,
+      "sha256": "b2fdfc19e67d894822fb2af3f1d8e2ba5be066310a4e0c10f509e81da56a41d8"
+    },
+    "scientist": {
+      "bytes": 521536,
+      "triangles": 7340,
+      "sha256": "564da3428c9b44c5b63431f0731a6dd63bbe4ac2020efc260fa55f87a4a8a5df"
+    }
+  },
+  "totalBytes": 7027244,
+  "protectedSourcesUnchanged": {
+    "art/theater/terminal-detective-library.blend": "39d57a0ed02b1e6b81bbd0669081f34e9ec9d1c445de41ebd1ca75779f6d7dca",
+    "art/theater/terminal-detective-library.blend1": "72ea1e95839eb1a6a5234c22aa882346aa9ab4d541c425ffb3a3d751af0b870e",
+    "art/theater/terminal-detective-motion-v2.blend": "1a6da4f7ce4d8d54886d74b41b6cab4eed603d082ff1266395529dd3f7d57bda",
+    "art/theater/terminal-detective-polish-v3.blend": "1a356865b1fcef891053fc72e635b5aff83b103ad25f8c9f65e7bccad902fb82"
+  },
+  "newSource": "art/theater/terminal-detective-model-v4.blend",
+  "limitations": [
+    "Isolated public-state fixtures; no production auth/profile writes.",
+    "Software WebGL and viewport emulation do not establish real mobile GPU performance.",
+    "Contact accuracy applies to authored flat-ground Walk; turning and crossfades do not claim exact foot locking."
+  ]
+}

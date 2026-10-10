@@ -1427,6 +1427,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           busy={interactionLocked}
           paused={Boolean(narrativeVisible || showSettings || showOnboarding || showCommandConsole || decisionCards || actionCinematic || cinematic || crisis || showBSoD || isFinalizing)}
           selectedNpcId={selectedNPC?.npc_id}
+          npcEmotionLevels={Object.fromEntries(caseData.npcs.map(npc => [npc.npc_id, getEmotion(npcEmotionState, npc.npc_id).level]))}
           quality={settings.cinematicQuality}
           spatialRef={theaterSpatialRef}
           dialoguePanel={dialoguePanel}
@@ -1440,6 +1441,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           onAbort={handleAbort}
           onExecute={() => { if (interactionLocked) return; if (selectedNPC) handleNPCDialogueClose(); setReportMode(false); runReActCycle(); }}
           onTalk={npc => { if (interactionLocked) return; setReportMode(false); handleNPCTalk(npc); }}
+          onCloseDialogue={handleNPCDialogueClose}
           onOpenTools={tab => { setToolTab(tab); setMobileToolsOpen(true); }}
           onCloseTools={() => setMobileToolsOpen(false)}
           onReport={() => { setReportMode(value => !value); setJudgeResult(null); }}

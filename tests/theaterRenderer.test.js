@@ -8,27 +8,30 @@ import { Group, MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import * as world from '../src/game/theaterWorld.js';
 import * as motion from '../src/game/theaterMotion.js';
 import * as cameraCollision from '../src/game/theaterCamera.js';
+import * as visuals from '../src/game/theaterVisuals.js';
 
 const source = ts.createSourceFile('TheaterScene.jsx', readFileSync(new URL('../src/components/game/theater/TheaterScene.jsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
 const declaration = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'World');
 const { outputText } = ts.transpileModule(`const result = (${declaration.getText()});`, { compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } });
 
-function harness() {
+function harness({ deferEffects = false } = {}) {
   const camera = new PerspectiveCamera();
   const gltf = { scene: new Group() };
   const refs = [];
   const cleanups = [];
+  const effects = [];
+  const runEffect = fn => { const cleanup = fn(); if (cleanup) cleanups.push(cleanup); };
   let frame;
   let invalidations = 0;
   const bindings = {
-    ...world, ...motion, ...cameraCollision, MathUtils, Vector3, React,
+    ...world, ...motion, ...cameraCollision, ...visuals, MathUtils, Vector3, React,
     ASSET_ROOT: '/assets/theater/', EMPTY_CONTROLS: { forward: false, backward: false, left: false, right: false },
     useMemo: fn => fn(), useRef: current => { const ref = { current }; refs.push(ref); return ref; },
     useState: initial => [initial, () => {}], useThree: () => ({ camera, invalidate: () => invalidations++ }),
-    useEffect: fn => { const cleanup = fn(); if (cleanup) cleanups.push(cleanup); },
+    useEffect: fn => { if (deferEffects) effects.push(fn); else runEffect(fn); },
     useFrame: callback => { frame = callback; }, useGLTF: () => gltf,
     document: { hidden: false }, window: { setTimeout: fn => fn(), clearTimeout: () => {} },
-    RoomModel: () => null, Avatar: () => null, HotspotRing: () => null,
+    RoomModel: () => null, Avatar: () => null, HotspotRing: () => null, FieldLighting: () => null, FootShadow: () => null, FieldFeedback: () => null,
   };
   const component = compileFunction(`${outputText}\nreturn result;`, Object.keys(bindings))(...Object.values(bindings));
   const controlsRef = { current: { forward: false } };
@@ -37,8 +40,24 @@ function harness() {
   const manifest = world.validateTheaterManifest(JSON.parse(readFileSync(new URL('../public/assets/theater/manifest.json', import.meta.url), 'utf8')));
   const spatialRef = { current: {} };
   component({ caseData: { case_id: 'test', npcs: [] }, zoneId: 'datacenter', manifest, selectedNpcId: null, controlsRef, spatialRef, live, input, nearbyRef: { current: null }, sceneReady: () => {}, quality: { shadows: false } });
-  return { state: refs[0].current, live, input, controlsRef, camera, document: bindings.document, frame: delta => frame({}, delta), cleanup: () => cleanups.reverse().forEach(fn => fn()), spatialRef, invalidations: () => invalidations };
+  return { state: refs[0].current, live, input, controlsRef, camera, document: bindings.document, frame: delta => frame({}, delta), flushEffects: () => effects.splice(0).forEach(runEffect), cleanup: () => cleanups.reverse().forEach(fn => fn()), spatialRef, manifest, invalidations: () => invalidations };
 }
+
+test('a frame before passive setup cannot leave the stationary nearby interaction disabled', () => {
+  const h = harness({ deferEffects: true });
+  const spot = h.manifest.scenes.datacenter.hotspots[0];
+  h.state.position = [...spot.position];
+  const notifications = [];
+  h.live.current.onNearbyChange = target => notifications.push(target?.id ?? null);
+  h.frame(1 / 60);
+  assert.equal(notifications.at(-1), spot.id);
+  h.flushEffects();
+  assert.equal(notifications.at(-1), null, 'Room setup clears the previous interaction');
+  h.frame(1 / 60);
+  assert.equal(notifications.at(-1), spot.id, 'The first stable frame restores the interaction without requiring movement');
+  assert.deepEqual(h.state.position, spot.position);
+  h.cleanup();
+});
 
 test('real World frame stops movement under Home suspension even when paused is false and keys remain held', () => {
   const h = harness();
@@ -77,5 +96,25 @@ test('World keeps a stationary camera stable and freezes its pose while suspende
   h.frame(1 / 60);
   assert.ok(position.distanceTo(h.camera.position) < 1e-8);
   assert.equal(h.invalidations(), invalidations);
+  h.cleanup();
+});
+
+test('portrait arrival framing leaves room above its panel and restores projection after closing', () => {
+  const h = harness();
+  h.camera.aspect = .46;
+  h.camera.updateProjectionMatrix();
+  const position = [...h.state.position];
+  h.live.current.overview = true;
+  h.live.current.paused = true;
+  h.frame(1 / 60);
+  assert.equal(h.camera.view.enabled, true);
+  assert.equal(h.camera.view.offsetY, 180);
+  for (let frame = 0; frame < 100; frame++) h.frame(1 / 60);
+  assert.deepEqual(h.state.position, position);
+  h.live.current.overview = false;
+  h.live.current.paused = false;
+  h.frame(1 / 60);
+  assert.equal(h.camera.view.enabled, false);
+  assert.deepEqual(h.state.position, position);
   h.cleanup();
 });
