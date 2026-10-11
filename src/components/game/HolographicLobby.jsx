@@ -25,6 +25,7 @@ import CommandPlanPanel from '@/components/game/lobby/CommandPlanPanel';
 import { CASE_ENERGY_COST } from '@/game/playerProfile';
 import TacticalRehearsalPanel from '@/components/game/TacticalRehearsalPanel';
 import { buildTacticalRehearsal } from '@/game/tacticalRehearsal';
+import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 function getDisplayLore(agentDef, slot, lang) {
   const starter = AGENT_DEFS[slot];
@@ -104,14 +105,16 @@ function LobbyAtmosphere() {
 // ── Particle Canvas — neural network lines ────────────────────────────────────
 function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, accentColor: _accentColor, hasTarget = false }) {
   const { settings } = useSettings();
+  const { motionEnabled } = usePresentationMotion();
   const canvasRef = useRef(null);
   const particles = useRef([]);
   const frameRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !settings.particles || !motionEnabled) return undefined;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
 
     const resize = () => {
       canvas.width = canvas.offsetWidth;
@@ -119,6 +122,11 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
     };
     resize();
     window.addEventListener('resize', resize);
+    // The stage remains mounted while mobile tabs hide/show it; a window
+    // resize is not guaranteed when the tab becomes visible again. Keep the
+    // backing buffer aligned with its CSS size in that case as well.
+    const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(resize) : null;
+    resizeObserver?.observe(canvas);
 
     // Spawn floating particles
     particles.current = Array.from({ length: 36 }, () => ({
@@ -128,16 +136,16 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
       vy: (Math.random() - 0.5) * 0.4,
       r: 1 + Math.random() * 2,
       opacity: 0.2 + Math.random() * 0.5,
-      color: agentDefs[Math.floor(Math.random() * 3)].color,
+      color: agentDefs[Math.floor(Math.random() * 3)]?.color || AGENT_DEFS[0].color,
     }));
 
     // Agent node positions (roughly center positions of holo figures)
     const getNodePositions = () => {
       const w = canvas.width, h = canvas.height;
       return [
-        { x: w * 0.25, y: h * 0.55, color: agentDefs[0].color },
-        { x: w * 0.5,  y: h * 0.45, color: agentDefs[1].color },
-        { x: w * 0.75, y: h * 0.55, color: agentDefs[2].color },
+        { x: w * 0.25, y: h * 0.55, color: agentDefs[0]?.color || AGENT_DEFS[0].color },
+        { x: w * 0.5,  y: h * 0.45, color: agentDefs[1]?.color || AGENT_DEFS[1].color },
+        { x: w * 0.75, y: h * 0.55, color: agentDefs[2]?.color || AGENT_DEFS[2].color },
       ];
     };
 
@@ -265,11 +273,12 @@ function ParticleCanvas({ agents: _agents, agentDefs = AGENT_DEFS, selectedIdx, 
     frameRef.current = requestAnimationFrame(draw);
     return () => {
       window.removeEventListener('resize', resize);
+      resizeObserver?.disconnect();
       cancelAnimationFrame(frameRef.current);
     };
-  }, [agentDefs, hasTarget, selectedIdx, settings.particles]);
+  }, [agentDefs, hasTarget, motionEnabled, selectedIdx, settings.particles]);
 
-  if (!settings.particles) return null;
+  if (!settings.particles || !motionEnabled) return null;
 
   return (
     <canvas ref={canvasRef} style={{

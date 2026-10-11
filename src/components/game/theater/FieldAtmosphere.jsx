@@ -5,6 +5,7 @@ import { DataTexture, LinearFilter, PMREMGenerator, RGBAFormat } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { sceneInteractionProfile } from '@/game/theaterWorld.js';
 import { SCENE_ART, sceneEvidenceCount } from '@/game/theaterVisuals.js';
+import { cancelDeferredDispose, deferDispose } from '@/lib/deferredDispose.js';
 
 export function FieldLighting({ sceneName, room, quality }) {
   const art = SCENE_ART[sceneName];
@@ -60,7 +61,10 @@ function contactTexture() {
 export function FootShadow({ position, player = null, scale = 1 }) {
   const ref = useRef(null);
   const texture = useMemo(contactTexture, []);
-  useEffect(() => () => texture.dispose(), [texture]);
+  useEffect(() => {
+    cancelDeferredDispose(texture);
+    return () => deferDispose(texture, () => texture.dispose());
+  }, [texture]);
   useFrame(() => { if (player && ref.current) ref.current.position.set(player.current.position[0], .008, player.current.position[2]); });
   return <mesh ref={ref} position={[position[0], .008, position[2]]} rotation={[-Math.PI / 2, 0, 0]} scale={[scale, scale * .72, 1]} raycast={() => null}>
     <planeGeometry args={[.95, .95]} /><meshBasicMaterial map={texture} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-1} />

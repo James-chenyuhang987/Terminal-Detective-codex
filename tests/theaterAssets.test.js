@@ -198,16 +198,16 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         if (!components.has(component)) components.set(component, new Set());
         influences.forEach(({ bone }) => components.get(component).add(bone));
         for (const side of ['L', 'R']) {
-          if (influences.some((i) => i.bone === `Shin${side}`) && influences.some((i) => i.bone === `Thigh${side}`)) jointBlends.add(`knee${side}`);
-          if (influences.some((i) => i.bone === `Shin${side}`) && influences.some((i) => i.bone === `Foot${side}`)) jointBlends.add(`ankle${side}`);
-          if (influences.some((i) => i.bone === `UpperArm${side}`) && influences.some((i) => i.bone === `Forearm${side}`)) jointBlends.add(`elbow${side}`);
-          if (influences.length === 1 && influences[0].bone === `Foot${side}` && posedVertex(point).y < 0.001) soles[side].push({ ...point, restZ: posedVertex(point).z });
+          if (influences.some((i) => i.bone === `Shin.${side}`) && influences.some((i) => i.bone === `Thigh.${side}`)) jointBlends.add(`knee${side}`);
+          if (influences.some((i) => i.bone === `Shin.${side}`) && influences.some((i) => i.bone === `Foot.${side}`)) jointBlends.add(`ankle${side}`);
+          if (influences.some((i) => i.bone === `UpperArm.${side}`) && influences.some((i) => i.bone === `Forearm.${side}`)) jointBlends.add(`elbow${side}`);
+          if (influences.length === 1 && influences[0].bone === `Foot.${side}` && posedVertex(point).y < 0.001) soles[side].push({ ...point, restZ: posedVertex(point).z });
         }
       }
       for (const bones of components.values()) {
         for (const side of ['L', 'R']) {
-          if (['Thigh', 'Shin', 'Foot'].every((joint) => bones.has(joint + side))) continuousLegs.add(side);
-          if (['UpperArm', 'Forearm'].every((joint) => bones.has(joint + side))) continuousArms.add(side);
+          if (['Thigh', 'Shin', 'Foot'].every((joint) => bones.has(`${joint}.${side}`))) continuousLegs.add(side);
+          if (['UpperArm', 'Forearm'].every((joint) => bones.has(`${joint}.${side}`))) continuousArms.add(side);
         }
       }
     });
@@ -255,7 +255,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         assert.ok(bounds.min.x > -1 && bounds.max.x < 1 && Number.isFinite(bounds.max.z));
         if (clip.name !== 'Walk') {
           for (const side of ['L', 'R']) {
-            const [hip, knee, ankle] = ['Thigh', 'Shin', 'Foot'].map(joint => model.getObjectByName(joint + side).getWorldPosition(new Vector3()));
+            const [hip, knee, ankle] = ['Thigh', 'Shin', 'Foot'].map(joint => model.getObjectByName(`${joint}.${side}`).getWorldPosition(new Vector3()));
             const extension = hip.distanceTo(ankle) / (hip.distanceTo(knee) + knee.distanceTo(ankle));
             assert.ok(extension > .975 && extension < .999, `${name}/${clip.name}: relaxed standing knees, without crouching or locking`);
             assert.ok(soles[side].every(point => Math.abs(posedVertex(point).y) < .002), `${name}/${clip.name}: both standing soles stay planted`);

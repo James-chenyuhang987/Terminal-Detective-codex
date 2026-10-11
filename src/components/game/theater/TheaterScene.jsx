@@ -10,10 +10,11 @@ import {
   interactionTargets, isViewportKeyTarget, nearestTarget, restoreSpatial,
   sceneForZone, stageNpcs, targetKey, validateTheaterManifest, withNpcColliders,
 } from '@/game/theaterWorld.js';
-import { createAvatarAnimation, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation } from '@/game/theaterMotion.js';
+import { createAvatarAnimation, createFootLock, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation, updateFootLock } from '@/game/theaterMotion.js';
 import { buildCameraCollision, cameraClearance } from '@/game/theaterCamera.js';
 import { fieldFraming, npcAppearance, npcDemeanor } from '@/game/theaterVisuals.js';
 import { fieldMaterial } from '@/game/theaterMaterials.js';
+import { cancelDeferredDispose, deferDispose } from '@/lib/deferredDispose.js';
 import { FieldFeedback, FieldLighting, FootShadow } from './FieldAtmosphere.jsx';
 
 const ASSET_ROOT = `${import.meta.env.BASE_URL}assets/theater/`;
@@ -129,6 +130,9 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       input.current.orbitX = 0;
       input.current.orbitY = 0;
       input.current.stopMotion?.();
+      // Demand rendering has no clock of its own. Wake one frame so a
+      // release/blur can apply the stopped locomotion and settle the camera.
+      input.current.invalidate?.();
       if (controlsRef.current) {
         Object.assign(controlsRef.current, EMPTY_CONTROLS);
         controlsRef.current.orbitDelta = null;
@@ -156,6 +160,7 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       if (direction) {
         event.preventDefault();
         if (!event.repeat) { pressed.add(event.code); input.current.keys[direction] = true; }
+        input.current.invalidate?.();
       } else if (event.code === 'KeyE') {
         event.preventDefault(); if (!event.repeat) interact();
       }
@@ -165,6 +170,7 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       if (!direction) return;
       pressed.delete(event.code);
       input.current.keys[direction] = [...pressed].some(code => KEY_DIRECTIONS[code] === direction);
+      input.current.invalidate?.();
       if (isViewportKeyTarget(event.target, viewport)) event.preventDefault();
     };
     const focus = event => {
@@ -187,11 +193,18 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       input.current.orbitX += Math.max(-80, Math.min(80, event.clientX - dragging.x));
       input.current.orbitY += Math.max(-80, Math.min(80, event.clientY - dragging.y));
       dragging.x = event.clientX; dragging.y = event.clientY;
+      input.current.invalidate?.();
     };
     const pointerup = event => {
-      if (!dragging || dragging.id !== event.pointerId) return;
+      if (!dragging || dragging.id !== event.pointerId) {
+        // Touch-pad buttons are handled by React rather than the drag state,
+        // but their release still needs to render one final stopped frame.
+        input.current.invalidate?.();
+        return;
+      }
       if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
       dragging = null;
+      input.current.invalidate?.();
     };
     const suspend = () => {
       input.current.windowActive = false;
@@ -271,14 +284,20 @@ function RoomModel({ gltf, quality }) {
     if (!meshes) throw new Error('The bundled room has no renderable geometry.');
     return clone;
   }, [gltf.scene, quality.shadows]);
-  useEffect(() => () => { scene.traverse(node => { if (node instanceof Mesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose()); }); }, [scene]);
+  useEffect(() => {
+    cancelDeferredDispose(scene);
+    return () => deferDispose(scene, () => {
+      scene.traverse(node => {
+        if (node instanceof Mesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose());
+      });
+    });
+  }, [scene]);
   return <primitive object={scene} dispose={null} />;
 }
 
-function Avatar({ role, position, rotationY = 0, player = null, talking = false, interacting = false, targetPosition = null, interactionTarget = null, appearance = null, emotion = 'calm', locomotion, live, input, quality }) {
+function Avatar({ role, position, rotationY = 0, player = null, talking = false, interacting = false, targetPosition = null, interactionTarget = null, appearance = null, emotion = 'calm', locomotion, gait, live, input, quality }) {
   const gltf = useGLTF(`${ASSET_ROOT}${CHARACTER_FILES[role]}`, false, false);
   const root = useRef(null);
-  const pose = useRef(null);
   const model = useMemo(() => {
     const cloned = cloneSkeleton(gltf.scene);
     let skinned = false;
@@ -305,63 +324,122 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
     return cloned;
   }, [gltf.scene, gltf.animations, role, appearance]);
   useEffect(() => { model.traverse(node => { if (node instanceof Mesh) node.castShadow = quality.shadows; }); }, [model, quality.shadows]);
+  // The authored gait already animates Hips and both leg chains. Keep dynamic
+  // balance adjustments on Spine so the support foot stays in the model's
+  // local frame instead of rotating the group that contains both feet.
+  const spine = useMemo(() => {
+    let result = null;
+    model.traverse(node => {
+      if (!result && node.isBone && /^(?:Spine)(?:\.|$)/.test(node.name)) result = node;
+    });
+    return result;
+  }, [model]);
+  const appliedSpineOffset = useRef({ x: 0, y: 0, z: 0 });
   const animation = useMemo(() => {
-    const result = createAvatarAnimation(new AnimationMixer(model), gltf.animations);
+    const result = createAvatarAnimation(new AnimationMixer(model), gltf.animations, gait);
     result.actions.Idle.time = appearance?.phase || 0;
     result.actions.Talk.time = appearance?.phase || 0;
     return result;
-  }, [gltf.animations, model, appearance]);
+  }, [gltf.animations, model, appearance, gait]);
+  const footLock = useMemo(() => createFootLock(model), [model]);
   const grounding = useMemo(() => createSoleGrounding(model), [model]);
-  useEffect(() => () => {
-    // Keep bindings reusable during StrictMode effect replay; the owned mixer is GC'd on unmount.
-    animation.mixer.stopAllAction();
-    model.traverse(node => { if (node instanceof SkinnedMesh) node.skeleton.dispose(); });
-    model.traverse(node => {
-      if (node instanceof Mesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose());
+  useEffect(() => {
+    // StrictMode can replay this effect with the same clone. Cancel a pending
+    // disposal when that happens; a real unmount still releases the clone.
+    cancelDeferredDispose(model);
+    return () => deferDispose(model, () => {
+      animation.mixer.stopAllAction();
+      model.traverse(node => { if (node instanceof SkinnedMesh) node.skeleton.dispose(); });
+      model.traverse(node => {
+        if (node instanceof Mesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose());
+      });
     });
-  }, [animation, model, appearance]);
+  }, [animation, model]);
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, MAX_FRAME_DELTA);
     const background = live.current.suspended || !input.current.windowActive || document.hidden;
     const reduced = live.current.reducedMotion;
+    // Remove the previous presentation offset before the mixer writes the
+    // next authored pose. This also handles a frozen frame without leaving a
+    // lean behind when the viewport loses focus.
+    if (spine) {
+      const previous = appliedSpineOffset.current;
+      spine.rotation.x -= previous.x;
+      spine.rotation.y -= previous.y;
+      spine.rotation.z -= previous.z;
+      previous.x = 0;
+      previous.y = 0;
+      previous.z = 0;
+    }
     updateAvatarAnimation(animation, delta, {
       speed: !live.current.paused ? player?.current.speed : 0,
+      distance: !live.current.paused ? player?.current.distance : 0,
       authoredSpeed: locomotion.speed,
       talking: talking || interacting,
       frozen: background,
       reducedMotion: reduced,
+      gait,
     });
+    // Keep a short demand-render chain for walk/talk fade-outs. The World
+    // subscriber may stop locomotion later in this frame, so it cannot by
+    // itself know that the mixer still needs a few frames to settle.
+    if (!background && !reduced && (animation.walkWeight > 0.0001 || animation.talkWeight > 0.0001)) input.current.invalidate?.();
+    // Publish the authoritative actor transform before measuring foot world
+    // positions. World runs immediately before Avatar, so this reflects the
+    // collision-resolved position for the current frame.
+    if (root.current) {
+      if (player) {
+        root.current.position.fromArray(player.current.position);
+        const focus = interacting && interactionTarget?.current?.position;
+        if (focus) {
+          const face = Math.atan2(focus[0] - player.current.position[0], focus[2] - player.current.position[2]);
+          const difference = Math.atan2(Math.sin(face - root.current.rotation.y), Math.cos(face - root.current.rotation.y));
+          if (!background) root.current.rotation.y += difference * (reduced ? 1 : 1 - Math.exp(-delta * 7));
+        } else root.current.rotation.y = player.current.rotationY;
+      } else {
+        const face = talking && targetPosition ? Math.atan2(targetPosition.current.position[0] - position[0], targetPosition.current.position[2] - position[2]) : rotationY;
+        const difference = Math.atan2(Math.sin(face - root.current.rotation.y), Math.cos(face - root.current.rotation.y));
+        if (!background) root.current.rotation.y += difference * (reduced ? 1 : 1 - Math.exp(-delta * 7));
+      }
+      root.current.updateWorldMatrix(true, false);
+    }
     if (!background) {
       const demeanor = npcDemeanor(emotion);
       const speedRatio = player ? MathUtils.clamp((player.current.speed || 0) / Math.max(.01, locomotion.speed), 0, 1) : 0;
-      const turnLean = player ? MathUtils.clamp(-(player.current.turnRate || 0) * .014, -.055, .055) : 0;
-      // Apply a small whole-body lean around the hips. This avoids accumulating
-      // bone rotations every frame while preserving the authored gait tracks.
-      if (pose.current) {
-        pose.current.rotation.x = reduced ? 0 : (player ? -speedRatio * .012 : demeanor.bodyPitch);
-        pose.current.rotation.z = reduced ? 0 : turnLean;
-        pose.current.rotation.y = reduced ? 0 : (!player ? Math.sin(animation.mixer.time * 1.8 + (appearance?.phase || 0)) * demeanor.hesitation : 0);
+      const turnLean = player ? MathUtils.clamp(-(player.current.visualTurnRate || player.current.turnRate || 0) * .014, -.055, .055) : 0;
+      // Apply balance only to the upper body. Rotating a parent around the
+      // hips moves both ankles in world X/Z and produces visible foot sliding.
+      if (spine && !reduced) {
+        const offset = appliedSpineOffset.current;
+        offset.x = player ? -speedRatio * .012 : demeanor.bodyPitch;
+        offset.y = !player ? Math.sin(animation.mixer.time * 1.8 + (appearance?.phase || 0)) * demeanor.hesitation : 0;
+        offset.z = player ? turnLean : 0;
+        spine.rotation.x += offset.x;
+        spine.rotation.y += offset.y;
+        spine.rotation.z += offset.z;
       }
+      // Lock only a single foot during its authored mid-stance contact. The
+      // compensation lives on the render model; player.current.position stays
+      // collision-authoritative and is never altered by presentation code.
+      if (player || footLock.lockWeight > .001) updateFootLock(footLock, animation, model, {
+        delta,
+        // Reduced-motion mode intentionally freezes authored gait. Do not
+        // retain a stale support-foot anchor while the actor is transitioning
+        // back to Idle; the lock is presentation-only and should release with
+        // the same preference as the animation itself.
+        enabled: Boolean(player && !reduced && animation.walkWeight > 0.0001),
+      });
       model.position.y = player && animation.walkWeight > 0.0001 ? soleGroundOffset(grounding, model) : 0;
-    } else if (pose.current) {
-      pose.current.rotation.set(0, 0, 0);
+    } else {
+      // Release a stale lock when the tab is suspended or the scene is
+      // backgrounded. Keep this path presentation-only as well.
+      if (player || footLock.lockWeight > .001) updateFootLock(footLock, animation, model, { delta, enabled: false });
     }
     if (!root.current) return;
-    if (player) {
-      root.current.position.fromArray(player.current.position);
-      const focus = interacting && interactionTarget?.current?.position;
-      if (focus) {
-        const face = Math.atan2(focus[0] - player.current.position[0], focus[2] - player.current.position[2]);
-        const difference = Math.atan2(Math.sin(face - root.current.rotation.y), Math.cos(face - root.current.rotation.y));
-        if (!background) root.current.rotation.y += difference * (reduced ? 1 : 1 - Math.exp(-delta * 7));
-      } else root.current.rotation.y = player.current.rotationY;
-    } else {
-      const face = talking && targetPosition ? Math.atan2(targetPosition.current.position[0] - position[0], targetPosition.current.position[2] - position[2]) : rotationY;
-      const difference = Math.atan2(Math.sin(face - root.current.rotation.y), Math.cos(face - root.current.rotation.y));
-      if (!background) root.current.rotation.y += difference * (reduced ? 1 : 1 - Math.exp(-delta * 7));
-    }
   }, -0.5);
-  return <group ref={root} position={position} rotation={[0, rotationY, 0]} scale={appearance?.stature || 1} dispose={null}><group ref={pose} position={[0, .92, 0]}><group position={[0, -.92, 0]}><primitive object={model} dispose={null} /></group></group></group>;
+  // Keep the model at the actor root. Presentation lean is applied to Spine
+  // above, so no parent transform can move both support feet sideways.
+  return <group ref={root} position={position} rotation={[0, rotationY, 0]} scale={appearance?.stature || 1} dispose={null}><primitive object={model} dispose={null} /></group>;
 }
 
 function HotspotRing({ target, nearby, selected }) {
@@ -469,16 +547,30 @@ function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = n
     }
     view.direction.subVectors(view.boom, view.smoothTarget);
     const length = view.direction.length();
+    let targetDistance = view.distance;
     if (length > 0.01 && (snap || cameraActive)) {
       view.direction.divideScalar(length);
       const clear = Math.max(0, cameraClearance(collision, view.smoothTarget, view.direction, length) - 0.03);
+      targetDistance = clear;
       // Contract immediately; recover gently without feeding the collision into orbit smoothing.
       view.distance = snap || clear < view.distance ? clear : MathUtils.lerp(view.distance, clear, 1 - Math.exp(-delta * 5));
       camera.position.copy(view.smoothTarget).addScaledVector(view.direction, Math.max(0.01, view.distance));
     }
     camera.lookAt(view.smoothTarget);
     view.initialized = true;
-    if (!live.current.suspended && !document.hidden && input.current.windowActive) invalidate();
+    // A demand canvas should schedule another frame only while something can
+    // visibly change. Keyboard/pointer handlers request the first frame;
+    // locomotion, camera easing and active dialogue keep the chain alive until
+    // they settle. An idle, unfocused scene therefore stops rendering.
+    const orbitPending = Math.abs(input.current.orbitX) > 0.001 || Math.abs(input.current.orbitY) > 0.001;
+    const cameraSettling = cameraActive && (
+      view.boom.distanceToSquared(view.desired) > 0.00001
+      || view.smoothTarget.distanceToSquared(view.target) > 0.00001
+      || Math.abs(view.distance - targetDistance) > 0.0001
+    );
+    const animationActive = !live.current.reducedMotion && Boolean(selectedNpcId || interactionNpcId);
+    if (!live.current.suspended && !document.hidden && input.current.windowActive
+      && (state.walking || orbitPending || cameraSettling || animationActive)) invalidate();
   }, -1);
 
   return <>
@@ -486,8 +578,8 @@ function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = n
     <RoomModel gltf={roomGltf} quality={quality} />
     <FootShadow position={player.current.position} player={player} />
     <FieldFeedback room={room} progress={progress} focusedId={live.current.focusTargetId} focusedType={focusTargetType} sceneName={sceneName} caseData={caseData} zoneId={zoneId} />
-    <Avatar role="detective" position={player.current.position} rotationY={player.current.rotationY} player={player} interacting={Boolean(interactionNpc)} interactionTarget={interactionTarget} locomotion={manifest.characters.detective.locomotion} live={live} input={input} quality={quality} />
-    {staged.map(npc => <group key={npc.npcId}><FootShadow position={npc.position} scale={appearances[npc.npcId].stature} /><Avatar role={npc.role} position={npc.position} rotationY={npc.rotationY} talking={npc.npcId === selectedNpcId} interacting={npc.npcId === interactionNpcId} targetPosition={player} appearance={appearances[npc.npcId]} emotion={npcEmotionLevels[npc.npcId] || 'calm'} locomotion={manifest.characters[npc.role].locomotion} live={live} input={input} quality={quality} /></group>)}
+    <Avatar role="detective" position={player.current.position} rotationY={player.current.rotationY} player={player} interacting={Boolean(interactionNpc)} interactionTarget={interactionTarget} locomotion={manifest.characters.detective.locomotion} gait={manifest.characters.detective.gait} live={live} input={input} quality={quality} />
+    {staged.map(npc => <group key={npc.npcId}><FootShadow position={npc.position} scale={appearances[npc.npcId].stature} /><Avatar role={npc.role} position={npc.position} rotationY={npc.rotationY} talking={npc.npcId === selectedNpcId} interacting={npc.npcId === interactionNpcId} targetPosition={player} appearance={appearances[npc.npcId]} emotion={npcEmotionLevels[npc.npcId] || 'calm'} locomotion={manifest.characters[npc.role].locomotion} gait={manifest.characters[npc.role].gait} live={live} input={input} quality={quality} /></group>)}
     {targets.map(target => <HotspotRing key={targetKey(target)} target={target} nearby={targetKey(target) === nearbyKey} selected={target.kind === 'npc' && target.npcId === selectedNpcId} />)}
   </>;
 }

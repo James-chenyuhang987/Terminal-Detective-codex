@@ -88,6 +88,16 @@ test('direction reversals decelerate before changing heading; reduced motion and
   close(state.rotationY, Math.PI / 2);
 });
 
+test('turn presentation lean decays after a blocked or released turn', () => {
+  const state = player();
+  for (let frame = 0; frame < 30; frame++) stepLocomotion(state, [0, -1], 1 / 60, room);
+  stepLocomotion(state, [1, -1], 1 / 60, room);
+  const turning = Math.abs(state.visualTurnRate || 0);
+  assert.ok(turning > 0);
+  stepLocomotion(state, [0, 0], 1 / 60, room);
+  assert.ok(Math.abs(state.visualTurnRate) < turning);
+});
+
 test('actual Idle/Walk crossfades stay above the floor without moving the actor root or cached geometry', async () => {
   const bytes = readFileSync(new URL('../public/assets/theater/detective.glb', import.meta.url));
   const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), '');
@@ -157,4 +167,39 @@ test('walk phase follows real distance, never resets at stops, and independent c
   updateAvatarAnimation(first, 1 / 60, { speed: WALK_SPEED, reducedMotion: true });
   close(first.actions.Walk.getEffectiveWeight(), 0);
   close(first.mixer.time, time);
+});
+
+test('walk-to-idle waits for a stable contact phase and exposes damped stop state', () => {
+  const instance = animation();
+  // Reach the settled walking blend, then release near toe-off. Phase .45 is
+  // deliberately outside the mid-stance window and should settle at .5.
+  for (let frame = 0; frame < 30; frame++) updateAvatarAnimation(instance, 1 / 60, { speed: WALK_SPEED });
+  instance.actions.Walk.time = .45;
+  const before = instance.actions.Walk.time;
+  updateAvatarAnimation(instance, 1 / 60, { speed: 0 });
+  assert.ok(instance.actions.Walk.time > before, 'stop advances only to the next planted contact');
+  assert.ok(instance.stopBlend < .1, 'Idle fade remains held while the foot is in transition');
+  assert.equal(instance.contactPhase, 'left');
+  assert.equal(instance.contact.safe, false);
+
+  let sawSafe = false;
+  let previousStopBlend = instance.stopBlend;
+  for (let frame = 0; frame < 30; frame++) {
+    updateAvatarAnimation(instance, 1 / 60, { speed: 0 });
+    if (instance.contact.safe) sawSafe = true;
+    assert.ok(instance.stopBlend + 1e-8 >= previousStopBlend, 'stop blend is monotonic after contact');
+    previousStopBlend = instance.stopBlend;
+  }
+  assert.ok(sawSafe, 'stop transition reaches a planted contact phase');
+  assert.ok(instance.stopBlend > .99);
+  assert.equal(instance.locomotionState, 'idle');
+});
+
+test('optional collision-resolved distance drives walk phase independently of requested speed', () => {
+  const instance = animation();
+  updateAvatarAnimation(instance, 1 / 60, { speed: WALK_SPEED, distance: WALK_SPEED / 120 });
+  close(instance.actions.Walk.time, 1 / 120);
+  updateAvatarAnimation(instance, 1 / 60, { speed: WALK_SPEED, distance: 0 });
+  close(instance.actions.Walk.time, 1 / 120);
+  assert.equal(instance.contactPhaseValue, instance.gaitPhase);
 });

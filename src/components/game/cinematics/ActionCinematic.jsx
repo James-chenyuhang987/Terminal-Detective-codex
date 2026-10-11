@@ -12,6 +12,7 @@ import { getCinematicActionLabel } from '@/game/actionCinematic';
 import { createAvatarAnimation, updateAvatarAnimation } from '@/game/theaterMotion.js';
 import { fieldMaterial } from '@/game/theaterMaterials.js';
 import { FootShadow } from '@/components/game/theater/FieldAtmosphere.jsx';
+import { cancelDeferredDispose, deferDispose } from '@/lib/deferredDispose.js';
 
 const AGENT_COLORS = {
   'NEXUS-01': '#709f9a',
@@ -59,11 +60,14 @@ function HoloAgent({ color, position = [0, 0, 0], scale = 1, active = false, pha
   useEffect(() => { model.traverse(node => { if (node instanceof THREE.Mesh) node.castShadow = quality === 'high'; }); }, [model, quality]);
   const animation = useMemo(() => createAvatarAnimation(new THREE.AnimationMixer(model), gltf.animations), [model, gltf.animations]);
   useFrame((_, delta) => updateAvatarAnimation(animation, delta, { talking: active && phase === 'action', reducedMotion: !motionEnabled }));
-  useEffect(() => () => {
-    animation.mixer.stopAllAction();
-    model.traverse(node => {
-      if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose();
-      if (node instanceof THREE.Mesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose());
+  useEffect(() => {
+    cancelDeferredDispose(model);
+    return () => deferDispose(model, () => {
+      animation.mixer.stopAllAction();
+      model.traverse(node => {
+        if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose();
+        if (node instanceof THREE.Mesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => material.dispose());
+      });
     });
   }, [model, animation]);
   return <group position={position} scale={scale} rotation={[0, .35, 0]} dispose={null}><FootShadow position={[0, 0, 0]} /><primitive object={model} dispose={null} /></group>;
@@ -91,11 +95,14 @@ function LocalProp({ template, accent }) {
     return copy;
   }, [accent, scene]);
 
-  useEffect(() => () => {
-    clone.traverse(child => {
-      if (!(child instanceof THREE.Mesh)) return;
-      const materials = Array.isArray(child.material) ? child.material : [child.material];
-      materials.forEach(material => material.dispose());
+  useEffect(() => {
+    cancelDeferredDispose(clone);
+    return () => deferDispose(clone, () => {
+      clone.traverse(child => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach(material => material.dispose());
+      });
     });
   }, [clone]);
 

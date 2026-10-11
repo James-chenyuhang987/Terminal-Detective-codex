@@ -22,7 +22,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
       const p = mesh.getVertexPosition(i, new Vector3()).applyMatrix4(mesh.matrixWorld);
       if (p.y > 0.001) continue;
       const bone = mesh.skeleton.bones[joints.getX(i)];
-      if (weights.getX(i) > .99 && /^Foot[LR]$/.test(bone.name)) points.push({ mesh, i, side: bone.name.slice(-1), rest: p.clone() });
+      if (weights.getX(i) > .99 && /^Foot\.?[LR]$/.test(bone.name)) points.push({ mesh, i, side: bone.name.slice(-1), rest: p.clone() });
     }
   }
   const clip = gltf.animations.find(a => a.name === 'Walk');

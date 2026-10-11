@@ -58,7 +58,7 @@ Cloudflare D1
 | 技术 | 用途 |
 | --- | --- |
 | React 18 | 游戏界面、状态交互、抽屉与调查终端。 |
-| Vite 6 | 本地开发、生产构建、懒加载和 Cloudflare 静态资源输出。 |
+| Vite 8 | 本地开发、生产构建、懒加载和 Cloudflare 静态资源输出。 |
 | Tailwind CSS + 自定义 CSS | 响应式布局、赛博朋克视觉、动效与移动端适配。 |
 | Three.js + React Three Fiber + Drei | 按需加载的调查回合 3D 情节演示。 |
 | 本地 Narrative Engine | 确定性生成双语战术思考、行动演出和提示，不请求模型。 |

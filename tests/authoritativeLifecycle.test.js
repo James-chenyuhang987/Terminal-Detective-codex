@@ -40,7 +40,7 @@ function gateway() {
   return { bindings, stored, pending };
 }
 
-test('late command from unmounted or replaced session cannot overwrite current state or clear current request lock', async () => {
+test('late command from unmounted or replaced session cannot overwrite current state and releases its request lock', async () => {
   for (const replaced of [false, true]) {
     const h = gateway();
     const request = handler('executeRunCommand', h.bindings)({ type: 'rest' });
@@ -51,7 +51,7 @@ test('late command from unmounted or replaced session cannot overwrite current s
     assert.deepEqual(h.stored.commits, []);
     assert.deepEqual(h.stored.ready, []);
     assert.deepEqual(h.stored.errors, []);
-    assert.equal(h.bindings.commandInFlightRef.current, true);
+    assert.equal(h.bindings.commandInFlightRef.current, false);
   }
 });
 

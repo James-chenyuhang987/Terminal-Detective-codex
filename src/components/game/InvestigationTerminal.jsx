@@ -79,6 +79,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     const view = { client: runClient, active: true };
     runViewRef.current = view;
     commandInFlightRef.current = false;
+    commandInFlightRef.token = null;
     return () => { view.active = false; };
   }, [runClient]);
   const { settings, setSetting } = useSettings();
@@ -236,7 +237,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     const isCurrent = () => view?.active && view.client === runClient && runViewRef.current === view;
     if (!isCurrent()) throw new DOMException('Run view changed', 'AbortError');
     if (commandInFlightRef.current) throw Object.assign(new Error('RUN_REQUEST_BUSY'), { code: 'RUN_REQUEST_BUSY' });
+    const requestToken = {};
     commandInFlightRef.current = true;
+    commandInFlightRef.token = requestToken;
     try {
       const response = await runClient.command({ lang, ...command });
       if (!isCurrent()) throw new DOMException('Run view changed', 'AbortError');
@@ -250,7 +253,14 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       }
       throw error;
     } finally {
-      if (isCurrent()) commandInFlightRef.current = false;
+      // The request may finish after abort/run replacement. The view guard
+      // still prevents stale state commits, but the single-flight latch must
+      // be released by the request that owns it. A newer run may already have
+      // acquired the latch while this stale request was finishing.
+      if (commandInFlightRef.token === requestToken) {
+        commandInFlightRef.current = false;
+        commandInFlightRef.token = null;
+      }
     }
   }, [commitServerRun, lang, runClient]);
 
@@ -534,17 +544,22 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       let chosenResponse = null;
       let chosenExecutorId = null;
       let chosenAssistId = null;
-      // ── 关键决策节点：挂起自动执行，玩家 30 秒内选择 ──────────────────
-      // 每一轮都交由架构师决策 —— 玩家始终掌握剧情走向
-      const isKeyNode = true;
+      // ── 关键决策节点：重要回合交给玩家，其余回合沿用服务器推荐卡 ────────
+      // 首回合、每三回合、高混乱、低 AP 和 NPC 对话仍然保留明确选择，
+      // 其余回合自动执行服务器已经签发的首选卡，避免调查节奏被反复打断。
+      const isKeyNode = nextTurn === 1
+        || nextTurn % 3 === 0
+        || Number(gs.confusion_score) >= 60
+        || Number(gs.action_points_left) <= 2
+        || Boolean(selectedNPC?.npc_id);
+      const optionLoad = await optionPacksPromise;
+      if (!optionLoad.ok) throw optionLoad.error;
+      if (isCancelled()) return;
+      const packs = optionLoad.value?.packs || {};
       if (isKeyNode) {
         const fallbackTag = 'search_area';
         addLine(`\n${t.keyDecisionNode}`, 'warning');
-        const optionLoad = await optionPacksPromise;
-        if (!optionLoad.ok) throw optionLoad.error;
-        const optionResult = optionLoad.value;
         if (isCancelled()) return;
-        const packs = optionResult?.packs || {};
         setDecisionStory({
           ...publicStory,
           zone: publicStory.zoneId,
@@ -585,6 +600,41 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           ...(chosenAssistId ? { assist_agent_id: chosenAssistId } : {}),
           command_ids: choice.commandIds || [], lang: runLang,
         });
+      } else {
+        // The authority grants the per-turn recovery before validating a
+        // round. Mirror DecisionCards/server semantics here so an agent at
+        // 6–9 stamina can still take the automatic route after +4 recovery.
+        const eligibleAutomaticAgents = (roundAgentStrategy?.team || [])
+          .filter(agent => canAgentInvestigate(agent.stamina, true));
+        if (!eligibleAutomaticAgents.length) {
+          await executeRunCommand({ type: 'rest', lang: runLang });
+          addLine(runLang === 'zh'
+            ? '\n↻ 探员体力不足，自动整备后继续调查'
+            : '\n↻ AGENTS NEED RECOVERY; THE TEAM RESTS BEFORE CONTINUING', 'success');
+          return;
+        }
+        // The team strategy exposes the configured primary agent as
+        // `primary_agent_id`; `executing_agent_id` only exists on the
+        // server's per-round settlement. Using the latter here always fell
+        // through to the first eligible agent, silently ignoring the
+        // player's selected primary when auto-routing ordinary turns.
+        const preferredAgentId = eligibleAutomaticAgents.find(agent =>
+          agent.agent_id === roundAgentStrategy?.primary_agent_id)?.agent_id
+          || eligibleAutomaticAgents[0]?.agent_id
+          || Object.keys(packs)[0];
+        const preferredPack = packs[preferredAgentId]
+          || eligibleAutomaticAgents.map(agent => packs[agent.agent_id]).find(pack => pack?.cards?.length);
+        const automaticCard = preferredPack?.cards?.[0];
+        if (!automaticCard) throw new Error('No server-issued investigation option is available.');
+        actionTag = automaticCard.actionTag || automaticCard.action_tag || 'search_area';
+        chosenExecutorId = preferredAgentId || null;
+        addLine(runLang === 'zh'
+          ? `\n◇ 自动沿用稳健调查路径：${automaticCard.label || actionTag}`
+          : `\n◇ AUTO-ROUTED THROUGH THE STEADY PATH: ${automaticCard.label || actionTag}`, 'action');
+        chosenResponse = await executeRunCommand({
+          type: 'round', option_id: automaticCard.option_id || automaticCard.optionId || automaticCard.id,
+          lang: runLang,
+        });
       }
       if (!chosenResponse || isCancelled()) return;
       const newState = chosenResponse.run.state;
@@ -621,7 +671,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
 
       // ── Update flow map from the validated game-state location ─────────
       if (newState.current_zone) {
-        setAgentPath(prev => [...prev, newState.current_zone]);
+        setAgentPath(prev => prev.at(-1) === newState.current_zone ? prev : [...prev, newState.current_zone]);
         if (settlement.action_narration) {
           const shortFeedback = settlement.action_narration.replace(/[^\u0000-\u007E\u4e00-\u9fa5]/g, '').slice(0, 28);
           setZoneFeedback(prev => ({ ...prev, [newState.current_zone]: shortFeedback }));

@@ -84,12 +84,30 @@ export function panelSkin(light, accent = '#00e5ff') {
 }
 
 // ── 简易音效（无资源依赖，WebAudio 合成） ────────────────────────────────
+let sfxContext = null;
+let sfxContextCtor = null;
+
+function getSfxContext() {
+  const Ctx = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
+  if (!Ctx) return null;
+  if (!sfxContext || sfxContextCtor !== Ctx || sfxContext.state === 'closed') {
+    sfxContext = new Ctx();
+    sfxContextCtor = Ctx;
+  }
+  if (sfxContext.state === 'suspended') {
+    // Browsers may reject resume() when a sound is triggered outside a user
+    // activation (for example, a queued presentation effect). Absorb that
+    // expected rejection so it cannot become an unhandled promise event.
+    void Promise.resolve(sfxContext.resume?.()).catch(() => {});
+  }
+  return sfxContext;
+}
+
 export function playSfx(enabled, kind = 'click') {
   if (!enabled) return;
   try {
-    const Ctx = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
+    const ctx = getSfxContext();
+    if (!ctx) return;
     const freqs = kind === 'success' ? [660, 880] : kind === 'error' ? [220, 165] : [520];
     freqs.forEach((f, i) => {
       const osc = ctx.createOscillator();
@@ -103,6 +121,5 @@ export function playSfx(enabled, kind = 'click') {
       osc.start(ctx.currentTime + i * 0.08);
       osc.stop(ctx.currentTime + 0.3 + i * 0.08);
     });
-    setTimeout(() => ctx.close(), 700);
   } catch { /* ignore */ }
 }

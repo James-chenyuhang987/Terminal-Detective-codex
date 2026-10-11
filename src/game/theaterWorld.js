@@ -159,7 +159,17 @@ export function validateTheaterManifest(input) {
       speed: positive(source.locomotion?.speed, `${key}.locomotion.speed`, 3),
       duration: positive(source.locomotion?.duration, `${key}.locomotion.duration`, 4),
     };
-    characters[key] = { file, height: positive(source.height, `${key}.height`, 3), bounds: dimensions(source.bounds, `${key}.bounds`), animations: ['Idle', 'Walk', 'Talk'], locomotion };
+    const gaitSource = source.gait || {};
+    const gait = {
+      stance: Number.isFinite(gaitSource.stance) ? gaitSource.stance : .56,
+      heelEnd: Number.isFinite(gaitSource.heelEnd) ? gaitSource.heelEnd : .10,
+      toeStart: Number.isFinite(gaitSource.toeStart) ? gaitSource.toeStart : .40,
+      swingLift: Number.isFinite(gaitSource.swingLift) ? gaitSource.swingLift : .068,
+    };
+    check(gait.stance > 0 && gait.stance < 1, `${key}.gait.stance must be between 0 and 1`);
+    check(gait.heelEnd >= 0 && gait.heelEnd < gait.toeStart && gait.toeStart < gait.stance, `${key}.gait heel/toe phases must be ordered before stance end`);
+    check(gait.swingLift >= 0 && gait.swingLift <= .3, `${key}.gait.swingLift must be a plausible meter value`);
+    characters[key] = { file, height: positive(source.height, `${key}.height`, 3), bounds: dimensions(source.bounds, `${key}.bounds`), animations: ['Idle', 'Walk', 'Talk'], locomotion, gait };
   }
   return { version: 1, units: 'meters', upAxis: 'Y', forwardAxis: '+Z', spawn: defaultSpawn, scenes, characters };
 }

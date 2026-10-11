@@ -85,6 +85,14 @@ test('malformed or unsafe manifest geometry produces explanatory asset errors', 
   for (const invalid of [null, {}, [], 'bad']) assert.throws(() => validateTheaterManifest(invalid), /Theater asset manifest:/);
 });
 
+test('manifest gait metadata is validated and defaults safely for older assets', () => {
+  const source = manifest();
+  const validated = validateTheaterManifest(source);
+  assert.deepEqual(validated.characters.detective.gait, { stance: .56, heelEnd: .10, toeStart: .40, swingLift: .068 });
+  source.characters.detective.gait = { stance: .5, heelEnd: .2, toeStart: .1, swingLift: .068 };
+  assert.throws(() => validateTheaterManifest(source), /gait heel\/toe phases/);
+});
+
 test('camera-relative WASD is normalized, cancels opposites and follows the orbit yaw', () => {
   assert.deepEqual(cameraRelativeMovement({ forward: true }), [0, -1]);
   const orbit = cameraRelativeMovement({ forward: true }, Math.PI / 2);
@@ -269,7 +277,9 @@ test('renderer uses local GLBs, skinned clones, animations and intent-only focus
   assert.match(source, /dispose=\{null\}/);
   assert.match(source, /webglcontextlost/);
   assert.match(source, /const background = live.current.suspended \|\|/);
-  assert.match(source, /if \(!live.current.suspended && !document.hidden && input.current.windowActive\) invalidate\(\)/);
+  assert.match(source, /const cameraSettling = cameraActive/);
+  assert.match(source, /state.walking \|\| orbitPending \|\| cameraSettling \|\| animationActive/);
+  assert.doesNotMatch(source, /if \(!live.current.suspended && !document.hidden && input.current.windowActive\) invalidate\(\)/);
   assert.match(source, /useEffect\(\(\) => \{ if \(!suspended\) invalidate\(\); \}, \[suspended, invalidate\]\)/);
   assert.match(source, /visibilitychange/);
   assert.match(source, /isViewportKeyTarget/);

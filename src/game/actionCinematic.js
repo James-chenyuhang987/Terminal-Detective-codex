@@ -81,6 +81,29 @@ const OUTCOME_ACCENTS = Object.freeze({
   no_yield: '#f2b84b',
 });
 
+// WebGL capability is a browser-session property. Reusing the probe avoids
+// creating and destroying a context every time an action cinematic starts.
+const cinematicWebglCache = new WeakMap();
+
+function hasCinematicWebgl(win) {
+  // `windowObject` is injectable for tests and embedded callers. A malformed
+  // primitive must degrade to the 2D path instead of throwing from WeakMap.
+  if ((typeof win !== 'object' && typeof win !== 'function') || win === null) return false;
+  if (cinematicWebglCache.has(win)) return cinematicWebglCache.get(win);
+  let supported = false;
+  try {
+    const canvas = win.document?.createElement?.('canvas');
+    const context = canvas?.getContext?.('webgl2', { failIfMajorPerformanceCaveat: true })
+      || canvas?.getContext?.('webgl', { failIfMajorPerformanceCaveat: true });
+    supported = Boolean(context);
+    context?.getExtension?.('WEBGL_lose_context')?.loseContext?.();
+  } catch {
+    supported = false;
+  }
+  cinematicWebglCache.set(win, supported);
+  return supported;
+}
+
 export const CINEMATIC_OUTCOME_EFFECTS = Object.freeze({
   trap: 'hazard-collapse',
   clue: 'evidence-lock',
@@ -251,15 +274,7 @@ export function detectCinematicPlayback({
     return { mode: '2d', quality: 'low', reason: 'reduced_motion' };
   }
 
-  try {
-    const canvas = win.document?.createElement?.('canvas');
-    const context = canvas?.getContext?.('webgl2', { failIfMajorPerformanceCaveat: true })
-      || canvas?.getContext?.('webgl', { failIfMajorPerformanceCaveat: true });
-    if (!context) return { mode: '2d', quality: 'low', reason: 'no_webgl' };
-    context.getExtension?.('WEBGL_lose_context')?.loseContext?.();
-  } catch {
-    return { mode: '2d', quality: 'low', reason: 'webgl_error' };
-  }
+  if (!hasCinematicWebgl(win)) return { mode: '2d', quality: 'low', reason: 'no_webgl' };
 
   const deviceMemory = Number(/** @type {any} */ (nav)?.deviceMemory);
   const lowMemory = deviceMemory > 0 && deviceMemory <= 4;
