@@ -87,6 +87,11 @@ for (const [name, character] of Object.entries(manifest.characters)) {
     assert.ok(character.height > 1.68 && character.height < 1.9);
     assert.equal(character.forward, '+Z');
     assert.deepEqual(character.locomotion, { speed: 1.4, duration: 1 });
+    assert.ok(character.gait && Number.isFinite(character.gait.stance), `${name}: gait metadata is required`);
+    for (const key of ['heelEnd', 'toeStart', 'swingLift', 'pelvisRise']) {
+      assert.ok(Number.isFinite(character.gait[key]), `${name}: gait.${key} metadata is required`);
+    }
+    assert.ok(character.gait.pelvisRise >= .035 && character.gait.pelvisRise <= .045, `${name}: gait.pelvisRise should describe the authored 4cm support lift`);
     for (const node of document.nodes.filter((item) => item.skin !== undefined)) {
       const skin = document.skins[node.skin];
       assert.ok(skin.joints.length >= 15);
@@ -259,11 +264,26 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         const outgoing = nearStart[i].clone().sub(start[i]).divideScalar(h);
         return incoming.distanceTo(outgoing) < 0.25;
       }), `${name}/${clip.name}: no velocity cusp at loop seam`);
+      const hasSupportRise = clip.name === 'Walk';
+      const supportExtensions = { L: [], R: [] };
+      const swingExtensions = { L: [], R: [] };
       for (let frame = 0; frame <= 120; frame += 1) {
         sample(clip.duration * frame / 120);
         const bounds = new Box3().setFromObject(model, true);
         assert.ok(bounds.min.y >= -0.002 && bounds.max.y < 1.9, `${name}/${clip.name}: tight deformed ground bounds`);
         assert.ok(bounds.min.x > -1 && bounds.max.x < 1 && Number.isFinite(bounds.max.z));
+        if (hasSupportRise) {
+          for (const side of ['L', 'R']) {
+            const [hip, knee, ankle] = ['Thigh', 'Shin', 'Foot'].map(joint => getLimbBone(model, joint, side).getWorldPosition(new Vector3()));
+            const extension = hip.distanceTo(ankle) / (hip.distanceTo(knee) + knee.distanceTo(ankle));
+            const phase = (frame / 120 + (side === 'R' ? .5 : 0)) % 1;
+            // Check the loaded support middle, where the authored pelvis rise
+            // is expected to straighten the weight-bearing leg. Heel strike
+            // and toe-off intentionally retain a small natural bend.
+            if (phase >= asset.gait.heelEnd + .10 && phase <= asset.gait.toeStart - .05) supportExtensions[side].push(extension);
+            if (phase >= asset.gait.stance + .16 && phase <= asset.gait.stance + .28) swingExtensions[side].push(extension);
+          }
+        }
         if (clip.name !== 'Walk') {
           for (const side of ['L', 'R']) {
             const [hip, knee, ankle] = ['Thigh', 'Shin', 'Foot'].map(joint => getLimbBone(model, joint, side).getWorldPosition(new Vector3()));
@@ -271,6 +291,12 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
             assert.ok(extension > .975 && extension < .999, `${name}/${clip.name}: relaxed standing knees, without crouching or locking`);
             assert.ok(soles[side].every(point => Math.abs(posedVertex(point).y) < .002), `${name}/${clip.name}: both standing soles stay planted`);
           }
+        }
+      }
+      if (hasSupportRise) {
+        for (const side of ['L', 'R']) {
+          assert.ok(Math.min(...supportExtensions[side]) >= .94 && Math.max(...supportExtensions[side]) <= .96, `${name}/${side}: Walk support knee extension should stay near .94-.96`);
+          assert.ok(Math.min(...swingExtensions[side]) >= .82 && Math.max(...swingExtensions[side]) <= .88, `${name}/${side}: Walk swing knee should retain a natural .82-.88 bend`);
         }
       }
       if (clip.name !== 'Walk') continue;
@@ -284,6 +310,26 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
           const incoming = values[1].clone().sub(values[0]).divideScalar(h);
           const outgoing = values[2].clone().sub(values[1]).divideScalar(h);
           assert.ok(incoming.distanceTo(outgoing) < 0.12, 'Touchdown/lift-off has no sharp foot-velocity cusp');
+        }
+      }
+      // The animation is authored at 120fps. Probe the keys around toe-off
+      // themselves: checking only phase=.56 can land between the .558/.567
+      // keys and miss a discontinuous swing-foot lift.
+      const authoredFrames = 120;
+      const toeOffFrame = Math.round(asset.gait.stance * authoredFrames);
+      const keyH = 1 / 2400;
+      for (const side of ['L', 'R']) {
+        const offset = side === 'R' ? .5 : 0;
+        for (let frame = toeOffFrame - 2; frame <= toeOffFrame + 3; frame += 1) {
+          const key = (frame / authoredFrames + offset) % 1;
+          const values = [-keyH, 0, keyH].map((delta) => {
+            sample((key + delta + clip.duration) % clip.duration);
+            return posedVertex(soles[side][0]);
+          });
+          const incoming = values[1].clone().sub(values[0]).divideScalar(keyH);
+          const outgoing = values[2].clone().sub(values[1]).divideScalar(keyH);
+          assert.ok(incoming.length() < 3 && outgoing.length() < 3, `${name}/${side}: toe-off key ${frame} has an excessive foot velocity`);
+          assert.ok(incoming.distanceTo(outgoing) < .25, `${name}/${side}: toe-off key ${frame} has a foot velocity cusp`);
         }
       }
       const anchors = new Map();

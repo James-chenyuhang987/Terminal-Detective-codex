@@ -8,7 +8,7 @@ import { useLang } from '@/lib/lang.jsx';
 import {
   CHARACTER_FILES, MAX_FRAME_DELTA, SCENE_FILES, cameraRelativeMovement, interactionIntent,
   interactionTargets, isViewportKeyTarget, nearestTarget, restoreSpatial,
-  sceneForZone, stageNpcs, targetKey, validateTheaterManifest, withNpcColliders,
+  sceneForZone, stageNpcs, targetKey, validateTheaterManifest, withNpcColliders, SPRINT_SPEED,
 } from '@/game/theaterWorld.js';
 import { createAvatarAnimation, createFootLock, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation, updateFootLock } from '@/game/theaterMotion.js';
 import { buildCameraCollision, cameraClearance } from '@/game/theaterCamera.js';
@@ -18,7 +18,7 @@ import { cancelDeferredDispose, deferDispose } from '@/lib/deferredDispose.js';
 import { FieldFeedback, FieldLighting, FootShadow } from './FieldAtmosphere.jsx';
 
 const ASSET_ROOT = `${import.meta.env.BASE_URL}assets/theater/`;
-const EMPTY_CONTROLS = { forward: false, backward: false, left: false, right: false };
+const EMPTY_CONTROLS = { forward: false, backward: false, left: false, right: false, sprint: false };
 const KEY_DIRECTIONS = { KeyW: 'forward', ArrowUp: 'forward', KeyS: 'backward', ArrowDown: 'backward', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
 const QUALITY = { low: { dpr: 1, shadows: false, shadowSize: 512, antialias: false }, auto: { dpr: 1.35, shadows: true, shadowSize: 512, antialias: true }, high: { dpr: 1.75, shadows: true, shadowSize: 1024, antialias: true } };
 
@@ -152,7 +152,8 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
     const keydown = event => {
       if (live.current.paused || live.current.suspended || document.hidden || !document.hasFocus() || !isViewportKeyTarget(event.target, viewport) || event.altKey || event.ctrlKey || event.metaKey) return;
       const direction = KEY_DIRECTIONS[event.code];
-      if (!direction && event.code !== 'KeyE') return;
+      const sprint = event.code === 'KeyR';
+      if (!direction && !sprint && event.code !== 'KeyE') return;
       if (!input.current.windowActive || !input.current.focused) {
         if (event.repeat || !activate()) return;
         input.current.focused = true;
@@ -161,12 +162,24 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
         event.preventDefault();
         if (!event.repeat) { pressed.add(event.code); input.current.keys[direction] = true; }
         input.current.invalidate?.();
+      } else if (sprint) {
+        event.preventDefault();
+        // R is a hold action. Repeated keydown events must not toggle it or
+        // change its state after the initial press.
+        if (!event.repeat) input.current.keys.sprint = true;
+        input.current.invalidate?.();
       } else if (event.code === 'KeyE') {
         event.preventDefault(); if (!event.repeat) interact();
       }
     };
     const keyup = event => {
       const direction = KEY_DIRECTIONS[event.code];
+      if (event.code === 'KeyR') {
+        input.current.keys.sprint = false;
+        input.current.invalidate?.();
+        if (isViewportKeyTarget(event.target, viewport)) event.preventDefault();
+        return;
+      }
       if (!direction) return;
       pressed.delete(event.code);
       input.current.keys[direction] = [...pressed].some(code => KEY_DIRECTIONS[code] === direction);
@@ -512,7 +525,13 @@ function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = n
       if (controlsRef.current) controlsRef.current.orbitDelta = null;
       for (const key in EMPTY_CONTROLS) intent.controls[key] = touch[key] || (input.current.focused && input.current.keys[key]);
       const movement = cameraRelativeMovement(intent.controls, orbit.current.yaw, intent.direction);
-      stepLocomotion(state, movement, delta, movementRoom, { reducedMotion: live.current.reducedMotion, speed: manifest.characters.detective.locomotion.speed });
+      const walkingSpeed = manifest.characters.detective.locomotion.speed;
+      const sprinting = Boolean(intent.controls.sprint && Math.hypot(movement[0], movement[1]) > 0);
+      stepLocomotion(state, movement, delta, movementRoom, {
+        reducedMotion: live.current.reducedMotion,
+        speed: sprinting ? SPRINT_SPEED : walkingSpeed,
+        sprinting,
+      });
     } else stopLocomotion(state);
     const target = nearestTarget(state.position, targets);
     const key = targetKey(target);
@@ -611,7 +630,7 @@ export default function TheaterScene({ caseData, zoneId, selectedNpcId, interact
   useExplorationFocus(viewport, readyRoom === roomKey && !paused && !suspended);
 
   // Fiber always mounts native canvas fallback content, including on working WebGL devices.
-  return <div ref={viewport} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：WASD 或方向键移动，拖动视角，E 交互；关闭面板后可直接继续移动' : '3D detective scene: WASD or arrows to move, drag to orbit, E to interact; movement is ready after closing panels'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>
+  return <div ref={viewport} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：WASD 或方向键移动，按住 R 疾跑，拖动视角，E 交互；关闭面板后可直接继续移动' : '3D detective scene: WASD or arrows to move, hold R to sprint, drag to orbit, E to interact; movement is ready after closing panels'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>
     {manifest && <Canvas frameloop="demand" dpr={[1, settings.dpr]} shadows={settings.shadows} gl={{ antialias: settings.antialias, alpha: false, powerPreference: 'low-power' }} camera={{ position: [0, 3.2, 6], fov: 52, near: 0.06, far: 70 }} aria-label={zh ? '以第三人称探索案件现场' : 'Explore the case scene in third person'} fallback={<p>{zh ? '此设备无法显示 3D 场景，请切换文字模式继续调查。' : 'This device cannot display the 3D scene. Continue your investigation in text mode.'}</p>}>
       <RendererLifecycle live={live} input={input} suspended={suspended} />
       <TheaterAssetErrorBoundary assetUrls={assetUrls} clear={useGLTF.clear} onFailure={onFailure}>

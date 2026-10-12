@@ -265,6 +265,37 @@ test('viewport keyboard focus resumes fresh presses only, and button typing is n
   h.cleanup();
 });
 
+test('R is a held viewport sprint key with fresh presses, modifier guards, and release cleanup', () => {
+  const h = harness();
+  h.viewport.focus();
+
+  const press = h.event({ code: 'KeyR', target: h.viewport });
+  h.viewport.dispatch('keydown', press);
+  assert.equal(press.prevented, true);
+  assert.equal(h.input.current.keys.sprint, true);
+
+  // Browser repeat events keep the hold state; they never toggle it.
+  h.viewport.dispatch('keydown', h.event({ code: 'KeyR', repeat: true, target: h.viewport }));
+  assert.equal(h.input.current.keys.sprint, true);
+  h.viewport.dispatch('keyup', h.event({ code: 'KeyR', target: h.viewport }));
+  assert.equal(h.input.current.keys.sprint, false);
+
+  // Modifier chords and controls outside the viewport never claim sprint.
+  for (const modifier of ['altKey', 'ctrlKey', 'metaKey']) {
+    h.viewport.dispatch('keydown', h.event({ code: 'KeyR', [modifier]: true, target: h.viewport }));
+    assert.equal(h.input.current.keys.sprint, false, `${modifier} must keep R outside the viewport control`);
+  }
+  h.viewport.dispatch('keydown', h.event({ code: 'KeyR', target: { tagName: 'BUTTON' } }));
+  assert.equal(h.input.current.keys.sprint, false);
+
+  h.viewport.dispatch('keydown', h.event({ code: 'KeyR', target: h.viewport }));
+  assert.equal(h.input.current.keys.sprint, true);
+  h.hideAndReturn();
+  assert.equal(h.input.current.keys.sprint, false);
+  assert.equal(h.controlsRef.current.sprint, false);
+  h.cleanup();
+});
+
 test('multi-direction touch and every release path work without clearing the activation bridge on pause', () => {
   const h = harness();
   h.hideAndReturn();

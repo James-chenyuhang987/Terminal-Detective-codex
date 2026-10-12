@@ -43,6 +43,11 @@ HIP_Y = .96
 KNEE_Y = .55
 KNEE_FORWARD = .16
 WALK_HIP_DROP = .034
+# The pelvis rises over the weight-bearing portion of each step. A 4 cm
+# mid-stance lift straightens the supporting leg through the IK solve while
+# preserving the bend in the recovering (swing) leg.
+WALK_HIP_RISE = .040
+WALK_SWING_CLEARANCE = .088
 
 
 def material(name, color, metallic=0.0, rough=0.75, glow=0.0):
@@ -920,8 +925,54 @@ def foot_pitch(phase):
     return .16 * smoothstep((u-.5)*2)
 
 
+def stance_support_rise(phase, amplitude=WALK_HIP_RISE):
+    """Return a smooth pelvis lift from the two alternating support legs."""
+    def bump(cycle):
+        # Hold the lift through the middle support window, then settle before
+        # toe-off so the authored IK reach remains available for the next step.
+        rise_start = .10
+        rise_end = .20
+        plateau_end = .35
+        support_end = .42
+        if cycle <= rise_start:
+            return 0.0
+        if cycle <= rise_end:
+            return smoothstep((cycle - rise_start) / (rise_end - rise_start))
+        if cycle <= plateau_end:
+            return 1.0
+        if cycle > support_end:
+            return 0.0
+        return smoothstep((support_end - cycle) / (support_end - plateau_end))
+
+    left = bump(phase % 1.0)
+    right = bump((phase + .5) % 1.0)
+    # An even-power norm is a smooth maximum that remains exactly zero when
+    # both support curves are zero, avoiding a seam step at phase 0/1.
+    return amplitude * (left**6 + right**6) ** (1/6)
+
+
+def smooth_lift_cap(value, cap=WALK_SWING_CLEARANCE, softness=.0015):
+    """Limit swing clearance without introducing a velocity cusp."""
+    if value <= 0:
+        return 0.0
+    scaled = (value - cap) / softness
+    if scaled > 40:
+        return cap
+    if scaled < -40:
+        return value
+    return value - softness * math.log1p(math.exp(scaled))
+
+
 def solve_leg(rig, side, suffix, phase):
     z, lift = walk_target(phase)
+    if phase > STANCE:
+        global_phase = phase if suffix == 'L' else (phase - .5) % 1.0
+        lift = smooth_lift_cap(lift + stance_support_rise(global_phase))
+        # Keep the recovering foot closer to the body while the pelvis rises,
+        # retaining knee flexion without lifting the boot unnaturally high.
+        # This envelope and its first two derivatives vanish at both contacts.
+        u = (phase - STANCE) / (1 - STANCE)
+        z *= 1 - .12 * 64 * (u * (1 - u))**3
     pitch = foot_pitch(phase)
     roll = Matrix.Rotation(-pitch, 4, 'X')
     edge = -.0695 if pitch >= 0 else .1835
@@ -972,7 +1023,10 @@ def make_animations(rig):
             if clip == 'Walk':
                 # Weight transfers toward the planted leg; the chest counters the pelvis.
                 p['Hips'].location.x = -.021*math.sin(phase)
-                p['Hips'].location.y = -WALK_HIP_DROP-.011*math.cos(phase*2)
+                p['Hips'].location.y = (
+                    -WALK_HIP_DROP-.011*math.cos(phase*2)
+                    + stance_support_rise(frame/end)
+                )
                 p['Hips'].rotation_euler.y = .055*math.sin(phase)
                 p['Hips'].rotation_euler.z = .022*math.sin(phase+.35)
                 bpy.context.view_layer.update()
@@ -1183,9 +1237,9 @@ for name in ['detective','witness','security','scientist']:
     print('BUILD CHARACTER',name,flush=True)
     characters[name]=make_character(name)
     manifest['characters'][name]={'file':name+'.glb','animations':['Idle','Walk','Talk'],
-        'animationNotes':'120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.',
+        'animationNotes':'120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.',
         'locomotion':{'speed':WALK_SPEED,'duration':WALK_DURATION},
-        'gait':{'stance':STANCE,'heelEnd':.10,'toeStart':.40,'swingLift':.068},
+        'gait':{'stance':STANCE,'heelEnd':.10,'toeStart':.40,'swingLift':.068,'pelvisRise':WALK_HIP_RISE},
         'forward':'+Z','feetY':0}
 # Read actual exported data instead of estimating renderer budgets.
 sys.path.insert(0,str(Path(__file__).parent))

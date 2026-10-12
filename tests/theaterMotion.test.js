@@ -5,7 +5,7 @@ import { AnimationClip, AnimationMixer, Box3, Group, NumberKeyframeTrack } from 
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { createAvatarAnimation, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation } from '../src/game/theaterMotion.js';
-import { WALK_SPEED, isWalkable } from '../src/game/theaterWorld.js';
+import { SPRINT_SPEED, WALK_SPEED, isWalkable } from '../src/game/theaterWorld.js';
 
 const room = { bounds: { min: [-6, 0, -5], max: [6, 4, 5] }, spawn: [0, 0, 3], colliders: [] };
 const player = () => ({ position: [0, 0, 3], rotationY: Math.PI });
@@ -24,6 +24,22 @@ test('accelerated walking integrates consistently at 30/60/144 Hz and never exce
   }
   close(distances[0], distances[1]); close(distances[0], distances[2]);
   close(distances[0], WALK_SPEED * (2 - (1 - Math.exp(-24)) / 12));
+});
+
+test('sprinting integrates consistently at 30/60/144 Hz and stays within 2.4 m/s', () => {
+  const distances = [];
+  for (const hz of [30, 60, 144]) {
+    const state = player();
+    for (let frame = 0; frame < hz * 2; frame++) {
+      stepLocomotion(state, [0, -1], 1 / hz, room, { speed: SPRINT_SPEED, sprinting: true });
+      assert.ok(state.speed <= SPRINT_SPEED + 1e-8);
+      if (frame === 0) assert.ok(state.speed < SPRINT_SPEED * 0.2);
+      assert.equal(state.sprinting, true);
+    }
+    distances.push(3 - state.position[2]);
+  }
+  close(distances[0], distances[1]); close(distances[0], distances[2]);
+  close(distances[0], SPRINT_SPEED * (2 - (1 - Math.exp(-24)) / 12));
 });
 
 test('interaction Talk clips start at a clear beat and pause when the conversation ends', () => {
@@ -57,6 +73,24 @@ test('released/cancelled input, pause and suspend stop immediately with no stale
   }
 });
 
+test('releasing sprint clears the sprint state and does not leave a release impulse', () => {
+  const state = player();
+  for (let frame = 0; frame < 60; frame++) {
+    stepLocomotion(state, [0, -1], 1 / 60, room, { speed: SPRINT_SPEED, sprinting: true });
+  }
+  assert.equal(state.sprinting, true);
+  const position = [...state.position];
+  stepLocomotion(state, [0, -1], 1 / 60, room, { speed: WALK_SPEED, sprinting: false });
+  assert.equal(state.sprinting, false);
+  assert.ok(state.speed <= WALK_SPEED + 1e-8);
+  assert.ok(Math.hypot(state.velocityX, state.velocityZ) <= WALK_SPEED + 1e-8);
+  assert.ok(state.position[2] < position[2]);
+  stepLocomotion(state, [0, 0], 1 / 60, room, { speed: SPRINT_SPEED, sprinting: true });
+  assert.equal(state.sprinting, false);
+  assert.equal(state.speed, 0);
+  assert.equal(state.distance, 0);
+});
+
 test('blocked motion stops the gait without vibration and sliding uses actual distance/heading', () => {
   const wallRoom = { ...room, colliders: [{ min: [-4, 0], max: [4, 0.05] }] };
   const state = player();
@@ -73,6 +107,23 @@ test('blocked motion stops the gait without vibration and sliding uses actual di
   assert.ok(state.position[0] > 0.3); close(state.position[2], stopped[2], 0.0001);
   close(state.rotationY, Math.PI / 2, 0.005);
   assert.ok(state.speed < WALK_SPEED * 0.72);
+});
+
+test('blocked sprinting cannot accumulate a release lurch', () => {
+  const wallRoom = { ...room, colliders: [{ min: [-4, 0], max: [4, 0.05] }] };
+  const state = player();
+  for (let frame = 0; frame < 240; frame++) {
+    stepLocomotion(state, [0, -1], 1 / 60, wallRoom, { speed: SPRINT_SPEED, sprinting: true });
+  }
+  const stopped = [...state.position];
+  assert.equal(state.sprinting, false);
+  assert.equal(state.speed, 0);
+  for (let frame = 0; frame < 120; frame++) {
+    stepLocomotion(state, [0, -1], 1 / 60, wallRoom, { speed: SPRINT_SPEED, sprinting: false });
+    assert.deepEqual(state.position, stopped);
+    assert.equal(state.sprinting, false);
+    assert.equal(state.speed, 0);
+  }
 });
 
 test('direction reversals decelerate before changing heading; reduced motion and frame spikes are safe', () => {

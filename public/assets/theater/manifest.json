@@ -1362,7 +1362,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1371,7 +1371,8 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068
+        "swingLift": 0.068,
+        "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,
@@ -1400,7 +1401,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1409,7 +1410,8 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068
+        "swingLift": 0.068,
+        "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,
@@ -1438,7 +1440,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1447,7 +1449,8 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068
+        "swingLift": 0.068,
+        "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,
@@ -1476,7 +1479,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1485,7 +1488,8 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068
+        "swingLift": 0.068,
+        "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,

@@ -205,6 +205,7 @@ export function stopLocomotion(state, decayDelta = 0) {
   state.speed = 0;
   state.distance = 0;
   state.walking = false;
+  state.sprinting = false;
   state.turnRate = 0;
   state.visualTurnRate = decayDelta > 0
     ? (state.visualTurnRate || 0) * Math.exp(-decayDelta * 12)
@@ -212,14 +213,30 @@ export function stopLocomotion(state, decayDelta = 0) {
 }
 
 /** Presentation-only velocity; actual collision-resolved distance drives the gait. */
-export function stepLocomotion(state, direction, rawDelta, room, { allowed = true, reducedMotion = false, speed = WALK_SPEED } = {}) {
+export function stepLocomotion(state, direction, rawDelta, room, {
+  allowed = true,
+  reducedMotion = false,
+  speed = WALK_SPEED,
+  sprinting = false,
+} = {}) {
   const delta = Number.isFinite(rawDelta) ? Math.max(0, Math.min(rawDelta, MAX_FRAME_DELTA)) : 0;
   const magnitude = Math.hypot(direction[0], direction[1]);
   if (!allowed || !delta || !magnitude) { stopLocomotion(state, delta); return state; }
   const targetX = direction[0] / magnitude * speed;
   const targetZ = direction[1] / magnitude * speed;
-  const oldX = state.velocityX || 0;
-  const oldZ = state.velocityZ || 0;
+  let oldX = state.velocityX || 0;
+  let oldZ = state.velocityZ || 0;
+  // A sprint release changes the requested speed immediately. Limit the
+  // carried velocity before integrating the new target so a fast stride
+  // cannot leak into the next walk frame or a direction change.
+  const oldMagnitude = Math.hypot(oldX, oldZ);
+  if (oldMagnitude > speed && oldMagnitude > 0) {
+    const scale = speed / oldMagnitude;
+    oldX *= scale;
+    oldZ *= scale;
+    state.velocityX = oldX;
+    state.velocityZ = oldZ;
+  }
   const decay = reducedMotion ? 0 : Math.exp(-12 * delta);
   state.velocityX = targetX + (oldX - targetX) * decay;
   state.velocityZ = targetZ + (oldZ - targetZ) * decay;
@@ -237,6 +254,10 @@ export function stepLocomotion(state, direction, rawDelta, room, { allowed = tru
   state.distance = Math.hypot(dx, dz);
   state.speed = state.distance / delta;
   state.walking = state.speed > 0.015;
+  // Sprint is a presentation state derived from actual, collision-resolved
+  // movement. A held sprint key without a direction, or a blocked actor,
+  // therefore cannot leave a stale sprint gait behind.
+  state.sprinting = Boolean(sprinting && state.walking);
   if (state.walking) {
     state.nextPosition = state.position;
     state.position = next;

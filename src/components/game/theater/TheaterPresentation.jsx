@@ -52,7 +52,7 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
   const [interactionNpcId, setInteractionNpcId] = useState(null);
   const { reducedMotion } = usePresentationMotion();
   const moreRef = useRef(null);
-  const controlsRef = useRef({ forward: false, backward: false, left: false, right: false, activate: /** @type {(() => boolean) | null} */ (null) });
+  const controlsRef = useRef({ forward: false, backward: false, left: false, right: false, sprint: false, activate: /** @type {(() => boolean) | null} */ (null) });
   const zoneId = gameState.current_zone;
   const ready = readyZone === zoneId;
   const location = caseData.scene?.zones?.[zoneId]?.label || caseData.zone_layout?.[zoneId]?.label || zoneId;
@@ -65,7 +65,7 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
     return true;
   };
   useEffect(() => {
-    if (movementPaused) ['forward', 'backward', 'left', 'right'].forEach(key => { controlsRef.current[key] = false; });
+    if (movementPaused) ['forward', 'backward', 'left', 'right', 'sprint'].forEach(key => { controlsRef.current[key] = false; });
   }, [movementPaused]);
   useEffect(() => { setNearby(null); setFocusTargetId(null); setFocusTargetType(''); setFocusTargetLabel(''); setFocusTargetLabelEn(''); setInteractionNpcId(null); }, [zoneId]);
   useEffect(() => {
@@ -134,7 +134,7 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
 
     {!panel && !dialoguePanel && !reportPanel && (streamingText || fieldLine) && <aside className="td-theater-transmission" aria-label={zh ? '现场字幕' : 'Field subtitles'}><small>{zh ? '现场通讯 · 完整记录见手记' : 'FIELD COMMS · FULL RECORD IN NOTEBOOK'}</small><p role="status"><IconText text={streamingText || fieldLine.text} /></p></aside>}
 
-    {!panel && !dialoguePanel && !reportPanel && !failed && <div className="td-theater-exploration-hud"><p>{movementPaused ? (zh ? '现场移动已暂停' : 'Movement paused') : (zh ? 'WASD / 方向键移动 · 拖动视角 · E 交互' : 'WASD / arrows move · Drag to orbit · E interact')}</p>
+    {!panel && !dialoguePanel && !reportPanel && !failed && <div className="td-theater-exploration-hud"><p>{movementPaused ? (zh ? '现场移动已暂停' : 'Movement paused') : (zh ? 'WASD / 方向键移动 · 按住 R 疾跑 · 拖动视角 · E 交互' : 'WASD / arrows move · Hold R to sprint · Drag to orbit · E interact')}</p>
       <button type="button" className="td-theater-interact" disabled={!nearby || movementPaused || !ready} onClick={() => interact(nearby)}>{nearby ? `E · ${nearbyLabel}` : (zh ? '靠近人物或调查物件' : 'Approach a contact or investigation prop')}</button>
       <div className="td-theater-touch-pad" aria-label={zh ? '触屏移动方向' : 'Touch movement controls'}>
         {[['forward', '↑', zh ? '前进' : 'Forward'], ['left', '←', zh ? '左移' : 'Left'], ['backward', '↓', zh ? '后退' : 'Backward'], ['right', '→', zh ? '右移' : 'Right']].map(([key, symbol, label]) => <button type="button" key={key} aria-label={label} disabled={movementPaused || !ready}

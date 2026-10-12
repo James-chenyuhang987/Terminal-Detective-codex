@@ -2,6 +2,7 @@
 export const PLAYER_RADIUS = 0.28;
 export const MAX_FRAME_DELTA = 0.05;
 export const WALK_SPEED = 1.4;
+export const SPRINT_SPEED = 2.4;
 export const SCENE_FILES = Object.freeze({ office: 'office.glb', datacenter: 'datacenter.glb', lobby: 'lobby.glb', laboratory: 'laboratory.glb', balcony: 'balcony.glb' });
 export const CHARACTER_FILES = Object.freeze({ detective: 'detective.glb', witness: 'witness.glb', security: 'security.glb', scientist: 'scientist.glb' });
 
