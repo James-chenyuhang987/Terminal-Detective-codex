@@ -41,8 +41,8 @@ STANCE = .56
 ANKLE_Y = .145
 HIP_Y = .96
 KNEE_Y = .55
-KNEE_FORWARD = .16
-WALK_HIP_DROP = .034
+KNEE_FORWARD = .020
+WALK_HIP_DROP = .090
 # The pelvis rises over the weight-bearing portion of each step. A 4 cm
 # mid-stance lift straightens the supporting leg through the IK solve while
 # preserving the bend in the recovering (swing) leg.
@@ -598,11 +598,28 @@ def smoothstep(t):
     return t*t*t*(10+t*(-15+6*t))
 
 
+def septic_segment(start, end, start_velocity, end_velocity, t):
+    """C3 stage easing for baked gait keys and skin-deformed sole motion."""
+    t = max(0.0, min(1.0, t))
+    t2, t3 = t*t, t*t*t
+    t4 = t2*t2
+    t5 = t3*t2
+    t6 = t3*t3
+    t7 = t3*t4
+    h00 = 1 - 35*t4 + 84*t5 - 70*t6 + 20*t7
+    h10 = t - 20*t4 + 45*t5 - 36*t6 + 10*t7
+    h01 = 35*t4 - 84*t5 + 70*t6 - 20*t7
+    h11 = -15*t4 + 39*t5 - 34*t6 + 10*t7
+    return start*h00 + start_velocity*h10 + end*h01 + end_velocity*h11
+
+
 def tailored_leg(side, suffix):
     # Shared rings, not disconnected rigid cylinders: blend through knee and ankle.
-    sections = [(.985,.092,0),(.93,.097,.012),(.82,.09,.05),(.69,.081,.105),
-                (.60,.075,.145),(.55,.075,KNEE_FORWARD),(.50,.073,.145),
-                (.43,.069,.114),(.32,.062,.070),(.22,.056,.030),(.16,.053,.006),(.115,.052,0)]
+    # The bind silhouette follows a nearly straight hip-to-ankle centerline;
+    # the IK pole creates the visible knee bend only during the swing phase.
+    sections = [(.985,.092,0),(.93,.097,.005),(.82,.09,.011),(.69,.081,.017),
+                (.60,.075,.019),(.55,.075,KNEE_FORWARD),(.50,.073,.019),
+                (.43,.069,.016),(.32,.062,.011),(.22,.056,.006),(.16,.053,.002),(.115,.052,0)]
     vertices = []
     for y, radius, z in sections:
         vertices.extend((side*.112+radius*math.sin(i*math.tau/16), y,
@@ -905,9 +922,42 @@ def walk_target(phase):
     if phase <= STANCE:
         return stride*(STANCE/2-phase), 0
     u = (phase-STANCE)/(1-STANCE)
-    # Quintic recovery matches stance velocity and zero acceleration at both contacts.
-    z = -stride*STANCE/2-stride*(1-STANCE)*u+stride*smoothstep(u)
-    lift = .068*64*(u*(1-u))**3
+    # The swing is deliberately split into three C3-smooth stages. The first
+    # stage brings the ankle under the hip while it rises, loading the knee
+    # before the foot starts its visible forward step. The middle stage then
+    # advances it monotonically, and the final stage finishes the step while
+    # the ankle falls for heel contact. Each segment has zero velocity and
+    # acceleration at its boundaries, so the baked 120 Hz keys stay smooth.
+    start_z = -stride*STANCE/2
+    bend_z = -.27
+    stride_z = .15
+    end_z = stride*STANCE/2
+    # Match the planted-foot velocity at toe-off and at the loop seam. The
+    # derivative is expressed in normalized swing time (u), hence the
+    # (1-STANCE) factor; all interior stage boundaries settle to zero speed.
+    contact_velocity = -stride*(1-STANCE)
+    # Hold the toe-off velocity through the first .08 of swing before easing
+    # into the bend. This preserves planted-foot speed over the first baked
+    # frame, then settles at a clear pre-step bend by .20.
+    hold_end = .08
+    bend_end = .20
+    if u <= hold_end:
+        z = start_z + contact_velocity*u
+    elif u <= bend_end:
+        span = bend_end - hold_end
+        z = septic_segment(start_z + contact_velocity*hold_end, bend_z,
+                           contact_velocity*span, 0, (u-hold_end)/span)
+    elif u <= .72:
+        z = septic_segment(bend_z, stride_z, 0, 0, (u-bend_end)/(.72-bend_end))
+    else:
+        span = .28
+        # Compensate for the final IK/heel-roll transform, which amplifies the
+        # deformed boot derivative slightly at the seam. The resulting baked
+        # foot stays within the planted stance speed without a visible cusp.
+        z = septic_segment(stride_z, end_z, 0, contact_velocity*.27, (u-.72)/span)
+    bend = smoothstep((u-.08)/.12)
+    recover = smoothstep((u-.52)/.48)
+    lift = .068*bend*(1-recover)
     return z, lift
 
 
@@ -920,9 +970,14 @@ def foot_pitch(phase):
     if phase <= STANCE:
         return -.21 * smoothstep((phase-.40)/(STANCE-.40))
     u = (phase-STANCE)/(1-STANCE)
-    if u < .5:
-        return -.21 * (1-smoothstep(u*2))
-    return .16 * smoothstep((u-.5)*2)
+    # Keep the toe-off roll through the initial knee-loading stage. This
+    # prevents the lifted foot's contact edge from drifting backward while
+    # the ankle is intentionally held close to its take-off position.
+    if u <= .22:
+        return -.21
+    if u <= .55:
+        return -.21 * (1-smoothstep((u-.22)/.33))
+    return .16 * smoothstep((u-.55)/.45)
 
 
 def stance_support_rise(phase, amplitude=WALK_HIP_RISE):
@@ -930,8 +985,8 @@ def stance_support_rise(phase, amplitude=WALK_HIP_RISE):
     def bump(cycle):
         # Hold the lift through the middle support window, then settle before
         # toe-off so the authored IK reach remains available for the next step.
-        rise_start = .10
-        rise_end = .20
+        rise_start = .08
+        rise_end = .16
         plateau_end = .35
         support_end = .42
         if cycle <= rise_start:
@@ -968,11 +1023,6 @@ def solve_leg(rig, side, suffix, phase):
     if phase > STANCE:
         global_phase = phase if suffix == 'L' else (phase - .5) % 1.0
         lift = smooth_lift_cap(lift + stance_support_rise(global_phase))
-        # Keep the recovering foot closer to the body while the pelvis rises,
-        # retaining knee flexion without lifting the boot unnaturally high.
-        # This envelope and its first two derivatives vanish at both contacts.
-        u = (phase - STANCE) / (1 - STANCE)
-        z *= 1 - .12 * 64 * (u * (1 - u))**3
     pitch = foot_pitch(phase)
     roll = Matrix.Rotation(-pitch, 4, 'X')
     edge = -.0695 if pitch >= 0 else .1835
@@ -1065,7 +1115,7 @@ def make_animations(rig):
             if clip != 'Walk':
                 # Stand on the same planted soles with relaxed, nearly straight knees.
                 # The bent bind pose gives the walking IK reach; it is not the idle pose.
-                p['Hips'].location.y = .045
+                p['Hips'].location.y = 0
                 bpy.context.view_layer.update()
                 for side,suffix in [(-1,'L'),(1,'R')]:
                     solve_leg(rig,side,suffix,STANCE/2)
