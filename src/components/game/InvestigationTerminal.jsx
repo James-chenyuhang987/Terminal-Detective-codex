@@ -70,7 +70,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const [authorityReady, setAuthorityReady] = useState(false);
   const [authorityError, setAuthorityError] = useState(null);
   const [authorityLoading, setAuthorityLoading] = useState(false);
-  const commandInFlightRef = useRef(false);
+  // Preserve the owning request token across renders until the lock is released.
+  const commandInFlightRef = /** @type {React.MutableRefObject<boolean> & { token?: object | null }} */ (useRef(false));
   const runClient = useMemo(() => createPlayerRunClient({
     ownerUid: account?.id, runId: authoritativeRun?.id, sessionId, invoke: cloudflareApi.functions.invoke,
   }), [account?.id, authoritativeRun?.id, sessionId]);

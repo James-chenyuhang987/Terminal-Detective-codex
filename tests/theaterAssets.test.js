@@ -160,6 +160,17 @@ function posedVertex({ mesh, index }, target = new Vector3()) {
   return mesh.getVertexPosition(index, target).applyMatrix4(mesh.matrixWorld);
 }
 
+// GLTFLoader removes dots from authored names for animation bindings:
+// `Thigh.L` in the GLB becomes `ThighL` in Three.js. Compare both consistently.
+function canonicalBoneName(name) {
+  const match = /^(Thigh|Shin|Foot|UpperArm|Forearm)\.?([LR])$/.exec(name);
+  return match ? `${match[1]}.${match[2]}` : name;
+}
+
+function getLimbBone(model, joint, side) {
+  return model.getObjectByName(`${joint}.${side}`) || model.getObjectByName(`${joint}${side}`);
+}
+
 for (const [name, asset] of Object.entries(manifest.characters)) {
   test(`${name} has heel-to-toe contacts, continuous limbs, exact loops and independent poses in Three.js`, async () => {
     const { buffer } = glb(asset.file);
@@ -191,7 +202,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         const point = { mesh, index };
         vertices.push(point);
         const influences = Array.from({ length: 4 }, (_, component) => ({
-          bone: mesh.skeleton.bones[skinIndex.getComponent(index, component)].name,
+          bone: canonicalBoneName(mesh.skeleton.bones[skinIndex.getComponent(index, component)].name),
           weight: skinWeight.getComponent(index, component),
         })).filter(({ weight }) => weight > 0.001);
         const component = root(index);
@@ -255,7 +266,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         assert.ok(bounds.min.x > -1 && bounds.max.x < 1 && Number.isFinite(bounds.max.z));
         if (clip.name !== 'Walk') {
           for (const side of ['L', 'R']) {
-            const [hip, knee, ankle] = ['Thigh', 'Shin', 'Foot'].map(joint => model.getObjectByName(`${joint}.${side}`).getWorldPosition(new Vector3()));
+            const [hip, knee, ankle] = ['Thigh', 'Shin', 'Foot'].map(joint => getLimbBone(model, joint, side).getWorldPosition(new Vector3()));
             const extension = hip.distanceTo(ankle) / (hip.distanceTo(knee) + knee.distanceTo(ankle));
             assert.ok(extension > .975 && extension < .999, `${name}/${clip.name}: relaxed standing knees, without crouching or locking`);
             assert.ok(soles[side].every(point => Math.abs(posedVertex(point).y) < .002), `${name}/${clip.name}: both standing soles stay planted`);

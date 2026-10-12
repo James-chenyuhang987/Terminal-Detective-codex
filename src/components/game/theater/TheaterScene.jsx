@@ -2,7 +2,7 @@
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, useProgress } from '@react-three/drei';
-import { AnimationMixer, MathUtils, Mesh, SkinnedMesh, Vector3 } from 'three';
+import { AnimationMixer, Bone, MathUtils, Mesh, SkinnedMesh, Vector3 } from 'three';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useLang } from '@/lib/lang.jsx';
 import {
@@ -330,7 +330,7 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
   const spine = useMemo(() => {
     let result = null;
     model.traverse(node => {
-      if (!result && node.isBone && /^(?:Spine)(?:\.|$)/.test(node.name)) result = node;
+      if (!result && node instanceof Bone && /^(?:Spine)(?:\.|$)/.test(node.name)) result = node;
     });
     return result;
   }, [model]);

@@ -301,6 +301,9 @@ export function createAvatarAnimation(mixer, clips, gait = {}) {
  * in the short heel/toe transition window, the clip advances to the next heel
  * contact before its weight is allowed to fade out. This prevents a lifted
  * foot from freezing in mid-air and makes Walk → Idle phase-aware.
+ * @param {object} animation
+ * @param {number} rawDelta
+ * @param {{speed?: number, distance?: number, authoredSpeed?: number, talking?: boolean, frozen?: boolean, reducedMotion?: boolean, gait?: {stance?: number, heelEnd?: number, toeStart?: number, swingLift?: number}}} [options]
  */
 export function updateAvatarAnimation(animation, rawDelta, {
   speed = 0,

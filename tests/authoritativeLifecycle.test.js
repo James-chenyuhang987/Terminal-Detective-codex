@@ -55,6 +55,25 @@ test('late command from unmounted or replaced session cannot overwrite current s
   }
 });
 
+test('rerendering during a command preserves its token and releases the lock on completion', async () => {
+  const h = gateway();
+  const ref = h.bindings.commandInFlightRef;
+  const renderRef = () => handler('commandInFlightRef', { useRef: () => ref });
+  assert.equal(renderRef(), ref);
+  const execute = handler('executeRunCommand', h.bindings);
+  const request = execute({ type: 'rest' });
+  const token = ref.token;
+  assert.ok(token);
+  assert.equal(renderRef(), ref);
+  assert.equal(ref.token, token);
+  await assert.rejects(execute({ type: 'rest' }), { code: 'RUN_REQUEST_BUSY' });
+  h.pending.resolve({ run: { id: 'current-run' }, result: {} });
+  await request;
+  assert.equal(ref.current, false);
+  assert.equal(ref.token, null);
+  assert.equal(h.stored.commits.length, 1);
+});
+
 test('StrictMode replay commits only the live view even when both effects share the same response', async () => {
   const h = gateway();
   const first = handler('resumeRun', h.bindings)();
