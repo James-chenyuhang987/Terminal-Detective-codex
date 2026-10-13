@@ -13,7 +13,9 @@ export function FieldLighting({ sceneName, room, quality }) {
   useEffect(() => {
     const environment = new RoomEnvironment();
     const generator = new PMREMGenerator(gl);
-    const target = generator.fromScene(environment, .06);
+    // At the generator's 256px resolution, .04 stays within its 20-tap
+    // blur kernel; .06 is truncated and warns every time a room mounts.
+    const target = generator.fromScene(environment, .04);
     const previous = scene.environment;
     scene.environment = target.texture;
     scene.environmentIntensity = .22;

@@ -1362,7 +1362,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "240fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, 21 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 9-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK. Talk holds a right-hand-under-chin thinking pose with head-following arm IK; runtime eases the arm in and out over 0.5s.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1371,13 +1371,13 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068,
+        "swingLift": 0.088,
         "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 592184,
-      "triangles": 8045,
+      "bytes": 848468,
+      "triangles": 12196,
       "bounds": {
         "min": [
           -0.37352,
@@ -1401,7 +1401,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "240fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 9-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1410,13 +1410,13 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068,
+        "swingLift": 0.088,
         "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 505976,
-      "triangles": 6968,
+      "bytes": 651704,
+      "triangles": 9292,
       "bounds": {
         "min": [
           -0.37352,
@@ -1440,7 +1440,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "240fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 9-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1449,18 +1449,18 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068,
+        "swingLift": 0.088,
         "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 502772,
-      "triangles": 6856,
+      "bytes": 648644,
+      "triangles": 9180,
       "bounds": {
         "min": [
           -0.37352,
           0.0,
-          -0.13608
+          -0.14132
         ],
         "max": [
           0.37352,
@@ -1479,7 +1479,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.",
+      "animationNotes": "240fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 9-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1488,13 +1488,13 @@
         "stance": 0.56,
         "heelEnd": 0.1,
         "toeStart": 0.4,
-        "swingLift": 0.068,
+        "swingLift": 0.088,
         "pelvisRise": 0.04
       },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 521784,
-      "triangles": 7340,
+      "bytes": 667524,
+      "triangles": 9664,
       "bounds": {
         "min": [
           -0.37352,
@@ -1512,5 +1512,5 @@
       "height": 1.7625
     }
   },
-  "totalBytes": 7028228
+  "totalBytes": 7721852
 }

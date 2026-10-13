@@ -36,7 +36,9 @@ CURRENT = None
 PARTS = []
 WALK_SPEED = 1.4
 WALK_DURATION = 1.0
-FPS = 120
+# Dense sampling keeps near-straight IK and the heel-contact seam smooth
+# when glTF rotations are interpolated between rendered frames.
+FPS = 240
 STANCE = .56
 ANKLE_Y = .145
 HIP_Y = .96
@@ -48,6 +50,11 @@ WALK_HIP_DROP = .090
 # preserving the bend in the recovering (swing) leg.
 WALK_HIP_RISE = .040
 WALK_SWING_CLEARANCE = .088
+# Distribute the walking lean across pelvis and chest so the coat silhouette
+# advances with the shoulders, while the IK keeps the feet on their targets.
+WALK_PELVIS_PITCH = math.radians(2)
+WALK_CHEST_PITCH = math.radians(7)
+WALK_HEAD_PITCH = math.radians(1.5)
 
 
 def material(name, color, metallic=0.0, rough=0.75, glow=0.0):
@@ -577,20 +584,52 @@ def export(name, armature=False):
     )
 
 
-def body_shell(name, rings, mat, bone='Spine'):
+def body_shell(name, rings, mat, bone='Spine', segments=24):
+    # Shared, smooth side normals make the silhouette read as tailored cloth;
+    # keep the end caps flat rather than shading them like a rounded balloon.
     vertices = []
     for height, rx, rz, zoffset in rings:
-        for i in range(12):
-            a = i*math.tau/12
+        for i in range(segments):
+            a = i*math.tau/segments
             vertices.append((math.sin(a)*rx, height, math.cos(a)*rz+zoffset))
     faces = []
     for row in range(len(rings)-1):
-        for i in range(12):
-            a = row*12+i
-            b = row*12+(i+1)%12
-            faces.append((a, b, b+12, a+12))
-    faces += [tuple(reversed(range(12))), tuple((len(rings)-1)*12+i for i in range(12))]
-    return panel(name, vertices, faces, mat, bone)
+        for i in range(segments):
+            a = row*segments+i
+            b = row*segments+(i+1)%segments
+            faces.append((a, b, b+segments, a+segments))
+    faces += [tuple(reversed(range(segments))), tuple((len(rings)-1)*segments+i for i in range(segments))]
+    obj = panel(name, vertices, faces, mat, bone)
+    for face in list(obj.data.polygons)[:-2]:
+        face.use_smooth = True
+    return obj
+
+
+def cloth_panel(name, vertices, faces, mat, bone='Spine'):
+    obj = panel(name, vertices, faces, mat, bone)
+    solid = obj.modifiers.new('Folded cloth edge', 'SOLIDIFY')
+    solid.thickness = .004
+    solid.offset = 0  # Mirrored lapels keep the same clearance on both sides.
+    bpy.ops.object.modifier_apply(modifier=solid.name)
+    bevel = obj.modifiers.new('Soft sewn edge', 'BEVEL')
+    bevel.width, bevel.segments = .002, 2
+    bpy.ops.object.modifier_apply(modifier=bevel.name)
+    return obj
+
+
+def tailored_boot(side, suffix):
+    # Shape the upper around the instep and rounded toe; the sole retains its
+    # authored heel/toe contact envelope used by IK and runtime foot locking.
+    obj = body_shell('Shaped leather boot '+suffix,
+                     [(.023,.067,.123,.057),(.046,.071,.129,.057),
+                      (.075,.070,.125,.053),(.102,.064,.106,.041),
+                      (.129,.057,.075,.021),(.157,.053,.052,.004),
+                      (.173,.052,.050,.002)], 'ink', 'Foot.'+suffix)
+    obj.location.x = side*.112
+    box('Boot sole '+suffix, (side*.112,.013,.057), (.151,.026,.273), 'blue', .01, 'Foot.'+suffix)
+    for i in range(3):
+        z, y = .036+i*.021, .160-i*.012
+        rod('Boot lacing '+suffix,(side*.112-.027,y,z),(side*.112+.027,y,z+.007),.0025,'navy','Foot.'+suffix,vertices=6)
 
 
 def smoothstep(t):
@@ -630,7 +669,9 @@ def tailored_leg(side, suffix):
             a, b = row*16+i, row*16+(i+1)%16
             faces.append((a,b,b+16,a+16))
     faces += [tuple(reversed(range(16))), tuple((len(sections)-1)*16+i for i in range(16))]
-    obj = panel('Continuous tailored leg '+suffix, vertices, faces, 'navy')
+    # These rings run from hip to ankle, so reverse the ascending-loft order
+    # to keep the exported surface normals facing outwards.
+    obj = panel('Continuous tailored leg '+suffix, vertices, [tuple(reversed(face)) for face in faces], 'navy')
     groups = {name:obj.vertex_groups.new(name=name+'.'+suffix) for name in ('Thigh','Shin','Foot')}
     for row,(y,_,_) in enumerate(sections):
         foot = 1-smoothstep((y-.125)/.10)
@@ -644,35 +685,50 @@ def tailored_leg(side, suffix):
 
 def sculpted_head(skin):
     # One continuous jaw/cheek/brow surface, rather than stacked face/chin spheres.
-    rings = [(1.448,.044,.047,.024),(1.474,.080,.064,.023),(1.512,.108,.083,.014),
-             (1.559,.133,.105,.007),(1.604,.136,.107,0),(1.655,.128,.103,-.008),
-             (1.704,.101,.081,-.012),(1.735,.057,.048,-.012),(1.746,.008,.008,-.012)]
+    rings = [(1.448,.044,.047,.024),(1.461,.065,.057,.023),(1.480,.086,.067,.021),
+             (1.512,.108,.083,.014),(1.537,.123,.096,.011),(1.559,.133,.105,.007),
+             (1.583,.136,.107,.003),(1.604,.136,.107,0),(1.630,.133,.106,-.004),
+             (1.655,.128,.103,-.008),(1.683,.116,.094,-.011),
+             (1.704,.101,.081,-.012),(1.723,.077,.064,-.012),
+             (1.738,.046,.040,-.012),(1.746,.008,.008,-.012)]
+    segments = 32
     vertices=[]
     for y,rx,rz,offset in rings:
-        for i in range(24):
-            angle=i*math.tau/24
+        for i in range(segments):
+            angle=i*math.tau/segments
             vertices.append((rx*math.sin(angle),y,offset+rz*math.cos(angle)))
     faces=[]
     for row in range(len(rings)-1):
-        for i in range(24):
-            a,b=row*24+i,row*24+(i+1)%24
-            faces.append((a,b,b+24,a+24))
-    faces += [tuple(reversed(range(24))),tuple((len(rings)-1)*24+i for i in range(24))]
+        for i in range(segments):
+            a,b=row*segments+i,row*segments+(i+1)%segments
+            faces.append((a,b,b+segments,a+segments))
+    faces += [tuple(reversed(range(segments))),tuple((len(rings)-1)*segments+i for i in range(segments))]
     obj=panel('Continuous sculpted face',vertices,faces,skin)
     head=obj.vertex_groups.new(name='Head')
     jaw=obj.vertex_groups.new(name='Jaw')
     for row,(y,_,_,_) in enumerate(rings):
         weight=.65*(1-smoothstep((y-1.47)/.055))
-        indices=list(range(row*24,(row+1)*24))
+        indices=list(range(row*segments,(row+1)*segments))
         head.add(indices,1-weight,'REPLACE')
         if weight: jaw.add(indices,weight,'REPLACE')
     for face in obj.data.polygons: face.use_smooth=True
 
 
-def tailored_sleeve(side,suffix,coat):
-    sections=[(.213,1.39,0,.059,.075),(.244,1.35,0,.077,.087),(.270,1.29,.002,.074,.081),
+def tailored_sleeve(side,suffix,coat,preserve_elbow=False):
+    sections=[(.213,1.39,0,.059,.075),(.230,1.37,0,.072,.084),(.244,1.35,0,.077,.087),
+              (.257,1.32,.001,.078,.087),(.270,1.29,.002,.074,.081),
               (.286,1.21,.007,.068,.073),(.304,1.13,.011,.061,.064),(.310,1.09,.016,.058,.062),
               (.317,1.03,.028,.053,.058),(.325,.95,.043,.046,.051),(.327,.914,.05,.044,.049)]
+    if preserve_elbow:
+        # Sample the elbow's whole bend zone so it forms a rounded sleeve
+        # instead of concentrating the fold into one strip of triangles.
+        for y in [1.23,1.19,1.17,1.15,1.12,1.11,1.10,1.07,1.05,1.01,.99]:
+            for top,bottom in zip(sections,sections[1:]):
+                if top[1] > y > bottom[1]:
+                    t=(top[1]-y)/(top[1]-bottom[1])
+                    sections.append(tuple(top[i]+(bottom[i]-top[i])*t for i in range(5)))
+                    break
+            sections.sort(key=lambda section:-section[1])
     vertices=[]
     for x,y,z,rx,rz in sections:
         vertices.extend((side*x+rx*math.sin(i*math.tau/16),y,z+rz*math.cos(i*math.tau/16)) for i in range(16))
@@ -682,14 +738,27 @@ def tailored_sleeve(side,suffix,coat):
             a,b=row*16+i,row*16+(i+1)%16
             faces.append((a,b,b+16,a+16))
     faces += [tuple(reversed(range(16))),tuple((len(sections)-1)*16+i for i in range(16))]
-    obj=panel('Continuous tailored sleeve '+suffix,vertices,faces,coat)
+    obj=panel('Continuous tailored sleeve '+suffix,vertices,[tuple(reversed(face)) for face in faces],coat)
+    chest=obj.vertex_groups.new(name='Spine')
     upper=obj.vertex_groups.new(name='UpperArm.'+suffix)
     lower=obj.vertex_groups.new(name='Forearm.'+suffix)
+    elbow=obj.vertex_groups.new(name='Elbow.'+suffix) if preserve_elbow else None
     for row,(_,y,_,_,_) in enumerate(sections):
         weight=smoothstep((y-1.064)/.096)
+        # Anchor the sleeve cap to the jacket when the thinking arm lifts;
+        # a rigid UpperArm cap would peel away from the shoulder seam.
+        shoulder=smoothstep((y-1.29)/.10)
         indices=list(range(row*16,(row+1)*16))
-        if weight: upper.add(indices,weight,'REPLACE')
-        if weight<1: lower.add(indices,1-weight,'REPLACE')
+        if shoulder: chest.add(indices,shoulder,'REPLACE')
+        if elbow:
+            upper_weight=smoothstep((y-1.11)/.11)
+            lower_weight=smoothstep((1.11-y)/.11)
+            elbow_weight=1-upper_weight-lower_weight
+            for group,value in [(upper,upper_weight),(elbow,elbow_weight),(lower,lower_weight)]:
+                if value and shoulder<1: group.add(indices,value*(1-shoulder),'REPLACE')
+        else:
+            if weight and shoulder<1: upper.add(indices,weight*(1-shoulder),'REPLACE')
+            if weight<1: lower.add(indices,1-weight,'REPLACE')
     for face in obj.data.polygons: face.use_smooth=True
 
 
@@ -744,10 +813,14 @@ def make_character(role):
     coat = {'detective':'coat-noir', 'witness':'wine', 'security':'blue', 'scientist':'paper'}[role]
     hair = {'detective':'hair-dark', 'witness':'hair-dark', 'security':'hair-brown', 'scientist':'hair-silver'}[role]
     build={'detective':(1,1),'witness':(.93,.90),'security':(1.075,1.08),'scientist':(.96,.95)}[role]
-    torso=[(1.0,.181,.112,0),(1.12,.181,.119,0),(1.27,.205,.125,0),(1.355,.232,.126,0),(1.398,.18,.095,0),(1.416,.083,.070,0)]
+    torso=[(.984,.182,.113,0),(1.025,.181,.115,0),(1.09,.178,.117,0),
+           (1.16,.187,.122,0),(1.23,.200,.126,0),(1.29,.219,.129,-.002),
+           (1.34,.232,.126,-.003),(1.365,.226,.119,-.003),
+           (1.391,.192,.100,-.002),(1.409,.133,.080,0),(1.416,.083,.070,0)]
     body_shell('Tailored torso',[(y,rx*build[0],rz*build[1],z) for y,rx,rz,z in torso],coat)
     ellipsoid('Pelvis', (0,.974,-.007), (.176,.102,.117), 'navy', 'Hips')
-    rod('Neck', (0,1.388,0), (0,1.514,0), .057, skin, 'Head')
+    body_shell('Neck sculpted contour',[(1.385,.065,.053,-.006),(1.414,.054,.047,-.007),
+               (1.453,.050,.044,-.006),(1.486,.055,.047,-.002),(1.511,.063,.051,.002)],skin,'Head')
     sculpted_head(skin)
     for side in (-1,1):
         ellipsoid('Ear', (side*.137,1.565,-.006), (.020,.039,.018), skin, 'Head')
@@ -758,25 +831,42 @@ def make_character(role):
         rod('Expressive eyebrow', (side*.027,1.618,.111), (side*.082,1.622 if role!='security' else 1.613,.095), .006,hair,'Head',vertices=8)
         rod('Upper eyelid', (side*.029,1.604,.111), (side*.080,1.601,.10), .003,skin,'Head',vertices=6)
         rod('Lower eyelid', (side*.031,1.583,.109), (side*.077,1.584,.101), .0025,skin,'Head',vertices=6)
-    panel('Nose bridge',[(-.011,1.61,.105),(.011,1.61,.105),(.019,1.545,.132),(-.019,1.545,.132),(0,1.551,.154)],[(0,1,4),(1,2,4),(2,3,4),(3,0,4)],skin,'Head')
-    ellipsoid('Nose tip',(0,1.548,.141),(.019,.014,.020),skin,'Head',segments=12,rings=6)
+    nose_rows=[(1.614,.012,.108,.003),(1.594,.013,.111,.010),
+               (1.570,.015,.113,.019),(1.552,.022,.115,.030),
+               (1.542,.023,.114,.025),(1.536,.016,.111,.008)]
+    nose_vertices=[]
+    for y,width,z,projection in nose_rows:
+        for i in range(7):
+            u=i/3-1
+            nose_vertices.append((u*width,y,z+projection*max(0,1-u*u)**.65))
+    nose_faces=[(row*7+i,(row+1)*7+i,(row+1)*7+i+1,row*7+i+1)
+                for row in range(len(nose_rows)-1) for i in range(6)]
+    nose=panel('Sculpted nose bridge',nose_vertices,nose_faces,skin,'Head')
+    for face in nose.data.polygons: face.use_smooth=True
     for side in (-1,1):
         rod('Mouth line',(0,1.511,.104),(side*.032,1.514,.098),.0027,'lip','Jaw',vertices=6)
         rod('Cheek plane',(side*.080,1.555,.092),(side*.102,1.542,.076),.002,skin,'Head',vertices=6)
     # A partial scalp cap leaves a clean brow line instead of covering the expressive face.
-    verts = [(0, 1.772, -.012)]
-    for row in range(1, 5):
-        for j in range(24):
-            a = j*math.tau/24
-            phi = row/4*(1.20 if math.cos(a)>.25 else 1.86)
-            verts.append((math.sin(a)*math.sin(phi)*.153, 1.57+math.cos(phi)*.205, -.015+math.cos(a)*math.sin(phi)*.14))
-    faces = [(0, 1+j, 1+(j+1)%24) for j in range(24)]
-    for row in range(3):
-        for j in range(24):
-            a = 1+row*24+j
-            b = 1+row*24+(j+1)%24
-            faces.append((a, a+24, b+24, b))
-    panel('Sculpted hair cap', verts, faces, hair, 'Head')
+    verts = [(0, 1.761, -.012)]
+    hair_segments, hair_rows = 32, 8
+    for row in range(1,hair_rows+1):
+        for j in range(hair_segments):
+            a = j*math.tau/hair_segments
+            # A graduated hairline follows temples and ears, rather than a
+            # hard step from the forehead to a flat, helmet-like back edge.
+            front = smoothstep((math.cos(a)+.15)/.85)
+            edge = 1.83-.64*front+.045*math.sin(3*a+.3)
+            phi = row/hair_rows*edge
+            verts.append((math.sin(a)*math.sin(phi)*.151,1.57+math.cos(phi)*.198,
+                          -.012+math.cos(a)*math.sin(phi)*.139))
+    faces = [(0,1+j,1+(j+1)%hair_segments) for j in range(hair_segments)]
+    for row in range(hair_rows-1):
+        for j in range(hair_segments):
+            a = 1+row*hair_segments+j
+            b = 1+row*hair_segments+(j+1)%hair_segments
+            faces.append((a,a+hair_segments,b+hair_segments,b))
+    scalp=panel('Sculpted hair cap',verts,faces,hair,'Head')
+    for face in scalp.data.polygons: face.use_smooth=True
     for i in range(6):
         lock = ellipsoid('Swept hair lock', (-.105+i*.04, 1.725-abs(i-2)*.012, .025), (.049, .055, .10), hair, 'Head', segments=10, rings=6)
         lock.rotation_euler.y = -.4
@@ -784,8 +874,7 @@ def make_character(role):
         upper = 'UpperArm.'+suffix
         lower = 'Forearm.'+suffix
         hand = 'Hand.'+suffix
-        foot = 'Foot.'+suffix
-        tailored_sleeve(side,suffix,coat)
+        tailored_sleeve(side,suffix,coat,preserve_elbow=role=='detective')
         rod('Tailored cuff '+suffix,(side*.326,.946,.043),(side*.327,.909,.05),.048,coat,lower,tip=.046)
         box('Cuff button '+suffix,(side*.327,.931,.097),(.012,.013,.007),'brass',.002,lower)
         glove='ink' if role in ('detective','security') else 'cream' if role=='scientist' else skin
@@ -795,34 +884,42 @@ def make_character(role):
         for i in range(3):
             rod('Finger seam',(side*.317+i*.010,.835,.078),(side*.317+i*.010,.863,.081),.0013,'wear' if glove!=skin else 'lip',hand,vertices=4)
         tailored_leg(side, suffix)
-        box('Boot '+suffix, (side*.112, .073, .057), (.145, .145, .265), 'ink', .045, foot)
-        box('Boot sole '+suffix, (side*.112, .013, .057), (.151, .026, .273), 'blue', .01, foot)
-        for i in range(3):
-            rod('Boot lacing '+suffix,(side*.112-.037,.148,.047+i*.022),(side*.112+.037,.148,.047+i*.022),.0028,'navy',foot,vertices=6)
+        tailored_boot(side,suffix)
     box('Belt', (0, 1.012, .124), (.345, .041, .027), 'ink', .007, 'Hips')
     box('Belt buckle', (0, 1.012, .144), (.055, .045, .016), 'brass', .005, 'Hips')
     for side in (-1, 1):
-        panel('Angular lapel', [(side*.045,1.39,.105),(side*.16,1.35,.124),(side*.11,1.20,.133),(side*.02,1.29,.14)], [(0,1,2,3)], 'navy' if role!='security' else 'cream', 'Spine')
+        cloth_panel('Folded lapel', [(side*.045,1.39,.105),(side*.16,1.35,.124),
+                    (side*.11,1.20,.133),(side*.02,1.29,.14),(side*.075,1.326,.148)],
+                    [(0,1,4),(1,2,4),(2,3,4),(3,0,4)], 'navy' if role!='security' else 'cream')
     if role == 'detective':
         for side, suffix in [(-1,'L'), (1,'R')]:
             trench_skirt(side,suffix,coat)
             box('Welt coat pocket',(side*.151,1.112,.130),(.086,.018,.010),'navy',.004,'Spine')
-            panel('Storm collar',[(side*.02,1.42,.047),(side*.087,1.436,-.004),(side*.167,1.387,.107),(side*.077,1.316,.142)],[(0,1,2,3)],'navy','Spine')
-        panel('Shirt collar',[(-.04,1.406,.072),(0,1.37,.124),(.04,1.406,.072),(.055,1.34,.143),(-.055,1.34,.143)],[(0,1,4),(1,2,3)],'paper','Spine')
+            cloth_panel('Storm collar',[(side*.02,1.42,.047),(side*.087,1.436,-.004),(side*.167,1.387,.107),(side*.077,1.316,.142)],[(0,1,2,3)],'navy')
+        for side in (-1,1):
+            cloth_panel('Shirt collar point',[(side*.020,1.411,.084),(side*.068,1.373,.116),
+                        (side*.046,1.346,.149),(side*.014,1.372,.143)],[(0,1,2,3)],'paper')
         for y in (1.25,1.17,1.095):
             for x in (-.065,.065):
                 ellipsoid('Horn coat button',(x,y,.129),(.009,.009,.006),'brass','Spine',segments=8,rings=4)
         box('Leather notebook',(.223,1.04,-.012),(.062,.18,.12),'wood',.012,'Hips')
         for x in (-.018,.018):
             box('Storm flap seam',(x,1.32,-.131),(.010,.105,.008),'navy',.002,'Spine')
-        panel('Amber scarf', [(-.038,1.42,.098),(.038,1.42,.098),(.048,1.29,.144),(.005,1.18,.145),(-.033,1.27,.145)], [(0,1,2,3,4)], 'amber', 'Spine')
+        # Separate the collar, knot and draped tail in depth; coplanar layers
+        # previously produced jagged holes when the chest turned in the light.
+        cloth_panel('Amber scarf tail',[(-.022,1.379,.153),(.022,1.379,.153),
+                    (.028,1.303,.157),(.016,1.225,.150),(-.020,1.244,.150),(-.028,1.308,.157)],
+                    [(0,1,2,5),(5,2,3,4)],'amber')
+        ellipsoid('Scarf knot',(0,1.379,.153),(.025,.023,.013),'amber','Spine',segments=16,rings=8)
         for side in (-1, 1):
             rod('Shoulder seam', (side*.17,1.396,0), (side*.28,1.361,0), .005, 'navy', 'Spine')
-        brim=rod('Fedora felt brim',(0,1.731,0),(0,1.748,0),.182,'coat-noir','Head',vertices=32)
+        brim=rod('Fedora felt brim',(0,1.731,0),(0,1.748,0),.182,'coat-noir','Head',vertices=48)
+        for face in brim.data.polygons:
+            face.use_smooth=len(face.vertices)==4
         brim.scale.x=1.13; brim.scale.y=.95
         body_shell('Pinched fedora crown',[(1.747,.144,.130,-.006),(1.784,.140,.126,-.006),(1.833,.116,.111,-.009),
-                                         (1.819,.077,.058,-.009),(1.800,.013,.049,-.009)],'coat-noir','Head')
-        body_shell('Fedora grosgrain band',[(1.754,.147,.132,-.006),(1.774,.145,.131,-.006)],'navy','Head')
+                                         (1.819,.077,.058,-.009),(1.800,.013,.049,-.009)],'coat-noir','Head',segments=32)
+        body_shell('Fedora grosgrain band',[(1.754,.147,.132,-.006),(1.774,.145,.131,-.006)],'navy','Head',segments=32)
         box('Hat band pin',(-.127,1.766,.063),(.026,.012,.012),'brass',.002,'Head')
         for i in range(16):
             a,b = i*math.tau/16,(i+1)*math.tau/16
@@ -900,6 +997,8 @@ def make_rig(role, mesh):
     for side,suffix in [(-1,'L'),(1,'R')]:
         bone('UpperArm.'+suffix,(side*.24,1.35,0),(side*.308,1.11,.012),'Spine')
         bone('Forearm.'+suffix,(side*.308,1.11,.012),(side*.327,.923,.047),'UpperArm.'+suffix)
+        if role == 'detective':
+            bone('Elbow.'+suffix,(side*.308,1.11,.012),(side*.314,1.05,.023),'UpperArm.'+suffix)
         bone('Hand.'+suffix,(side*.327,.923,.047),(side*.332,.83,.06),'Forearm.'+suffix)
         bone('Thigh.'+suffix,(side*.112,HIP_Y,0),(side*.112,KNEE_Y,KNEE_FORWARD),'Hips')
         shin = bone('Shin.'+suffix,(side*.112,KNEE_Y,KNEE_FORWARD),(side*.112,ANKLE_Y,0),'Thigh.'+suffix)
@@ -922,42 +1021,31 @@ def walk_target(phase):
     if phase <= STANCE:
         return stride*(STANCE/2-phase), 0
     u = (phase-STANCE)/(1-STANCE)
-    # The swing is deliberately split into three C3-smooth stages. The first
-    # stage brings the ankle under the hip while it rises, loading the knee
-    # before the foot starts its visible forward step. The middle stage then
-    # advances it monotonically, and the final stage finishes the step while
-    # the ankle falls for heel contact. Each segment has zero velocity and
-    # acceleration at its boundaries, so the baked 120 Hz keys stay smooth.
+    # Bend -> stride -> recovery are overlapping movements, not three stops.
+    # Share non-zero tangents at the internal boundaries so the foot keeps
+    # travelling forward as the knee loads and unfolds. Endpoint derivatives
+    # match the planted foot; acceleration and jerk are zero at every join.
     start_z = -stride*STANCE/2
-    bend_z = -.27
-    stride_z = .15
     end_z = stride*STANCE/2
-    # Match the planted-foot velocity at toe-off and at the loop seam. The
-    # derivative is expressed in normalized swing time (u), hence the
-    # (1-STANCE) factor; all interior stage boundaries settle to zero speed.
     contact_velocity = -stride*(1-STANCE)
-    # Hold the toe-off velocity through the first .08 of swing before easing
-    # into the bend. This preserves planted-foot speed over the first baked
-    # frame, then settles at a clear pre-step bend by .20.
-    hold_end = .08
-    bend_end = .20
-    if u <= hold_end:
-        z = start_z + contact_velocity*u
-    elif u <= bend_end:
-        span = bend_end - hold_end
-        z = septic_segment(start_z + contact_velocity*hold_end, bend_z,
-                           contact_velocity*span, 0, (u-hold_end)/span)
+    if u <= .22:
+        z = septic_segment(start_z, -.235, contact_velocity*.22, 1.15*.22, u/.22)
     elif u <= .72:
-        z = septic_segment(bend_z, stride_z, 0, 0, (u-bend_end)/(.72-bend_end))
+        z = septic_segment(-.235, .19, 1.15*.50, .75*.50, (u-.22)/.50)
     else:
-        span = .28
-        # Compensate for the final IK/heel-roll transform, which amplifies the
-        # deformed boot derivative slightly at the seam. The resulting baked
-        # foot stays within the planted stance speed without a visible cusp.
-        z = septic_segment(stride_z, end_z, 0, contact_velocity*.27, (u-.72)/span)
-    bend = smoothstep((u-.08)/.12)
-    recover = smoothstep((u-.52)/.48)
-    lift = .068*bend*(1-recover)
+        z = septic_segment(.19, end_z, .75*.28, contact_velocity*.28, (u-.72)/.28)
+
+    # Clearance is a single envelope, independent of the support-leg pelvis
+    # lift. Adding and clamping those two curves created a second vertical
+    # acceleration and an abrupt plateau during the original knee bend.
+    if u <= .22:
+        lift = septic_segment(0, WALK_SWING_CLEARANCE, 0, 0, u/.22)
+    elif u <= .36:
+        lift = septic_segment(WALK_SWING_CLEARANCE, .078, 0, 0, (u-.22)/.14)
+    elif u <= .55:
+        lift = .078
+    else:
+        lift = septic_segment(.078, 0, 0, 0, (u-.55)/.45)
     return z, lift
 
 
@@ -985,19 +1073,21 @@ def stance_support_rise(phase, amplitude=WALK_HIP_RISE):
     def bump(cycle):
         # Hold the lift through the middle support window, then settle before
         # toe-off so the authored IK reach remains available for the next step.
+        # A wider C3 rise absorbs the load over several frames instead of
+        # making the pelvis snap upward as the other foot leaves the floor.
         rise_start = .08
-        rise_end = .16
-        plateau_end = .35
-        support_end = .42
+        rise_end = .20
+        plateau_end = .34
+        support_end = .48
         if cycle <= rise_start:
             return 0.0
         if cycle <= rise_end:
-            return smoothstep((cycle - rise_start) / (rise_end - rise_start))
+            return septic_segment(0, 1, 0, 0, (cycle - rise_start) / (rise_end - rise_start))
         if cycle <= plateau_end:
             return 1.0
         if cycle > support_end:
             return 0.0
-        return smoothstep((support_end - cycle) / (support_end - plateau_end))
+        return septic_segment(1, 0, 0, 0, (cycle - plateau_end) / (support_end - plateau_end))
 
     left = bump(phase % 1.0)
     right = bump((phase + .5) % 1.0)
@@ -1006,23 +1096,8 @@ def stance_support_rise(phase, amplitude=WALK_HIP_RISE):
     return amplitude * (left**6 + right**6) ** (1/6)
 
 
-def smooth_lift_cap(value, cap=WALK_SWING_CLEARANCE, softness=.0015):
-    """Limit swing clearance without introducing a velocity cusp."""
-    if value <= 0:
-        return 0.0
-    scaled = (value - cap) / softness
-    if scaled > 40:
-        return cap
-    if scaled < -40:
-        return value
-    return value - softness * math.log1p(math.exp(scaled))
-
-
 def solve_leg(rig, side, suffix, phase):
     z, lift = walk_target(phase)
-    if phase > STANCE:
-        global_phase = phase if suffix == 'L' else (phase - .5) % 1.0
-        lift = smooth_lift_cap(lift + stance_support_rise(global_phase))
     pitch = foot_pitch(phase)
     roll = Matrix.Rotation(-pitch, 4, 'X')
     edge = -.0695 if pitch >= 0 else .1835
@@ -1048,6 +1123,62 @@ def solve_leg(rig, side, suffix, phase):
         bone.matrix = Matrix.LocRotScale(start,rotation,Vector((1,1,1)))
         bpy.context.view_layer.update()
     foot.matrix = Matrix.LocRotScale(ankle,roll.to_quaternion() @ foot.bone.matrix_local.to_quaternion(),Vector((1,1,1)))
+    bpy.context.view_layer.update()
+
+
+def solve_thinking_arm(rig):
+    """Keep the detective's right fingertips below the chin as the head moves."""
+    p = rig.pose.bones
+    upper, lower, hand = [p[name+'.R'] for name in ('UpperArm','Forearm','Hand')]
+    spine, head = p['Spine'], p['Head']
+    chest_transform = spine.matrix @ spine.bone.matrix_local.inverted()
+    head_transform = head.matrix @ head.bone.matrix_local.inverted()
+    shoulder = chest_transform @ upper.bone.head_local
+    # The head mesh is already scaled to adult proportions. Aim the wrist so
+    # the existing glove's fingertips stop just below the sculpted chin.
+    wrist = head_transform @ Vector(xyz((.052,1.389,.142)))
+    delta = wrist-shoulder
+    a, b, distance = upper.bone.length, lower.bone.length, delta.length
+    assert abs(a-b) < distance < a+b, 'Thinking hand target must remain within arm reach'
+    direction = delta.normalized()
+    pole = chest_transform.to_3x3() @ Vector(xyz((.25,-1,.55)))
+    pole = (pole-direction*pole.dot(direction)).normalized()
+    projection = (a*a-b*b+distance*distance)/(2*distance)
+    elbow = shoulder+direction*projection+pole*math.sqrt(max(0,a*a-projection*projection))
+    for bone,start,end in [(upper,shoulder,elbow),(lower,elbow,wrist)]:
+        rest = bone.bone.matrix_local.to_quaternion()
+        rest_axis = bone.bone.tail_local-bone.bone.head_local
+        if bone == upper:
+            rotation = rest_axis.rotation_difference(end-start) @ rest
+        else:
+            # Transport the upper arm's frame through the elbow hinge. Two
+            # independent shortest rotations introduce an anatomical twist,
+            # collapsing the sleeve even if shoulder/elbow/wrist positions fit.
+            rest_upper = upper.bone.tail_local-upper.bone.head_local
+            upper_deform = upper.matrix.to_quaternion() @ upper.bone.matrix_local.to_quaternion().inverted()
+            lower_deform = (elbow-shoulder).rotation_difference(wrist-elbow) @ upper_deform @ rest_axis.rotation_difference(rest_upper)
+            rotation = lower_deform @ rest
+        bone.matrix = Matrix.LocRotScale(start,rotation,Vector((1,1,1)))
+        bpy.context.view_layer.update()
+    finger_direction = head_transform.to_3x3() @ Vector(xyz((-.20,.90,-.43)))
+    rest_axis = hand.bone.tail_local-hand.bone.head_local
+    rotation = rest_axis.rotation_difference(finger_direction) @ hand.bone.matrix_local.to_quaternion()
+    hand.matrix = Matrix.LocRotScale(wrist,rotation,Vector((1,1,1)))
+    bpy.context.view_layer.update()
+
+
+def preserve_elbow_volume(rig):
+    # glTF uses linear skinning. A half-bend joint retains elbow thickness
+    # instead of averaging two opposing transforms until the sleeve pinches.
+    bpy.context.view_layer.update()
+    for suffix in ('L','R'):
+        helper=rig.pose.bones.get('Elbow.'+suffix)
+        if not helper: continue
+        upper,lower=[rig.pose.bones[name+'.'+suffix] for name in ('UpperArm','Forearm')]
+        upper_deform=upper.matrix.to_quaternion() @ upper.bone.matrix_local.to_quaternion().inverted()
+        lower_deform=lower.matrix.to_quaternion() @ lower.bone.matrix_local.to_quaternion().inverted()
+        rotation=upper_deform.slerp(lower_deform,.5) @ helper.bone.matrix_local.to_quaternion()
+        helper.matrix=Matrix.LocRotScale(lower.matrix.translation,rotation,Vector((1,1,1)))
     bpy.context.view_layer.update()
 
 
@@ -1077,6 +1208,7 @@ def make_animations(rig):
                     -WALK_HIP_DROP-.011*math.cos(phase*2)
                     + stance_support_rise(frame/end)
                 )
+                p['Hips'].rotation_euler.x = WALK_PELVIS_PITCH
                 p['Hips'].rotation_euler.y = .055*math.sin(phase)
                 p['Hips'].rotation_euler.z = .022*math.sin(phase+.35)
                 bpy.context.view_layer.update()
@@ -1084,28 +1216,44 @@ def make_animations(rig):
                     cycle = (frame/end+(0 if suffix=='L' else .5)) % 1
                     solve_leg(rig,side,suffix,cycle)
                     z,_ = walk_target(cycle)
-                    arm = math.sin(phase+(0 if suffix=='L' else math.pi)-.20)
-                    p['UpperArm.'+suffix].rotation_euler.x = -.23*arm-.025
+                    # The foot is furthest forward at contact (phase zero).
+                    # Oppose it with the arm, then let elbow and wrist follow.
+                    arm_phase = phase+(0 if suffix=='L' else math.pi)
+                    arm = math.cos(arm_phase-.20)
+                    p['UpperArm.'+suffix].rotation_euler.x = .23*arm-.025
                     p['UpperArm.'+suffix].rotation_euler.z = side*.035
-                    p['Forearm.'+suffix].rotation_euler.x = -.19-.055*math.sin(phase+(0 if suffix=='L' else math.pi)-.55)
-                    p['Hand.'+suffix].rotation_euler.x = .028*arm
+                    p['Forearm.'+suffix].rotation_euler.x = -.19+.045*math.cos(arm_phase-.40)
+                    p['Hand.'+suffix].rotation_euler.x = -.028*math.cos(arm_phase-.60)
                     p['Coat.'+suffix].rotation_euler.x = -z*.17+.018*math.sin(phase-.45)
                     p['Coat.'+suffix].rotation_euler.z = side*.012*math.sin(phase*2-.5)
-                p['Spine'].rotation_euler.x = -.025+.012*math.cos(phase*2-.3)
+                # Positive local X tilts this upright bone toward runtime +Z.
+                # The pelvis contributes 2 degrees, the chest another 7.
+                # A small breathing motion avoids a rigidly held angle.
+                chest_pitch = WALK_CHEST_PITCH+.008*math.cos(phase*2-.3)
+                p['Spine'].rotation_euler.x = chest_pitch
                 p['Spine'].rotation_euler.y = -.040*math.sin(phase)
                 p['Spine'].rotation_euler.z = -.016*math.sin(phase+.35)
                 p['Head'].rotation_euler.y = -.015*math.sin(phase)
-                p['Head'].rotation_euler.x = .014*math.cos(phase*2-.3)
+                p['Head'].rotation_euler.x = WALK_HEAD_PITCH-WALK_PELVIS_PITCH-chest_pitch
             elif clip == 'Talk':
-                p['Head'].rotation_euler.x = math.sin(phase)*.065
-                p['Head'].rotation_euler.y = math.sin(phase)*.06
-                gesture = {'detective':1, 'witness':.70, 'security':.45, 'scientist':.85}[rig.name.split('_')[0]]
-                p['UpperArm.R'].rotation_euler.z = (-.26-.07*math.sin(phase))*gesture
-                p['Forearm.R'].rotation_euler.x = (-.65-.15*math.sin(phase-.35))*gesture
-                p['Hand.R'].rotation_euler.y = .3*math.sin(phase)
-                p['Jaw'].rotation_euler.x = .065*(1-math.cos(phase*4))/2
+                role = rig.name.split('_')[0]
                 p['UpperArm.L'].rotation_euler.x = -.08
                 p['Spine'].rotation_euler.y = .025*math.sin(phase-.25)
+                if role == 'detective':
+                    # Hold a listening/thinking pose throughout the loop;
+                    # runtime crossfades handle the initial lift and release.
+                    p['Head'].rotation_euler.x = .018+.010*math.sin(phase)
+                    p['Head'].rotation_euler.y = .015*math.sin(phase)
+                    bpy.context.view_layer.update()
+                    solve_thinking_arm(rig)
+                else:
+                    p['Head'].rotation_euler.x = math.sin(phase)*.065
+                    p['Head'].rotation_euler.y = math.sin(phase)*.06
+                    gesture = {'witness':.70, 'security':.45, 'scientist':.85}[role]
+                    p['UpperArm.R'].rotation_euler.z = (-.26-.07*math.sin(phase))*gesture
+                    p['Forearm.R'].rotation_euler.x = (-.65-.15*math.sin(phase-.35))*gesture
+                    p['Hand.R'].rotation_euler.y = .3*math.sin(phase)
+                    p['Jaw'].rotation_euler.x = .065*(1-math.cos(phase*4))/2
             else:
                 p['Spine'].rotation_euler.x = math.sin(phase)*.018
                 attention = {'detective':.028, 'witness':.045, 'security':.065, 'scientist':.020}[rig.name.split('_')[0]]
@@ -1119,6 +1267,7 @@ def make_animations(rig):
                 bpy.context.view_layer.update()
                 for side,suffix in [(-1,'L'),(1,'R')]:
                     solve_leg(rig,side,suffix,STANCE/2)
+            preserve_elbow_volume(rig)
             for bone in rig.pose.bones:
                 bone.keyframe_insert('rotation_quaternion' if bone.name in leg_names else 'rotation_euler', frame=frame, group=bone.name)
                 bone.keyframe_insert('location', frame=frame, group=bone.name)
@@ -1287,10 +1436,12 @@ for name in ['detective','witness','security','scientist']:
     print('BUILD CHARACTER',name,flush=True)
     characters[name]=make_character(name)
     manifest['characters'][name]={'file':name+'.glb','animations':['Idle','Walk','Talk'],
-        'animationNotes':'120fps exact loops: planted relaxed Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/elbow/knee/ankle weights, vented cloth, 19 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, planted mid-stance, 6.8cm recovery, 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, delayed arms and coat.',
+        'animationNotes':f'{FPS}fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, {len(characters[name][2].data.bones)} joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 9-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK.',
         'locomotion':{'speed':WALK_SPEED,'duration':WALK_DURATION},
-        'gait':{'stance':STANCE,'heelEnd':.10,'toeStart':.40,'swingLift':.068,'pelvisRise':WALK_HIP_RISE},
+        'gait':{'stance':STANCE,'heelEnd':.10,'toeStart':.40,'swingLift':WALK_SWING_CLEARANCE,'pelvisRise':WALK_HIP_RISE},
         'forward':'+Z','feetY':0}
+    if name == 'detective':
+        manifest['characters'][name]['animationNotes'] += ' Talk holds a right-hand-under-chin thinking pose with head-following arm IK; runtime eases the arm in and out over 0.5s.'
 # Read actual exported data instead of estimating renderer budgets.
 sys.path.insert(0,str(Path(__file__).parent))
 from validate_assets import inspect_glb

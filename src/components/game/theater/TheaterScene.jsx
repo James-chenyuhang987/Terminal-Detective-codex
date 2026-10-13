@@ -407,10 +407,15 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
         if (focus) {
           const face = Math.atan2(focus[0] - player.current.position[0], focus[2] - player.current.position[2]);
           const difference = Math.atan2(Math.sin(face - root.current.rotation.y), Math.cos(face - root.current.rotation.y));
-          if (!background) root.current.rotation.y += difference * (reduced ? 1 : 1 - Math.exp(-delta * 7));
+          if (!background) {
+            root.current.rotation.y += difference * (reduced ? 1 : 1 - Math.exp(-delta * 7));
+            // Conversation turns become the actor's current facing too. A
+            // closed dialogue must not snap back to its pre-conversation yaw.
+            player.current.rotationY = root.current.rotation.y;
+          }
         } else root.current.rotation.y = player.current.rotationY;
       } else {
-        const face = talking && targetPosition ? Math.atan2(targetPosition.current.position[0] - position[0], targetPosition.current.position[2] - position[2]) : rotationY;
+        const face = (talking || interacting) && targetPosition ? Math.atan2(targetPosition.current.position[0] - position[0], targetPosition.current.position[2] - position[2]) : rotationY;
         const difference = Math.atan2(Math.sin(face - root.current.rotation.y), Math.cos(face - root.current.rotation.y));
         if (!background) root.current.rotation.y += difference * (reduced ? 1 : 1 - Math.exp(-delta * 7));
       }
@@ -424,7 +429,7 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
       // hips moves both ankles in world X/Z and produces visible foot sliding.
       if (spine && !reduced) {
         const offset = appliedSpineOffset.current;
-        offset.x = player ? -speedRatio * .012 : demeanor.bodyPitch;
+        offset.x = player ? speedRatio * .012 : demeanor.bodyPitch;
         offset.y = !player ? Math.sin(animation.mixer.time * 1.8 + (appearance?.phase || 0)) * demeanor.hesitation : 0;
         offset.z = player ? turnLean : 0;
         spine.rotation.x += offset.x;
@@ -448,6 +453,9 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
       // backgrounded. Keep this path presentation-only as well.
       if (player || footLock.lockWeight > .001) updateFootLock(footLock, animation, model, { delta, enabled: false });
     }
+    // Foot-lock release can outlast the Walk fade. Finish its small remaining
+    // correction before the demand canvas goes idle.
+    if (!background && footLock.applied.lengthSq() > 1e-10) input.current.invalidate?.();
     if (!root.current) return;
   }, -0.5);
   // Keep the model at the actor root. Presentation lean is applied to Spine
@@ -471,7 +479,7 @@ function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = n
   const appearances = useMemo(() => Object.fromEntries(staged.map(npc => [npc.npcId, npcAppearance(caseData.case_id, npc.npcId, npc.role)])), [staged, caseData.case_id]);
   const movementRoom = useMemo(() => withNpcColliders(room, staged), [room, staged]);
   const targets = useMemo(() => interactionTargets(room, staged, sceneName), [room, staged, sceneName]);
-  const interactionNpc = staged.find(npc => npc.npcId === interactionNpcId) || null;
+  const interactionNpc = staged.find(npc => npc.npcId === (interactionNpcId || selectedNpcId)) || null;
   const interactionTarget = useMemo(() => interactionNpc ? { current: { position: interactionNpc.position } } : null, [interactionNpc]);
   const spatialKey = JSON.stringify([caseData.case_id, zoneId]);
   const player = useRef(null);

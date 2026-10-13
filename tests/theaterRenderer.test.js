@@ -59,7 +59,7 @@ function inputHarness() {
   };
 }
 
-function harness({ deferEffects = false } = {}) {
+function harness({ deferEffects = false, npcs = [], selectedNpcId = null, interactionNpcId = null } = {}) {
   const camera = new PerspectiveCamera();
   const gltf = { scene: new Group() };
   const refs = [];
@@ -84,9 +84,26 @@ function harness({ deferEffects = false } = {}) {
   const live = { current: { paused: false, suspended: false, reducedMotion: false } };
   const manifest = world.validateTheaterManifest(JSON.parse(readFileSync(new URL('../public/assets/theater/manifest.json', import.meta.url), 'utf8')));
   const spatialRef = { current: {} };
-  component({ caseData: { case_id: 'test', npcs: [] }, zoneId: 'datacenter', manifest, selectedNpcId: null, controlsRef, spatialRef, live, input, nearbyRef: { current: null }, sceneReady: () => {}, quality: { shadows: false } });
-  return { state: refs[0].current, live, input, controlsRef, camera, document: bindings.document, frame: delta => frame({}, delta), flushEffects: () => effects.splice(0).forEach(runEffect), cleanup: () => cleanups.reverse().forEach(fn => fn()), spatialRef, manifest, invalidations: () => invalidations };
+  const tree = component({ caseData: { case_id: 'test', npcs }, zoneId: 'datacenter', manifest, selectedNpcId, interactionNpcId, controlsRef, spatialRef, live, input, nearbyRef: { current: null }, sceneReady: () => {}, quality: { shadows: false } });
+  return { tree, state: refs[0].current, live, input, controlsRef, camera, document: bindings.document, frame: delta => frame({}, delta), flushEffects: () => effects.splice(0).forEach(runEffect), cleanup: () => cleanups.reverse().forEach(fn => fn()), spatialRef, manifest, invalidations: () => invalidations };
 }
+
+test('detective keeps the conversation pose and facing target when 3D mounts during an open dialogue', () => {
+  const npc = { npc_id: 'witness', name: 'Witness' };
+  for (const selection of [{ interactionNpcId: npc.npc_id }, { selectedNpcId: npc.npc_id }]) {
+    const h = harness({ npcs: [npc], ...selection });
+    const detective = React.Children.toArray(h.tree.props.children).find(child => child.props.role === 'detective');
+    assert.equal(detective.props.interacting, true);
+    const staged = world.stageNpcs([npc], h.manifest.scenes.datacenter, 'test');
+    assert.deepEqual(detective.props.interactionTarget.current.position, staged[0].position);
+    h.cleanup();
+  }
+  const h = harness({ npcs: [npc] });
+  const detective = React.Children.toArray(h.tree.props.children).find(child => child.props.role === 'detective');
+  assert.equal(detective.props.interacting, false);
+  assert.equal(detective.props.interactionTarget, null);
+  h.cleanup();
+});
 
 test('a frame before passive setup cannot leave the stationary nearby interaction disabled', () => {
   const h = harness({ deferEffects: true });
@@ -213,4 +230,56 @@ test('portrait arrival framing leaves room above its panel and restores projecti
   assert.equal(h.camera.view.enabled, false);
   assert.deepEqual(h.state.position, position);
   h.cleanup();
+});
+
+function avatarFrame({ root, player = null, talking = false, interacting = false, interactionTarget = null, targetPosition = null, live }) {
+  const avatar = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'Avatar');
+  let callback;
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.expression.getText() === 'useFrame') callback = node.arguments[0];
+    ts.forEachChild(node, visit);
+  };
+  visit(avatar);
+  const { outputText } = ts.transpileModule(`const result = (${callback.getText()});`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } });
+  const bindings = {
+    MAX_FRAME_DELTA: world.MAX_FRAME_DELTA, MathUtils, root: { current: root }, player,
+    talking, interacting, interactionTarget, targetPosition, live,
+    input: { current: { windowActive: true } }, document: { hidden: false },
+    spine: null, appliedSpineOffset: { current: { x: 0, y: 0, z: 0 } },
+    animation: { walkWeight: 0, talkWeight: 0 }, updateAvatarAnimation: () => {},
+    locomotion: { speed: world.WALK_SPEED }, gait: {}, position: [0, 0, 0], rotationY: 0,
+    npcDemeanor: visuals.npcDemeanor, emotion: 'calm', appearance: null,
+    footLock: { lockWeight: 0, applied: new Vector3() }, updateFootLock: () => {},
+    model: new Group(), grounding: {}, soleGroundOffset: () => 0,
+  };
+  return compileFunction(`${outputText}\nreturn result;`, Object.keys(bindings))(...Object.values(bindings));
+}
+
+test('ending a conversation preserves the detective facing instead of snapping to the old walking direction', () => {
+  for (const reducedMotion of [false, true]) {
+    const root = new Group();
+    const player = { current: { position: [0, 0, 0], rotationY: 0, speed: 0, distance: 0 } };
+    const live = { current: { suspended: false, paused: true, reducedMotion } };
+    const speaking = avatarFrame({ root, player, live, interacting: true, interactionTarget: { current: { position: [0, 0, -2] } } });
+    for (let index = 0; index < 90; index++) speaking({}, 1 / 60);
+    const facing = root.rotation.y;
+    assert.ok(Math.abs(facing) > 3, 'the detective has turned to face the person behind them');
+    const idle = avatarFrame({ root, player, live });
+    idle({}, 1 / 60);
+    assert.ok(Math.abs(root.rotation.y - facing) < 1e-8, 'closing dialogue cannot undo the rendered turn');
+    assert.equal(player.current.rotationY, facing, 'spatial persistence and the next movement start from the visible facing');
+    assert.deepEqual(player.current.position, [0, 0, 0], 'conversation orientation cannot move the collision body');
+  }
+});
+
+test('an NPC turns toward the detective during pending conversation without waiting for the dialogue panel', () => {
+  const root = new Group();
+  const live = { current: { suspended: false, paused: true, reducedMotion: false } };
+  const frame = avatarFrame({ root, live, interacting: true, targetPosition: { current: { position: [2, 0, 0] } } });
+  frame({}, 1 / 60);
+  assert.ok(root.rotation.y > 0, 'a newly interacting NPC turns with the talk gesture');
+  const facing = root.rotation.y;
+  live.current.suspended = true;
+  frame({}, 1 / 60);
+  assert.equal(root.rotation.y, facing, 'background conversation remains frozen');
 });

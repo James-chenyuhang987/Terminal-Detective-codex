@@ -69,7 +69,11 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
   }, [movementPaused]);
   useEffect(() => { setNearby(null); setFocusTargetId(null); setFocusTargetType(''); setFocusTargetLabel(''); setFocusTargetLabelEn(''); setInteractionNpcId(null); }, [zoneId]);
   useEffect(() => {
-    if (!interactionNpcId || dialoguePanel) return undefined;
+    if (!interactionNpcId) return undefined;
+    // Once the owner opens dialogue, selectedNpcId owns the conversation.
+    // Clearing the pending gesture also handles closing from NPCDialogBox's
+    // own button, which does not pass through this panel's close handler.
+    if (dialoguePanel) { setInteractionNpcId(null); return undefined; }
     const pendingId = interactionNpcId;
     const timeout = window.setTimeout(() => setInteractionNpcId(current => current === pendingId ? null : current), 1200);
     return () => window.clearTimeout(timeout);

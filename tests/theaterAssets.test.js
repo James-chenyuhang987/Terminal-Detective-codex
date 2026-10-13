@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { AnimationMixer, Box3, LoopOnce, Vector3 } from 'three';
+import { AnimationMixer, Box3, LoopOnce, Quaternion, Ray, Triangle, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -168,7 +168,7 @@ function posedVertex({ mesh, index }, target = new Vector3()) {
 // GLTFLoader removes dots from authored names for animation bindings:
 // `Thigh.L` in the GLB becomes `ThighL` in Three.js. Compare both consistently.
 function canonicalBoneName(name) {
-  const match = /^(Thigh|Shin|Foot|UpperArm|Forearm)\.?([LR])$/.exec(name);
+  const match = /^(Thigh|Shin|Foot|UpperArm|Elbow|Forearm|Hand)\.?([LR])$/.exec(name);
   return match ? `${match[1]}.${match[2]}` : name;
 }
 
@@ -198,6 +198,306 @@ function nearestSample(samples, u) {
     Math.abs(sample.u - u) < Math.abs(nearest.u - u) ? sample : nearest);
 }
 
+function correlation(a, b) {
+  const meanA = a.reduce((sum, value) => sum + value, 0) / a.length;
+  const meanB = b.reduce((sum, value) => sum + value, 0) / b.length;
+  let covariance = 0, varianceA = 0, varianceB = 0;
+  for (let index = 0; index < a.length; index++) {
+    const deltaA = a[index] - meanA;
+    const deltaB = b[index] - meanB;
+    covariance += deltaA * deltaB;
+    varianceA += deltaA * deltaA;
+    varianceB += deltaB * deltaB;
+  }
+  return covariance / Math.sqrt(varianceA * varianceB);
+}
+
+for (const [name, asset] of Object.entries(manifest.characters)) {
+  test(`${name} walks with opposite arm and leg swings, a gentle forward lean and a steady head`, async () => {
+    const { buffer } = glb(asset.file);
+    const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
+    const model = clone(gltf.scene);
+    model.updateMatrixWorld(true);
+    const head = model.getObjectByName('Head');
+    const spine = model.getObjectByName('Spine');
+    // Convert world up into the bind head's local space, so this measures the
+    // exported head attitude without assuming Blender's local bone axes.
+    const headLocalUp = new Vector3(0, 1, 0)
+      .applyQuaternion(head.getWorldQuaternion(new Quaternion()).invert());
+    const mixer = new AnimationMixer(model);
+    const walk = gltf.animations.find(clip => clip.name === 'Walk');
+    mixer.clipAction(walk).play();
+    const samples = Array.from({ length: 120 }, (_, frame) => {
+      mixer.setTime(walk.duration * frame / 120);
+      model.updateMatrixWorld(true);
+      const limbs = Object.fromEntries(['L', 'R'].map(side => {
+        const hand = getLimbBone(model, 'Hand', side).getWorldPosition(new Vector3());
+        const shoulder = getLimbBone(model, 'UpperArm', side).getWorldPosition(new Vector3());
+        const { hip, ankle } = limbPose(model, side);
+        return [side, { arm: hand.z - shoulder.z, leg: ankle.z - hip.z }];
+      }));
+      const torsoUp = head.getWorldPosition(new Vector3()).sub(spine.getWorldPosition(new Vector3()));
+      const headUp = headLocalUp.clone().applyQuaternion(head.getWorldQuaternion(new Quaternion()));
+      const shoulderCenter = getLimbBone(model, 'UpperArm', 'L').getWorldPosition(new Vector3())
+        .add(getLimbBone(model, 'UpperArm', 'R').getWorldPosition(new Vector3())).multiplyScalar(.5);
+      const pelvis = model.getObjectByName('Hips').getWorldPosition(new Vector3());
+      return {
+        limbs,
+        torsoPitch: Math.atan2(torsoUp.z, torsoUp.y) * 180 / Math.PI,
+        headPitch: Math.atan2(headUp.z, headUp.y) * 180 / Math.PI,
+        shoulderLead: shoulderCenter.z - pelvis.z,
+      };
+    });
+    for (const side of ['L', 'R']) {
+      const arm = samples.map(sample => sample.limbs[side].arm);
+      const leg = samples.map(sample => sample.limbs[side].leg);
+      assert.ok(Math.max(...arm) - Math.min(...arm) > .12, `${name}/${side}: arm swing must be visible`);
+      assert.ok(correlation(arm, leg) < -.85, `${name}/${side}: the hand must swing opposite its same-side foot throughout the cycle`);
+    }
+    const armSeparation = samples.map(sample => sample.limbs.L.arm - sample.limbs.R.arm);
+    const legSeparation = samples.map(sample => sample.limbs.L.leg - sample.limbs.R.leg);
+    assert.ok(correlation(armSeparation, legSeparation) < -.90, `${name}: arm and leg coordination must not drift a quarter-cycle out of phase`);
+    for (const [frame, contactSide] of [[0, 'L'], [60, 'R']]) {
+      const opposite = contactSide === 'L' ? 'R' : 'L';
+      const { limbs } = samples[frame];
+      assert.ok(limbs[contactSide].arm < limbs[opposite].arm - .10, `${name}/${contactSide}: the opposite arm leads when the foot lands`);
+    }
+    assert.ok(samples.every(sample => sample.torsoPitch > 8 && sample.torsoPitch < 10), `${name}: Walk should visibly lean forward by about 9 degrees`);
+    assert.ok(samples.every(sample => sample.shoulderLead > .045 && sample.shoulderLead < .065), `${name}: the shoulder silhouette should lead the pelvis by about 5cm, not just rotate the neck`);
+    const headPitches = samples.map(sample => sample.headPitch);
+    assert.ok(headPitches.every(pitch => Math.abs(pitch) < 2), `${name}: the head should counter the torso lean to keep the gaze level`);
+    assert.ok(Math.max(...headPitches) - Math.min(...headPitches) < 1.5, `${name}: walking should not make the head nod with each step`);
+    for (const clipName of ['Idle', 'Talk']) {
+      mixer.stopAllAction();
+      const clip = gltf.animations.find(item => item.name === clipName);
+      mixer.clipAction(clip).play();
+      for (let frame = 0; frame < 24; frame++) {
+        mixer.setTime(clip.duration * frame / 24);
+        model.updateMatrixWorld(true);
+        const standingUp = head.getWorldPosition(new Vector3()).sub(spine.getWorldPosition(new Vector3()));
+        assert.ok(Math.abs(Math.atan2(standingUp.z, standingUp.y)) < .03, `${name}/${clipName}: the walking lean must clear when standing or talking`);
+      }
+    }
+    mixer.stopAllAction();
+    mixer.uncacheRoot(model);
+  });
+}
+
+test('detective Talk holds one bent arm just below the chin with a relaxed free arm and planted feet', async () => {
+  const { buffer } = glb(manifest.characters.detective.file);
+  const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
+  const model = clone(gltf.scene);
+  updateSkin(model);
+  const hand = [], chin = [], faceTriangles = [], soles = [];
+  model.traverse(mesh => {
+    if (!mesh.isSkinnedMesh) return;
+    const { position, skinIndex, skinWeight } = mesh.geometry.attributes;
+    const faceIndices = new Set();
+    for (let index = 0; index < position.count; index++) {
+      const vertex = { mesh, index };
+      const rest = posedVertex(vertex);
+      const influences = Array.from({ length: 4 }, (_, component) => ({
+        bone: canonicalBoneName(mesh.skeleton.bones[skinIndex.getComponent(index, component)].name),
+        weight: skinWeight.getComponent(index, component),
+      })).filter(({ weight }) => weight > .001);
+      if (influences.every(({ bone }) => bone === 'Hand.R')) hand.push(vertex);
+      if (influences.every(({ bone }) => ['Foot.L', 'Foot.R'].includes(bone)) && rest.y < .001) soles.push(vertex);
+      if (mesh.material.name === 'skin-warm' && influences.every(({ bone }) => ['Head', 'Jaw'].includes(bone))) {
+        faceIndices.add(index);
+        // The lower jaw includes the actual chin surface, rather than the
+        // Head bone origin, which sits below it at the base of the neck.
+        if (influences.some(({ bone }) => bone === 'Jaw') && rest.y < 1.51 && rest.z > .035) chin.push(vertex);
+      }
+    }
+    const indices = mesh.geometry.index;
+    for (let index = 0; index < indices.count; index += 3) {
+      const triangle = [indices.getX(index), indices.getX(index + 1), indices.getX(index + 2)];
+      if (triangle.every(vertex => faceIndices.has(vertex))) faceTriangles.push(triangle.map(vertex => ({ mesh, index: vertex })));
+    }
+  });
+  assert.ok(hand.length > 100 && chin.length >= 16 && faceTriangles.length > 100 && soles.length > 16, 'Measure the exported glove, chin and soles');
+  const mixer = new AnimationMixer(model);
+  const talk = gltf.animations.find(clip => clip.name === 'Talk');
+  mixer.clipAction(talk).play();
+  const samples = [];
+  let referenceSoles;
+  for (let frame = 0; frame < 120; frame++) {
+    mixer.setTime(talk.duration * frame / 120);
+    updateSkin(model);
+    const handPoints = hand.map(vertex => posedVertex(vertex));
+    const chinPoints = chin.map(vertex => posedVertex(vertex));
+    const handBounds = new Box3().setFromPoints(handPoints);
+    const chinBounds = new Box3().setFromPoints(chinPoints);
+    let chinGap = Infinity;
+    for (const finger of handPoints) for (const jaw of chinPoints) chinGap = Math.min(chinGap, finger.distanceTo(jaw));
+    assert.ok(chinGap < .025, 'The raised glove must visibly reach the chin, not merely gesture at chest height');
+    assert.ok(handBounds.max.y < chinBounds.max.y + .003, 'Fingertips remain below the mouth');
+    assert.ok(handBounds.getCenter(new Vector3()).y < chinBounds.min.y - .035, 'The palm stays below the chin');
+    const shoulder = getLimbBone(model, 'UpperArm', 'R').getWorldPosition(new Vector3());
+    const elbow = getLimbBone(model, 'Forearm', 'R').getWorldPosition(new Vector3());
+    const wrist = getLimbBone(model, 'Hand', 'R').getWorldPosition(new Vector3());
+    const elbowAngle = shoulder.clone().sub(elbow).angleTo(wrist.clone().sub(elbow)) * 180 / Math.PI;
+    assert.ok(elbowAngle > 35 && elbowAngle < 85, 'The thinking arm has a comfortable, visible elbow bend');
+    assert.ok(elbow.y < wrist.y - .10 && elbow.z > shoulder.z + .12, 'The elbow is lowered in front of the torso');
+    assert.ok(getLimbBone(model, 'Hand', 'L').getWorldPosition(new Vector3()).y < 1.02, 'Only one arm is raised');
+    const planted = soles.map(vertex => posedVertex(vertex));
+    referenceSoles ??= planted;
+    assert.ok(planted.every((point, index) => point.distanceTo(referenceSoles[index]) < .001), 'The thinking gesture does not shift either foot');
+    // Check the actual skinned glove against the facial surface throughout
+    // the loop, not just a wrist-to-head distance that can hide penetration.
+    if (frame % 10 === 0) {
+      const triangles = faceTriangles.map(vertices => new Triangle(...vertices.map(vertex => posedVertex(vertex))));
+      const ray = new Ray(new Vector3(), new Vector3(0, 0, 1));
+      const intersection = new Vector3();
+      for (const finger of handPoints) {
+        ray.origin.copy(finger);
+        const hits = [];
+        for (const triangle of triangles) {
+          if (!ray.intersectTriangle(triangle.a, triangle.b, triangle.c, false, intersection)) continue;
+          const distance = finger.distanceTo(intersection);
+          if (!hits.some(hit => Math.abs(hit - distance) < .00001)) hits.push(distance);
+        }
+        assert.equal(hits.length % 2, 0, 'The thinking glove must remain outside the closed face and neck surfaces');
+      }
+    }
+    samples.push({ wrist, elbow, chinGap });
+  }
+  for (let index = 0; index < samples.length; index++) {
+    const next = samples[(index + 1) % samples.length];
+    assert.ok(samples[index].wrist.distanceTo(next.wrist) < .003, 'The held hand moves smoothly through the loop seam');
+    assert.ok(samples[index].elbow.distanceTo(next.elbow) < .003, 'The thinking elbow does not snap or flip');
+  }
+  const gaps = samples.map(sample => sample.chinGap);
+  assert.ok(Math.max(...gaps) - Math.min(...gaps) < .005, 'The hand follows subtle head motion without drifting away from the chin');
+  mixer.stopAllAction();
+  mixer.uncacheRoot(model);
+});
+
+test('detective thinking sleeve preserves elbow volume and bends without folded-over faces', async () => {
+  const { buffer } = glb(manifest.characters.detective.file);
+  const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
+  const model = clone(gltf.scene);
+  updateSkin(model);
+  const sections = new Map(), facePairs = [];
+  model.traverse(mesh => {
+    if (!mesh.isSkinnedMesh) return;
+    const { position, skinIndex, skinWeight } = mesh.geometry.attributes;
+    const sleeve = new Map();
+    for (let index = 0; index < position.count; index++) {
+      const influences = Array.from({ length: 4 }, (_, component) => ({
+        bone: canonicalBoneName(mesh.skeleton.bones[skinIndex.getComponent(index, component)].name),
+        weight: skinWeight.getComponent(index, component),
+      })).filter(({ weight }) => weight > .001);
+      if (!influences.every(({ bone }) => ['UpperArm.R', 'Elbow.R', 'Forearm.R'].includes(bone))) continue;
+      const vertex = { mesh, index }, rest = posedVertex(vertex);
+      if (rest.y < 1.0 || rest.y > 1.23) continue;
+      sleeve.set(index, { vertex, rest });
+      // The exported sleeve uses horizontal cross sections in its bind pose.
+      // Weld duplicate export vertices so split normals do not bias thickness.
+      const row = rest.y.toFixed(4);
+      if (!sections.has(row)) sections.set(row, new Map());
+      sections.get(row).set(rest.toArray().map(value => value.toFixed(5)).join('/'), { vertex, rest });
+    }
+    const edges = new Map(), indices = mesh.geometry.index;
+    for (let index = 0; index < indices.count; index += 3) {
+      const ids = [indices.getX(index), indices.getX(index + 1), indices.getX(index + 2)];
+      if (!ids.every(id => sleeve.has(id))) continue;
+      const face = ids.map(id => sleeve.get(id).vertex);
+      const normal = new Triangle(...ids.map(id => sleeve.get(id).rest)).getNormal(new Vector3());
+      for (let edge = 0; edge < 3; edge++) {
+        const key = [ids[edge], ids[(edge + 1) % 3]].sort((a, b) => a - b).join('/');
+        if (!edges.has(key)) edges.set(key, []);
+        edges.get(key).push({ face, normal });
+      }
+    }
+    for (const neighbors of edges.values()) {
+      // Only compare faces that were nearly coplanar before deformation;
+      // this excludes the sleeve's intentional radial facets and seams.
+      if (neighbors.length === 2 && neighbors[0].normal.angleTo(neighbors[1].normal) < Math.PI / 12) {
+        facePairs.push(neighbors.map(({ face }) => face));
+      }
+    }
+  });
+  const sectionShape = points => {
+    const center = points.reduce((sum, point) => sum.add(point), new Vector3()).multiplyScalar(1 / points.length);
+    const radial = points.map(point => point.clone().sub(center));
+    const areaVector = new Vector3();
+    radial.forEach((point, index) => areaVector.add(new Vector3().crossVectors(point, radial[(index + 1) % radial.length])));
+    const area = areaVector.length() / 2;
+    const normal = areaVector.normalize(), axis = radial[0].clone().normalize();
+    let minorRadius = Infinity;
+    for (let angle = 0; angle < 32; angle++) {
+      const direction = axis.clone().applyAxisAngle(normal, Math.PI * angle / 32);
+      const projections = radial.map(point => point.dot(direction));
+      minorRadius = Math.min(minorRadius, (Math.max(...projections) - Math.min(...projections)) / 2);
+    }
+    return { area, minorRadius };
+  };
+  const rings = [...sections.values()].filter(section => section.size >= 12).map(section => {
+    const points = [...section.values()];
+    const center = points.reduce((sum, { rest }) => sum.add(rest), new Vector3()).multiplyScalar(1 / points.length);
+    points.sort((a, b) => Math.atan2(a.rest.z - center.z, a.rest.x - center.x) - Math.atan2(b.rest.z - center.z, b.rest.x - center.x));
+    return { points, rest: sectionShape(points.map(({ rest }) => rest)) };
+  });
+  assert.ok(rings.length >= 4 && facePairs.length >= 24, 'Measure the actual exported elbow sleeve, not only joint angles');
+  const mixer = new AnimationMixer(model);
+  const idle = mixer.clipAction(gltf.animations.find(clip => clip.name === 'Idle')).play();
+  const talkClip = gltf.animations.find(clip => clip.name === 'Talk');
+  const talk = mixer.clipAction(talkClip).play();
+  const checkSleeve = label => {
+    updateSkin(model);
+    for (const { points, rest } of rings) {
+      const posed = sectionShape(points.map(({ vertex }) => posedVertex(vertex)));
+      assert.ok(posed.area >= rest.area * .80, `${label}: elbow sleeve retains at least 80% of its cross-section area`);
+      assert.ok(posed.minorRadius >= rest.minorRadius * .80, `${label}: elbow sleeve must not pinch into a thin hinge`);
+    }
+    for (const faces of facePairs) {
+      const normals = faces.map(face => new Triangle(...face.map(vertex => posedVertex(vertex))).getNormal(new Vector3()));
+      assert.ok(normals[0].angleTo(normals[1]) < 100 * Math.PI / 180, `${label}: neighboring sleeve faces must not fold back over each other`);
+    }
+  };
+  // Check the whole held gesture and its interpolation from/to Idle: a good
+  // endpoint can still pinch halfway through raising or lowering the arm.
+  idle.setEffectiveWeight(0);
+  talk.setEffectiveWeight(1);
+  for (let frame = 0; frame < 24; frame++) {
+    mixer.setTime(talkClip.duration * frame / 24);
+    checkSleeve(`Talk frame ${frame}`);
+  }
+  for (let step = 0; step <= 8; step++) {
+    idle.setEffectiveWeight(1 - step / 8);
+    talk.setEffectiveWeight(step / 8);
+    mixer.setTime(.3);
+    checkSleeve(`Idle/Talk blend ${step}/8`);
+  }
+  mixer.stopAllAction();
+  mixer.uncacheRoot(model);
+});
+
+test('NPC Talk keeps speaking gestures distinct from the detective thinking pose', async () => {
+  for (const name of ['witness', 'security', 'scientist']) {
+    const { buffer } = glb(manifest.characters[name].file);
+    const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
+    const model = clone(gltf.scene);
+    const mixer = new AnimationMixer(model);
+    const talk = gltf.animations.find(clip => clip.name === 'Talk');
+    mixer.clipAction(talk).play();
+    let initialJaw, jawMotion = 0;
+    for (let frame = 0; frame < 24; frame++) {
+      mixer.setTime(talk.duration * frame / 24);
+      model.updateMatrixWorld(true);
+      const wrist = getLimbBone(model, 'Hand', 'R').getWorldPosition(new Vector3());
+      assert.ok(wrist.y < 1.2, `${name}: retain the NPC's lower speaking gesture`);
+      const jaw = model.getObjectByName('Jaw').quaternion;
+      initialJaw ??= jaw.clone();
+      jawMotion = Math.max(jawMotion, initialJaw.angleTo(jaw));
+    }
+    assert.ok(jawMotion > .03, `${name}: the speaker's mouth still animates`);
+    mixer.stopAllAction();
+    mixer.uncacheRoot(model);
+  }
+});
+
 for (const [name, asset] of Object.entries(manifest.characters)) {
   test(`${name} has heel-to-toe contacts, continuous limbs, exact loops and independent poses in Three.js`, async () => {
     const { buffer } = glb(asset.file);
@@ -209,6 +509,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
     const vertices = [];
     const soles = { L: [], R: [] };
     const jointBlends = new Set();
+    const elbowBlends = { L: new Set(), R: new Set() };
     const continuousLegs = new Set();
     const continuousArms = new Set();
     model.traverse((mesh) => {
@@ -238,7 +539,11 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         for (const side of ['L', 'R']) {
           if (influences.some((i) => i.bone === `Shin.${side}`) && influences.some((i) => i.bone === `Thigh.${side}`)) jointBlends.add(`knee${side}`);
           if (influences.some((i) => i.bone === `Shin.${side}`) && influences.some((i) => i.bone === `Foot.${side}`)) jointBlends.add(`ankle${side}`);
-          if (influences.some((i) => i.bone === `UpperArm.${side}`) && influences.some((i) => i.bone === `Forearm.${side}`)) jointBlends.add(`elbow${side}`);
+          for (const [upper, lower] of [['UpperArm', 'Forearm'], ['UpperArm', 'Elbow'], ['Elbow', 'Forearm']]) {
+            if (influences.some(i => i.bone === `${upper}.${side}`) && influences.some(i => i.bone === `${lower}.${side}`)) {
+              elbowBlends[side].add(`${upper}/${lower}`);
+            }
+          }
           if (influences.length === 1 && influences[0].bone === `Foot.${side}` && posedVertex(point).y < 0.001) soles[side].push({ ...point, restZ: posedVertex(point).z });
         }
       }
@@ -249,6 +554,10 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         }
       }
     });
+    for (const side of ['L', 'R']) {
+      const links = elbowBlends[side];
+      if (links.has('UpperArm/Forearm') || (links.has('UpperArm/Elbow') && links.has('Elbow/Forearm'))) jointBlends.add(`elbow${side}`);
+    }
     assert.deepEqual([...jointBlends].sort(), ['ankleL', 'ankleR', 'elbowL', 'elbowR', 'kneeL', 'kneeR']);
     assert.deepEqual([...continuousLegs].sort(), ['L', 'R'], 'Each leg is a connected surface through hip, knee and ankle, not floating segments');
     assert.deepEqual([...continuousArms].sort(), ['L', 'R'], 'Cloth must bend continuously through the elbow without separating sleeve pieces');
@@ -352,6 +661,7 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
         }
       }
       if (clip.name !== 'Walk') continue;
+      const authoredFrames = Math.max(...clip.tracks.map(track => track.times.length)) - 1;
       for (const side of ['L', 'R']) {
         for (const boundary of [0, asset.gait.heelEnd, asset.gait.toeStart, asset.gait.stance].map(time => (time + (side === 'R' ? .5 : 0)) % 1)) {
           const h = 1 / 2400;
@@ -373,13 +683,13 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
       for (const side of ['L', 'R']) {
         const sideOffset = side === 'R' ? .5 : 0;
         for (const u of [0, .22, .72, 1]) {
-          // Compare adjacent authored keys (120Hz). Sampling tiny subframe
+          // Compare adjacent authored keys. Sampling tiny subframe
           // offsets would only measure Three.js' linear interpolation rather
           // than continuity of the baked gait curve.
           const phase = asset.gait.stance + (1 - asset.gait.stance) * u;
-          const boundaryFrame = Math.round((phase - sideOffset + 1) % 1 * 120);
-          const boundary = boundaryFrame / 120;
-          const h = 1 / 120;
+          const boundaryFrame = Math.round((phase - sideOffset + 1) % 1 * authoredFrames);
+          const boundary = boundaryFrame / authoredFrames;
+          const h = 1 / authoredFrames;
           const points = [-2, -1, 0, 1, 2].map((offset) => {
             sample((boundary + offset * h + 1) % 1);
             return getLimbBone(model, 'Foot', side).getWorldPosition(new Vector3());
@@ -389,16 +699,14 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
           const incomingAcceleration = points[2].clone().sub(points[1].clone().multiplyScalar(2)).add(points[0]).divideScalar(h * h);
           const outgoingAcceleration = points[4].clone().sub(points[3].clone().multiplyScalar(2)).add(points[2]).divideScalar(h * h);
           assert.ok(incomingVelocity.distanceTo(outgoingVelocity) < .50, `${name}/${side}: stage ${u} velocity is continuous`);
-          // The authored curve is C2 continuous; the 120 Hz baked samples
+          // The authored curve is C2 continuous; the baked samples
           // and two-bone IK add a small finite-difference residual at the
           // .72 boundary, so allow that sub-frame measurement headroom.
           assert.ok(incomingAcceleration.distanceTo(outgoingAcceleration) < 140, `${name}/${side}: stage ${u} acceleration is continuous`);
         }
       }
-      // The animation is authored at 120fps. Probe the keys around toe-off
-      // themselves: checking only phase=.56 can land between the .558/.567
-      // keys and miss a discontinuous swing-foot lift.
-      const authoredFrames = 120;
+      // Probe the actual baked keys around toe-off. Checking only phase=.56
+      // can fall between keys and miss a discontinuous swing-foot lift.
       const toeOffFrame = Math.round(asset.gait.stance * authoredFrames);
       const keyH = 1 / 2400;
       for (const side of ['L', 'R']) {
@@ -413,6 +721,25 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
           const outgoing = values[2].clone().sub(values[1]).divideScalar(keyH);
           assert.ok(incoming.length() < 3 && outgoing.length() < 3, `${name}/${side}: toe-off key ${frame} has an excessive foot velocity`);
           assert.ok(incoming.distanceTo(outgoing) < .25, `${name}/${side}: toe-off key ${frame} has a foot velocity cusp`);
+        }
+      }
+      // Stage endpoints alone missed the old stop-and-kick inside early
+      // swing (8.3 m/s and 560 m/s²). Bound the entire evaluated trajectory
+      // at display rates and at the bake rate, including the loop seam.
+      for (const hz of [30, 60, 144, authoredFrames]) {
+        const poses = Array.from({ length: hz }, (_, frame) => {
+          sample(frame / hz);
+          return ['FootL', 'FootR', 'Hips'].map(bone => model.getObjectByName(bone).getWorldPosition(new Vector3()));
+        });
+        const velocities = poses.map((pose, frame) => pose.map((point, bone) =>
+          poses[(frame + 1) % hz][bone].clone().sub(point).multiplyScalar(hz)));
+        for (let frame = 0; frame < hz; frame++) {
+          for (let bone = 0; bone < 3; bone++) {
+            const velocity = velocities[frame][bone];
+            const acceleration = velocities[(frame + 1) % hz][bone].clone().sub(velocity).multiplyScalar(hz);
+            assert.ok(velocity.length() < (bone === 2 ? .95 : 4), `${name}/${hz}Hz: ${bone === 2 ? 'pelvis' : 'ankle'} speed spike at ${frame / hz}`);
+            assert.ok(acceleration.length() < (bone === 2 ? 30 : 180), `${name}/${hz}Hz: ${bone === 2 ? 'pelvis' : 'ankle'} acceleration spike at ${frame / hz}`);
+          }
         }
       }
       const anchors = new Map();

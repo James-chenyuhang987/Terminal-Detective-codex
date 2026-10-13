@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { compileFunction } from 'node:vm';
+import ts from 'typescript';
 import { resolveTheaterInteraction } from '../src/game/theaterInteraction.js';
 import { createInitialGameState, applySettlementResult, applyRecoveryTurn } from '../src/game/gameState.js';
 import { ALL_CASES, Case_Data_Lvl_01 } from '../src/game/caseData.js';
@@ -122,4 +124,30 @@ test('shared tools, reports, and notebook have accessible scene-independent cont
   assert.match(presentation, /const \{ reducedMotion \} = usePresentationMotion\(\)/);
   assert.match(read('components/ui/usePresentationMotion.js'), /prefers-reduced-motion/);
   assert.match(read('components/ui/usePresentationMotion.js'), /settings.reduceMotion/);
+});
+
+
+test('opening the dialogue consumes its pending interaction so closing the inner dialogue cannot leave a stale talk pose', () => {
+  const source = ts.createSourceFile('TheaterPresentation.jsx', presentation, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  let effect;
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.expression.getText() === 'useEffect' && node.arguments[1]?.getText() === '[dialoguePanel, interactionNpcId]') effect = node.arguments[0];
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  const { outputText } = ts.transpileModule(`const result = (${effect.getText()});`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } });
+  let pending = 'witness';
+  const timers = new Map();
+  const window = { setTimeout(callback) { timers.set(1, callback); return 1; }, clearTimeout(id) { timers.delete(id); } };
+  const run = dialoguePanel => compileFunction(`${outputText}\nreturn result;`, ['interactionNpcId', 'dialoguePanel', 'setInteractionNpcId', 'window'])(
+    pending, dialoguePanel, value => { pending = typeof value === 'function' ? value(pending) : value; }, window,
+  )();
+  const cancelPending = run(null);
+  assert.equal(pending, 'witness', 'the gesture starts while the dialogue loads');
+  assert.equal(timers.size, 1);
+  cancelPending();
+  run({ type: 'NPCDialogBox' });
+  assert.equal(pending, null, 'the authoritative selected NPC takes over as soon as the dialogue is present');
+  run(null);
+  assert.equal(timers.size, 0, 'closing inside NPCDialogBox does not leave a 1.2-second stale interaction');
 });
