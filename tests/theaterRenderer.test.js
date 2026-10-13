@@ -232,7 +232,7 @@ test('portrait arrival framing leaves room above its panel and restores projecti
   h.cleanup();
 });
 
-function avatarFrame({ root, player = null, talking = false, interacting = false, interactionTarget = null, targetPosition = null, live }) {
+function avatarFrame({ root, player = null, talking = false, interacting = false, interactionTarget = null, targetPosition = null, live, bindings: overrides = {} }) {
   const avatar = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'Avatar');
   let callback;
   const visit = node => {
@@ -251,6 +251,7 @@ function avatarFrame({ root, player = null, talking = false, interacting = false
     npcDemeanor: visuals.npcDemeanor, emotion: 'calm', appearance: null,
     footLock: { lockWeight: 0, applied: new Vector3() }, updateFootLock: () => {},
     model: new Group(), grounding: {}, soleGroundOffset: () => 0,
+    ...overrides,
   };
   return compileFunction(`${outputText}\nreturn result;`, Object.keys(bindings))(...Object.values(bindings));
 }
@@ -269,6 +270,39 @@ test('ending a conversation preserves the detective facing instead of snapping t
     assert.ok(Math.abs(root.rotation.y - facing) < 1e-8, 'closing dialogue cannot undo the rendered turn');
     assert.equal(player.current.rotationY, facing, 'spatial persistence and the next movement start from the visible facing');
     assert.deepEqual(player.current.position, [0, 0, 0], 'conversation orientation cannot move the collision body');
+  }
+});
+
+test('stopping, pausing or suspending an Avatar never recenters its visible foot-lock offset', () => {
+  for (const reason of ['released', 'paused', 'suspended', 'blurred', 'hidden', 'reduced']) {
+    const root = new Group();
+    const model = new Group();
+    root.add(model);
+    const footLock = motion.createFootLock(model);
+    // A turn or a partially blended stride can have a nonzero presentation
+    // correction when input stops. Never trade that offset for visible drift.
+    footLock.applied.set(.018, 0, -.032);
+    footLock.appliedWorld.copy(footLock.applied);
+    footLock.lockWeight = 1;
+    footLock.activeSide = 'left';
+    model.position.copy(footLock.applied);
+    const released = model.position.clone();
+    const player = { current: { position: [1, 0, 2], rotationY: 0, speed: 0, distance: 0, walking: reason !== 'released' } };
+    const live = { current: { suspended: reason === 'suspended', paused: reason === 'paused', reducedMotion: reason === 'reduced' } };
+    let invalidations = 0;
+    const frame = avatarFrame({ root, player, live, bindings: {
+      model, footLock, updateFootLock: motion.updateFootLock,
+      input: { current: { windowActive: reason !== 'blurred', invalidate: () => invalidations++ } },
+      document: { hidden: reason === 'hidden' },
+    } });
+    for (let index = 0; index < 60; index++) frame({}, 1 / 60);
+    assert.deepEqual(model.position.toArray(), released.toArray(), `${reason}: the model stays at its last displayed position`);
+    assert.deepEqual(root.position.toArray(), player.current.position);
+    assert.equal(footLock.activeSide, null, 'the old world-space anchor is discarded');
+    assert.equal(footLock.lockWeight, 0);
+    if (reason === 'released') assert.equal(invalidations, 0, 'a held offset must not keep the idle canvas rendering');
+    const nextSceneLock = motion.createFootLock(new Group());
+    assert.equal(nextSceneLock.applied.length(), 0, 'a fresh scene cannot inherit the old offset');
   }
 });
 

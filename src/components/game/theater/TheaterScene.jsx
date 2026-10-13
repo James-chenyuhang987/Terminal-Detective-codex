@@ -423,13 +423,14 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
     }
     if (!background) {
       const demeanor = npcDemeanor(emotion);
-      const speedRatio = player ? MathUtils.clamp((player.current.speed || 0) / Math.max(.01, locomotion.speed), 0, 1) : 0;
       const turnLean = player ? MathUtils.clamp(-(player.current.visualTurnRate || player.current.turnRate || 0) * .014, -.055, .055) : 0;
       // Apply balance only to the upper body. Rotating a parent around the
       // hips moves both ankles in world X/Z and produces visible foot sliding.
       if (spine && !reduced) {
         const offset = appliedSpineOffset.current;
-        offset.x = player ? speedRatio * .012 : demeanor.bodyPitch;
+        // The authored Walk supplies the detective's forward lean and its
+        // stop fade. A speed-based addition would snap off on key release.
+        offset.x = player ? 0 : demeanor.bodyPitch;
         offset.y = !player ? Math.sin(animation.mixer.time * 1.8 + (appearance?.phase || 0)) * demeanor.hesitation : 0;
         offset.z = player ? turnLean : 0;
         spine.rotation.x += offset.x;
@@ -441,6 +442,7 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
       // collision-authoritative and is never altered by presentation code.
       if (player || footLock.lockWeight > .001) updateFootLock(footLock, animation, model, {
         delta,
+        stationary: Boolean(player && (!player.current.walking || live.current.paused || reduced)),
         // Reduced-motion mode intentionally freezes authored gait. Do not
         // retain a stale support-foot anchor while the actor is transitioning
         // back to Idle; the lock is presentation-only and should release with
@@ -449,13 +451,13 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
       });
       model.position.y = player && animation.walkWeight > 0.0001 ? soleGroundOffset(grounding, model) : 0;
     } else {
-      // Release a stale lock when the tab is suspended or the scene is
-      // backgrounded. Keep this path presentation-only as well.
-      if (player || footLock.lockWeight > .001) updateFootLock(footLock, animation, model, { delta, enabled: false });
+      // Discard the anchor while preserving the last displayed position. A
+      // background frame must not move a stopped actor toward the root.
+      if (player || footLock.lockWeight > .001) updateFootLock(footLock, animation, model, { delta, enabled: false, stationary: true });
     }
-    // Foot-lock release can outlast the Walk fade. Finish its small remaining
-    // correction before the demand canvas goes idle.
-    if (!background && footLock.applied.lengthSq() > 1e-10) input.current.invalidate?.();
+    // A held correction requires no frames while stationary. It can release
+    // during the next requested movement without an idle render loop.
+    if (!background && player?.current.walking && footLock.applied.lengthSq() > 1e-10) input.current.invalidate?.();
     if (!root.current) return;
   }, -0.5);
   // Keep the model at the actor root. Presentation lean is applied to Spine

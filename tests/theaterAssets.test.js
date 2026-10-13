@@ -213,7 +213,7 @@ function correlation(a, b) {
 }
 
 for (const [name, asset] of Object.entries(manifest.characters)) {
-  test(`${name} walks with opposite arm and leg swings, a gentle forward lean and a steady head`, async () => {
+  test(`${name} walks with opposite arm and leg swings, the intended forward lean and a steady head`, async () => {
     const { buffer } = glb(asset.file);
     const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
     const model = clone(gltf.scene);
@@ -262,10 +262,13 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
       const { limbs } = samples[frame];
       assert.ok(limbs[contactSide].arm < limbs[opposite].arm - .10, `${name}/${contactSide}: the opposite arm leads when the foot lands`);
     }
-    assert.ok(samples.every(sample => sample.torsoPitch > 8 && sample.torsoPitch < 10), `${name}: Walk should visibly lean forward by about 9 degrees`);
-    assert.ok(samples.every(sample => sample.shoulderLead > .045 && sample.shoulderLead < .065), `${name}: the shoulder silhouette should lead the pelvis by about 5cm, not just rotate the neck`);
+    const detective = name === 'detective';
+    const torsoRange = detective ? [14, 16] : [8, 10];
+    const shoulderRange = detective ? [.075, .10] : [.045, .065];
+    assert.ok(samples.every(sample => sample.torsoPitch > torsoRange[0] && sample.torsoPitch < torsoRange[1]), `${name}: Walk torso pitch stays within ${torsoRange.join('–')} degrees`);
+    assert.ok(samples.every(sample => sample.shoulderLead > shoulderRange[0] && sample.shoulderLead < shoulderRange[1]), `${name}: the shoulders visibly lead the pelvis, rather than only tilting the neck`);
     const headPitches = samples.map(sample => sample.headPitch);
-    assert.ok(headPitches.every(pitch => Math.abs(pitch) < 2), `${name}: the head should counter the torso lean to keep the gaze level`);
+    assert.ok(headPitches.every(pitch => detective ? pitch > 7 && pitch < 9 : Math.abs(pitch) < 2), `${name}: the detective looks down slightly while investigating; NPCs retain a level gaze`);
     assert.ok(Math.max(...headPitches) - Math.min(...headPitches) < 1.5, `${name}: walking should not make the head nod with each step`);
     for (const clipName of ['Idle', 'Talk']) {
       mixer.stopAllAction();
@@ -282,6 +285,87 @@ for (const [name, asset] of Object.entries(manifest.characters)) {
     mixer.uncacheRoot(model);
   });
 }
+
+test('detective arms are longer and fuller than the shared NPC proportions, with a broader coordinated walk swing', async () => {
+  const dimensions = {};
+  for (const [name, asset] of Object.entries(manifest.characters)) {
+    const { buffer } = glb(asset.file);
+    const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
+    const model = clone(gltf.scene);
+    updateSkin(model);
+    const arms = {};
+    for (const side of ['L', 'R']) {
+      const [shoulder, elbow, wrist] = ['UpperArm', 'Forearm', 'Hand']
+        .map(joint => getLimbBone(model, joint, side).getWorldPosition(new Vector3()));
+      const sections = new Map();
+      model.traverse(mesh => {
+        if (!mesh.isSkinnedMesh) return;
+        const { position, skinIndex, skinWeight } = mesh.geometry.attributes;
+        for (let index = 0; index < position.count; index++) {
+          const influences = Array.from({ length: 4 }, (_, component) => ({
+            bone: canonicalBoneName(mesh.skeleton.bones[skinIndex.getComponent(index, component)].name),
+            weight: skinWeight.getComponent(index, component),
+          })).filter(({ weight }) => weight > .001);
+          if (!influences.every(({ bone }) => ['UpperArm', 'Elbow', 'Forearm'].some(joint => bone === `${joint}.${side}`))) continue;
+          const point = posedVertex({ mesh, index });
+          const key = point.y.toFixed(4);
+          if (!sections.has(key)) sections.set(key, new Map());
+          sections.get(key).set(point.toArray().map(value => value.toFixed(5)).join('/'), point);
+        }
+      });
+      // Interpolate corresponding sections along each bone. Detective elbows
+      // have extra rings, so comparing the widest/nearest ring would confuse
+      // mesh density with an actual change in sleeve thickness.
+      const rings = [...sections.values()].filter(section => section.size >= 12).map(section => {
+        const bounds = new Box3().setFromPoints([...section.values()]);
+        return { y: bounds.getCenter(new Vector3()).y, width: bounds.max.x - bounds.min.x, depth: bounds.max.z - bounds.min.z };
+      }).sort((a, b) => a.y - b.y);
+      const thickness = (start, end, progress) => {
+        const y = start.y + (end.y - start.y) * progress;
+        const lower = rings.findLast(ring => ring.y <= y);
+        const upper = rings.find(ring => ring.y >= y);
+        assert.ok(lower && upper, `${name}/${side}: exported sleeve rings surround the sampled bone section`);
+        const t = upper.y === lower.y ? 0 : (y - lower.y) / (upper.y - lower.y);
+        return ['width', 'depth'].map(axis => lower[axis] + (upper[axis] - lower[axis]) * t);
+      };
+      arms[side] = {
+        lengths: [shoulder.distanceTo(elbow), elbow.distanceTo(wrist)],
+        thickness: [...thickness(shoulder, elbow, .6), ...thickness(elbow, wrist, .45)],
+        travel: [],
+      };
+    }
+    const mixer = new AnimationMixer(model);
+    const walk = gltf.animations.find(clip => clip.name === 'Walk');
+    mixer.clipAction(walk).play();
+    for (let frame = 0; frame < 120; frame++) {
+      mixer.setTime(walk.duration * frame / 120);
+      model.updateMatrixWorld(true);
+      for (const side of ['L', 'R']) {
+        const shoulder = getLimbBone(model, 'UpperArm', side).getWorldPosition(new Vector3());
+        const wrist = getLimbBone(model, 'Hand', side).getWorldPosition(new Vector3());
+        arms[side].travel.push(wrist.z - shoulder.z);
+      }
+    }
+    dimensions[name] = arms;
+    mixer.stopAllAction();
+    mixer.uncacheRoot(model);
+  }
+  for (const name of ['witness', 'security', 'scientist']) {
+    for (const side of ['L', 'R']) {
+      const detective = dimensions.detective[side], baseline = dimensions[name][side];
+      detective.lengths.forEach((length, index) => {
+        const ratio = length / baseline.lengths[index];
+        assert.ok(ratio > 1.10 && ratio < 1.16, `${side}: both detective arm segments are visibly longer than ${name}, without changing the whole body scale`);
+      });
+      detective.thickness.forEach((value, index) => {
+        const ratio = value / baseline.thickness[index];
+        assert.ok(ratio > 1.08 && ratio < 1.18, `${side}: upper and lower sleeves are fuller in both width and depth than ${name}`);
+      });
+      const range = values => Math.max(...values) - Math.min(...values);
+      assert.ok(range(detective.travel) > range(baseline.travel) * 1.5, `${side}: detective arm swing is broader than ${name}, beyond the extra travel caused by longer arms alone`);
+    }
+  }
+});
 
 test('detective Talk holds one bent arm just below the chin with a relaxed free arm and planted feet', async () => {
   const { buffer } = glb(manifest.characters.detective.file);
@@ -378,6 +462,11 @@ test('detective thinking sleeve preserves elbow volume and bends without folded-
   const gltf = await new GLTFLoader().parseAsync(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.length), '');
   const model = clone(gltf.scene);
   updateSkin(model);
+  const shoulder = getLimbBone(model, 'UpperArm', 'R').getWorldPosition(new Vector3());
+  const elbow = getLimbBone(model, 'Forearm', 'R').getWorldPosition(new Vector3());
+  const wrist = getLimbBone(model, 'Hand', 'R').getWorldPosition(new Vector3());
+  const bendTop = elbow.y + (shoulder.y - elbow.y) * .5;
+  const bendBottom = elbow.y - (elbow.y - wrist.y) * .6;
   const sections = new Map(), facePairs = [];
   model.traverse(mesh => {
     if (!mesh.isSkinnedMesh) return;
@@ -390,7 +479,7 @@ test('detective thinking sleeve preserves elbow volume and bends without folded-
       })).filter(({ weight }) => weight > .001);
       if (!influences.every(({ bone }) => ['UpperArm.R', 'Elbow.R', 'Forearm.R'].includes(bone))) continue;
       const vertex = { mesh, index }, rest = posedVertex(vertex);
-      if (rest.y < 1.0 || rest.y > 1.23) continue;
+      if (rest.y < bendBottom || rest.y > bendTop) continue;
       sleeve.set(index, { vertex, rest });
       // The exported sleeve uses horizontal cross sections in its bind pose.
       // Weld duplicate export vertices so split normals do not bias thickness.

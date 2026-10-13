@@ -1,4 +1,4 @@
-import { Matrix4, Vector3 } from 'three';
+import { AnimationClip, Matrix3, Matrix4, Vector3 } from 'three';
 import { MAX_FRAME_DELTA, PLAYER_RADIUS, WALK_SPEED, movePlayer } from './theaterWorld.js';
 
 const soleCache = new WeakMap();
@@ -14,9 +14,18 @@ const FOOT_LOCK_MAX_SPEED = .6;
 const DEFAULT_GAIT = Object.freeze({ stance: .56, heelEnd: .10, toeStart: .40, doubleSupport: .06 });
 const LOCOMOTION_EPSILON = .015;
 const TALK_BLEND_DURATION = .5;
+const WALK_STOP_DURATION = .3;
 
 const clamp01 = value => Math.max(0, Math.min(1, value));
 const wrapPhase = value => ((value % 1) + 1) % 1;
+const smoothBlend = value => {
+  const t = clamp01(value);
+  return t * t * t * (t * (t * 6 - 15) + 10);
+};
+
+function locomotionTrack(track) {
+  return /^(?:Root|Hips|(?:Coat|Thigh|Shin|Foot)\.?[LR])\./.test(track.name);
+}
 
 function gaitContact(phase, gait) {
   const leftPhase = wrapPhase(phase);
@@ -36,16 +45,6 @@ function gaitContact(phase, gait) {
     // also a safe point to blend to Idle without asking the foot to teleport.
     safe: double || leftMidStance || rightMidStance,
   };
-}
-
-function nextContactBoundary(phase, gait) {
-  const current = wrapPhase(phase);
-  // The first frame of a heel contact is a stable place to finish a stop.
-  const candidates = [0, gait.heelEnd, .5, .5 + gait.heelEnd, 1];
-  for (const candidate of candidates) {
-    if (candidate > current + 1e-6) return candidate;
-  }
-  return 1;
 }
 
 function writeContactState(animation, phase, gait) {
@@ -130,6 +129,8 @@ export function createFootLock(model) {
     activeSide: null,
     lockWeight: 0,
     applied: new Vector3(),
+    appliedWorld: new Vector3(),
+    parentBasis: new Matrix3(),
     previousApplied: new Vector3(),
     appliedStep: new Vector3(),
     anchorWorld: new Vector3(),
@@ -145,8 +146,11 @@ export function createFootLock(model) {
  * Keeps the current single support foot in world X/Z while it is in the
  * authored mid-stance interval. The compensation is deliberately bounded and
  * damped; when support changes or the foot enters swing, it releases smoothly.
+ * Once locomotion stops, preserve the displayed offset without following a
+ * foot through its Idle blend. Recentring the whole model while stationary
+ * would visually move the actor after input has already stopped it.
  */
-export function updateFootLock(lock, animation, model = lock?.model, { delta = 0, enabled = true } = {}) {
+export function updateFootLock(lock, animation, model = lock?.model, { delta = 0, enabled = true, stationary = false } = {}) {
   if (!lock || !model) return;
   const elapsed = Number.isFinite(delta) ? Math.max(0, Math.min(delta, MAX_FRAME_DELTA)) : 0;
   if (!elapsed) return;
@@ -156,10 +160,24 @@ export function updateFootLock(lock, animation, model = lock?.model, { delta = 0
 
   // Remove only our previous horizontal compensation so all measurements are
   // taken from the authored pose and any external model transform is retained.
-  lock.previousApplied.copy(lock.applied);
-  model.position.x -= lock.previousApplied.x;
-  model.position.z -= lock.previousApplied.z;
+  model.position.x -= lock.applied.x;
+  model.position.z -= lock.applied.z;
   parent.updateWorldMatrix(true, false);
+  // Store the correction in world space between frames. The parent can turn
+  // toward an NPC before this callback, including the first stopped frame;
+  // keeping an old local offset would orbit the model around the actor root.
+  lock.parentBasis.setFromMatrix4(parent.matrixWorld).invert();
+  lock.previousApplied.copy(lock.appliedWorld).applyMatrix3(lock.parentBasis);
+  lock.previousApplied.y = 0;
+  if (stationary) {
+    lock.activeSide = null;
+    lock.lockWeight = 0;
+    lock.applied.copy(lock.previousApplied);
+    model.position.x += lock.applied.x;
+    model.position.z += lock.applied.z;
+    model.updateWorldMatrix(true, true);
+    return;
+  }
   model.updateWorldMatrix(true, true);
 
   const contact = animation?.contact;
@@ -216,6 +234,7 @@ export function updateFootLock(lock, animation, model = lock?.model, { delta = 0
   if (!bone && lock.applied.lengthSq() < 1e-10) lock.applied.set(0, 0, 0);
   model.position.x += lock.applied.x;
   model.position.z += lock.applied.z;
+  lock.appliedWorld.copy(lock.applied).applyMatrix3(lock.parentBasis.setFromMatrix4(parent.matrixWorld));
   model.updateWorldMatrix(true, true);
 }
 
@@ -301,20 +320,32 @@ export function stepLocomotion(state, direction, rawDelta, room, {
 }
 
 export function createAvatarAnimation(mixer, clips, gait = {}) {
-  const actions = Object.fromEntries(clips.map(clip => [clip.name, mixer.clipAction(clip)]));
+  // A departing conversation should lower the arm while the legs can already
+  // walk. Keep the pelvis/legs/coat independent of the upper-body Talk fade.
+  // Small non-skeletal clips used by other callers keep their original shape.
+  const layered = clips.length > 0 && clips.every(clip => clip.tracks.some(locomotionTrack)
+    && clip.tracks.some(track => !locomotionTrack(track)));
+  const actions = Object.fromEntries(clips.map(clip => [clip.name, mixer.clipAction(layered
+    ? new AnimationClip(clip.name, clip.duration, clip.tracks.filter(track => !locomotionTrack(track))) : clip)]));
+  const locomotionActions = layered ? Object.fromEntries(clips.filter(clip => clip.name !== 'Talk')
+    .map(clip => [clip.name, mixer.clipAction(new AnimationClip(`${clip.name}:Locomotion`, clip.duration, clip.tracks.filter(locomotionTrack)))])) : null;
   for (const [name, action] of Object.entries(actions)) action.setEffectiveWeight(name === 'Idle' ? 1 : 0).play();
+  if (locomotionActions) for (const [name, action] of Object.entries(locomotionActions)) action.setEffectiveWeight(name === 'Idle' ? 1 : 0).play();
   const walkDuration = actions.Walk?.getClip().duration || 1;
   const gaitProfile = { ...DEFAULT_GAIT, ...gait };
   const animation = {
     mixer,
     actions,
+    locomotionActions,
     walkWeight: 0,
     talkWeight: 0,
     talking: false,
-    talkBlendStart: 0,
-    talkBlendElapsed: TALK_BLEND_DURATION,
-    // Blend state is deliberately exposed: the scene can use stopBlend to
-    // delay root/foot corrections until the supporting foot is planted.
+    talkBase: 0,
+    talkTransitions: [],
+    walkStopStart: 0,
+    walkStopElapsed: WALK_STOP_DURATION,
+    // Blend state is exposed for presentation; it never advances a step
+    // once collision-resolved locomotion has stopped.
     startBlend: 0,
     stopBlend: 1,
     locomotionState: 'idle',
@@ -325,9 +356,6 @@ export function createAvatarAnimation(mixer, clips, gait = {}) {
     supportFoot: 'double',
     contact: { left: true, right: true, double: true, safe: true, phase: 0 },
     gait: gaitProfile,
-    // `settleRate` is in clip cycles/second. It is only used for the small
-    // heel/toe transition window when input is released mid-step.
-    settleRate: 1.8,
     walkDuration,
     _wasWalking: false,
   };
@@ -340,10 +368,9 @@ export function createAvatarAnimation(mixer, clips, gait = {}) {
  * otherwise the legacy speed/time-scale path is retained for callers that do
  * not yet expose collision-resolved distance.
  *
- * On release, Walk is held through the current support phase. If release lands
- * in the short heel/toe transition window, the clip advances to the next heel
- * contact before its weight is allowed to fade out. This prevents a lifted
- * foot from freezing in mid-air and makes Walk → Idle phase-aware.
+ * On release, stop the phase immediately and ease the held pose back to Idle.
+ * Grounding keeps blended soles above the floor. Neither a settling step nor
+ * a support-foot correction may move the character after input is released.
  * @param {object} animation
  * @param {number} rawDelta
  * @param {{speed?: number, distance?: number, authoredSpeed?: number, talking?: boolean, frozen?: boolean, reducedMotion?: boolean, gait?: {stance?: number, heelEnd?: number, toeStart?: number, swingLift?: number}}} [options]
@@ -382,69 +409,86 @@ export function updateAvatarAnimation(animation, rawDelta, {
   // Keep the public contact state synchronized even when a caller changes the
   // action time (for example, deterministic appearance phase setup).
   const prePhase = walkAction ? wrapPhase(walkAction.time / walkDuration) : animation.gaitPhase;
-  let contact = writeContactState(animation, prePhase, profile);
+  writeContactState(animation, prePhase, profile);
 
   if (walking) {
+    if (!animation._wasWalking && hadWalk) {
+      // Resume from the held pose, rather than letting stale stop factors
+      // briefly reduce the gait weight again when a direction is re-pressed.
+      animation.startBlend = Math.sqrt(animation.walkWeight);
+      animation.stopBlend = 1 - animation.startBlend;
+    }
     animation.locomotionState = hadWalk ? 'walking' : 'starting';
     animation.startBlend += (1 - animation.startBlend) * blend;
     animation.stopBlend += (0 - animation.stopBlend) * blend;
   } else {
+    if (animation._wasWalking) {
+      animation.walkStopStart = animation.walkWeight;
+      animation.walkStopElapsed = 0;
+    }
     animation.locomotionState = hadWalk ? 'stopping' : 'idle';
     animation.startBlend += (0 - animation.startBlend) * blend;
-    // Do not fade from an arbitrary swing pose. Move only across the tiny
-    // heel/toe gap; normal mid-stance stops preserve the exact old clip time.
-    if (hadWalk && !contact.safe && walkAction && !reducedMotion) {
-      const target = nextContactBoundary(prePhase, profile);
-      const distanceToContact = target - prePhase;
-      const advance = Math.min(distanceToContact, animation.settleRate * delta);
-      walkAction.time = wrapPhase(prePhase + advance) * walkDuration;
-      contact = writeContactState(animation, walkAction.time / walkDuration, profile);
-    }
-    const stopTarget = contact.safe || !hadWalk ? 1 : 0;
-    animation.stopBlend += (stopTarget - animation.stopBlend) * blend;
+    animation.walkStopElapsed = reducedMotion ? WALK_STOP_DURATION : Math.min(WALK_STOP_DURATION, animation.walkStopElapsed + delta);
+    animation.stopBlend = smoothBlend(animation.walkStopElapsed / WALK_STOP_DURATION);
   }
 
   const authored = Math.max(.001, Math.abs(authoredSpeed));
   const targetWeight = walking ? Math.min(1, speed / authored * 1.35) : 0;
-  // startBlend avoids a first-frame pop; stopBlend remains at zero until the
-  // support foot has reached a safe contact phase.
+  // Blend the pose without allowing the no-input transition to take a step.
   const transitionWeight = animation.startBlend * (1 - animation.stopBlend);
-  const waitingForContact = hadWalk && !contact.safe && !reducedMotion;
-  // A zero locomotion speed must not erase the visible Walk pose while its
-  // last step is still settling. Hold its current contribution until contact;
-  // only then may Idle replace it through the normal damped fade.
-  const desiredWalkWeight = walking
-    ? targetWeight * clamp01(transitionWeight)
-    : waitingForContact ? animation.walkWeight : 0;
+  // A quick re-press accelerates from zero but already has a visible stride.
+  // Keep that pose contribution while the distance-driven phase speeds up;
+  // reducing it to the first frame's low speed would twitch back toward Idle.
+  const desiredWalkWeight = walking ? Math.max(animation.walkWeight, targetWeight * clamp01(transitionWeight)) : 0;
   if (activeTalk !== animation.talking) {
     // A new conversation starts on the greeting beat only once the previous
     // gesture has disappeared. Reopening during its fade resumes the held
     // clip, otherwise a still-visible hand jumps straight to frame zero.
     if (activeTalk && animation.talkWeight < .001) animation.actions.Talk.reset().play();
-    animation.talkBlendStart = animation.talkWeight;
-    animation.talkBlendElapsed = 0;
+    animation.talkTransitions.push({ elapsed: 0, change: Number(activeTalk) - Number(animation.talking) });
   }
   animation.talking = activeTalk;
-  animation.walkWeight += (desiredWalkWeight - animation.walkWeight) * blend;
-  // Talk holds its authored gesture throughout the loop. Ease the entire arm
-  // into/out of that pose once per conversation, with zero velocity at the
-  // ends instead of the sharp first-frame lift of Walk's faster damping.
-  animation.talkBlendElapsed = reducedMotion ? TALK_BLEND_DURATION : Math.min(TALK_BLEND_DURATION, animation.talkBlendElapsed + delta);
-  const talkProgress = animation.talkBlendElapsed / TALK_BLEND_DURATION;
-  const talkBlend = clamp01(talkProgress ** 3 * (talkProgress * (talkProgress * 6 - 15) + 10));
-  animation.talkWeight = animation.talkBlendStart + (Number(activeTalk) - animation.talkBlendStart) * talkBlend;
+  if (walking) animation.walkWeight += (desiredWalkWeight - animation.walkWeight) * blend;
+  else animation.walkWeight = animation.walkStopStart * (1 - animation.stopBlend);
+  // Superpose unfinished target changes instead of restarting the curve on
+  // every click. This is a positive smoothing kernel over the 0/1 signal:
+  // weights stay bounded and rapid reversals retain velocity/acceleration.
+  if (reducedMotion) {
+    animation.talkTransitions.length = 0;
+    animation.talkBase = 0;
+    animation.talkWeight = 0;
+  } else {
+    let pending = 0, contribution = 0;
+    for (const transition of animation.talkTransitions) {
+      transition.elapsed = Math.min(TALK_BLEND_DURATION, transition.elapsed + delta);
+      if (transition.elapsed >= TALK_BLEND_DURATION) animation.talkBase += transition.change;
+      else {
+        contribution += transition.change * smoothBlend(transition.elapsed / TALK_BLEND_DURATION);
+        animation.talkTransitions[pending++] = transition;
+      }
+    }
+    animation.talkTransitions.length = pending;
+    animation.talkWeight = clamp01(animation.talkBase + contribution);
+  }
   // The optional distance path is used by the theater scene once collision
   // resolution is available. It keeps the visual step cadence tied to actual
   // travel instead of requested velocity.
   const hasDistance = Number.isFinite(distance) && distance >= 0;
   const distanceAdvance = hasDistance ? distance / authored : 0;
-  animation.actions.Walk.setEffectiveWeight(animation.walkWeight)
+  const upperWalkWeight = animation.walkWeight * (1 - animation.talkWeight);
+  animation.actions.Walk.setEffectiveWeight(upperWalkWeight)
     .setEffectiveTimeScale(walking && !hasDistance ? speed / authored : 0)
     .play();
   animation.actions.Talk.setEffectiveWeight(animation.talkWeight).setEffectiveTimeScale(activeTalk ? 1 : 0).play();
-  animation.actions.Idle.setEffectiveWeight(Math.max(0, 1 - animation.walkWeight - animation.talkWeight)).play();
+  animation.actions.Idle.setEffectiveWeight((1 - animation.walkWeight) * (1 - animation.talkWeight)).play();
   if (walking && hasDistance && walkAction) {
     walkAction.time = wrapPhase((walkAction.time + distanceAdvance) / walkDuration) * walkDuration;
+  }
+  if (animation.locomotionActions) for (const [name, action] of Object.entries(animation.locomotionActions)) {
+    const source = animation.actions[name];
+    action.time = source.time;
+    action.setEffectiveTimeScale(source.getEffectiveTimeScale())
+      .setEffectiveWeight(name === 'Walk' ? animation.walkWeight : 1 - animation.walkWeight).play();
   }
   // Evaluate the pose at this frame's phase before contact/foot-lock consumers
   // run. Advancing after update leaves the bones one frame behind the root.

@@ -1362,7 +1362,7 @@
         "Walk",
         "Talk"
       ],
-      "animationNotes": "240fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, 21 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 9-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK. Talk holds a right-hand-under-chin thinking pose with head-following arm IK; runtime eases the arm in and out over 0.5s.",
+      "animationNotes": "240fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, 21 joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 15-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK. Arms lengthened 12% below the shoulder with 12% fuller sleeves and a 0.38-radian delayed walking swing; steady 8-degree downward gaze. Outward arm clearance, rear-mounted notebook and inset field lens preserve the full swing. Talk holds a right-hand-under-chin thinking pose with head-following arm IK and room for the sleeve and scarf; runtime eases the arm in and out over 0.5s.",
       "locomotion": {
         "speed": 1.4,
         "duration": 1.0
@@ -1376,16 +1376,16 @@
       },
       "forward": "+Z",
       "feetY": 0,
-      "bytes": 848468,
+      "bytes": 848676,
       "triangles": 12196,
       "bounds": {
         "min": [
-          -0.37352,
+          -0.37922,
           0.0,
           -0.21519
         ],
         "max": [
-          0.37352,
+          0.37922,
           1.80872,
           0.1935
         ]
@@ -1512,5 +1512,5 @@
       "height": 1.7625
     }
   },
-  "totalBytes": 7721852
+  "totalBytes": 7722060
 }

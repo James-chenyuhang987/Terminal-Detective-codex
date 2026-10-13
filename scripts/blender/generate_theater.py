@@ -55,6 +55,24 @@ WALK_SWING_CLEARANCE = .088
 WALK_PELVIS_PITCH = math.radians(2)
 WALK_CHEST_PITCH = math.radians(7)
 WALK_HEAD_PITCH = math.radians(1.5)
+DETECTIVE_ARM_LENGTH = 1.12
+DETECTIVE_SLEEVE_WIDTH = 1.12
+DETECTIVE_CHEST_PITCH = math.radians(13)
+DETECTIVE_HEAD_PITCH = math.radians(8)
+
+
+def arm_point(point, role):
+    # Keep the shoulder seam fixed while lengthening both arm segments.
+    x, y, z = point
+    return (x, 1.35+(y-1.35)*DETECTIVE_ARM_LENGTH, z) if role == 'detective' else point
+
+
+def glove_point(point, role):
+    # Move the whole glove with the wrist; stretching fingers would also
+    # change the carefully fitted hand-under-chin contact in Talk.
+    x, y, z = point
+    wrist_shift = (.923-1.35)*(DETECTIVE_ARM_LENGTH-1) if role == 'detective' else 0
+    return (x, y+wrist_shift, z)
 
 
 def material(name, color, metallic=0.0, rough=0.75, glow=0.0):
@@ -731,7 +749,10 @@ def tailored_sleeve(side,suffix,coat,preserve_elbow=False):
             sections.sort(key=lambda section:-section[1])
     vertices=[]
     for x,y,z,rx,rz in sections:
-        vertices.extend((side*x+rx*math.sin(i*math.tau/16),y,z+rz*math.cos(i*math.tau/16)) for i in range(16))
+        # Taper the extra sleeve volume into the existing shoulder seam.
+        width = 1+(DETECTIVE_SLEEVE_WIDTH-1)*(1-smoothstep((y-1.29)/.10)) if preserve_elbow else 1
+        height = arm_point((x,y,z),'detective')[1] if preserve_elbow and y<1.35 else y
+        vertices.extend((side*x+rx*width*math.sin(i*math.tau/16),height,z+rz*width*math.cos(i*math.tau/16)) for i in range(16))
     faces=[]
     for row in range(len(sections)-1):
         for i in range(16):
@@ -751,8 +772,10 @@ def tailored_sleeve(side,suffix,coat,preserve_elbow=False):
         indices=list(range(row*16,(row+1)*16))
         if shoulder: chest.add(indices,shoulder,'REPLACE')
         if elbow:
-            upper_weight=smoothstep((y-1.11)/.11)
-            lower_weight=smoothstep((1.11-y)/.11)
+            # Share the bend over a broader part of the fuller sleeve so
+            # the inside elbow does not fold into a single sharp crease.
+            upper_weight=smoothstep((y-1.11)/.13)
+            lower_weight=smoothstep((1.11-y)/.13)
             elbow_weight=1-upper_weight-lower_weight
             for group,value in [(upper,upper_weight),(elbow,elbow_weight),(lower,lower_weight)]:
                 if value and shoulder<1: group.add(indices,value*(1-shoulder),'REPLACE')
@@ -875,14 +898,15 @@ def make_character(role):
         lower = 'Forearm.'+suffix
         hand = 'Hand.'+suffix
         tailored_sleeve(side,suffix,coat,preserve_elbow=role=='detective')
-        rod('Tailored cuff '+suffix,(side*.326,.946,.043),(side*.327,.909,.05),.048,coat,lower,tip=.046)
-        box('Cuff button '+suffix,(side*.327,.931,.097),(.012,.013,.007),'brass',.002,lower)
+        cuff_width = DETECTIVE_SLEEVE_WIDTH if role == 'detective' else 1
+        rod('Tailored cuff '+suffix,arm_point((side*.326,.946,.043),role),arm_point((side*.327,.909,.05),role),.048*cuff_width,coat,lower,tip=.046*cuff_width)
+        box('Cuff button '+suffix,arm_point((side*.327,.931,.047+.050*cuff_width),role),(.012,.013,.007),'brass',.002,lower)
         glove='ink' if role in ('detective','security') else 'cream' if role=='scientist' else skin
-        ellipsoid('Hand '+suffix,(side*.332,.868,.055),(.039,.065,.026),glove,hand)
-        thumb=ellipsoid('Thumb '+suffix,(side*.298,.882,.076),(.017,.037,.017),glove,hand)
+        ellipsoid('Hand '+suffix,glove_point((side*.332,.868,.055),role),(.039,.065,.026),glove,hand)
+        thumb=ellipsoid('Thumb '+suffix,glove_point((side*.298,.882,.076),role),(.017,.037,.017),glove,hand)
         thumb.rotation_euler.y=side*.32
         for i in range(3):
-            rod('Finger seam',(side*.317+i*.010,.835,.078),(side*.317+i*.010,.863,.081),.0013,'wear' if glove!=skin else 'lip',hand,vertices=4)
+            rod('Finger seam',glove_point((side*.317+i*.010,.835,.078),role),glove_point((side*.317+i*.010,.863,.081),role),.0013,'wear' if glove!=skin else 'lip',hand,vertices=4)
         tailored_leg(side, suffix)
         tailored_boot(side,suffix)
     box('Belt', (0, 1.012, .124), (.345, .041, .027), 'ink', .007, 'Hips')
@@ -902,15 +926,18 @@ def make_character(role):
         for y in (1.25,1.17,1.095):
             for x in (-.065,.065):
                 ellipsoid('Horn coat button',(x,y,.129),(.009,.009,.006),'brass','Spine',segments=8,rings=4)
-        box('Leather notebook',(.223,1.04,-.012),(.062,.18,.12),'wood',.012,'Hips')
+        # Hang the notebook flat at the back of the belt, clear of the arm
+        # swing corridor instead of protruding directly into the right elbow.
+        box('Leather notebook',(.105,1.055,-.17),(.12,.18,.062),'wood',.012,'Hips')
         for x in (-.018,.018):
             box('Storm flap seam',(x,1.32,-.131),(.010,.105,.008),'navy',.002,'Spine')
         # Separate the collar, knot and draped tail in depth; coplanar layers
         # previously produced jagged holes when the chest turned in the light.
-        cloth_panel('Amber scarf tail',[(-.022,1.379,.153),(.022,1.379,.153),
+        cloth_panel('Amber scarf tail',[(-.022,1.354,.153),(.022,1.354,.153),
                     (.028,1.303,.157),(.016,1.225,.150),(-.020,1.244,.150),(-.028,1.308,.157)],
                     [(0,1,2,5),(5,2,3,4)],'amber')
-        ellipsoid('Scarf knot',(0,1.379,.153),(.025,.023,.013),'amber','Spine',segments=16,rings=8)
+        # A loosely tied knot sits below the hand's path into the chin pose.
+        ellipsoid('Scarf knot',(0,1.354,.153),(.025,.018,.013),'amber','Spine',segments=16,rings=8)
         for side in (-1, 1):
             rod('Shoulder seam', (side*.17,1.396,0), (side*.28,1.361,0), .005, 'navy', 'Spine')
         brim=rod('Fedora felt brim',(0,1.731,0),(0,1.748,0),.182,'coat-noir','Head',vertices=48)
@@ -923,8 +950,8 @@ def make_character(role):
         box('Hat band pin',(-.127,1.766,.063),(.026,.012,.012),'brass',.002,'Head')
         for i in range(16):
             a,b = i*math.tau/16,(i+1)*math.tau/16
-            rod('Field lens rim',(-.215+.05*math.cos(a),1.04+.05*math.sin(a),.147),(-.215+.05*math.cos(b),1.04+.05*math.sin(b),.147),.004,'brass','Hips',vertices=6)
-        rod('Field lens handle',(-.245,.997,.147),(-.287,.940,.147),.009,'brass','Hips')
+            rod('Field lens rim',(-.130+.05*math.cos(a),1.04+.05*math.sin(a),.162),(-.130+.05*math.cos(b),1.04+.05*math.sin(b),.162),.004,'brass','Hips',vertices=6)
+        rod('Field lens handle',(-.160,.997,.162),(-.202,.940,.162),.009,'brass','Hips')
     elif role == 'witness':
         ellipsoid('Asymmetric bun', (.115, 1.71, -.105), (.103,.108,.10), hair, 'Head')
         rod('Hair clasp', (.112,1.64,-.155), (.194,1.73,-.084), .018, 'amber', 'Head')
@@ -995,11 +1022,11 @@ def make_rig(role, mesh):
     bone('Head',(0,1.4,0),(0,1.73,0),'Spine')
     bone('Jaw',(0,1.5416,.0968),(0,1.5206,.1232),'Head')
     for side,suffix in [(-1,'L'),(1,'R')]:
-        bone('UpperArm.'+suffix,(side*.24,1.35,0),(side*.308,1.11,.012),'Spine')
-        bone('Forearm.'+suffix,(side*.308,1.11,.012),(side*.327,.923,.047),'UpperArm.'+suffix)
+        bone('UpperArm.'+suffix,arm_point((side*.24,1.35,0),role),arm_point((side*.308,1.11,.012),role),'Spine')
+        bone('Forearm.'+suffix,arm_point((side*.308,1.11,.012),role),arm_point((side*.327,.923,.047),role),'UpperArm.'+suffix)
         if role == 'detective':
-            bone('Elbow.'+suffix,(side*.308,1.11,.012),(side*.314,1.05,.023),'UpperArm.'+suffix)
-        bone('Hand.'+suffix,(side*.327,.923,.047),(side*.332,.83,.06),'Forearm.'+suffix)
+            bone('Elbow.'+suffix,arm_point((side*.308,1.11,.012),role),arm_point((side*.314,1.05,.023),role),'UpperArm.'+suffix)
+        bone('Hand.'+suffix,glove_point((side*.327,.923,.047),role),glove_point((side*.332,.83,.06),role),'Forearm.'+suffix)
         bone('Thigh.'+suffix,(side*.112,HIP_Y,0),(side*.112,KNEE_Y,KNEE_FORWARD),'Hips')
         shin = bone('Shin.'+suffix,(side*.112,KNEE_Y,KNEE_FORWARD),(side*.112,ANKLE_Y,0),'Thigh.'+suffix)
         shin.use_connect = True
@@ -1135,13 +1162,16 @@ def solve_thinking_arm(rig):
     head_transform = head.matrix @ head.bone.matrix_local.inverted()
     shoulder = chest_transform @ upper.bone.head_local
     # The head mesh is already scaled to adult proportions. Aim the wrist so
-    # the existing glove's fingertips stop just below the sculpted chin.
-    wrist = head_transform @ Vector(xyz((.052,1.389,.142)))
+    # the fingertips stop just below the chin. Keep the wrist in front of
+    # the collar so the full sleeve cuff has space behind the hand.
+    wrist = head_transform @ Vector(xyz((.052,1.417,.174)))
     delta = wrist-shoulder
     a, b, distance = upper.bone.length, lower.bone.length, delta.length
     assert abs(a-b) < distance < a+b, 'Thinking hand target must remain within arm reach'
     direction = delta.normalized()
-    pole = chest_transform.to_3x3() @ Vector(xyz((.25,-1,.55)))
+    # A forward, slightly open elbow clears the chest and raised lapel while
+    # keeping a comfortable bend throughout the lift and lower crossfades.
+    pole = chest_transform.to_3x3() @ Vector(xyz((1.05,-1,1.15)))
     pole = (pole-direction*pole.dot(direction)).normalized()
     projection = (a*a-b*b+distance*distance)/(2*distance)
     elbow = shoulder+direction*projection+pole*math.sqrt(max(0,a*a-projection*projection))
@@ -1160,7 +1190,9 @@ def solve_thinking_arm(rig):
             rotation = lower_deform @ rest
         bone.matrix = Matrix.LocRotScale(start,rotation,Vector((1,1,1)))
         bpy.context.view_layer.update()
-    finger_direction = head_transform.to_3x3() @ Vector(xyz((-.20,.90,-.43)))
+    # Flex the wrist gently back toward the jaw instead of pressing the
+    # enlarged cuff into the collar to make fingertip contact.
+    finger_direction = head_transform.to_3x3() @ Vector(xyz((-.20,.88,-1.25)))
     rest_axis = hand.bone.tail_local-hand.bone.head_local
     rotation = rest_axis.rotation_difference(finger_direction) @ hand.bone.matrix_local.to_quaternion()
     hand.matrix = Matrix.LocRotScale(wrist,rotation,Vector((1,1,1)))
@@ -1184,6 +1216,10 @@ def preserve_elbow_volume(rig):
 
 def make_animations(rig):
     scene = bpy.context.scene
+    role = rig.name.split('_')[0]
+    chest_lean = DETECTIVE_CHEST_PITCH if role == 'detective' else WALK_CHEST_PITCH
+    head_lean = DETECTIVE_HEAD_PITCH if role == 'detective' else WALK_HEAD_PITCH
+    arm_swing = .38 if role == 'detective' else .23
     scene.render.fps = FPS
     rig.animation_data_create()
     rig.animation_data.use_nla = False
@@ -1220,23 +1256,25 @@ def make_animations(rig):
                     # Oppose it with the arm, then let elbow and wrist follow.
                     arm_phase = phase+(0 if suffix=='L' else math.pi)
                     arm = math.cos(arm_phase-.20)
-                    p['UpperArm.'+suffix].rotation_euler.x = .23*arm-.025
-                    p['UpperArm.'+suffix].rotation_euler.z = side*.035
+                    p['UpperArm.'+suffix].rotation_euler.x = arm_swing*arm-.025
+                    # These local axes are mirrored: negative on the right
+                    # opens the swing corridor away from the coat and legs.
+                    p['UpperArm.'+suffix].rotation_euler.z = side*(-.065 if role == 'detective' else .035)
                     p['Forearm.'+suffix].rotation_euler.x = -.19+.045*math.cos(arm_phase-.40)
                     p['Hand.'+suffix].rotation_euler.x = -.028*math.cos(arm_phase-.60)
                     p['Coat.'+suffix].rotation_euler.x = -z*.17+.018*math.sin(phase-.45)
                     p['Coat.'+suffix].rotation_euler.z = side*.012*math.sin(phase*2-.5)
                 # Positive local X tilts this upright bone toward runtime +Z.
-                # The pelvis contributes 2 degrees, the chest another 7.
-                # A small breathing motion avoids a rigidly held angle.
-                chest_pitch = WALK_CHEST_PITCH+.008*math.cos(phase*2-.3)
+                # The detective bends farther from the chest to inspect the
+                # path ahead. Head compensation keeps the gaze steady while
+                # leaving a visible downward tilt instead of looking level.
+                chest_pitch = chest_lean+.008*math.cos(phase*2-.3)
                 p['Spine'].rotation_euler.x = chest_pitch
                 p['Spine'].rotation_euler.y = -.040*math.sin(phase)
                 p['Spine'].rotation_euler.z = -.016*math.sin(phase+.35)
                 p['Head'].rotation_euler.y = -.015*math.sin(phase)
-                p['Head'].rotation_euler.x = WALK_HEAD_PITCH-WALK_PELVIS_PITCH-chest_pitch
+                p['Head'].rotation_euler.x = head_lean-WALK_PELVIS_PITCH-chest_pitch
             elif clip == 'Talk':
-                role = rig.name.split('_')[0]
                 p['UpperArm.L'].rotation_euler.x = -.08
                 p['Spine'].rotation_euler.y = .025*math.sin(phase-.25)
                 if role == 'detective':
@@ -1436,12 +1474,12 @@ for name in ['detective','witness','security','scientist']:
     print('BUILD CHARACTER',name,flush=True)
     characters[name]=make_character(name)
     manifest['characters'][name]={'file':name+'.glb','animations':['Idle','Walk','Talk'],
-        'animationNotes':f'{FPS}fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, {len(characters[name][2].data.bones)} joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible 9-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK.',
+        'animationNotes':f'{FPS}fps exact loops: planted straight-leg Idle 2s, analytic two-bone IK Walk 1s at 1.4m/s, role-specific standing Talk 2s. Continuous face, sleeve and trouser surfaces with blended jaw/shoulder/elbow/knee/ankle weights, vented cloth, {len(characters[name][2].data.bones)} joints. Left stance [0,.56], right phase +.5. Heel-to-toe roll, continuous bend/stride/recovery with shared tangents, 8.8cm peak clearance, broad 4cm support-phase pelvis rise, lateral weight transfer, pelvis/chest counterrotation, opposite delayed arms and coat. Visible {15 if name == "detective" else 9}-degree forward torso lean shared by pelvis/chest, stabilized head, world-space planted-foot IK.',
         'locomotion':{'speed':WALK_SPEED,'duration':WALK_DURATION},
         'gait':{'stance':STANCE,'heelEnd':.10,'toeStart':.40,'swingLift':WALK_SWING_CLEARANCE,'pelvisRise':WALK_HIP_RISE},
         'forward':'+Z','feetY':0}
     if name == 'detective':
-        manifest['characters'][name]['animationNotes'] += ' Talk holds a right-hand-under-chin thinking pose with head-following arm IK; runtime eases the arm in and out over 0.5s.'
+        manifest['characters'][name]['animationNotes'] += ' Arms lengthened 12% below the shoulder with 12% fuller sleeves and a 0.38-radian delayed walking swing; steady 8-degree downward gaze. Outward arm clearance, rear-mounted notebook and inset field lens preserve the full swing. Talk holds a right-hand-under-chin thinking pose with head-following arm IK and room for the sleeve and scarf; runtime eases the arm in and out over 0.5s.'
 # Read actual exported data instead of estimating renderer budgets.
 sys.path.insert(0,str(Path(__file__).parent))
 from validate_assets import inspect_glb

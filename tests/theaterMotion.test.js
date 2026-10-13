@@ -105,7 +105,9 @@ test('reopening dialogue while its arm is lowering resumes the visible gesture w
   const clips = [
     new AnimationClip('Idle', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 0])]),
     new AnimationClip('Walk', 1, []),
-    new AnimationClip('Talk', 1, [new NumberKeyframeTrack('.position[x]', [0, .5, 1], [0, 1, 0])]),
+    // Hold a visibly raised pose around the interruption. Resuming a clip
+    // must preserve its time without conflating its own motion with the fade.
+    new AnimationClip('Talk', 1, [new NumberKeyframeTrack('.position[x]', [0, .25, .75, 1], [0, 1, 1, 0])]),
   ];
   const instance = createAvatarAnimation(new AnimationMixer(model), clips);
   for (let frame = 0; frame < 36; frame++) updateAvatarAnimation(instance, 1 / 60, { talking: true });
@@ -423,51 +425,25 @@ test('walk phase follows real distance, never resets at stops, and independent c
   close(first.mixer.time, time);
 });
 
-test('walk-to-idle waits for a stable contact phase and exposes damped stop state', () => {
-  const instance = animation();
-  // Reach the settled walking blend, then release near toe-off. Phase .45 is
-  // deliberately outside the mid-stance window and should settle at .5.
-  for (let frame = 0; frame < 30; frame++) updateAvatarAnimation(instance, 1 / 60, { speed: WALK_SPEED });
-  instance.actions.Walk.time = .45;
-  const before = instance.actions.Walk.time;
-  updateAvatarAnimation(instance, 1 / 60, { speed: 0 });
-  assert.ok(instance.actions.Walk.time > before, 'stop advances only to the next planted contact');
-  assert.ok(instance.stopBlend < .1, 'Idle fade remains held while the foot is in transition');
-  assert.equal(instance.contactPhase, 'left');
-  assert.equal(instance.contact.safe, false);
-
-  let sawSafe = false;
-  let previousStopBlend = instance.stopBlend;
-  for (let frame = 0; frame < 30; frame++) {
-    updateAvatarAnimation(instance, 1 / 60, { speed: 0 });
-    if (instance.contact.safe) sawSafe = true;
-    assert.ok(instance.stopBlend + 1e-8 >= previousStopBlend, 'stop blend is monotonic after contact');
-    previousStopBlend = instance.stopBlend;
-  }
-  assert.ok(sawSafe, 'stop transition reaches a planted contact phase');
-  assert.ok(instance.stopBlend > .99);
-  assert.equal(instance.locomotionState, 'idle');
-});
-
-test('Walk keeps its visible pose until the settling foot reaches contact at every display rate', () => {
-  for (const hz of [30, 60, 144]) for (const releasePhase of [.401, .901]) {
+test('walk-to-idle freezes the released phase and blends the pose without a finishing step', () => {
+  for (const hz of [30, 60, 144]) for (const releasePhase of [.05, .15, .35, .45, .55, .65, .85, .95]) {
     const instance = animation();
     for (let frame = 0; frame < hz; frame++) updateAvatarAnimation(instance, 1 / hz, { speed: WALK_SPEED });
     instance.actions.Walk.time = releasePhase;
-    let heldFrames = 0;
-    let fadedFrames = 0;
+    let previousStopBlend = instance.stopBlend;
     for (let frame = 0; frame < hz; frame++) {
       const previousWeight = instance.actions.Walk.getEffectiveWeight();
       updateAvatarAnimation(instance, 1 / hz, { speed: 0, distance: 0 });
+      close(instance.actions.Walk.time, releasePhase);
       const weight = instance.actions.Walk.getEffectiveWeight();
-      if (!instance.contact.safe) {
-        close(weight, previousWeight);
-        heldFrames++;
-      } else if (weight < previousWeight) fadedFrames++;
+      if (previousWeight > 0) assert.ok(weight < previousWeight, 'every release phase begins easing toward Idle immediately');
+      else assert.equal(weight, 0, 'a completed stop stays in Idle');
+      assert.ok(instance.stopBlend >= previousStopBlend, 'the stop blend is monotonic');
+      previousStopBlend = instance.stopBlend;
     }
-    assert.ok(heldFrames > 0, `${hz} Hz: exercise a foot still settling before contact`);
-    assert.ok(fadedFrames > 0, 'the pose fades normally after contact');
     assert.ok(instance.actions.Walk.getEffectiveWeight() < .001);
+    assert.ok(instance.stopBlend > .99);
+    assert.equal(instance.locomotionState, 'idle');
   }
 });
 
@@ -478,6 +454,27 @@ test('optional collision-resolved distance drives walk phase independently of re
   updateAvatarAnimation(instance, 1 / 60, { speed: WALK_SPEED, distance: 0 });
   close(instance.actions.Walk.time, 1 / 120);
   assert.equal(instance.contactPhaseValue, instance.gaitPhase);
+});
+
+test('re-pressing a direction during the stop fade resumes the visible stride without a weight dip', () => {
+  for (const hz of [30, 60, 144]) {
+    const instance = animation();
+    const state = player();
+    const advance = direction => {
+      stepLocomotion(state, direction, 1 / hz, room);
+      updateAvatarAnimation(instance, 1 / hz, { speed: state.speed, distance: state.distance });
+    };
+    for (let frame = 0; frame < hz; frame++) advance([0, -1]);
+    for (let frame = 0; frame < Math.ceil(hz * .06); frame++) advance([0, 0]);
+    assert.ok(instance.walkWeight > .8, 'resume while the previous walking pose is still visible');
+    let weight = instance.walkWeight;
+    for (let frame = 0; frame < hz / 2; frame++) {
+      advance([0, -1]);
+      assert.ok(instance.walkWeight >= weight, 'accelerating again must not recoil toward Idle first');
+      weight = instance.walkWeight;
+    }
+    assert.ok(instance.walkWeight > .99);
+  }
 });
 
 test('distance-driven bones and contact phase are evaluated in the same frame at every display rate', () => {
@@ -583,5 +580,105 @@ test('real Walk foot plants stay stable with the runtime phase and foot lock at 
       assert.ok(lock.applied.length() < .002, 'a matching stride needs no visible whole-model correction');
     }
     assert.ok(samples > 10, 'exercise repeated left/right plants');
+  }
+});
+
+test('actual detective stays at the released position while Walk fades at every phase and display rate', async () => {
+  const bytes = readFileSync(new URL('../public/assets/theater/detective.glb', import.meta.url));
+  const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), '');
+  for (const hz of [30, 60, 144]) for (const speed of [WALK_SPEED, SPRINT_SPEED]) {
+    for (const phase of [.05, .15, .25, .35, .45, .55, .65, .75, .85, .95]) {
+      const root = new Group();
+      const model = clone(gltf.scene);
+      root.add(model);
+      const hips = model.getObjectByName('Hips');
+      const instance = createAvatarAnimation(new AnimationMixer(model), gltf.animations);
+      const lock = createFootLock(model);
+      const state = { position: [0, 0, -3], rotationY: 0 };
+      // Include acceleration and partial Walk blends: both can leave a
+      // nonzero lock correction before a real key release.
+      for (let frame = 0; frame < Math.ceil((.5 + phase) * hz); frame++) {
+        stepLocomotion(state, [0, 1], 1 / hz, room, { speed, sprinting: speed === SPRINT_SPEED });
+        root.position.fromArray(state.position);
+        updateAvatarAnimation(instance, 1 / hz, { speed: state.speed, distance: state.distance });
+        updateFootLock(lock, instance, model, { delta: 1 / hz, stationary: !state.walking });
+      }
+      instance.actions.Walk.time = phase;
+      updateAvatarAnimation(instance, 0, { speed, distance: 0 });
+      model.updateMatrixWorld(true);
+      const releasedRoot = root.position.clone();
+      const releasedModel = model.position.clone();
+      const releasedHip = hips.getWorldPosition(new Vector3());
+      const previousPhase = instance.actions.Walk.time;
+      for (let frame = 0; frame < hz; frame++) {
+        stepLocomotion(state, [0, 0], 1 / hz, room);
+        root.position.fromArray(state.position);
+        updateAvatarAnimation(instance, 1 / hz, { speed: state.speed, distance: state.distance });
+        updateFootLock(lock, instance, model, { delta: 1 / hz, enabled: instance.walkWeight > .0001, stationary: !state.walking });
+        const hip = hips.getWorldPosition(new Vector3());
+        assert.deepEqual(root.position.toArray(), releasedRoot.toArray(), 'collision position stops on key release');
+        close(model.position.x, releasedModel.x);
+        close(model.position.z, releasedModel.z);
+        close(hip.z, releasedHip.z, 1e-6);
+        assert.ok(Math.abs(hip.x - releasedHip.x) < .023, 'only the authored lateral weight shift returns gently to the standing center');
+        close(instance.actions.Walk.time, previousPhase);
+        assert.equal(lock.activeSide, null, 'Idle blending must not pull the body after a moving foot');
+      }
+      assert.ok(instance.walkWeight < .001, 'the limbs still settle into standing');
+      assert.equal(state.speed, 0);
+      assert.equal(state.sprinting, false);
+      const beforeRestart = model.position.clone();
+      stepLocomotion(state, [0, 1], 1 / hz, room, { speed });
+      root.position.fromArray(state.position);
+      updateAvatarAnimation(instance, 1 / hz, { speed: state.speed, distance: state.distance });
+      updateFootLock(lock, instance, model, { delta: 1 / hz, stationary: !state.walking });
+      assert.ok(model.position.distanceTo(beforeRestart) <= .6 / hz + 1e-8, 'resuming movement releases the retained correction without snapping');
+    }
+  }
+});
+
+test('actual stopped detective turns toward dialogue without orbiting its retained foot-lock correction', async () => {
+  const bytes = readFileSync(new URL('../public/assets/theater/detective.glb', import.meta.url));
+  const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), '');
+  for (const hz of [30, 60, 144]) for (const targetYaw of [Math.PI / 2, Math.PI]) {
+    for (const immediateTurn of [false, true]) {
+      const root = new Group();
+      const model = clone(gltf.scene);
+      root.add(model);
+      const instance = createAvatarAnimation(new AnimationMixer(model), gltf.animations);
+      const lock = createFootLock(model);
+      const state = { position: [0, 0, -3], rotationY: 0 };
+      for (let frame = 0; frame < hz / 2; frame++) {
+        stepLocomotion(state, [0, 1], 1 / hz, room);
+        root.position.fromArray(state.position);
+        updateAvatarAnimation(instance, 1 / hz, { speed: state.speed, distance: state.distance });
+        updateFootLock(lock, instance, model, { delta: 1 / hz });
+      }
+      assert.ok(lock.applied.length() > .005, 'exercise a real acceleration/stride correction, not an already centered model');
+      const released = model.getWorldPosition(new Vector3());
+      const rootAtRelease = root.position.clone();
+      for (let frame = 0; frame < hz * 2; frame++) {
+        stepLocomotion(state, [0, 0], 1 / hz, room);
+        // Avatar publishes conversation yaw before updating the foot lock.
+        // Cover this ordering on the very first stationary frame too.
+        root.rotation.y += (targetYaw - root.rotation.y) * (immediateTurn ? 1 : 1 - Math.exp(-7 / hz));
+        state.rotationY = root.rotation.y;
+        updateAvatarAnimation(instance, 1 / hz, { speed: 0, distance: 0, talking: true });
+        updateFootLock(lock, instance, model, { delta: 1 / hz, stationary: true });
+        const position = model.getWorldPosition(new Vector3());
+        assert.ok(Math.hypot(position.x - released.x, position.z - released.z) < 1e-7,
+          `${hz} Hz / ${targetYaw}: conversation yaw must not translate the stopped model`);
+        assert.deepEqual(root.position, rootAtRelease);
+      }
+      const oldWorldOffset = model.getWorldPosition(new Vector3()).sub(root.position);
+      stepLocomotion(state, [Math.sin(targetYaw), Math.cos(targetYaw)], 1 / hz, room);
+      root.position.fromArray(state.position);
+      root.rotation.y = state.rotationY;
+      updateAvatarAnimation(instance, 1 / hz, { speed: state.speed, distance: state.distance });
+      updateFootLock(lock, instance, model, { delta: 1 / hz, stationary: !state.walking });
+      const newWorldOffset = model.getWorldPosition(new Vector3()).sub(root.position);
+      assert.ok(newWorldOffset.distanceTo(oldWorldOffset) <= .6 / hz + 1e-8,
+        'moving again after dialogue preserves the world correction and releases it without snapping');
+    }
   }
 });
