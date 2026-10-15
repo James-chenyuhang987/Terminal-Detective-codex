@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { compileFunction } from 'node:vm';
 import ts from 'typescript';
 import { ALL_CASES } from '../src/game/caseData.js';
+import { profileCommand, appendProfileCommand, readProfileCommands } from '../src/game/profileCommands.js';
+import { handleProfileFunction } from '../cloudflare/worker/profile.js';
+import { authorityDB, request, session } from './cloudflareAuthorityDB.js';
 
 const source = ts.createSourceFile('TerminalDetective.jsx', readFileSync(new URL('../src/pages/TerminalDetective.jsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
 const handlers = new Map();
@@ -44,6 +47,35 @@ test('paid entry sends only raw case/team intent and adopts server strategy with
   const defaults = harness({ saved: null });
   await defaults.call('handleCaseSelect', ALL_CASES[0]);
   assert.deepEqual(defaults.state.calls[0].args, { case_id: ALL_CASES[0].case_id });
+});
+
+test('paid entry carries the negotiated version through the real journal and authoritative endpoint', async () => {
+  for (const supported of [[1], [1, 2]]) {
+    const values = new Map();
+    const store = { get length() { return values.size; }, key: index => [...values.keys()][index],
+      getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+    const DB = authorityDB({ energy: 120, gold: 1000 });
+    const app = harness({ saved: { specs: [{}, {}, {}], primary_agent_index: 0,
+      command_plan: { doctrine_id: 'balanced' } }, response: async (type, args) => {
+      const command = profileCommand(type, args);
+      appendProfileCommand({ ownerUid: session.user_id, lineageId: 'web-entry-audit-123456',
+        operationId: 'entry-audit-operation-123456', baseRevision: 0, command }, store);
+      const [saved] = readProfileCommands(session.user_id, store);
+      const response = await handleProfileFunction(request({ action: 'command',
+        operation_id: saved.operationId, expected_revision: saved.baseRevision, command: saved.command }), { DB }, session);
+      const payload = await response.json();
+      assert.equal(response.status, 200, JSON.stringify(payload));
+      return { ...payload.result, profile: payload.profile, active_run: payload.active_run };
+    } });
+    app.bindings.supportedInvestigationVersions = supported;
+    await app.call('handleCaseSelect', ALL_CASES[0]);
+    const version = supported.includes(2) ? 2 : 1;
+    assert.equal(app.state.run.investigation_version ?? 1, version);
+    assert.equal(app.state.run.case_id, ALL_CASES[0].case_id);
+    assert.equal(app.state.screen, 'GAME');
+    assert.equal(DB.count('player_runs'), 1);
+    DB.sqlite.close();
+  }
 });
 
 test('explicit resume and same-case entry retain a paid cloud run without charging or replaying narrative', async () => {

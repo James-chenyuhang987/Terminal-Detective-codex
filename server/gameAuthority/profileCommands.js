@@ -121,7 +121,8 @@ const COMMAND_FIELDS = Object.freeze({
 });
 
 export function validateProfileCommand(command) {
-  if (!plainObject(command) || !Object.hasOwn(COMMAND_FIELDS, command.type)) throw invalidCommand();
+  if (!plainObject(command) || typeof command.type !== 'string'
+    || !Object.hasOwn(COMMAND_FIELDS, command.type)) throw invalidCommand();
   exactKeys(command, ['type', ...COMMAND_FIELDS[command.type]], ['type']);
   for (const key of COMMAND_FIELDS[command.type]) {
     if (key.endsWith('_id')) identifier(command[key]);

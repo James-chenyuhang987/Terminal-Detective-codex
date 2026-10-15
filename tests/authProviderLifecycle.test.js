@@ -11,6 +11,16 @@ const tree = ts.createSourceFile('AuthContext.jsx', source, ts.ScriptTarget.Late
 const code = ts.transpileModule(tree.statements.filter(node => !ts.isImportDeclaration(node))
   .map(node => node.getText(tree).replace(/^export /, '').replaceAll('import.meta.env.BASE_URL', "'/'")).join('\n'),
 { compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText;
+const appTree = ts.createSourceFile('App.jsx', readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8'),
+  ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+const appRoute = appTree.statements.flatMap(statement => ts.isVariableStatement(statement)
+  ? [...statement.declarationList.declarations] : []).find(declaration => declaration.name.getText(appTree) === 'AuthenticatedApp');
+const routeCode = ts.transpileModule(`const route = ${appRoute.initializer.getText(appTree)};`,
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText;
+function renderedAuthRoute(value) {
+  return compileFunction(`${routeCode}\nreturn route();`, ['useAuth', 'React', 'AppLoading', 'AuthGate', 'ProfileAppShell'])(
+    () => value, { createElement: type => type }, 'loading', 'sign-in', 'profile-game-shell');
+}
 const deferred = () => {
   let resolve; let reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -124,6 +134,40 @@ test('an account switch invalidates an older token request before it can update 
     assert.equal(app.value.isAuthenticated, true);
     app.unmount();
   }
+});
+
+test('switching a fully authenticated UID removes the game shell while same-UID token refresh preserves it', async () => {
+  const nextOwner = deferred();
+  const refreshedToken = deferred();
+  const app = harness({ session: token => token === 'owner-b' ? nextOwner.promise
+    : token === 'owner-b-refreshed' ? refreshedToken.promise : { authenticated: true, user: { id: token } } });
+  await app.flush();
+  await app.emit(user('owner-a'));
+  await app.flush();
+  assert.equal(renderedAuthRoute(app.value), 'profile-game-shell');
+
+  const switching = app.emit(user('owner-b'));
+  assert.equal(app.value.isLoadingAuth, true, 'The auth route blocks immediately, before another owner can bootstrap.');
+  assert.equal(renderedAuthRoute(app.value), 'loading', 'Changing route type unmounts ProfileProvider and the previous game subtree.');
+  await app.flush();
+  assert.equal(app.value.isAuthenticated, false);
+  assert.equal(renderedAuthRoute(app.value), 'loading');
+  nextOwner.resolve({ authenticated: true, user: { id: 'owner-b' } });
+  await switching;
+  await app.flush();
+  assert.equal(app.value.user.id, 'owner-b');
+  assert.equal(renderedAuthRoute(app.value), 'profile-game-shell');
+
+  const refreshing = app.emit({ ...user('owner-b'), getIdToken: async () => 'owner-b-refreshed' });
+  await app.flush();
+  assert.equal(app.value.isLoadingAuth, false);
+  assert.equal(app.value.isAuthenticated, true);
+  assert.equal(renderedAuthRoute(app.value), 'profile-game-shell', 'Normal token refresh keeps the existing investigation mounted.');
+  refreshedToken.resolve({ authenticated: true, user: { id: 'owner-b' } });
+  await refreshing;
+  await app.flush();
+  assert.equal(renderedAuthRoute(app.value), 'profile-game-shell');
+  app.unmount();
 });
 
 test('same-UID SDK user replacement ignores an older bootstrap success or failure', async () => {

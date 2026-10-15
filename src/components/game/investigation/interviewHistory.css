@@ -1,0 +1,8 @@
+.td-interview-history { min-width: 0; margin: 10px 0; border: 1px solid #709f9a45; border-radius: 8px; padding: 0 10px; font-size: 12px; line-height: 1.7; color: #cbd1c7; overflow-wrap: anywhere; }
+.td-interview-history summary { padding: 10px 0; min-height: 42px; cursor: pointer; color: #a5c6bc; }
+.td-interview-history summary:focus-visible { outline: 2px solid #e1d0ac; outline-offset: 2px; }
+.td-interview-history article { margin: 8px 0; border-top: 1px solid #709f9a25; padding-top: 8px; }
+.td-interview-history h4 { font-size: 11px; font-weight: 500; color: #ddcba7; margin: 0 0 5px; }
+.td-interview-history blockquote { margin: 5px 0; padding-left: 10px; border-left: 2px solid #709f9a70; white-space: pre-wrap; }
+.td-interview-history > p, .td-interview-evidence { font-size: 11px; color: #a9b0a5; }
+.td-interview-option-effect { display: block; padding: 4px 0; line-height: 1.6; font-size: 11px; color: #a9c5bb; overflow-wrap: anywhere; }

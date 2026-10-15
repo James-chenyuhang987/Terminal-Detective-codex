@@ -262,7 +262,7 @@ function interviewHarness({ theater = true, failRefresh = false, pendingCrisis =
   };
   const ask = (...args) => handler(owner, 'handleNPCQuestion', bindings)(...args);
   const close = handler(owner, 'handleNPCDialogueClose', bindings);
-  return { stored, bindings, ask: () => ask({ questionId: 'q-1', text: 'Question', available: true }), close, resolve: value => {
+  return { stored, bindings, ask: () => ask({ questionId: 'q-1', text: 'Question', available: true, ap_cost: 1, stamina_cost: 10 }), close, resolve: value => {
     // Fixture stands in for the server transition, not a client-side award.
     stored.charges++;
     const next = { ...stored.gameState, agent_stamina: { 'NEXUS-01': 90 }, unlocked_clues: value.revealedClueIds || [] };

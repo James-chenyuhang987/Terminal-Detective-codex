@@ -1,0 +1,26 @@
+.td-case-reconstruction { padding: 16px 18px; margin-bottom: 20px; background: #08121aee; border: 1px solid #c5a66f55; border-radius: 14px; font-size: 12px; line-height: 1.7; }
+.td-case-reconstruction h2 { color: #e1d0ac; font-size: 17px; margin: 0 0 8px; }
+.td-reconstruction-note, .td-reconstruction-empty { color: #b5b6af; margin: 0 0 12px; }
+.td-reconstruction-event { border-left: 2px solid #709f9a; padding: 10px 12px; margin: 8px 0; background: #ffffff05; }
+.td-reconstruction-event > summary { cursor: pointer; }
+.td-reconstruction-event > summary small { display: block; color: #9fb8b1; font-size: 10px; }
+.td-reconstruction-event > summary strong { color: #e0ded4; font-size: 13px; font-weight: 500; }
+.td-reconstruction-references { color: #c5a66f; font-size: 11px; }
+.td-reconstruction-group { border-top: 1px solid #c5a66f30; padding: 11px 0 0; margin-top: 12px; }
+.td-reconstruction-group > summary { cursor: pointer; color: #d6c7aa; min-height: 32px; }
+.td-reconstruction-group > p { color: #b5b6af; }
+.td-reconstruction-testimony { padding: 10px 0; border-bottom: 1px solid #ffffff13; }
+.td-reconstruction-testimony h3 { margin: 0; color: #d5d7cb; font-size: 13px; }
+.td-reconstruction-testimony small { color: #aaa99d; font-size: 10px; }
+.td-reconstruction-testimony p { white-space: pre-wrap; }
+.td-reconstruction-prior-claim { margin: 9px 0; padding: 8px 10px; border-left: 2px solid #c19a6366; background: #c19a6308; color: #c8c1b4; }
+.td-reconstruction-testimony strong { font-size: 11px; font-weight: 500; color: #c9c6b7; }
+.td-case-reconstruction summary:focus-visible, .td-advancement-summary summary:focus-visible { outline: 2px solid #e1d0ac; outline-offset: 3px; }
+.td-advancement-summary { margin: 8px 0 2px; padding: 12px; border: 1px solid #c5a66f50; border-radius: 8px; background: #c5a66f0c; color: #e1d0ac; font-size: 12px; line-height: 1.7; }
+.td-advancement-summary > summary { cursor: pointer; min-height: 32px; }
+.td-advancement-summary article + article { border-top: 1px solid #ffffff13; margin-top: 8px; padding-top: 8px; }
+.td-advancement-summary h3 { font-size: 12px; margin: 0 0 5px; }
+.td-advancement-summary ul { padding-left: 20px; margin: 5px 0; }
+.td-advancement-summary li { color: #bfc7bd; }
+.td-advancement-summary li strong { color: #e1d0ac; }
+@media (max-width: 600px) { .td-case-reconstruction { padding: 14px 12px; } }

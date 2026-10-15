@@ -27,8 +27,9 @@ function handler(name, bindings, root = owner) {
 const callback = fn => fn;
 function commitHarness() {
   const stored = {};
-  const bindings = { useCallback: callback, gameStateRef: { current: null }, bsodCountRef: { current: 0 }, crisisPendingRef: { current: false }, finalSettlementRef: { current: null }, finalizingRef: { current: false } };
-  for (const name of ['ServerRun', 'GameState', 'LinkedPairs', 'NpcEmotionState', 'TruthFragments', 'JudgeResult', 'ShowBSoD', 'CrisisPending', 'Crisis', 'IsFinalizing', 'FinalJudgeResult', 'ShowGameOver']) {
+  const bindings = { useCallback: callback, clearReportDraft: () => {}, gameStateRef: { current: null }, bsodCountRef: { current: 0 }, crisisPendingRef: { current: false }, finalSettlementRef: { current: null }, finalizingRef: { current: false },
+    activeTerminalTurnRef: { current: 0 }, viewedTerminalTurnRef: { current: 0 } };
+  for (const name of ['ServerRun', 'GameState', 'LinkedPairs', 'NpcEmotionState', 'TruthFragments', 'JudgeResult', 'ShowBSoD', 'CrisisPending', 'Crisis', 'IsFinalizing', 'FinalJudgeResult', 'ShowGameOver', 'ActiveTerminalTurn', 'ViewedTerminalTurn']) {
     bindings[`set${name}`] = value => { stored[name] = value; };
   }
   return { stored, bindings, commit: handler('commitServerRun', bindings) };
@@ -68,6 +69,30 @@ test('actual commit stores exact server state and dependent crisis, links, emoti
   assert.equal(h.stored.TruthFragments, 3);
   assert.doesNotMatch(text, /applySettlementResult|applyRecoveryTurn|applyCrisisChoice|acquireClues|destroyClues|spendAgentStamina|settleRoundEvidence|rollCrisis|createInitialGameState/);
   assert.equal((text.match(/setGameState\(/g) || []).length, 1);
+});
+
+test('authoritative turn changes update the archive before logging while free offers preserve legacy previews and history browsing', () => {
+  const h = commitHarness();
+  const snapshot = turn => run({ state: { ...run().state, turn_count: turn } });
+  h.bindings.gameStateRef.current = snapshot(7).state;
+  h.bindings.activeTerminalTurnRef.current = 8;
+  h.bindings.viewedTerminalTurnRef.current = 2;
+  h.commit(snapshot(7));
+  assert.equal(h.bindings.activeTerminalTurnRef.current, 8, 'A legacy round preview stays on its upcoming page while free options arrive.');
+  assert.equal(h.bindings.viewedTerminalTurnRef.current, 2, 'Reading options cannot steal focus from an archived page.');
+  assert.equal(h.stored.ActiveTerminalTurn, undefined);
+  h.commit(snapshot(8));
+  assert.equal(h.bindings.activeTerminalTurnRef.current, 8);
+  assert.equal(h.bindings.viewedTerminalTurnRef.current, 8);
+  assert.equal(h.stored.ActiveTerminalTurn, 8);
+  assert.equal(h.stored.ViewedTerminalTurn, 8);
+  h.bindings.viewedTerminalTurnRef.current = 3;
+  h.commit(snapshot(8));
+  assert.equal(h.bindings.viewedTerminalTurnRef.current, 3, 'Repeated snapshots of the same paid turn do not navigate again.');
+  h.commit(snapshot(9));
+  assert.equal(h.stored.ActiveTerminalTurn, 9);
+  h.commit(snapshot(8));
+  assert.equal(h.stored.ActiveTerminalTurn, 8, 'An authoritative checkpoint rollback also restores its current turn.');
 });
 
 test('public acquired clue projection overrides local labels in the selected language without granting evidence', () => {

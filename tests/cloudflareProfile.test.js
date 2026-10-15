@@ -130,11 +130,14 @@ test('business rejection is replayed unchanged even after later balance changes'
 test('profile CAS prevents concurrent spending and ledger operation ID reuse', async () => {
   const DB = authorityDB({ gold: 800 });
   const body = envelope({ type: 'purchase_item', item_id: 'energy_cell' });
-  const results = await Promise.all([send(DB, body), send(DB, envelope({ type: 'purchase_item', item_id: 'energy_cell' }))]);
+  const contenders = [body, envelope({ type: 'purchase_item', item_id: 'energy_cell' })];
+  const results = await Promise.all(contenders.map(candidate => send(DB, candidate)));
   assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
   assert.equal(DB.count('profile_operations'), 1);
   assert.equal(JSON.parse(DB.profile().profile_json).gold, 400);
-  const reused = await send(DB, { ...body, command: { type: 'checkin' } });
+  // Either digest can finish first; only the winning operation was committed.
+  const committed = contenders[results.findIndex(result => result.status === 200)];
+  const reused = await send(DB, { ...committed, command: { type: 'checkin' } });
   assert.equal(reused.code, 'OPERATION_ID_REUSED');
 });
 

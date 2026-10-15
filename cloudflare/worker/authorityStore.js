@@ -1,9 +1,24 @@
-import { authoritativeProfile, plainObject, exactKeys } from '../../server/gameAuthority/profileCommands.js';
+import { authoritativeProfile, plainObject, exactKeys, invalidCommand } from '../../server/gameAuthority/profileCommands.js';
 import { readBodyText } from './body.js';
 
 export const MAX_BODY_BYTES = 32 * 1024;
 export const MAX_PROFILE_BYTES = 512 * 1024;
 export const MAX_RUN_BYTES = 512 * 1024;
+const MAX_ENVELOPE_DEPTH = 16;
+
+function validateEnvelopeDepth(body) {
+  // A small JSON body can still contain thousands of nested arrays. Check it
+  // without recursion before command hashing or any command-specific reducer.
+  const pending = [{ value: body, depth: 0 }];
+  while (pending.length) {
+    const { value, depth } = pending.pop();
+    if (depth > MAX_ENVELOPE_DEPTH) throw invalidCommand('Command exceeds the nesting limit.');
+    if (!value || typeof value !== 'object') continue;
+    for (const child of Object.values(value)) {
+      if (child && typeof child === 'object') pending.push({ value: child, depth: depth + 1 });
+    }
+  }
+}
 
 export function json(payload, status = 200, headers = {}) {
   return Response.json(payload, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
@@ -28,6 +43,7 @@ export async function readEnvelope(request, run = false) {
   const raw = await readBodyText(request, MAX_BODY_BYTES, 'INVALID_COMMAND');
   let body;
   try { body = JSON.parse(raw || '{}'); } catch { throw Object.assign(new Error('Invalid JSON.'), { code: 'INVALID_COMMAND', status: 400 }); }
+  validateEnvelopeDepth(body);
   if (body?.action === 'patch') throw Object.assign(new Error('Client profile patches are disabled.'), { code: 'PROFILE_AUTHORITY_REQUIRED', status: 400 });
   exactKeys(body, ['action', 'session_id', ...(run ? ['run_id'] : []), 'operation_id', 'expected_revision', 'command'], ['action', 'session_id']);
   if (!validId(body.session_id) || (run && !validId(body.run_id))) {

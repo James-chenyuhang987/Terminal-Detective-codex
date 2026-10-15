@@ -15,6 +15,7 @@ import MiniMap from '@/components/game/MiniMap';
 import TheaterPresentation from '@/components/game/theater/TheaterPresentation';
 import '@/components/game/theater/theater.css';
 import { generateObservationSections } from '@/game/gameState';
+import { buildPublicCaseContext } from '@/game/narrativeEngine';
 import { getInitialZone } from '@/game/caseRuntime';
 import { streamInvestigationThought, streamTerminalText, setInvestigationLang } from '@/game/investigationEngine';
 import DecisionCards from '@/components/game/DecisionCards';
@@ -25,7 +26,13 @@ import CrisisAlert from '@/components/game/CrisisAlert';
 import InsightFlashFX from '@/components/game/InsightFlashFX';
 import LinkBoard from '@/components/game/LinkBoard';
 import AIProcessingIndicator from '@/components/game/AIProcessingIndicator';
-import ClueCard from '@/components/game/ClueCard';
+import InvestigationJournal from '@/components/game/investigation/InvestigationJournal';
+import { useReportDraft } from '@/components/game/investigation/useReportDraft';
+import { useHypothesisNotebook } from '@/components/game/investigation/useHypothesisNotebook';
+import { useReconstructionDraft } from '@/components/game/investigation/useReconstructionDraft';
+import { hypothesisKey, normalizeHypotheses, pendingHypotheses } from '@/game/hypothesisNotebook';
+import { sanitizeReportDraft } from '@/game/reportDraft';
+import { buildInvestigationEvidence } from '@/game/investigationEvidence';
 import EvidenceBoard from '@/components/game/EvidenceBoard';
 import GlitchOverlay from '@/components/game/GlitchOverlay';
 import BSoD from '@/components/game/BSoD';
@@ -34,6 +41,7 @@ import DecisionLog from '@/components/game/DecisionLog';
 import CaseFlowMap from '@/components/game/CaseFlowMap';
 import GameOverScreen from '@/components/game/GameOverScreen';
 import OnboardingGuide from '@/components/game/OnboardingGuide';
+import ProgressiveInvestigationGuide from '@/components/game/ProgressiveInvestigationGuide';
 import ToolPanelTabs from '@/components/game/ToolPanelTabs';
 import SettingsDrawer from '@/components/game/settings/SettingsDrawer';
 import { useSettings, panelSkin } from '@/lib/settings.jsx';
@@ -156,7 +164,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const [showBSoD, setShowBSoD] = useState(false);
   const [reportMode, setReportMode] = useState(false);
   const [reportOptions, setReportOptions] = useState(null);
-  const [structuredReport, setStructuredReport] = useState({ conclusionId: '', methodId: '', motiveId: '', timelineId: '', evidenceIds: [], evidenceByDimension: {} });
+  const reportOptionsRequestRef = useRef(null);
+  const { value: structuredReport, setValue: setStructuredReport, status: reportDraftStatus, clear: clearReportDraft } = useReportDraft({
+    ownerUid: account?.id, runId: authoritativeRun?.id, caseId: caseDataResolved.case_id,
+    investigationVersion: investigationV2 ? 2 : 1,
+  });
   const [reportError, setReportError] = useState(null);
   const [judgeResult, setJudgeResult] = useState(null);
   const [selectedNPC, setSelectedNPC] = useState(null);
@@ -175,7 +187,16 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const [showGameOver, setShowGameOver] = useState(false);
   const [showCommandConsole, setShowCommandConsole] = useState(false);
   const [commandNotice, setCommandNotice] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(() => settings.investigationTutorialEnabled !== false);
+  const [showOnboarding, setShowOnboarding] = useState(() => authoritativeRun?.investigation_version !== 2 && settings.investigationTutorialEnabled !== false);
+  const [tutorialHistory, setTutorialHistory] = useState(() => ({ client: runClient, moved: false, observed: false, reportOpened: false }));
+  const tutorialProgress = tutorialHistory.client === runClient ? tutorialHistory : { moved: false, observed: false, reportOpened: false };
+  const markTutorialProgress = useCallback(key => {
+    if (runViewRef.current?.client !== runClient || !runViewRef.current?.active) return;
+    setTutorialHistory(previous => previous.client === runClient
+      ? (previous[key] ? previous : { ...previous, [key]: true })
+      : { client: runClient, moved: false, observed: false, reportOpened: false, [key]: true });
+  }, [runClient]);
+  useEffect(() => { if (reportMode) markTutorialProgress('reportOpened'); }, [reportMode, markTutorialProgress]);
   const [finalJudgeResult, setFinalJudgeResult] = useState(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
   // ── 关键决策 / 危机事件 / 推理连线 ──
@@ -191,6 +212,21 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const [crisisError, setCrisisError] = useState(null);
   const [insightEvent, setInsightEvent] = useState(null);
   const [linkedPairs, setLinkedPairs] = useState([]);
+  const [linkWorkspace, setLinkWorkspace] = useState(() => ({ client: runClient, draft: { relation: 'supports', firstClue: '', secondClue: '' }, feedback: null }));
+  const linkDraft = linkWorkspace.client === runClient ? linkWorkspace.draft : { relation: 'supports', firstClue: '', secondClue: '' };
+  const linkFeedback = linkWorkspace.client === runClient ? linkWorkspace.feedback : null;
+  const evidenceArchive = useMemo(() => buildInvestigationEvidence({
+    state: gameState, investigation, zones: caseData.scene?.zones, lang,
+  }), [gameState, investigation, caseData, lang]);
+  const { value: hypotheses, status: hypothesisStatus, setValue: setHypotheses } = useHypothesisNotebook({
+    ownerUid: account?.id, runId: authoritativeRun?.id, caseId: caseDataResolved.case_id,
+  });
+  const { value: reconstructionDraft, setValue: setReconstructionDraft } = useReconstructionDraft({
+    ownerUid: account?.id, runId: authoritativeRun?.id, puzzleId: investigation?.puzzle?.id,
+  });
+  const knownEvidenceIds = useMemo(() => evidenceArchive.clues.map(clue => clue.clue_id), [evidenceArchive.clues]);
+  const unverifiedHypotheses = useMemo(() => pendingHypotheses(hypotheses, knownEvidenceIds, linkedPairs),
+    [hypotheses, knownEvidenceIds, linkedPairs]);
   const [isLinkChecking, setIsLinkChecking] = useState(false);
   const decisionResolveRef = useRef(null);
   const abortCtrlRef = useRef(null);
@@ -236,6 +272,17 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       // Preserve loaded choices and drafts without creating another offer/revision.
       setReportOptions(options => options ? { ...options, report_policy: run.investigation.report_policy } : options);
     }
+    const previousTurn = Math.max(0, Number(gameStateRef.current?.turn_count) || 0);
+    const confirmedTurn = Math.max(0, Number(run.state.turn_count) || 0);
+    if (confirmedTurn !== previousTurn) {
+      // Paid interviews, recovery and rest can advance outside the field
+      // handler. Update refs before their result lines are appended. Free
+      // offers must leave legacy round previews and archive browsing intact.
+      activeTerminalTurnRef.current = confirmedTurn;
+      viewedTerminalTurnRef.current = confirmedTurn;
+      setActiveTerminalTurn(confirmedTurn);
+      setViewedTerminalTurn(confirmedTurn);
+    }
     gameStateRef.current = run.state;
     setGameState(run.state);
     setLinkedPairs(run.linked_pairs);
@@ -243,6 +290,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     setNpcEmotionState(run.npc_emotions || {});
     setTruthFragments(run.truth_fragments || 0);
     setJudgeResult(run.judge_result || null);
+    if (run.judge_result?.is_passed) clearReportDraft();
     setShowBSoD(run.state.is_crashed === true);
     crisisPendingRef.current = Boolean(run.pending_crisis);
     setCrisisPending(Boolean(run.pending_crisis));
@@ -254,7 +302,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       setFinalJudgeResult(run.judge_result || null);
       setShowGameOver(true);
     }
-  }, []);
+  }, [clearReportDraft]);
 
   const executeRunCommand = useCallback(async (command) => {
     const view = runViewRef.current;
@@ -333,9 +381,28 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     let cancelled = false;
     setReportOptions(null);
     setReportError(null);
-    executeRunCommand({ type: 'report_options' })
+    const pending = reportOptionsRequestRef.current;
+    const sameView = pending?.client === runClient;
+    // Closing the panel does not cancel a cloud intent. Reuse its response
+    // on reopening, and queue a different language after that intent settles.
+    const request = sameView && pending.lang === lang ? pending : {
+      client: runClient,
+      lang,
+      promise: sameView
+        ? pending.promise.then(() => executeRunCommand({ type: 'report_options' }))
+        : executeRunCommand({ type: 'report_options' }),
+    };
+    reportOptionsRequestRef.current = request;
+    const release = () => { if (reportOptionsRequestRef.current === request) reportOptionsRequestRef.current = null; };
+    request.promise.then(release, release);
+    request.promise
       .then(response => {
-        if (!cancelled) setReportOptions(reportOptionsFromResponse(response));
+        if (!cancelled) {
+          const options = reportOptionsFromResponse(response);
+          setReportOptions(options);
+          setStructuredReport(current => sanitizeReportDraft(current, { reportOptions: options,
+            knownClueIds: response.run.state.unlocked_clues, investigationVersion: response.run.investigation_version === 2 ? 2 : 1 }));
+        }
       })
       .catch(error => {
         if (!cancelled && error?.name !== 'AbortError') {
@@ -345,7 +412,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
         }
       });
     return () => { cancelled = true; };
-  }, [authorityLoading, authorityReady, executeRunCommand, isFinalizing, lang, reportMode]);
+  }, [authorityLoading, authorityReady, executeRunCommand, isFinalizing, lang, reportMode, runClient, setStructuredReport]);
 
   const phaseColor = PHASE_COLORS[reactState] || PHASE_COLORS.IDLE;
   const terminalTurns = useMemo(
@@ -809,7 +876,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     setSelectedNPC(npc);
     setNpcDialogue([{ role: 'system', text: `— ${npc.name} ${t.npcEnters} —\n"${npc.initial_statement}"` }]);
     setNpcQuestionPacks(null);
-    setNpcQuestionError(executor
+    setNpcQuestionError(executor || investigationV2
       ? null
       : (lang === 'zh' ? '所有探员体力均不足 10%，请返回行动界面整备。' : 'ALL AGENTS HAVE LESS THAN 10% STAMINA. RETURN TO THE ACTION SCREEN TO RECOVER.'));
     setNpcExecutorId(executor?.agent_id || runtimeTeam[0]?.agent_id || '');
@@ -819,6 +886,16 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       const { result } = await executeRunCommand({ type: 'interrogation_options', npc_id: npc.npc_id });
       if (!isOperationCurrent(ctrl, operationId)) return;
       setNpcQuestionPacks(result.packs || {});
+      if (investigationV2) {
+        const available = runtimeTeam.filter(agent => result.packs?.[agent.agent_id]?.questions
+          ?.some(question => question.available));
+        const quotedExecutor = available.find(agent => agent.agent_id === executor?.agent_id)
+          || available.find(agent => agent.agent_id === primary?.agent_id) || available[0];
+        if (quotedExecutor) setNpcExecutorId(quotedExecutor.agent_id);
+        setNpcQuestionError(quotedExecutor ? null : (lang === 'zh'
+          ? '当前没有可执行的问题，请核对证据、行动点和选项中的体力报价。'
+          : 'No question is currently available. Check evidence, AP and the quoted stamina costs.'));
+      }
     } catch (error) {
       if (error?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
         setNpcQuestionError(lang === 'zh' ? '审讯规则暂时不可用，请稍后重试。' : 'INTERROGATION RULES ARE TEMPORARILY UNAVAILABLE.');
@@ -839,8 +916,10 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     const theaterAtQuestion = theaterMode;
     const state = gameStateRef.current;
     const staminaAgent = configuredAgentStrategy.team.find(agent => agent.agent_id === npcExecutorId);
-    if (!staminaAgent || !(investigationV2 ? question.available && (question.stamina_cost === 0 || canAgentInvestigate(state.agent_stamina?.[npcExecutorId], true)) : canAgentInvestigate(state.agent_stamina?.[npcExecutorId], false))) {
-      setNpcQuestionError(lang === 'zh'
+    if (!staminaAgent || !(investigationV2 ? question.available && state.action_points_left >= question.ap_cost : canAgentInvestigate(state.agent_stamina?.[npcExecutorId], false))) {
+      setNpcQuestionError(investigationV2 ? (lang === 'zh'
+        ? '该问题当前不可执行，请重新核对证据、行动点和体力报价。'
+        : 'This question is unavailable. Recheck evidence, AP and the quoted stamina cost.') : lang === 'zh'
         ? '该探员体力不足 10%，请更换探员或返回行动界面整备。'
         : 'THIS AGENT HAS LESS THAN 10% STAMINA. SWITCH AGENTS OR RECOVER FROM THE ACTION SCREEN.');
       return;
@@ -861,9 +940,10 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       const nextGameState = run.state;
       if (closedDialogueRef.current < dialogueId) {
         setNpcDialogue(prev => [...prev, { role: 'npc', text: result.response, name: result.npc_name }]);
-      } else {
-        addLine(`\n${result.npc_name || npc.name}: ${result.response}`, 'narration');
       }
+      // The dialogue is a presentation of this result, not its only record.
+      // Keep paid question turns available after another answer or panel close.
+      addLine(`\n${result.npc_name || npc.name}: ${result.response}`, 'narration');
       for (const clueId of nextGameState.unlocked_clues.filter(id => !state.unlocked_clues.includes(id))) {
         const clue = caseData.clue_dictionary.find(c => c.clue_id === clueId);
         if (!clue) continue;
@@ -877,7 +957,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       // Capture eligibility at submission, commit after the existing operation check, before option refresh.
       dispatchNarrative(successfulInterviewEvent({
         runId: state.run_id, dialogueId, theaterAtQuestion, result,
-        stage: theaterNarrativeStage(nextGameState, caseData),
+        stage: theaterNarrativeStage(nextGameState, caseData, run.investigation),
       }));
       if (closedDialogueRef.current >= dialogueId) {
         dispatchNarrative({ type: 'close', runId: state.run_id, dialogueId });
@@ -968,16 +1048,15 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       const sameDialogue = selectedNPC?.npc_id === npc.npc_id && !wasClosed;
       if (!pending && !sameDialogue) dialogueSequenceRef.current += 1;
       const dialogueId = pending?.dialogueId || dialogueSequenceRef.current;
-      if (wasClosed) {
-        addLine(`\n${result.npc_name || npc.name}: ${result.response}`, 'narration');
-      } else {
+      if (!wasClosed) {
         setSelectedNPC(npc);
         setNpcExecutorId(command.executor_agent_id);
         setNpcDialogue(previous => [...(sameDialogue ? previous : []), { role: 'npc', text: result.response, name: result.npc_name }]);
       }
+      addLine(`\n${result.npc_name || npc.name}: ${result.response}`, 'narration');
       dispatchNarrative(successfulInterviewEvent({
         runId: response.run.id, dialogueId, theaterAtQuestion: pending?.theaterAtQuestion === true, result,
-        stage: theaterNarrativeStage(response.run.state, caseData),
+        stage: theaterNarrativeStage(response.run.state, caseData, response.run.investigation),
       }));
       if (wasClosed) {
         dispatchNarrative({ type: 'close', runId: response.run.id, dialogueId });
@@ -1005,6 +1084,16 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       }
     } else if (command.type === 'report_options') {
       if (reportMode) setReportOptions(reportOptionsFromResponse(response));
+    } else if (command.type === 'link') {
+      const [a, b] = command.clue_ids || [];
+      const relation = command.relation_type || 'supports';
+      // A lost reply leaves a provisional error in the link workspace. Replace
+      // it with the receipt's confirmed result as well as the terminal entry.
+      setLinkWorkspace(current => ({ client: runClient,
+        draft: current.client === runClient ? current.draft : { relation, firstClue: a || '', secondClue: b || '' },
+        feedback: { valid: result.is_valid, text: result.reveal, a, b, relation, lang: command.lang || lang },
+      }));
+      if (result.reveal) addLine(result.reveal, result.is_valid ? 'success' : 'clue-desc');
     } else {
       const text = result.settlement?.action_narration || result.narration || result.reveal || result.resultText;
       if (text) addLine(text, 'narration');
@@ -1054,6 +1143,10 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     try {
       const { result, run } = await executeRunCommand({ type: 'link', clue_ids: [aId, bId], ...(investigationV2 ? { relation_type: relation } : {}) });
       if (!isOperationCurrent(ctrl, operationId)) return;
+      setLinkWorkspace(current => ({ client: runClient,
+        draft: current.client === runClient ? current.draft : { relation: 'supports', firstClue: aId, secondClue: bId },
+        feedback: { valid: result.is_valid, text: result.reveal, a: aId, b: bId, relation, lang },
+      }));
       if (result.is_valid) {
         addLine(`\n${t.insightBreak}${clueA.visual_icon} ${clueA.keyword} ⟺ ${clueB.visual_icon} ${clueB.keyword}`, 'success');
         if (investigationV2) { addLine(result.reveal, 'success'); return; }
@@ -1081,6 +1174,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       }
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
+        setLinkWorkspace(current => ({ ...current, feedback: { valid: false, text: publicErrorMessage(err, lang), lang } }));
         addLine(`\n${t.linkFailed}${publicErrorMessage(err, lang)}`, 'error');
       }
     } finally {
@@ -1173,9 +1267,16 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     }
   };
 
+  const selectFieldTarget = id => {
+    setFieldTargetId(id);
+    if (id && investigation?.targets.some(target => target.target_id === id && target.zone_id === gameState.current_zone && target.available)) {
+      markTutorialProgress('observed');
+    }
+  };
   const fieldPanel = investigationV2 && investigation && <InvestigationFieldPanel
     investigation={investigation} gameState={gameState} team={activeAgentStrategy.team} caseData={caseData}
-    targetId={fieldTargetId} onTargetChange={setFieldTargetId} onCommand={handleFieldCommand}
+    reconstructionDraft={reconstructionDraft} onReconstructionDraftChange={setReconstructionDraft}
+    targetId={fieldTargetId} onTargetChange={selectFieldTarget} onCommand={handleFieldCommand}
     busy={interactionLocked} active={authorityReady && !authorityLoading && presentationActive && !showSettings && !showOnboarding && !isFinalizing} />;
 
   const openInvestigation = () => {
@@ -1186,6 +1287,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     else void runReActCycle();
   };
 
+  const publicCaseContext = useMemo(() => investigation?.story
+    ? buildPublicCaseContext({ gameState, caseData, investigation, lang }) : null,
+  [caseData, gameState, investigation, lang]);
   const assistantBrief = useMemo(() => buildInvestigationBrief({
     gameState,
     caseData,
@@ -1197,8 +1301,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     linkedPairs,
     selectedNpcId: selectedNPC?.npc_id || null,
     investigationVersion: investigationV2 ? 2 : 1,
-    currentGoal: investigation?.current_goal,
-  }), [caseData, decisionCards, gameState, investigation?.current_goal, investigationV2, isProcessing, lang, linkedPairs, newClueIds.length, reportMode, selectedNPC?.npc_id]);
+    currentGoal: publicCaseContext?.objective || investigation?.current_goal,
+  }), [caseData, decisionCards, gameState, investigation?.current_goal, investigationV2, isProcessing, lang, linkedPairs, newClueIds.length, publicCaseContext?.objective, reportMode, selectedNPC?.npc_id]);
 
   const bgColor = noirColor(phaseColor.bg);
   const accentColor = noirColor(phaseColor.accent);
@@ -1224,6 +1328,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               team={activeAgentStrategy.team}
               error={npcQuestionError}
               investigationVersion={investigationV2 ? 2 : 1}
+              investigation={investigation}
+              knownClues={evidenceArchive.clues}
               actionPoints={gameState.action_points_left}
             />
           );
@@ -1244,6 +1350,10 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               error={reportError}
               investigationVersion={investigationV2 ? 2 : 1}
               actionPoints={gameState.action_points_left}
+              knownClues={evidenceArchive.clues}
+              evidenceSources={evidenceArchive.sources}
+              expertNotes={evidenceArchive.expertNotes}
+              draftStatus={reportDraftStatus}
             />
           );
 
@@ -1267,13 +1377,23 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           <button type="button" className="td-ui-button td-mobile-only td-tools-close" onClick={() => setMobileToolsOpen(false)}>↓ {lang === 'zh' ? '收起工具' : 'CLOSE TOOLS'}</button>
           {toolTab === 'link' ? (
             <LinkBoard
-              clues={caseData.clue_dictionary}
+              key={`${account?.id}:${authoritativeRun?.id}`}
+              clues={evidenceArchive.clues}
               unlockedIds={gameState.unlocked_clues}
               linkedPairs={linkedPairs}
               onLink={handleLink}
               relationsEnabled={investigationV2}
               isChecking={isLinkChecking || interactionLocked}
               accentColor={accentColor}
+              draft={linkDraft}
+              onDraftChange={draft => setLinkWorkspace({ client: runClient, draft, feedback: null })}
+              feedback={linkFeedback?.lang === lang ? linkFeedback : null}
+              sources={evidenceArchive.sources}
+              expertNotes={evidenceArchive.expertNotes}
+              hypotheses={unverifiedHypotheses}
+              hypothesisStatus={hypothesisStatus}
+              onSaveHypothesis={investigationV2 ? item => setHypotheses(previous => normalizeHypotheses([...previous, item], knownEvidenceIds)) : undefined}
+              onRemoveHypothesis={item => setHypotheses(previous => previous.filter(saved => hypothesisKey(saved) !== hypothesisKey(item)))}
             />
           ) : toolTab === 'map' ? (
             <CaseFlowMap
@@ -1301,21 +1421,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               </div>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              <div className="text-xs tracking-widest mb-3" style={{ color: accentColor }}>
-                <IconText text={t.evidenceLocker} /> ({gameState.unlocked_clues.length})
-              </div>
-              {gameState.unlocked_clues.length === 0 ? (
-                <div className="text-xs opacity-30 text-center mt-8" style={{ color: accentColor }}>
-                  <IconText text={t.noEvidence} />
-                </div>
-              ) : (
-                gameState.unlocked_clues.map(id => {
-                  const clue = caseData.clue_dictionary.find(c => c.clue_id === id);
-                  return clue ? <ClueCard key={id} clue={clue} isNew={newClueIds.includes(id)} compact /> : null;
-                })
-              )}
-            </div>
+            <InvestigationJournal key={`${account?.id}:${authoritativeRun?.id}`} {...evidenceArchive}
+              newClueIds={newClueIds} investigation={investigationV2 ? investigation : null} npcs={caseData.npcs} />
           )}
 
           {/* Confusion Meter */}
@@ -1348,6 +1455,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     onSwitch={() => setSetting('storyMode', theaterMode ? 'terminal' : 'theater')}
     onSettings={() => setShowSettings(value => !value)}
   />;
+  const progressiveGuide = investigationV2 && settings.investigationTutorialEnabled !== false && <ProgressiveInvestigationGuide
+    key={`${account?.id}:${authoritativeRun?.id}`}
+    gameState={gameState} investigation={investigation} progress={tutorialProgress} theaterMode={theaterMode}
+    active={presentationActive && authorityReady && !interactionLocked && !showSettings && !showOnboarding && !selectedNPC && !reportMode && !mobileToolsOpen && !showCommandConsole && !crisis && !decisionCards && !actionCinematic && !cinematic}
+    onOpenGuide={() => setShowOnboarding(true)} />;
 
   if (showGameOver) {
     const finalSettlement = finalSettlementRef.current || {
@@ -1364,6 +1476,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
         judgeResult={finalJudgeResult}
         gameState={finalGameState}
         caseData={caseData}
+        investigation={investigationV2 ? investigation : null}
         onSettlement={() => onSettlement?.({ run_id: finalGameState.run_id })}
         onReturnToLobby={onBackToLobby}
         onReturnToLanding={onGameEnd}
@@ -1409,6 +1522,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           }}
         />
       )}
+      {!theaterMode && progressiveGuide}
 
       {showSettings && presentationActive && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
@@ -1601,6 +1715,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           team={activeAgentStrategy.team}
           active={presentationActive}
           busy={interactionLocked}
+          crisisPending={crisisPending}
           paused={Boolean(narrativeVisible || showSettings || showOnboarding || showCommandConsole || decisionCards || actionCinematic || cinematic || crisis || showBSoD || isFinalizing)}
           selectedNpcId={selectedNPC?.npc_id}
           speakerNpcId={investigationV2 ? (npcDialogue.at(-1)?.role === 'npc' ? selectedNPC?.npc_id : null) : undefined}
@@ -1613,7 +1728,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           investigation={investigation}
           sfxEnabled={settings.sfxEnabled}
           fieldPanel={fieldPanel}
-          onInspect={id => { setFieldTargetId(id); setFieldDeskOpen(true); }}
+          guide={progressiveGuide}
+          onInspect={id => { selectFieldTarget(id); setFieldDeskOpen(true); }}
+          onActualMove={() => markTutorialProgress('moved')}
           brief={assistantBrief}
           lines={terminalLines}
           streamingText={streamingTerminal?.fullText}

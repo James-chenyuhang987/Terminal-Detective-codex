@@ -1,0 +1,150 @@
+{
+  "kind": "developer-prepared authority snapshots and actual React SSR",
+  "browserVisualVerified": false,
+  "records": [
+    {
+      "caseId": "Lvl_01",
+      "stage": "opening",
+      "lang": "zh",
+      "renderedBytes": 4996,
+      "milestones": 0,
+      "knownEvidence": 0,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_01",
+      "stage": "opening",
+      "lang": "en",
+      "renderedBytes": 5740,
+      "milestones": 0,
+      "knownEvidence": 0,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_01",
+      "stage": "pursuit",
+      "lang": "zh",
+      "renderedBytes": 6199,
+      "milestones": 1,
+      "knownEvidence": 2,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_01",
+      "stage": "pursuit",
+      "lang": "en",
+      "renderedBytes": 6997,
+      "milestones": 1,
+      "knownEvidence": 2,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_01",
+      "stage": "convergence",
+      "lang": "zh",
+      "renderedBytes": 9812,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_01",
+      "stage": "convergence",
+      "lang": "en",
+      "renderedBytes": 10702,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_01",
+      "stage": "closed",
+      "lang": "zh",
+      "renderedBytes": 10941,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "completed"
+    },
+    {
+      "caseId": "Lvl_01",
+      "stage": "closed",
+      "lang": "en",
+      "renderedBytes": 12056,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "completed"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "opening",
+      "lang": "zh",
+      "renderedBytes": 5074,
+      "milestones": 0,
+      "knownEvidence": 0,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "opening",
+      "lang": "en",
+      "renderedBytes": 5802,
+      "milestones": 0,
+      "knownEvidence": 0,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "pursuit",
+      "lang": "zh",
+      "renderedBytes": 6280,
+      "milestones": 1,
+      "knownEvidence": 2,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "pursuit",
+      "lang": "en",
+      "renderedBytes": 7060,
+      "milestones": 1,
+      "knownEvidence": 2,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "convergence",
+      "lang": "zh",
+      "renderedBytes": 10040,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "convergence",
+      "lang": "en",
+      "renderedBytes": 10890,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "active"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "closed",
+      "lang": "zh",
+      "renderedBytes": 13783,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "completed"
+    },
+    {
+      "caseId": "Lvl_02",
+      "stage": "closed",
+      "lang": "en",
+      "renderedBytes": 15161,
+      "milestones": 4,
+      "knownEvidence": 8,
+      "status": "completed"
+    }
+  ]
+}

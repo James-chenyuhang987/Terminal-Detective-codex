@@ -172,6 +172,25 @@ test('World requires a direction with R to sprint and clears sprint on pause or 
   h.cleanup();
 });
 
+test('movement onboarding only advances once after actual collision-resolved travel', () => {
+  const h = harness();
+  let notifications = 0;
+  h.live.current.onActualMove = () => notifications++;
+  h.controlsRef.current.sprint = true;
+  for (let frame = 0; frame < 60; frame++) h.frame(1 / 60);
+  assert.equal(notifications, 0, 'R without a direction cannot complete movement');
+  h.controlsRef.current.forward = true;
+  h.live.current.paused = true;
+  for (let frame = 0; frame < 60; frame++) h.frame(1 / 60);
+  assert.equal(notifications, 0, 'held movement during a pause cannot complete the tutorial');
+  h.live.current.paused = false;
+  h.frame(1 / 60);
+  assert.equal(notifications, 0, 'one sub-threshold frame is insufficient');
+  for (let frame = 0; frame < 180; frame++) h.frame(1 / 60);
+  assert.equal(notifications, 1, 'genuine movement reports once, including subsequent frames');
+  h.cleanup();
+});
+
 test('viewport input treats R as a held sprint key and clears it on release, blur, or hidden page', () => {
   const h = inputHarness();
   h.fire('keydown', { code: 'KeyR', repeat: false });

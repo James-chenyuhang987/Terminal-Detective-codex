@@ -63,10 +63,11 @@ const terminal = readFileSync(new URL('../src/components/game/InvestigationTermi
 function commitHarness() {
   const stored = {};
   const context = {
-    useCallback: fn => fn, gameStateRef: { current: null }, bsodCountRef: { current: 0 },
+    useCallback: fn => fn, clearReportDraft: () => {}, gameStateRef: { current: null }, bsodCountRef: { current: 0 },
     crisisPendingRef: { current: false }, finalizingRef: { current: false }, finalSettlementRef: { current: null },
+    activeTerminalTurnRef: { current: 0 }, viewedTerminalTurnRef: { current: 0 },
   };
-  for (const field of ['ServerRun', 'GameState', 'LinkedPairs', 'NpcEmotionState', 'TruthFragments', 'JudgeResult', 'ShowBSoD', 'CrisisPending', 'Crisis', 'IsFinalizing', 'FinalJudgeResult', 'ShowGameOver']) {
+  for (const field of ['ServerRun', 'GameState', 'LinkedPairs', 'NpcEmotionState', 'TruthFragments', 'JudgeResult', 'ShowBSoD', 'CrisisPending', 'Crisis', 'IsFinalizing', 'FinalJudgeResult', 'ShowGameOver', 'ActiveTerminalTurn', 'ViewedTerminalTurn']) {
     context[`set${field}`] = value => { stored[field] = value; };
   }
   const start = terminal.indexOf('  const commitServerRun = ');

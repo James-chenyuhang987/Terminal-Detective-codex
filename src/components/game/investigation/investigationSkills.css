@@ -1,0 +1,16 @@
+.td-investigation-skills { min-width: 0; border: 1px solid #709f9a35; border-radius: 8px; margin: 8px 0 12px; padding: 0 11px; color: #bec8bd; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.td-investigation-skills > summary { cursor: pointer; min-height: 40px; padding: 10px 0; color: #a5c6bc; }
+.td-investigation-skills > summary:focus-visible { outline: 2px solid #e1d0ac; outline-offset: 3px; }
+.td-investigation-active-skills { margin: 0 0 10px; padding-left: 18px; }
+.td-investigation-active-skills li { padding-bottom: 7px; }
+.td-investigation-active-skills strong { color: #ded1b7; font-weight: 500; }
+.td-investigation-active-skills p { margin: 2px 0; }
+.td-investigation-skill-budgets { margin: 8px 0; border-top: 1px solid #709f9a30; }
+.td-investigation-skill-budgets > div { display: flex; flex-wrap: wrap; gap: 3px 10px; justify-content: space-between; padding: 5px 0; }
+.td-investigation-skill-budgets dt { color: #d0d5c8; }
+.td-investigation-skill-budgets dd { margin: 0; font-variant-numeric: tabular-nums; }
+.td-investigation-source-hint { margin: 8px 0; padding: 8px 10px; border-left: 2px solid #709f9a; background: #709f9a0d; font-size: 11px; overflow-wrap: anywhere; }
+.td-investigation-source-hint strong { color: #a5c6bc; font-weight: 500; }
+.td-investigation-source-hint small { display: block; margin-top: 3px; color: #aeb8aa; }
+.td-investigation-skill-quote { display: block; color: #a5c6bc; font-size: 10px; line-height: 1.6; }
+@media (max-width: 600px) { .td-investigation-skills { padding: 0 9px; } }

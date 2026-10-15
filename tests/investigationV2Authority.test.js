@@ -456,7 +456,7 @@ test('recorded temporal relationships work in both languages, enforce direction 
         assert.equal(act(linked.run, command).run.truth_fragments, before + 1);
         const reversed = act(linked.run, { ...command, clue_ids: [edge.b, edge.a] });
         assert.equal(reversed.result.is_valid, false);
-        assert.match(reversed.result.reveal, lang === 'zh' ? /支持、矛盾和先后.*原始时钟.*较早/ : /support, contradiction and ordering.*original clocks.*earlier/);
+        assert.match(reversed.result.reveal, lang === 'zh' ? /先后关系.*原始时钟.*具体事件.*较早/ : /selected order.*original clocks.*specific events.*earlier/);
         assert.equal(reversed.run.investigation.propositions.filter(item => item.alternative).length, 0);
         assert.deepEqual(reversed.run.state.destroyed_clue_ids, []);
         run = reversed.run;

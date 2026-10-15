@@ -1,0 +1,13 @@
+.td-evidence-role, .td-evidence-report-review { min-width: 0; color: #c5d0c8; overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; }
+.td-evidence-role { margin: 5px 0; padding: 0 8px; border-left: 2px solid #709f9a66; background: #709f9a08; }
+.td-evidence-role > summary, .td-evidence-report-review > summary { min-height: 38px; cursor: pointer; padding: 8px 0; color: #b7ccc2; }
+.td-evidence-role p, .td-evidence-report-review p { margin: 3px 0 9px; white-space: pre-wrap; }
+.td-evidence-role summary:focus-visible, .td-evidence-report-review summary:focus-visible { outline: 2px solid #e1d0ac; outline-offset: 3px; border-radius: 3px; }
+.td-evidence-report-review { border: 1px solid #709f9a55; border-radius: 9px; padding: 4px 12px 10px; margin: 12px 0; background: #709f9a08; }
+.td-evidence-review-scope, .td-report-role-note { color: #b7c0b7; font-size: 12px; line-height: 1.7; }
+.td-evidence-review-dimensions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.td-evidence-review-dimensions > article { min-width: 0; padding: 10px; border: 1px solid #709f9a30; border-radius: 7px; background: #08121a66; }
+.td-evidence-review-dimensions h4 { font-size: 14px; color: #e1d0ac; margin: 0 0 6px; }
+.td-evidence-review-dimensions h5 { font-size: 12px; color: #adc4b6; margin: 12px 0 4px; }
+.td-report-attached-roles { margin: 6px 0 10px; }
+@media (max-width: 600px) { .td-evidence-review-dimensions { grid-template-columns: minmax(0, 1fr); } .td-evidence-report-review { padding: 4px 9px 9px; } }

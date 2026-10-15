@@ -1,0 +1,25 @@
+.td-observation-viewer { min-width: 0; }
+.td-observation-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.td-observation-viewer button { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid #71827c; border-radius: 7px; background: #1c2d32; color: #dbe2d6; font: inherit; cursor: pointer; }
+.td-observation-viewer button[aria-pressed="true"] { border-color: #c5ad7c; background: #3c3b2c; color: #f0ddb5; }
+.td-observation-viewer button:disabled { opacity: .45; cursor: default; }
+.td-observation-viewer :is(button, summary):focus-visible { outline: 2px solid #e3c27e; outline-offset: 3px; }
+.td-observation-viewer .td-object-canvas { min-height: 220px; margin: 12px 0; }
+.td-observation-viewer .is-text-observation { height: auto; min-height: 0; }
+.td-observation-text-view, .td-observation-fallback { padding: 16px; color: #d2dbd1; white-space: pre-wrap; overflow-wrap: anywhere; }
+.td-observation-text-view p { margin: 8px 0 0; }
+.td-observation-number { display: grid; place-items: center; width: 23px; height: 23px; border: 1px solid #dfca9c; border-radius: 50%; background: #14272be8; color: #f0dfba; font: 700 12px/1 system-ui, sans-serif; }
+.td-observation-viewer .td-object-view-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.td-observation-viewer .td-observation-free { margin: 10px 0; color: #b3c1b7; font-size: 12px; }
+.td-observation-features { border: 1px solid #72867d70; border-radius: 8px; padding: 12px; background: #15252b; overflow-wrap: anywhere; }
+.td-observation-features > p { margin: 0; color: #c9d3c6; }
+.td-observation-features ol { margin: 10px 0; padding-left: 24px; list-style: decimal; }
+.td-observation-features li { margin: 5px 0; padding-left: 3px; }
+.td-observation-features small, .td-observation-assist small { color: #a9bbb1; font-size: 12px; }
+.td-observation-assist { margin-top: 12px; border-left: 2px solid #aab7a0; padding: 8px 12px; background: #1a2c28; }
+.td-observation-assist strong { color: #d1c6a0; font-size: 13px; }
+.td-observation-assist p { margin: 5px 0; }
+.td-observation-earned { margin-top: 12px; border-top: 1px solid #72867d70; }
+.td-observation-earned summary { min-height: 44px; padding: 10px 0; cursor: pointer; }
+.td-observation-earned p { white-space: pre-wrap; }
+@media (max-width: 600px) { .td-observation-viewer .td-object-canvas { min-height: 190px; } .td-observation-toolbar button { flex: 1 1 auto; } }

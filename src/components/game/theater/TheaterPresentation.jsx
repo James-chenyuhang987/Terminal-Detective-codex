@@ -7,6 +7,7 @@ import { resolveTheaterInteraction } from '@/game/theaterInteraction';
 import { TerminalLine } from '@/components/game/investigation/TerminalPanels';
 import { localizedInvestigationText } from '@/game/investigationChoices.js';
 import { fieldProgress } from '@/game/theaterVisuals.js';
+import TheaterStatusHUD, { useFieldTransmission } from './TheaterStatusHUD.jsx';
 
 const LazyTheaterScene = lazy(() => import('./TheaterScene'));
 
@@ -39,7 +40,7 @@ function FieldPanel({ title, children, onClose = null, active = true, kind = '' 
   }}><header className="td-theater-panel-heading"><h2>{title}</h2>{onClose && <button type="button" onClick={onClose} aria-label={lang === 'zh' ? '收起面板' : 'Close panel'}>✕</button>}</header><div className="td-theater-panel-body">{children}</div></section>;
 }
 
-export default function TheaterPresentation({ caseData, gameState, team, active, busy, paused, selectedNpcId, speakerNpcId = undefined, npcEmotionLevels, quality, spatialRef, investigation = null, sfxEnabled = true, fieldPanel = null, onInspect = null, dialoguePanel, reportPanel, toolsPanel, brief, lines, streamingText, phase, canAbort, onAbort, onExecute, onTalk, onCloseDialogue, onOpenTools, onCloseTools, onReport, onCommand, onGuide, onEnd, onTextMode }) {
+export default function TheaterPresentation({ caseData, gameState, team, active, busy, paused, selectedNpcId, speakerNpcId = undefined, npcEmotionLevels, quality, spatialRef, investigation = null, sfxEnabled = true, fieldPanel = null, onInspect = null, onActualMove = null, crisisPending = false, guide = null, dialoguePanel, reportPanel, toolsPanel, brief, lines, streamingText, phase, canAbort, onAbort, onExecute, onTalk, onCloseDialogue, onOpenTools, onCloseTools, onReport, onCommand, onGuide, onEnd, onTextMode }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [failed, setFailed] = useState(false);
@@ -125,20 +126,19 @@ export default function TheaterPresentation({ caseData, gameState, team, active,
     onExecute();
     if (investigation) setPanel('investigate');
   };
-  const fieldLine = lines.filter(line => ['narration', 'success', 'trap', 'error'].includes(line.type)).at(-1);
+  const fieldLine = useFieldTransmission(lines.filter(line => ['narration', 'success', 'trap', 'error'].includes(line.type)).at(-1), active);
   const inspectionTitle = zh ? (focusTargetLabel || (focusTargetType === 'evidence' ? '证物检查' : '调查终端')) : (focusTargetLabelEn || (focusTargetType === 'evidence' ? 'Evidence inspection' : 'Investigation console'));
 
   if (failed) return <section className="td-story-theater">{unavailable}</section>;
 
   return <section className={`td-story-theater ${panel || dialoguePanel || reportPanel ? 'has-field-panel' : ''}`} aria-label={zh ? '3D 侦探剧情现场' : '3D detective story theater'}>
+    <div hidden={Boolean(panel || dialoguePanel || reportPanel)}>{guide}</div>
     <div className="td-theater-viewport">{failed ? unavailable : <TheaterErrorBoundary fallback={unavailable} onFailure={handleFailure}><Suspense fallback={<LoadingScene zh={zh} />}>
-      <LazyTheaterScene speakerNpcId={speakerNpcId} investigation={investigation} sfxEnabled={sfxEnabled} caseData={caseData} zoneId={zoneId} selectedNpcId={dialoguePanel && !panel && !reportPanel ? selectedNpcId : null} interactionNpcId={interactionNpcId} npcEmotionLevels={npcEmotionLevels} progress={progress} focusTargetId={panel === 'investigate' ? focusTargetId : null} focusTargetType={panel === 'investigate' ? focusTargetType : ''} overview={panel === 'arrival'} paused={movementPaused} suspended={!active || paused} quality={quality} reducedMotion={reducedMotion} onInteract={interact} onReady={handleReady} onFailure={handleFailure} controlsRef={controlsRef} spatialRef={spatialRef} onNearbyChange={setNearby} />
+      <LazyTheaterScene speakerNpcId={speakerNpcId} investigation={investigation} sfxEnabled={sfxEnabled} caseData={caseData} zoneId={zoneId} selectedNpcId={dialoguePanel && !panel && !reportPanel ? selectedNpcId : null} interactionNpcId={interactionNpcId} npcEmotionLevels={npcEmotionLevels} progress={progress} focusTargetId={panel === 'investigate' ? focusTargetId : null} focusTargetType={panel === 'investigate' ? focusTargetType : ''} overview={panel === 'arrival'} paused={movementPaused} suspended={!active || paused} quality={quality} reducedMotion={reducedMotion} onInteract={interact} onReady={handleReady} onFailure={handleFailure} controlsRef={controlsRef} spatialRef={spatialRef} onNearbyChange={setNearby} onActualMove={onActualMove} />
     </Suspense></TheaterErrorBoundary>}</div>
 
     <header className="td-theater-case-heading"><div><small>{caseData.case_id} · {zh ? '现场剧情' : 'FIELD STORY'}</small><h1>{caseData.title}</h1><p>⌖ {location}</p></div>
-      <div className="td-theater-resources" aria-label={zh ? '案件状态' : 'Case status'}>
-        <span>{zh ? '回合' : 'Turn'} <b>{gameState.turn_count}</b></span><span>AP <b>{gameState.action_points_left}</b></span><span>{zh ? '线索' : 'Clues'} <b>{progress.evidenceCount}</b></span><span className="is-vitals">HP <b>{gameState.current_hp}%</b></span><span className="is-vitals">{zh ? '混乱' : 'Confusion'} <b>{gameState.confusion_score}%</b></span>
-      </div>
+      <TheaterStatusHUD gameState={gameState} evidenceCount={progress.evidenceCount} crisisPending={crisisPending} />
     </header>
     <div className="td-theater-objective" data-onboarding-target="field-objective"><small>{busy ? phase : (zh ? '当前任务' : 'CURRENT OBJECTIVE')}</small><p>{busy ? (zh ? '探员正在处理调查指令…' : 'Your agents are carrying out the investigation…') : (investigation ? localizedInvestigationText(investigation.current_goal, lang) : (zh ? '检查现场、核对口供，建立证据链。' : 'Inspect the scene, compare statements, and link evidence.'))}</p></div>
 

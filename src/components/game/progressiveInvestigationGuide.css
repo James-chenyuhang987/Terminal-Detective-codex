@@ -1,0 +1,14 @@
+.td-progress-guide { position: relative; color: #e6dfcf; background: #101923ed; border: 1px solid #c5a66f55; border-radius: 9px; font-size: 12px; line-height: 1.6; margin: 10px 0; }
+.td-progress-guide details { padding: 10px 40px 10px 12px; }
+.td-progress-guide summary { cursor: pointer; }
+.td-progress-guide summary small { display: block; color: #c5a66f; font-size: 9px; letter-spacing: .1em; }
+.td-progress-guide summary strong { font-size: 12px; font-weight: 600; }
+.td-progress-guide p { margin: 8px 0; color: #c9c6bd; }
+.td-progress-guide button { min-height: 32px; color: #dac79e; border: 1px solid #c5a66f55; border-radius: 5px; background: #15202b; padding: 4px 9px; cursor: pointer; }
+.td-progress-guide .td-progress-guide-dismiss { position: absolute; top: 4px; right: 4px; border: 0; font-size: 20px; width: 32px; padding: 0; }
+.td-progress-guide :focus-visible { outline: 2px solid #e7d1a2; outline-offset: 3px; }
+.td-progress-guide.is-theater { position: fixed; z-index: 28; left: 24px; bottom: calc(154px + env(safe-area-inset-bottom)); width: min(300px, calc(100% - 48px)); margin: 0; }
+@media (max-width: 600px) {
+  .td-progress-guide.is-theater { left: 16px; bottom: auto; top: calc(212px + env(safe-area-inset-top)); width: calc(100% - 32px); }
+  .td-progress-guide details { padding-top: 7px; padding-bottom: 7px; }
+}

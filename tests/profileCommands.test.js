@@ -34,6 +34,20 @@ test('intents are canonical, detached from forms and contain no profile snapshot
   })));
 });
 
+test('case-start journal preserves negotiated investigation versions and legacy omission', () => {
+  for (const version of [undefined, 1, 2]) {
+    const store = storage();
+    const args = { case_id: 'Lvl_01', ...(version === undefined ? {} : { investigation_version: version }) };
+    const command = profileCommand('start_case', args);
+    appendProfileCommand({ ...receipt, command }, store);
+    assert.deepEqual(readProfileCommands('owner-a', store)[0].command, { ...args, type: 'start_case' });
+  }
+  for (const version of [0, 3, '2', null, false]) {
+    assert.throws(() => profileCommand('start_case', { case_id: 'Lvl_01', investigation_version: version }),
+      { code: 'PROFILE_COMMAND_INVALID' });
+  }
+});
+
 test('journal keeps one immutable owner-scoped receipt for retries and reloads', () => {
   const store = storage();
   const entry = appendProfileCommand(receipt, store);

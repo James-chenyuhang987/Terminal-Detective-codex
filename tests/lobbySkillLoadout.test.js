@@ -6,6 +6,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { SKILL_TREES, LEVEL_XP_TABLE, getLevelFromXP } from '../src/game/agentProgression.js';
+import * as investigationSkills from '../src/game/investigationSkills.js';
 
 const source = readFileSync(new URL('../src/components/game/SkillTreePanel.jsx', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, { compilerOptions: {
@@ -26,6 +27,7 @@ function harness(lang = 'zh') {
     react,
     '@/components/ui/Icon': { default: () => null },
     '@/game/agentProgression': { SKILL_TREES, getLevelFromXP },
+    '@/game/investigationSkills.js': investigationSkills,
     '@/lib/lang.jsx': { useLang: () => ({ lang }) },
     '@/components/ui/usePresentationMotion': { usePresentationMotion: () => ({ motionEnabled: false, foreground: true }) },
   };
@@ -145,5 +147,26 @@ test('manual skill descriptions disclose compatibility and describe only actual 
     assert.match(html, lang === 'zh' ? /已装备技能 · 适用范围/ : /EQUIPPED SKILLS · APPLICABILITY/);
     assert.doesNotMatch(html, /部署后真实生效|Applies after deployment|ACTIVE EFFECTS|已激活效果/);
     assert.match(html, lang === 'zh' ? /之后新开的案件/ : /newly started cases/);
+  }
+});
+
+test('skill previews distinguish current benefits from frozen legacy and unmarked paid cases', () => {
+  for (const lang of ['zh', 'en']) {
+    for (const [investigationVersion, skillsRevision, current] of [[2, 1, true], [2, 0, false], [1, 0, false], [2, 2, false]]) {
+      const h = harness(lang);
+      const props = { agentIdx: 1, progression: progressionAt(10), investigationVersion, skillsRevision, disabled: true };
+      nodes(h.render(props))[0].props.onFocus(SKILL_TREES[1][0].id);
+      const tip = tooltip(h.render(props));
+      const html = renderToStaticMarkup(tip.type(tip.props));
+      if (current) {
+        assert.match(html, lang === 'zh' ? /新调查效果：/ : /NEW INVESTIGATION EFFECT:/);
+        assert.match(html, lang === 'zh' ? /混乱增量减少 1 点，每案最多 2 次/ : /Reduce confusion from a direct question by 1, up to twice per case/);
+        assert.doesNotMatch(html, /CATALOG DESCRIPTION|原始技能说明/);
+      } else {
+        assert.match(html, lang === 'zh' ? /原始技能说明（以适用范围为准）/ : /CATALOG DESCRIPTION \(CHECK APPLICABILITY\)/);
+        assert.match(html, lang === 'zh' ? /目前不提供.*加成或自动效果/ : /provides none of the described bonuses or automatic effects/);
+        assert.doesNotMatch(html, /NEW INVESTIGATION EFFECT|新调查效果/);
+      }
+    }
   }
 });

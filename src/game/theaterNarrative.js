@@ -48,7 +48,9 @@ export function caseBriefingNarrative(caseData, lang = 'zh') {
 }
 
 // Match the existing public observation chapters; never infer a stage from hidden truth.
-export function theaterNarrativeStage(state, caseData) {
+export function theaterNarrativeStage(state, caseData, investigation = null) {
+  const story = investigation?.story || state.investigation?.story;
+  if (story) return Object.hasOwn(CHAPTERS, story.stage) ? story.stage : 'opening';
   const count = state.unlocked_clues?.length || 0;
   if ((Number(state.turn_count) || 0) <= 1 || count === 0) return 'opening';
   return count / Math.max(1, caseData.clue_dictionary?.length || 0) >= 0.55 ? 'convergence' : 'pursuit';

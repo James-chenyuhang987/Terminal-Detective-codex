@@ -100,7 +100,9 @@ jobs:
           npm run lint
 
       - name: Build
-        run: npm run build
+        run: |
+          npm run build
+          node scripts/check-investigation-public-build.mjs
 
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6

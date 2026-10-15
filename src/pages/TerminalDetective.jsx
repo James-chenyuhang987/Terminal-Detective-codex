@@ -438,6 +438,8 @@ export default function TerminalDetective() {
           : profile}
         readOnly={isReadOnly || lobbyPreviewRun}
         previewActiveRun={lobbyPreviewRun}
+        investigationVersion={lobbyPreviewRun ? activeRun?.investigation_version || 1 : 2}
+        skillsRevision={lobbyPreviewRun ? activeRun?.investigation?.skills?.revision || 0 : 1}
         targetCase={ALL_CASES.find(item => item.case_id === preferredCaseId) || null}
         onDeploy={handleDeploy}
         onBack={() => { setLobbyPreviewRun(false); setScreen(lobbyReturnScreen); }}

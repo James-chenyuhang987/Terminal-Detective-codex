@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-15",
+  "commands": [
+    "npm audit --json",
+    "npm audit --omit=dev --json"
+  ],
+  "before": {
+    "info": 0,
+    "low": 0,
+    "moderate": 2,
+    "high": 15,
+    "critical": 0,
+    "total": 17
+  },
+  "after": {
+    "info": 0,
+    "low": 0,
+    "moderate": 2,
+    "high": 5,
+    "critical": 0,
+    "total": 7
+  },
+  "production": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "updates": {
+    "wrangler": "4.128.0 -> 4.151.0",
+    "@grpc/grpc-js": "1.9.16 -> 1.13.6 (scoped Firestore override)",
+    "brace-expansion": "1.1.18 -> 1.1.21",
+    "source-map-js": "1.2.1 -> 1.2.2"
+  },
+  "remaining": [
+    {
+      "name": "braces",
+      "severity": "high",
+      "range": "*",
+      "via": [
+        {
+          "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+          "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+          "range": "<=3.0.3"
+        }
+      ]
+    },
+    {
+      "name": "chokidar",
+      "severity": "high",
+      "range": "2.0.0 - 3.6.0",
+      "via": [
+        "braces"
+      ]
+    },
+    {
+      "name": "fast-glob",
+      "severity": "high",
+      "range": "*",
+      "via": [
+        "micromatch"
+      ]
+    },
+    {
+      "name": "micromatch",
+      "severity": "high",
+      "range": ">=0.2.0",
+      "via": [
+        "braces"
+      ]
+    },
+    {
+      "name": "postcss-nested",
+      "severity": "moderate",
+      "range": "2.0.3 - 6.2.0",
+      "via": [
+        "postcss-selector-parser"
+      ]
+    },
+    {
+      "name": "postcss-selector-parser",
+      "severity": "moderate",
+      "range": "<7.1.6",
+      "via": [
+        {
+          "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+          "range": "<7.1.6"
+        }
+      ]
+    },
+    {
+      "name": "tailwindcss",
+      "severity": "high",
+      "range": "<=0.0.0-oxide-insiders.ff2c25f || 0.5.0 - 3.4.19",
+      "via": [
+        "chokidar",
+        "fast-glob",
+        "micromatch",
+        "postcss-nested",
+        "postcss-selector-parser"
+      ]
+    }
+  ],
+  "exposure": {
+    "browser_audited_package_matches": {
+      "braces": [],
+      "micromatch": [],
+      "tailwindcss": [],
+      "postcss-selector-parser": []
+    },
+    "worker_sources": 62,
+    "worker_remaining_package_matches": [],
+    "notes": "Remaining packages belong to Tailwind 3 build tooling. The application accepts no user-provided CSS or glob patterns; build configuration targets repository source files. No live production penetration test was performed. Audit package-node counts include transitive duplicates, not independent exploitable vulnerabilities."
+  }
+}

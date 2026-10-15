@@ -944,9 +944,9 @@ export function renderObservationAftermath({ gameState = {}, caseData = {}, lang
 }
 
 /**
- * @param {{ gameState?: Record<string, any>, caseData?: Record<string, any>, lang?: string }} options
+ * @param {{ gameState?: Record<string, any>, caseData?: Record<string, any>, investigation?: Record<string, any> | null, lang?: string }} options
  */
-export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = 'zh' } = {}) {
+export function buildPublicCaseContext({ gameState = {}, caseData = {}, investigation = null, lang = 'zh' } = {}) {
   const language = lang === 'en' ? 'en' : 'zh';
   const zh = language === 'zh';
   const source = localizedCase(caseData, language);
@@ -974,9 +974,13 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
   const totalClues = Math.max(clues.length, publicClueDictionary.length);
   const castNames = npcs.map(npc => npc.name).join(zh ? '、' : ', ');
   const profile = getCaseNarrativeProfile(source.case_id || gameState.case_id, language);
-  const stage = narrativeStage({ turn, clueCount: clues.length, clueTotal: totalClues });
+  const story = investigation?.story || gameState.investigation?.story;
+  const stage = story ? (['opening', 'pursuit', 'convergence'].includes(story.stage) ? story.stage : 'opening')
+    : narrativeStage({ turn, clueCount: clues.length, clueTotal: totalClues });
+  const storyText = value => safeText(typeof value === 'string' ? value : value?.[language] || value?.zh || value?.en, '', 2400);
+  const focus = story ? storyText(story.focus) : '';
   const zoneAtmosphere = safeText(profile.zones?.[gameState.current_zone], '', 260);
-  const aftermath = turn > 1 ? renderObservationAftermath({ gameState, caseData: source, lang: language }) : null;
+  const aftermath = !story && turn > 1 ? renderObservationAftermath({ gameState, caseData: source, lang: language }) : null;
 
   const sceneReport = publicLabel(
     source.scene?.description,
@@ -988,6 +992,7 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
     profile.prologue,
     zh ? `现场初勘：${sceneReport}` : `INITIAL SCENE REPORT: ${sceneReport}`,
     zh ? `核心谜题：${profile.question}` : `CENTRAL MYSTERY: ${profile.question}`,
+    ...(focus ? [focus] : []),
   ].join('\n\n');
   const evidenceProgress = recentClues.length
     ? (zh
@@ -998,11 +1003,11 @@ export function buildPublicCaseContext({ gameState = {}, caseData = {}, lang = '
       : 'No evidence yet supports a conclusion; the first reviewable record is still waiting to be secured.');
   const progressNarrative = [
     aftermath?.text,
-    profile.stages?.[stage],
+    ...(story ? [focus, ...(story.milestones || []).map(item => joinSentence(storyText(item.title), storyText(item.body)))] : [profile.stages?.[stage]]),
     zoneAtmosphere ? `${zoneName}：${zoneAtmosphere}` : '',
     evidenceProgress,
   ].filter(Boolean).join('\n\n');
-  const objective = gameState.confusion_score >= 60
+  const objective = story ? focus : gameState.confusion_score >= 60
     ? (zh
       ? `当前判断稳定度偏低；先复核已有证据，再继续执行本案目标：${profile.objectives?.[stage]}`
       : `Judgment stability is low. Recheck secured evidence before continuing the case objective: ${profile.objectives?.[stage]}`)

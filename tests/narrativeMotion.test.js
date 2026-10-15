@@ -120,7 +120,7 @@ test('actual NPC panel animates only appended answers and Show all never dispatc
   let closed = 0;
   const Statement = () => null;
   const Panel = component('src/components/game/investigation/TerminalPanels.jsx', {
-    react: { ...React, useRef: value => {
+    react: { ...React, useId: () => 'npc-dialogue-test', useRef: value => {
       const slot = cursor++;
       if (!(slot in refs)) refs[slot] = { current: value };
       return refs[slot];
@@ -132,6 +132,9 @@ test('actual NPC panel animates only appended answers and Show all never dispatc
     '@/components/game/InterrogationHints': { EmotionBadge: () => null },
     '@/components/game/AgentStaminaMeter': { default: () => null },
     '@/game/investigationChoices.js': { REPORT_DIMENSIONS, reportEvidenceIds },
+    './EvidenceReference': { default: () => null },
+    './InterviewHistory.jsx': { default: () => null },
+    './EvidenceReportExplanation.jsx': { default: () => null, EvidenceRoleDisclosure: () => null },
     '@/game/caseEvaluation': { getRejectedReportPenalty },
     '@/game/agentStamina': { AGENT_STAMINA_INVESTIGATION_COST: 10, AGENT_STAMINA_RECOVERY_PER_TURN: 4, canAgentInvestigate: stamina => stamina >= 10 },
   }, { React });

@@ -5,7 +5,7 @@ import { noirColor } from '@/components/ui/palette';
 
 // 右侧工具面板分类标签 —— 调查工具统一收纳，玩家一目了然
 export const TOOL_TABS = [
-  { id: 'evidence', icon: '🗄', zh: '证据库', en: 'EVIDENCE' },
+  { id: 'evidence', icon: '🗄', zh: '调查档案', en: 'JOURNAL' },
   { id: 'link',     icon: '🔗', zh: '推理连线', en: 'LINK' },
   { id: 'board',    icon: '🧩', zh: '关系板', en: 'BOARD' },
   { id: 'map',      icon: '🗺', zh: '流程图', en: 'MAP' },

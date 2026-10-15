@@ -722,7 +722,7 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
 }
 
 // ── Right: Attribute Config + Skill Tree ─────────────────────────────────────
-function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive, locked = false, readOnly = false, skillSyncPending = false, tab, setTab }) {
+function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive, locked = false, readOnly = false, skillSyncPending = false, investigationVersion = 2, skillsRevision = 1, tab, setTab }) {
   const { lang } = useLang();
 
   const tabs = [
@@ -803,7 +803,7 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
               {(readOnly || skillSyncPending) && <p role="status" className="td-lobby-skill-status">{skillSyncPending
                 ? (lang === 'zh' ? '正在同步技能，完成后可继续部署…' : 'SYNCING SKILLS. DEPLOYMENT WILL BE AVAILABLE WHEN COMPLETE…')
                 : (lang === 'zh' ? '只读模式：可查看技能和进行战术试演。' : 'READ ONLY: INSPECT SKILLS AND TRY A TACTICAL REHEARSAL.')}</p>}
-              <SkillTreePanel agentIdx={agentIdx} progression={progression} loadout={skillLoadout} disabled={readOnly || locked} onChange={onSkillLoadout} />
+              <SkillTreePanel agentIdx={agentIdx} progression={progression} loadout={skillLoadout} disabled={readOnly || locked} onChange={onSkillLoadout} investigationVersion={investigationVersion} skillsRevision={skillsRevision} />
             </>
           )}
           {tab === 'dossier' && (
@@ -1073,7 +1073,7 @@ function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose })
 }
 
 // ── Main HolographicLobby ─────────────────────────────────────────────────────
-export default function HolographicLobby({ profile, readOnly = false, previewActiveRun = false, targetCase = null, onDeploy, onBack, backLabel, onTeamSave, onSkillLoadout, onAgentPurchase }) {
+export default function HolographicLobby({ profile, readOnly = false, previewActiveRun = false, investigationVersion = 2, skillsRevision = 1, targetCase = null, onDeploy, onBack, backLabel, onTeamSave, onSkillLoadout, onAgentPurchase }) {
   const { lang } = useLang();
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
@@ -1478,6 +1478,8 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
           locked={deploymentLocked}
           readOnly={readOnly}
           skillSyncPending={skillSyncPending}
+          investigationVersion={investigationVersion}
+          skillsRevision={skillsRevision}
           tab={agentTab}
           setTab={setAgentTab}
         />

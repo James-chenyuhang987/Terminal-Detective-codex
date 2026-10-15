@@ -1,29 +1,215 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "check": "v2_private_phrases_absent_from_browser_build",
   "command": "node scripts/check-investigation-public-build.mjs",
-  "content_sha256": "00173453d24c0403478fbaf7ca7ad5db23259d63d4b6d17d0e40755f2aa5b26e",
-  "corpus_sha256": "146c7a25a4cd70c93ea9121e995ead96a110aa1c28fccec5bca18220d64a2b5c",
+  "content_sha256": "9c1f686d946c32b7a77641b733c760b254ece476e2a548614a4d8e099a482784",
+  "corpus_sha256": "f989f90d7f397d69b05cc42ed17acd31a449667bc5140f6a28a8ff0885449f3b",
   "source_sha256": {
-    "scripts/check-investigation-public-build.mjs": "6d2c618c2a5cb6996165a623de31eaa74a54ae59ceabd833b5ec328a6cdf0d81",
+    "scripts/check-investigation-public-build.mjs": "c334ec967fe46b0f4c1262ea2b181e47f50ef36162839879612df7f9b0eab45c",
     "scripts/browser-case-projection.mjs": "e65a1e973e1e0b4a38f325097f69063d99827e2b5672173c0da5f5f03bc5d936",
+    "server/investigationV2/rawMaterials.js": "605ea5bc4ec65f406c73d1ab9dbeff75f23f069ae5c03b0d8685f3f6ddfa7542",
+    "server/investigationV2/caseDesign.js": "78efaef09cb9c7a849148d6739491a85caa2b547a968333cea04bf95487c0ddb",
+    "server/investigationV2/reportExplanation.js": "c376485699bb6097f30da7ab0ad4cb68cdaf6cb0b5ea8ae0896b249f50c7570b",
+    "server/investigationV2/interviewContent.js": "1c683a38d4b03dc98791d1df3a58298b3d73a7c82f358b7e2abe6112cccb6767",
     "src/game/caseData.js": "9703710eedb61c7a0064af2994e6af9f4b738447589a0bf50b54eb35f7149951",
     "src/game/caseDataExtra.js": "a2175f7dc69b8cafddd9ffc38a1fc6b02d5b9c2d957983877bde18fccf31a972",
     "src/game/caseDataExpansion.js": "b2efed1c94a1b9b963fa69733f87e1ceab48573a19b9510e5a1bc92000f3b8fd"
   },
+  "content_revisions_checked": [
+    0,
+    1
+  ],
+  "revision_coverage": [
+    {
+      "case_design_revision": 0,
+      "cases": [
+        {
+          "case_id": "Lvl_01",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        },
+        {
+          "case_id": "Lvl_02",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        },
+        {
+          "case_id": "Lvl_03",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        },
+        {
+          "case_id": "Lvl_04",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        },
+        {
+          "case_id": "Lvl_05",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        },
+        {
+          "case_id": "Lvl_06",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        },
+        {
+          "case_id": "Lvl_07",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        },
+        {
+          "case_id": "Lvl_08",
+          "conditional_focus": 0,
+          "milestones": 0,
+          "sequence": 0,
+          "aftermath": 0
+        }
+      ],
+      "counts": {
+        "testimony_response": 288,
+        "hidden_result": 16,
+        "wrong_outcome": 32,
+        "expert_observation": 48,
+        "investigation_result": 128,
+        "confirmed_proposition": 150,
+        "failure_explanation": 0,
+        "conditional_story_focus": 0,
+        "story_milestone": 0,
+        "story_sequence": 0,
+        "story_aftermath": 0,
+        "report_evidence_scope": 0,
+        "interview_background": 0,
+        "interview_claim": 0,
+        "conditional_interview_prompt": 0,
+        "legacy_clue_description": 0,
+        "legacy_conflict_reason": 0
+      }
+    },
+    {
+      "case_design_revision": 1,
+      "cases": [
+        {
+          "case_id": "Lvl_01",
+          "conditional_focus": 2,
+          "milestones": 5,
+          "sequence": 4,
+          "aftermath": 2
+        },
+        {
+          "case_id": "Lvl_02",
+          "conditional_focus": 2,
+          "milestones": 5,
+          "sequence": 4,
+          "aftermath": 2
+        },
+        {
+          "case_id": "Lvl_03",
+          "conditional_focus": 2,
+          "milestones": 3,
+          "sequence": 3,
+          "aftermath": 1
+        },
+        {
+          "case_id": "Lvl_04",
+          "conditional_focus": 2,
+          "milestones": 3,
+          "sequence": 3,
+          "aftermath": 1
+        },
+        {
+          "case_id": "Lvl_05",
+          "conditional_focus": 2,
+          "milestones": 3,
+          "sequence": 3,
+          "aftermath": 1
+        },
+        {
+          "case_id": "Lvl_06",
+          "conditional_focus": 2,
+          "milestones": 3,
+          "sequence": 3,
+          "aftermath": 1
+        },
+        {
+          "case_id": "Lvl_07",
+          "conditional_focus": 2,
+          "milestones": 3,
+          "sequence": 4,
+          "aftermath": 1
+        },
+        {
+          "case_id": "Lvl_08",
+          "conditional_focus": 2,
+          "milestones": 3,
+          "sequence": 4,
+          "aftermath": 1
+        }
+      ],
+      "counts": {
+        "testimony_response": 288,
+        "hidden_result": 16,
+        "wrong_outcome": 32,
+        "expert_observation": 48,
+        "investigation_result": 128,
+        "confirmed_proposition": 156,
+        "failure_explanation": 16,
+        "conditional_story_focus": 32,
+        "story_milestone": 112,
+        "story_sequence": 112,
+        "story_aftermath": 40,
+        "report_evidence_scope": 0,
+        "interview_background": 0,
+        "interview_claim": 0,
+        "conditional_interview_prompt": 0,
+        "legacy_clue_description": 0,
+        "legacy_conflict_reason": 0
+      }
+    }
+  ],
+  "authored_coverage": {
+    "report_evidence_scopes": 64,
+    "report_evidence_scope_phrases": 128,
+    "interview_exchanges": 48,
+    "conditional_interview_prompts": 24,
+    "public_initial_interview_prompts_excluded": 24
+  },
   "counts": {
-    "testimony_response": 288,
+    "testimony_response": 290,
     "hidden_result": 16,
     "wrong_outcome": 32,
     "expert_observation": 48,
-    "investigation_result": 128,
-    "confirmed_proposition": 150,
+    "investigation_result": 164,
+    "confirmed_proposition": 156,
+    "failure_explanation": 16,
+    "conditional_story_focus": 32,
+    "story_milestone": 112,
+    "story_sequence": 112,
+    "story_aftermath": 40,
+    "report_evidence_scope": 128,
+    "interview_background": 96,
+    "interview_claim": 96,
+    "conditional_interview_prompt": 48,
     "legacy_clue_description": 144,
     "legacy_conflict_reason": 8
   },
-  "private_strings_checked": 698,
+  "private_strings_checked": 1422,
   "browser_js_files": 20,
-  "decoded_literals": 27050,
+  "decoded_literals": 28414,
   "matched": 0,
   "matched_by_category": {
     "testimony_response": 0,
@@ -32,121 +218,130 @@
     "expert_observation": 0,
     "investigation_result": 0,
     "confirmed_proposition": 0,
+    "failure_explanation": 0,
+    "conditional_story_focus": 0,
+    "story_milestone": 0,
+    "story_sequence": 0,
+    "story_aftermath": 0,
+    "report_evidence_scope": 0,
+    "interview_background": 0,
+    "interview_claim": 0,
+    "conditional_interview_prompt": 0,
     "legacy_clue_description": 0,
     "legacy_conflict_reason": 0
   },
-  "source_files_checked": 179,
+  "source_files_checked": 203,
   "source_import_violations": [],
   "files": [
     {
-      "path": "dist/assets/ActionCinematic-CO1FaPs6.js",
-      "bytes": 27266,
-      "sha256": "d6bd50443a7901f9347f186513c30334353f57f2bb626265f9ee100ee9aba521",
+      "path": "dist/assets/ActionCinematic-BbEiKD5F.js",
+      "bytes": 27267,
+      "sha256": "82d0f019a4c80f3902114c4dc0b728678e321ab391cd08c6409b410ebf39c41a",
       "decoded_literals": 451,
       "matched": 0
     },
     {
-      "path": "dist/assets/AgentLobby-CwyarET6.js",
-      "bytes": 153958,
-      "sha256": "d7b6e2708e5c866648d78ea45beed97dca6f2e46e42d353433303d7b45a2440a",
-      "decoded_literals": 3949,
+      "path": "dist/assets/AgentLobby-QtXv5mSA.js",
+      "bytes": 160165,
+      "sha256": "9e8d611bca13adc3164dad45904a32c44a0f9d5f1e54a5eb01549068a29d4261",
+      "decoded_literals": 4010,
       "matched": 0
     },
     {
-      "path": "dist/assets/CaseSelect-CiewuI3m.js",
+      "path": "dist/assets/CaseSelect-COxWov-E.js",
       "bytes": 10549,
-      "sha256": "c8f67b57541b811471d35ee994b914bc4e70c0cc2231e4cb21a9844df562cb67",
+      "sha256": "96b8be70bea41f248fee74fcbaa63224e24b26d2eea2608b8ab2bf6b77e4e5a4",
       "decoded_literals": 309,
       "matched": 0
     },
     {
-      "path": "dist/assets/DetectiveHome-BpS74-OT.js",
+      "path": "dist/assets/DetectiveHome-CtJ1ZK_4.js",
       "bytes": 42402,
-      "sha256": "98f8144658e10a283674b4a88741302fa3a00e4e0365f23724ac7ce6fa540741",
+      "sha256": "d2eafe7127fbf85d8b7bbe60b43a65f054b7e3589faded84bd4d5594b0971133",
       "decoded_literals": 1408,
       "matched": 0
     },
     {
-      "path": "dist/assets/EvidenceObjectViewer-Dp1cnLkZ.js",
-      "bytes": 17213,
-      "sha256": "52d61b5d1debe3ba01a2bdefcd3731ba2906b0c978b5fea6ee4ba961ad14c11a",
-      "decoded_literals": 145,
+      "path": "dist/assets/EvidenceObjectViewer-DN0Twhiq.js",
+      "bytes": 20946,
+      "sha256": "0d30030134bf30a4d2929f7dc9f90c2b47dc60d8201a71a47ca792befc2737bc",
+      "decoded_literals": 237,
       "matched": 0
     },
     {
-      "path": "dist/assets/FieldAtmosphere-CB1xnYeS.js",
-      "bytes": 16564,
-      "sha256": "9dfc4ec1c02bd3826f13e4b771aee1d70f6459d86df8b916c619764520ed4949",
+      "path": "dist/assets/FieldAtmosphere-6UuyQBwT.js",
+      "bytes": 16561,
+      "sha256": "d9563cdce58e483b73c45f6f4b0c4e99e06cc2b9fd8a49c1daaaf0bd9e534452",
       "decoded_literals": 100,
       "matched": 0
     },
     {
-      "path": "dist/assets/GraphModule-3w_9-TqF.js",
+      "path": "dist/assets/GraphModule-D86RFn6e.js",
       "bytes": 2381,
-      "sha256": "6c698e2ca5ffe282dd94644f1b505f66dfb04ddffdeb196e582f7c6064d621ef",
+      "sha256": "eb22a2316b2fff54d0f22f24b793bdecf80d9424d9bc4ac4057399aee3a4b55a",
       "decoded_literals": 69,
       "matched": 0
     },
     {
-      "path": "dist/assets/HomeModules-BeM6NaAD.js",
+      "path": "dist/assets/HomeModules-WfXms_6u.js",
       "bytes": 45428,
-      "sha256": "3a4c54d3715f1255b481fecd6f2dbdff2627ce61145e90a31012eb05a04fcc44",
+      "sha256": "463f70b201ec37fe2d8e1d8ac46fe87b8102b52ea8c8a82279dddafa3a222ab9",
       "decoded_literals": 1444,
       "matched": 0
     },
     {
-      "path": "dist/assets/InvestigationProps-CPYDjvb2.js",
-      "bytes": 9795,
-      "sha256": "06825c26ea8ed32820b66b1622ba72783baa87a91ddb623217f0cc0dd852e985",
-      "decoded_literals": 107,
+      "path": "dist/assets/InvestigationProps-DeTkRHAp.js",
+      "bytes": 41447,
+      "sha256": "0edbef084432ba00883d004631f51285064ebe41c4735ccc34d737f318062549",
+      "decoded_literals": 337,
       "matched": 0
     },
     {
-      "path": "dist/assets/InvestigationTerminal-D7yTcl1O.js",
-      "bytes": 300714,
-      "sha256": "773486fa6ecabbeb0cf867b6e15ff9742e07ccd2aed216aec3e63591f9fedcd0",
-      "decoded_literals": 6673,
+      "path": "dist/assets/InvestigationTerminal-DpzKFhdW.js",
+      "bytes": 352016,
+      "sha256": "72691ef54f25199703da97981870113751d60faeaa324073465b5e1e71baa972",
+      "decoded_literals": 7649,
       "matched": 0
     },
     {
-      "path": "dist/assets/ProfileAppShell-CDq9NPeX.js",
-      "bytes": 20958,
-      "sha256": "ae9090c798e67ca08b1e9ed56d734d5144adbec625d37a46d969ff5f6868b8af",
-      "decoded_literals": 342,
+      "path": "dist/assets/ProfileAppShell-C-7ULd-U.js",
+      "bytes": 21113,
+      "sha256": "7a14505ec7877c55f64ba7070a5000c74306016585fe6a4fc17c99a2db602204",
+      "decoded_literals": 346,
       "matched": 0
     },
     {
-      "path": "dist/assets/SettingsDrawer-CRmp1oNc.js",
+      "path": "dist/assets/SettingsDrawer-CwD45_qV.js",
       "bytes": 24859,
-      "sha256": "b097c24950b37a4ce044f321fa3e4d0be55e56b4eb59f4a2db35e8684d8d1f37",
+      "sha256": "fe9fe5a9459f583f59b458e5ceb4301240e70f7e22925d97dd5d6980311838c6",
       "decoded_literals": 595,
       "matched": 0
     },
     {
-      "path": "dist/assets/StatusToast-DLlH9wGq.js",
+      "path": "dist/assets/StatusToast-w54qqwrq.js",
       "bytes": 789,
-      "sha256": "765499e8a07906ad771150dd96c877f85d8442d6027ab8a55406f135f30256ca",
+      "sha256": "e903c6a974c8d283564776333fe1094e8a0ea6e71d5d1c7d1d1b83ce9be59a63",
       "decoded_literals": 30,
       "matched": 0
     },
     {
-      "path": "dist/assets/TerminalDetective-Cru1NWZ_.js",
-      "bytes": 103377,
-      "sha256": "1d0ec91432b64b205ac972b92e05ce6da632c4e285878857be48f86d149c5f39",
-      "decoded_literals": 2032,
+      "path": "dist/assets/TerminalDetective-B8bz4eRv.js",
+      "bytes": 103588,
+      "sha256": "08a66ef657260e67a4ee994299b2774e81032199368d3cc13bc20c21934407fe",
+      "decoded_literals": 2033,
       "matched": 0
     },
     {
-      "path": "dist/assets/TheaterScene-CjewZDVQ.js",
-      "bytes": 31055,
-      "sha256": "1a37361f386362f10b00f3f4020f44594c61b9f37d5fdb2c831d6fda22a9f8d8",
+      "path": "dist/assets/TheaterScene-DcjAZ2Yk.js",
+      "bytes": 31293,
+      "sha256": "5cd18968cea4742e468035fe70c3cfd770618ba51ee3ebcebb9630f8d1d2c9d7",
       "decoded_literals": 211,
       "matched": 0
     },
     {
-      "path": "dist/assets/index-devKRpuH.js",
+      "path": "dist/assets/index-CigkiK-7.js",
       "bytes": 310950,
-      "sha256": "07d1e25f8df5243f910d92f0b231ea78192a5ced5daa56205aab5949053a94f0",
+      "sha256": "b131e0c7e95bb05d2bdd9d5a1b9bdac60afd89f2b5de1687bb04fb8e575daddd",
       "decoded_literals": 3175,
       "matched": 0
     },
@@ -165,20 +360,20 @@
       "matched": 0
     },
     {
-      "path": "dist/assets/playerProfile-DKpyO0xg.js",
+      "path": "dist/assets/playerProfile-CHO2v2eA.js",
       "bytes": 108033,
-      "sha256": "43845bd8ac5fab58fdf1f84027288659fce5149b7d3a5f152af10a4b27898e1e",
+      "sha256": "59b011b6c22e673b3c2ae3e22cdd0a33ea1db01723637319e3fc555895155b05",
       "decoded_literals": 2728,
       "matched": 0
     },
     {
-      "path": "dist/assets/theaterWorld-Cc2q4m5s.js",
-      "bytes": 891337,
-      "sha256": "ec0f2f87d38bf38bd18761e96f4d0819945f69550bb400948ee985ffeafd09fd",
+      "path": "dist/assets/theaterWorld-BEDbEWlx.js",
+      "bytes": 891456,
+      "sha256": "d709c1c621d3e3b58a67296d89e8e2129fedff84266ed4c03a5f6124f391e355",
       "decoded_literals": 2821,
       "matched": 0
     }
   ],
   "result": "passed",
-  "limitations": "All private v2 responses, hidden results, consequences and present expert observations plus canonical legacy clue descriptions and correct-conflict reasons are checked as decoded literal containment. No legacy description is exempted, including generic hidden metadata. Short clue labels and weights are validated separately by browser projection and authority tests. Source import boundaries are also checked. This does not audit live API projections, arbitrary derived paraphrases or production deployment; those require separate authority tests."
+  "limitations": "Frozen and current case-design revisions are both checked for private v2 testimony, hidden results, consequences, expert observations, investigation results and propositions. Current wrong-method explanations, conditional focus after opening, authored milestone/sequence/aftermath titles and bodies, 64 bilingual evidence scopes, and all 48 interview background/claim exchanges with their conditional later-stage prompts are included. Opening focus and initial interview prompts are intentionally public and excluded. Canonical legacy clue descriptions and correct-conflict reasons are included without exemptions. Revision and authored coverage counts precede deduplication; corpus counts are unique per category. Decoded literal containment and source import boundaries are checked. Short clue labels and weights, live API projections, arbitrary derived paraphrases and production deployment require separate authority tests."
 }

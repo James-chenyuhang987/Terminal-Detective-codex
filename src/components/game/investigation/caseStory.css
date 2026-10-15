@@ -1,0 +1,13 @@
+.td-case-story { min-width: 0; margin: 10px 0 14px; padding: 12px 14px; border: 1px solid #709f9a50; border-radius: 10px; background: #709f9a0a; color: #cbd1c7; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.td-case-story > small { color: #9db9b1; font-size: 10px; }
+.td-case-story h3 { margin: 3px 0 7px; color: #e1d0ac; font-size: 14px; }
+.td-case-story h4 { margin: 0 0 4px; color: #d5d9cd; font-size: 12px; }
+.td-case-story p { margin: 0 0 7px; white-space: pre-wrap; }
+.td-case-story ol, .td-case-story ul { margin: 10px 0 0; padding-left: 22px; }
+.td-case-story li { padding: 0 0 10px 3px; }
+.td-case-story li + li { border-top: 1px solid #709f9a24; padding-top: 10px; }
+.td-case-story-milestones > summary { min-height: 36px; padding: 7px 0; cursor: pointer; color: #a5c6bc; }
+.td-case-story summary:focus-visible { outline: 2px solid #e1d0ac; outline-offset: 3px; border-radius: 3px; }
+.td-case-story-aftermath { border-top: 1px solid #c5a66f30; padding-top: 10px; margin-top: 5px; }
+.td-case-story.is-resolution { background: #c5a66f08; border-color: #c5a66f40; }
+@media (max-width: 600px) { .td-case-story { padding: 11px 10px; } .td-case-story h3 { font-size: 13px; } }

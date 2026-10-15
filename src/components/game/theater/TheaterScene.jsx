@@ -525,6 +525,7 @@ function World({ caseData, zoneId, manifest, investigation = null, lang = 'zh', 
   const appearances = useMemo(() => Object.fromEntries(staged.map(npc => [npc.npcId, npcAppearance(caseData.case_id, npc.npcId, npc.role)])), [staged, caseData.case_id]);
   const objectTargets = useMemo(() => investigation ? investigationTargets(room, staged, investigation, zoneId) : [], [room, staged, investigation, zoneId]);
   const player = useRef(null);
+  const actualMovement = useRef({ distance: 0, reported: false });
   const objectCollisionState = useRef(createInvestigationCollisionState());
   const movementRoom = useMemo(() => {
     const geometry = withNpcColliders(room, staged);
@@ -600,6 +601,15 @@ function World({ caseData, zoneId, manifest, investigation = null, lang = 'zh', 
         sprinting,
       });
     } else stopLocomotion(state);
+    // Input alone cannot complete the movement tutorial: collisions and pauses
+    // may leave a held direction without any actual travel.
+    if (!actualMovement.current.reported && state.distance > 0) {
+      actualMovement.current.distance += state.distance;
+      if (actualMovement.current.distance >= 0.25) {
+        actualMovement.current.reported = true;
+        live.current.onActualMove?.();
+      }
+    }
     const target = nearestTarget(state.position, targets);
     const key = targetKey(target);
     nearbyRef.current = target;
@@ -671,7 +681,7 @@ function World({ caseData, zoneId, manifest, investigation = null, lang = 'zh', 
   </>;
 }
 
-export default function TheaterScene({ caseData, zoneId, investigation = null, sfxEnabled = true, selectedNpcId, speakerNpcId = undefined, interactionNpcId = null, npcEmotionLevels, progress, focusTargetId = null, focusTargetType = '', overview = false, paused, suspended = false, quality, reducedMotion, onInteract, onReady, onFailure, controlsRef, spatialRef, onNearbyChange }) {
+export default function TheaterScene({ caseData, zoneId, investigation = null, sfxEnabled = true, selectedNpcId, speakerNpcId = undefined, interactionNpcId = null, npcEmotionLevels, progress, focusTargetId = null, focusTargetType = '', overview = false, paused, suspended = false, quality, reducedMotion, onInteract, onReady, onFailure, controlsRef, spatialRef, onNearbyChange, onActualMove }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const viewport = useRef(null);
@@ -689,8 +699,8 @@ export default function TheaterScene({ caseData, zoneId, investigation = null, s
     ...(investigation ? [`${ASSET_ROOT}${INVESTIGATION_PROP_FILE}`] : []),
   ], [zoneId, investigation]);
   const nearby = useRef(null);
-  const live = useRef({ paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, focusTargetId, overview, qualityMode: 'auto', investigationV2: Boolean(investigation) });
-  live.current = { paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, focusTargetId, overview, investigationV2: Boolean(investigation), qualityMode: quality === 'low' || quality === 'high' ? quality : 'auto' };
+  const live = useRef({ paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, onActualMove, focusTargetId, overview, qualityMode: 'auto', investigationV2: Boolean(investigation) });
+  live.current = { paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, onActualMove, focusTargetId, overview, investigationV2: Boolean(investigation), qualityMode: quality === 'low' || quality === 'high' ? quality : 'auto' };
   const input = useRef({ keys: { ...EMPTY_CONTROLS }, focused: false, windowActive: !document.hidden && document.hasFocus(), orbitX: 0, orbitY: 0, clear: null, audio: null });
   const interact = useCallback(() => {
     if (live.current.paused || live.current.suspended || document.hidden || !input.current.windowActive) return;

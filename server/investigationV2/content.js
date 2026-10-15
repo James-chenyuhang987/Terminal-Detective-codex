@@ -1,6 +1,8 @@
 // Private investigation-v2 content. Import from server code only: method keys,
 // later testimony, report answers and hidden rewards must never reach src/.
 import { ALL_CASES } from '../../src/game/caseData.js';
+import { getReconstructionWorkbench, getReportSupportAlternatives } from './rawMaterials.js';
+import { applyCaseDesign, CASE_DESIGN_REVISION } from './caseDesign.js';
 
 const text = (zh, en) => ({ zh, en });
 const option = (id, zh, en) => ({ id, label: text(zh, en) });
@@ -711,10 +713,18 @@ const CONTENT = Object.fromEntries(ALL_CASES.map(caseData => {
     ...target, action_tag: ENTRY_ACTIONS[caseData.case_id]?.[target.clue_id] || target.action_tag,
     ...(EXPERT_NOTES[caseData.case_id]?.[target.clue_id] ? { expert_note: EXPERT_NOTES[caseData.case_id][target.clue_id] } : {}),
   }));
-  return [caseData.case_id, deepFreeze({ ...spec, case_id: caseData.case_id, targets })];
+  return [caseData.case_id, deepFreeze({ ...spec, case_id: caseData.case_id, targets,
+    puzzle: { ...spec.puzzle, workbench: getReconstructionWorkbench(caseData.case_id) },
+    report: { ...spec.report, support_alternatives: getReportSupportAlternatives(caseData.case_id) },
+  })];
 }));
 
 export const INVESTIGATION_CASE_IDS = Object.freeze(Object.keys(CONTENT));
-export function getInvestigationContent(caseId) {
-  return Object.prototype.hasOwnProperty.call(CONTENT, caseId) ? CONTENT[caseId] : null;
+const DESIGNED_CONTENT = Object.fromEntries(Object.entries(CONTENT).map(([caseId, spec]) => [
+  caseId, deepFreeze(applyCaseDesign(caseId, spec)),
+]));
+
+export function getInvestigationContent(caseId, revision = CASE_DESIGN_REVISION) {
+  const source = revision === CASE_DESIGN_REVISION ? DESIGNED_CONTENT : CONTENT;
+  return Object.prototype.hasOwnProperty.call(source, caseId) ? source[caseId] : null;
 }

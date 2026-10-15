@@ -200,6 +200,25 @@ test('Pages waits for Worker and checks the deployed page URL and configured Wor
   assert.match(pagesJob, /run: node scripts\/smoke-production\.mjs/);
 });
 
+test('private investigation content audits gate each final browser build before publication', () => {
+  const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const audit = 'node scripts/check-investigation-public-build.mjs';
+  const workerBuildSteps = scripts['build:cloudflare'].split(/\s*&&\s*/);
+  assert.equal(workerBuildSteps.at(-1), audit, 'audit the final prepared Worker assets');
+  assert.equal(workerBuildSteps.at(-2), 'node scripts/prepare-cloudflare-build.mjs');
+  assert.ok(workerBuildSteps.some(step => /\bvite build$/.test(step)), 'audit must follow a fresh browser build');
+  assert.equal(scripts['cloudflare:check'], 'npm run build:cloudflare && wrangler deploy --dry-run',
+    'a failed privacy audit must prevent Worker packaging and deployment');
+  assert.doesNotMatch(scripts['build:cloudflare'], /\|\||;|\b(?:true|exit 0)\b/);
+  const buildStart = pagesJob.indexOf('      - name: Build\n');
+  const nextStep = pagesJob.indexOf('\n      - name:', buildStart + 1);
+  const buildStep = pagesJob.slice(buildStart, nextStep);
+  assert.match(buildStep, /run: \|\s+npm run build\s+node scripts\/check-investigation-public-build\.mjs\s*$/,
+    'Pages must audit its own API-origin build, not the earlier Worker build');
+  assert.ok(buildStart >= 0 && nextStep < pagesJob.indexOf('      - name: Upload artifact'),
+    'privacy failure must stop the job before Pages upload');
+});
+
 test('both release gates inherit exact build/config values and cannot mask failures or migrate data', () => {
   for (const job of [workerJob, pagesJob]) {
     assert.ok(job.includes('VITE_BUILD_SHA: ${{ github.sha }}'));

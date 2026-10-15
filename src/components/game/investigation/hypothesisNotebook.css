@@ -1,0 +1,10 @@
+.td-hypothesis-entry, .td-hypothesis-notebook { margin: .5rem .65rem; padding: .65rem; border: 1px solid #b69b6b55; border-radius: .5rem; background: #b69b6b0a; color: #c9bfab; font-size: .72rem; line-height: 1.6; }
+.td-hypothesis-entry label { display: grid; gap: .3rem; }
+.td-hypothesis-entry textarea { width: 100%; min-height: 3.5rem; resize: vertical; padding: .4rem; background: #111820; color: #e4ded3; border: 1px solid #b69b6b66; border-radius: .3rem; }
+.td-hypothesis-entry button, .td-hypothesis-notebook button { min-height: 44px; padding: .35rem .6rem; border: 1px solid #b69b6b66; border-radius: .3rem; }
+.td-hypothesis-entry p, .td-hypothesis-notebook p { margin: .35rem 0; overflow-wrap: anywhere; }
+.td-hypothesis-notebook summary { cursor: pointer; min-height: 44px; display: list-item; align-content: center; font-weight: 700; }
+.td-hypothesis-notebook ul { padding: 0; list-style: none; }
+.td-hypothesis-notebook li { padding: .5rem 0; border-top: 1px solid #b69b6b33; overflow-wrap: anywhere; }
+.td-hypothesis-notebook li div { display: flex; flex-wrap: wrap; gap: .4rem; }
+.td-hypothesis-entry button:disabled, .td-hypothesis-notebook button:disabled { opacity: .4; }

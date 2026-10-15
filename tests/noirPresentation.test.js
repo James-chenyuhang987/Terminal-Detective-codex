@@ -10,6 +10,7 @@ import { drawIcon } from '../src/components/ui/iconCanvas.js';
 import { NOIR, noirColor } from '../src/components/ui/palette.js';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/lib/settingsData.js';
 import { SKILL_TREES, LEVEL_XP_TABLE, MAX_LEVEL, getLevelFromXP, getXPToNextLevel } from '../src/game/agentProgression.js';
+import * as investigationSkills from '../src/game/investigationSkills.js';
 import { ALL_CASES } from '../src/game/caseData.js';
 import { CASE_ENERGY_COST, CASE_GOLD_REWARD, FIRST_CLEAR_DIAMONDS } from '../src/game/playerProfile.js';
 import { AUTH_EMAIL_LANGUAGE_KEY } from '../src/lib/authEmail.js';
@@ -219,6 +220,7 @@ function skillTreeHarness(lang) {
   const { default: Panel } = load('components/game/SkillTreePanel.jsx', {
     react: api, '@/components/ui/Icon': icons,
     '@/game/agentProgression': { SKILL_TREES, getLevelFromXP },
+    '@/game/investigationSkills.js': investigationSkills,
     '@/lib/lang.jsx': { useLang: () => ({ lang }) },
     '@/components/ui/usePresentationMotion': { usePresentationMotion: () => ({ motionEnabled: false, foreground: true }) },
   });
@@ -300,7 +302,8 @@ test('skill focus tooltips stay bounded, retain full copy and survive pointer le
         assert.equal(info.props.role, 'tooltip');
         const markup = renderToStaticMarkup(info);
         assert.ok(markup.includes(lang === 'zh' ? tip.props.skill.name : tip.props.skill.nameEn));
-        assert.ok(markup.includes(lang === 'zh' ? tip.props.skill.desc : tip.props.skill.descEn));
+        assert.ok(markup.includes(investigationSkills.investigationSkillDescription(tip.props.skill, lang)),
+          'current skills retain the full implemented description instead of the legacy catalog promise');
         assert.equal(info.props.style.overflowWrap, 'anywhere');
         assert.equal(info.props.style.boxSizing, 'border-box');
         for (const parentWidth of [250, 314, 360]) {

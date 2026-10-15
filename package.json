@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "release:check": "node scripts/check-cloudflare-release.mjs",
-    "build:cloudflare": "npm run release:check && VITE_API_SERVER_URL=same-origin VITE_BASE_PATH=/ vite build && node scripts/prepare-cloudflare-build.mjs",
+    "build:cloudflare": "npm run release:check && VITE_API_SERVER_URL=same-origin VITE_BASE_PATH=/ vite build && node scripts/prepare-cloudflare-build.mjs && node scripts/check-investigation-public-build.mjs",
     "cloudflare:check": "npm run build:cloudflare && wrangler deploy --dry-run",
     "cloudflare:dev": "npm run build:cloudflare && wrangler dev",
     "cloudflare:deploy": "npm test && npm run typecheck && npm run lint && npm run security:check && npm run cloudflare:check && wrangler deploy",
@@ -47,6 +47,11 @@
     "tailwindcss": "3.4.17",
     "typescript": "5.9.3",
     "vite": "8.2.2",
-    "wrangler": "4.128.0"
+    "wrangler": "4.151.0"
+  },
+  "overrides": {
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "1.13.6"
+    }
   }
 }

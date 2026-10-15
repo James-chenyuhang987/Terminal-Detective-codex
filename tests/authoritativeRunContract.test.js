@@ -15,6 +15,8 @@ import { applyStaminaToTeam, canAgentInvestigate } from '../src/game/agentStamin
 import { generateObservationSections } from '../src/game/gameState.js';
 import { successfulInterviewEvent, theaterNarrativeStage } from '../src/game/theaterNarrative.js';
 import { getRejectedReportPenalty } from '../src/game/caseEvaluation.js';
+import { defaultReportDraft, sanitizeReportDraft } from '../src/game/reportDraft.js';
+import { getTerminalTurns } from '../src/game/turnArchive.js';
 
 // The sibling backend can be tested before integration without copying its files.
 const backendURL = process.env.TD_AUTHORITY_TEST_ROOT
@@ -48,14 +50,16 @@ function reportOptionsEffect(bindings) {
 const skip = authority ? false : 'Backend reducer is integrated separately; set TD_AUTHORITY_TEST_ROOT to its worktree.';
 const now = new Date('2026-09-07T00:00:00.000Z');
 
-async function runtimeFixture({ lostQuestion = false, incompleteQuestion = false, lostReport = false, lostReportOptions = false,
-  advanceAfterReportOptions = false, seedRun = () => {}, jointRound = false, investigationVersion = 1 } = {}) {
+async function runtimeFixture({ lostQuestion = false, incompleteQuestion = false, lostLink = false, lostReport = false, lostReportOptions = false,
+  advanceAfterReportOptions = false, delayReportOptions = false, seedRun = () => {}, jointRound = false, investigationVersion = 1 } = {}) {
   let run = authority.createRun({ id: 'ui-contract-run', caseData: Case_Data_Lvl_01, teamConfig: buildTeamConfig(), effects: { skill_effects: { auto_unlock_first: true } }, now, investigationVersion });
   seedRun(run);
   const ledger = new Map();
   const storage = new Map();
   const calls = [];
-  const stored = { errors: [], dialogue: [], packs: null, lines: [], ready: true, reportOptions: null };
+  const reportOptionReleases = [];
+  const stored = { errors: [], dialogue: [], packs: null, lines: [], lineRecords: [], ready: true, reportOptions: null,
+    activeTerminalTurn: 0, viewedTerminalTurn: 0 };
   let sequence = 0;
   let activeSession = 'fixture-device';
   const clientOptions = {
@@ -77,9 +81,11 @@ async function runtimeFixture({ lostQuestion = false, incompleteQuestion = false
       const response = { data: { authority_version: 1, run: authority.publicRun(run), result: outcome.result } };
       ledger.set(body.operation_id, response);
       if (lostQuestion && body.command.type === 'question') throw new Error('Accepted answer lost');
+      if (lostLink && body.command.type === 'link') throw new Error('Accepted link reply lost');
       if (incompleteQuestion && body.command.type === 'question') return { data: { authority_version: 1, run: response.data.run } };
       if (lostReport && body.command.type === 'report') throw new Error('Accepted report reply lost');
       if (lostReportOptions && body.command.type === 'report_options') throw new Error('Accepted report options reply lost');
+      if (delayReportOptions && body.command.type === 'report_options') await new Promise(resolve => reportOptionReleases.push(resolve));
       if (advanceAfterReportOptions && body.command.type === 'report_options') {
         const choices = insufficientReportSelection(run);
         run = authority.applyRunCommand(run, { type: 'report', ...reportCommandFromSelection(choices) }, now).run;
@@ -91,8 +97,8 @@ async function runtimeFixture({ lostQuestion = false, incompleteQuestion = false
   };
   const client = createPlayerRunClient(clientOptions);
   const bindings = {
-    dialogueLanguageRef: { current: 'en' },
-    investigationV2: investigationVersion === 2, selectAutomaticInvestigationCard, reportEvidenceIds, REPORT_DIMENSIONS,
+    dialogueLanguageRef: { current: 'en' }, reportOptionsRequestRef: { current: null }, clearReportDraft: () => {},
+    investigationV2: investigationVersion === 2, investigation: null, selectAutomaticInvestigationCard, reportEvidenceIds, REPORT_DIMENSIONS, sanitizeReportDraft,
     useCallback: fn => fn, runClient: client, runViewRef: { current: { active: true, client } }, lang: 'en', t: {},
     commandInFlightRef: { current: false }, gameStateRef: { current: null }, bsodCountRef: { current: 0 },
     crisisPendingRef: { current: false }, finalizingRef: { current: false }, finalSettlementRef: { current: null },
@@ -107,16 +113,20 @@ async function runtimeFixture({ lostQuestion = false, incompleteQuestion = false
     selectedNPC: null,
     schedule: () => {}, triggerSynergy: () => {}, notifyCommand: (_message, type) => { if (type === 'error') stored.errors.push(_message); },
     publicErrorMessage: error => error.message, runRecoveryMessage: error => error.message,
-    addLine: (line, type) => { stored.lines.push(line); if (type === 'error') stored.errors.push(line); },
+    addLine: (line, type) => { stored.lines.push(line); stored.lineRecords.push({ text: line, turn: bindings.activeTerminalTurnRef.current }); if (type === 'error') stored.errors.push(line); },
     setAuthorityReady: value => { stored.ready = value; }, setAuthorityLoading: () => {}, setAuthorityError: error => { stored.authorityError = error; },
     setNpcDialogue: value => { stored.dialogue = typeof value === 'function' ? value(stored.dialogue) : value; },
     setNpcQuestionPacks: value => { stored.packs = value; }, setNpcQuestionError: error => { if (error) stored.errors.push(error); },
     setReportError: error => { if (error) stored.errors.push(error); }, setCrisisError: error => { if (error) stored.errors.push(error); },
     setReportOptions: value => { stored.reportOptions = typeof value === 'function' ? value(stored.reportOptions) : value; },
+    setStructuredReport: value => { bindings.structuredReport = typeof value === 'function' ? value(bindings.structuredReport || defaultReportDraft()) : value; },
+    setLinkWorkspace: value => { stored.linkWorkspace = typeof value === 'function'
+      ? value(stored.linkWorkspace || { client, draft: { relation: 'supports', firstClue: '', secondClue: '' }, feedback: null }) : value; },
     setFieldTargetId: () => {}, handleNPCDialogueClose: () => {},
     setSelectedNPC: value => { bindings.selectedNPC = value; }, setNpcExecutorId: value => { bindings.npcExecutorId = value; },
     setGameState: state => { stored.state = state; },
-    setServerRun: snapshot => { stored.run = snapshot; bindings.activeAgentStrategy = snapshot.agent_strategy; bindings.configuredAgentStrategy = snapshot.agent_strategy; },
+    setServerRun: snapshot => { stored.run = snapshot; bindings.investigation = snapshot.investigation;
+      bindings.activeAgentStrategy = snapshot.agent_strategy; bindings.configuredAgentStrategy = snapshot.agent_strategy; },
     setCrisis: value => { bindings.crisis = value; }, setTruthFragments: value => { bindings.truthFragments = value; },
     setDecisionCards: packs => {
       if (packs) queueMicrotask(() => {
@@ -127,12 +137,15 @@ async function runtimeFixture({ lostQuestion = false, incompleteQuestion = false
       });
     },
   };
-  for (const name of ['LinkedPairs', 'NpcEmotionState', 'JudgeResult', 'ShowBSoD', 'CrisisPending', 'IsFinalizing', 'FinalJudgeResult', 'ShowGameOver', 'ActiveTerminalTurn', 'ViewedTerminalTurn', 'IsProcessing', 'ReactState', 'StreamingTerminal', 'DecisionStory', 'DecisionLog', 'AgentPath', 'ZoneFeedback', 'NewClueIds', 'IsLinkChecking', 'Cinematic', 'RedFlash']) {
+  for (const name of ['LinkedPairs', 'NpcEmotionState', 'JudgeResult', 'ShowBSoD', 'CrisisPending', 'IsFinalizing', 'FinalJudgeResult', 'ShowGameOver', 'IsProcessing', 'ReactState', 'StreamingTerminal', 'DecisionStory', 'DecisionLog', 'AgentPath', 'ZoneFeedback', 'NewClueIds', 'IsLinkChecking', 'Cinematic', 'RedFlash']) {
     bindings[`set${name}`] = () => {};
   }
+  bindings.setActiveTerminalTurn = value => { stored.activeTerminalTurn = value; };
+  bindings.setViewedTerminalTurn = value => { stored.viewedTerminalTurn = value; };
   for (const name of ['reportOptionsFromResponse', 'commitServerRun', 'executeRunCommand', 'beginAbortableOperation', 'isOperationCurrent']) bindings[name] = handler(name, bindings);
   bindings.commitServerRun((await client.resume()).run);
   return { bindings, stored, calls, client, cloud: () => run, perform: name => handler(name, bindings),
+    releaseReportOptions: () => { assert.ok(reportOptionReleases.length, 'A report options response must be pending.'); reportOptionReleases.shift()(); },
     advance: command => { const outcome = authority.applyRunCommand(run, command, now); run = outcome.run; return outcome; },
     reload: () => {
       activeSession = 'newly-claimed-device';
@@ -345,6 +358,162 @@ test('V2 testimony advance refreshes its stage-bound offers instead of adopting 
   assert.equal(h.calls.filter(call => call.command?.type === 'interrogation_options').length, 2);
 });
 
+test('actual dialogue callbacks select and execute the discounted low-stamina authority offer', { skip }, async () => {
+  const content = getInvestigationContent('Lvl_01');
+  const npcId = 'npc_02';
+  const h = await runtimeFixture({ investigationVersion: 2, seedRun: run => {
+    run.team_config.skill_effects = { interrogation_bonus: .3 };
+    run.state.current_zone = content.npc_zones[npcId];
+    run.state.unlocked_clues = content.testimonies[npcId][0].required_clues;
+    run.next_crisis_turn = 99;
+    run.team_config.team.forEach(agent => { run.state.agent_stamina[agent.agent_id] = 2; });
+  } });
+  await h.perform('handleNPCTalk')(Case_Data_Lvl_01.npcs.find(npc => npc.npc_id === npcId));
+  assert.deepEqual(h.stored.errors, []);
+  const executor = h.bindings.npcExecutorId;
+  const question = h.stored.packs[executor].questions.find(item => item.tone === 'evidence');
+  assert.equal(question.stamina_cost, 6);
+  assert.equal(question.available, true);
+  await h.perform('handleNPCQuestion')(question);
+  assert.deepEqual(h.stored.errors, []);
+  assert.equal(h.cloud().investigation.testimony_stages[npcId], 1);
+  assert.equal(h.cloud().state.agent_stamina[executor], 0);
+  assert.equal(h.cloud().investigation.skill_usage.interview_stamina, 1);
+  assert.equal(h.calls.filter(call => call.command?.type === 'question').length, 1);
+});
+
+test('lost strategy replies restore the recorded account and charge its action only once', { skip }, async () => {
+  const content = getInvestigationContent('Lvl_01');
+  const npcId = 'npc_02';
+  for (const tone of ['gentle', 'firm']) {
+    const h = await runtimeFixture({ investigationVersion: 2, lostQuestion: true, seedRun: run => {
+      run.state.current_zone = content.npc_zones[npcId];
+      run.next_crisis_turn = 99;
+    } });
+    await h.perform('handleNPCTalk')(Case_Data_Lvl_01.npcs.find(npc => npc.npc_id === npcId));
+    const question = h.stored.packs[h.bindings.npcExecutorId].questions.find(item => item.tone === tone);
+    const ap = h.cloud().state.action_points_left;
+    const turns = h.cloud().state.turn_count;
+    await h.perform('handleNPCQuestion')(question);
+    const saved = structuredClone(h.cloud().state);
+    h.reload();
+    await h.resume();
+    assert.deepEqual(h.cloud().state, saved);
+    assert.equal(h.cloud().state.action_points_left, ap - (tone === 'firm' ? 1 : 0));
+    assert.equal(h.cloud().state.turn_count, turns + (tone === 'firm' ? 1 : 0));
+    assert.equal(h.cloud().investigation.interview_records[npcId].length, 1);
+    assert.deepEqual(h.stored.run.investigation.interview_records, h.cloud().investigation.interview_records);
+    const sent = h.calls.filter(call => call.command?.type === 'question');
+    assert.equal(new Set(sent.map(call => call.operation_id)).size, 1);
+    await h.resume();
+    assert.deepEqual(h.cloud().state, saved);
+  }
+});
+
+test('question turn archive follows actual paid v2 turns and recovery while v1 and completed-testimony reviews keep their turn', { skip }, async () => {
+  const content = getInvestigationContent('Lvl_01');
+  const npcId = 'npc_02';
+  for (const scenario of [
+    { investigationVersion: 2, stage: 0, lostQuestion: false, expectedTurn: 8 },
+    { investigationVersion: 2, stage: 0, lostQuestion: true, expectedTurn: 8 },
+    { investigationVersion: 2, stage: 2, lostQuestion: false, expectedTurn: 7 },
+    { investigationVersion: 1, stage: 0, lostQuestion: false, expectedTurn: 7 },
+  ]) {
+    const h = await runtimeFixture({ ...scenario, seedRun: run => {
+      run.state.turn_count = 7;
+      run.state.action_points_left = 13;
+      run.state.current_zone = content.npc_zones[npcId];
+      run.state.visited_zones.push(content.npc_zones[npcId]);
+      run.state.unlocked_clues = run.case_data.clue_dictionary.map(clue => clue.clue_id);
+      run.next_crisis_turn = scenario.expectedTurn === 8 ? 8 : 99;
+      if (scenario.stage === 2) {
+        run.investigation.testimony_stages[npcId] = 2;
+        run.investigation.testimony_records[npcId] = content.testimonies[npcId].map((record, index) => ({
+          stage: index + 1, response: record.response, evidence_ids: record.required_clues,
+        }));
+      }
+    } });
+    h.bindings.activeTerminalTurnRef.current = 7;
+    h.bindings.viewedTerminalTurnRef.current = 7;
+    h.bindings.setActiveTerminalTurn(7);
+    h.bindings.setViewedTerminalTurn(7);
+    await h.perform('handleNPCTalk')(Case_Data_Lvl_01.npcs.find(npc => npc.npc_id === npcId));
+    assert.equal(h.stored.activeTerminalTurn, 7, 'Reading dialogue options never advances the archive.');
+    const executor = h.bindings.npcExecutorId;
+    const question = scenario.investigationVersion === 2
+      ? h.stored.packs[executor].questions.find(item => item.tone === 'evidence')
+      : h.stored.packs[executor].questions[0];
+    // Closing before delivery routes the confirmed answer into the terminal.
+    h.bindings.closedDialogueRef.current = h.bindings.dialogueSequenceRef.current;
+    await h.perform('handleNPCQuestion')(question);
+    if (scenario.lostQuestion) {
+      assert.equal(h.stored.activeTerminalTurn, 7, 'A lost response cannot guess that the server advanced a turn.');
+      await h.resume();
+    }
+    assert.equal(h.cloud().state.turn_count, scenario.expectedTurn);
+    assert.equal(h.stored.activeTerminalTurn, scenario.expectedTurn);
+    assert.equal(h.stored.viewedTerminalTurn, scenario.expectedTurn);
+    assert.equal(h.bindings.activeTerminalTurnRef.current, scenario.expectedTurn);
+    assert.ok(getTerminalTurns(h.stored.lineRecords, h.stored.activeTerminalTurn).includes(scenario.expectedTurn));
+    assert.equal(h.stored.lineRecords.at(-1).turn, scenario.expectedTurn, 'The delivered answer belongs to its authoritative turn.');
+    assert.equal(h.cloud().state.action_points_left, scenario.expectedTurn === 8 ? 12 : 13);
+    if (scenario.expectedTurn === 8) assert.ok(h.stored.run.pending_crisis);
+  }
+});
+
+test('open dialogue archives each confirmed answer on its paid turn so earlier question pages remain available', { skip }, async () => {
+  const content = getInvestigationContent('Lvl_01');
+  const npcId = 'npc_02';
+  const h = await runtimeFixture({ investigationVersion: 2, seedRun: run => {
+    run.state.turn_count = 7;
+    run.state.current_zone = content.npc_zones[npcId];
+    run.state.visited_zones.push(content.npc_zones[npcId]);
+    run.state.unlocked_clues = run.case_data.clue_dictionary.map(clue => clue.clue_id);
+    run.next_crisis_turn = 99;
+  } });
+  await h.perform('handleNPCTalk')(Case_Data_Lvl_01.npcs.find(npc => npc.npc_id === npcId));
+  for (const turn of [8, 9]) {
+    const question = h.stored.packs[h.bindings.npcExecutorId].questions.find(item => item.tone === 'evidence');
+    await h.perform('handleNPCQuestion')(question);
+    assert.equal(h.stored.activeTerminalTurn, turn);
+    const answer = h.stored.dialogue.filter(line => line.role === 'npc').at(-1);
+    assert.ok(answer?.text);
+    const records = h.stored.lineRecords.filter(line => line.turn === turn);
+    assert.equal(records.length, 1, 'An open dialogue still records its confirmed public answer once.');
+    assert.ok(records[0].text.includes(answer.text));
+  }
+  assert.deepEqual(getTerminalTurns(h.stored.lineRecords, h.stored.activeTerminalTurn), [0, 8, 9]);
+  assert.equal(h.cloud().state.action_points_left, 18);
+  assert.deepEqual(h.stored.errors, []);
+});
+
+test('a recovered answer with its dialogue still open is archived once and a later status refresh cannot duplicate it', { skip }, async () => {
+  for (const reload of [false, true]) {
+    const content = getInvestigationContent('Lvl_01');
+    const npcId = 'npc_02';
+    const h = await runtimeFixture({ investigationVersion: 2, lostQuestion: true, seedRun: run => {
+      run.state.turn_count = 7;
+      run.state.current_zone = content.npc_zones[npcId];
+      run.state.visited_zones.push(content.npc_zones[npcId]);
+      run.state.unlocked_clues = run.case_data.clue_dictionary.map(clue => clue.clue_id);
+      run.next_crisis_turn = 99;
+    } });
+    await h.perform('handleNPCTalk')(Case_Data_Lvl_01.npcs.find(npc => npc.npc_id === npcId));
+    const question = h.stored.packs[h.bindings.npcExecutorId].questions.find(item => item.tone === 'evidence');
+    await h.perform('handleNPCQuestion')(question);
+    assert.equal(h.stored.lineRecords.length, 0, 'An unknown response does not fabricate a saved answer.');
+    if (reload) h.reload();
+    await h.resume();
+    assert.equal(h.stored.lineRecords.length, 1);
+    assert.equal(h.stored.lineRecords[0].turn, 8);
+    assert.ok(h.stored.lineRecords[0].text.includes(h.stored.dialogue.filter(line => line.role === 'npc').at(-1).text));
+    await h.resume();
+    assert.equal(h.stored.lineRecords.length, 1);
+    assert.equal(h.cloud().state.turn_count, 8);
+    assert.equal(h.cloud().state.action_points_left, 19);
+  }
+});
+
 function evidenceCorrectionFixture(lostReport = false, options = {}) {
   return runtimeFixture({ investigationVersion: 2, lostReport, ...options, seedRun: run => {
     // The reducer owns these known clues; this contract isolates the report UI
@@ -496,5 +665,84 @@ test('a replayed lost report-options reply keeps current policy after another ta
     const offers = h.calls.filter(body => body.command?.type === 'report_options');
     assert.equal(offers.length, 2, 'Only the original request and its same-operation replay are sent.');
     assert.deepEqual(offers[1], { ...offers[0], session_id: reload ? 'newly-claimed-device' : 'fixture-device' });
+  }
+});
+
+test('closing and reopening a report while its offer is loading shares the response without a busy error or another revision', { skip }, async () => {
+  const h = await evidenceCorrectionFixture(false, { delayReportOptions: true });
+  const bindings = { ...h.bindings, reportMode: true, authorityReady: true, authorityLoading: false, isFinalizing: false };
+  const firstCleanup = reportOptionsEffect(bindings)();
+  await new Promise(resolve => setImmediate(resolve));
+  firstCleanup();
+  const secondCleanup = reportOptionsEffect(bindings)();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(h.stored.errors, [], 'The new panel must await the same in-flight offer rather than fail with RUN_REQUEST_BUSY.');
+  h.releaseReportOptions();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(h.stored.reportOptions?.conclusions.length, 'The reopened panel receives the original authoritative offer.');
+  assert.equal(h.calls.filter(body => body.command?.type === 'report_options').length, 1);
+  assert.equal(h.cloud().revision, 1);
+  assert.equal(h.stored.state.action_points_left, 7);
+  assert.equal(h.bindings.reportOptionsRequestRef.current, null);
+  secondCleanup();
+});
+
+test('changing report language during loading reads the localized offer after the first response and keeps draft selections', { skip }, async () => {
+  const h = await evidenceCorrectionFixture(false, { delayReportOptions: true });
+  h.bindings.structuredReport = insufficientReportSelection(h.cloud());
+  const draft = structuredClone(h.bindings.structuredReport);
+  const load = lang => {
+    const bindings = { ...h.bindings, lang, reportMode: true, authorityReady: true, authorityLoading: false, isFinalizing: false };
+    bindings.executeRunCommand = handler('executeRunCommand', bindings);
+    return reportOptionsEffect(bindings)();
+  };
+  const firstCleanup = load('en');
+  await new Promise(resolve => setImmediate(resolve));
+  firstCleanup();
+  const secondCleanup = load('zh');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(h.stored.errors, [], 'A language change must not race the single-flight command lock.');
+  h.releaseReportOptions();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.filter(body => body.command?.type === 'report_options').length, 2);
+  h.releaseReportOptions();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(h.stored.reportOptions.conclusions.some(option => /[\u4e00-\u9fff]/.test(option.label)));
+  assert.deepEqual(h.bindings.structuredReport, draft);
+  assert.deepEqual(h.calls.filter(body => body.command?.type === 'report_options').map(body => body.command.lang), ['en', 'zh']);
+  assert.deepEqual(h.stored.errors, []);
+  assert.equal(h.cloud().revision, 2);
+  assert.equal(h.stored.state.action_points_left, 7);
+  secondCleanup();
+});
+
+test('recovering a lost link reply replaces the pending failure message with its confirmed relation result exactly once', { skip }, async () => {
+  for (const relation of ['supports', 'contradicts']) {
+    for (const reload of [false, true]) {
+      const h = await runtimeFixture({ investigationVersion: 2, lostLink: true, seedRun: run => {
+        run.state.unlocked_clues = ['c_01', 'c_02'];
+      } });
+      await h.perform('handleLink')('c_01', 'c_02', relation);
+      assert.equal(h.stored.ready, false);
+      assert.equal(h.client.hasPending(), true);
+      assert.match(h.stored.linkWorkspace.feedback.text, /lost/);
+      const committed = authority.publicRun(h.cloud());
+      if (reload) h.reload();
+      await h.resume();
+      const feedback = h.stored.linkWorkspace.feedback;
+      assert.equal(h.stored.ready, true);
+      assert.strictEqual(h.stored.linkWorkspace.client, h.bindings.runClient);
+      assert.equal(feedback.valid, relation === 'supports');
+      assert.equal(feedback.a, 'c_01');
+      assert.equal(feedback.b, 'c_02');
+      assert.equal(feedback.relation, relation);
+      assert.equal(feedback.lang, 'en');
+      assert.ok(feedback.text);
+      assert.doesNotMatch(feedback.text, /lost/);
+      assert.deepEqual(authority.publicRun(h.cloud()), committed, 'Replaying the receipt cannot repeat a relation reward or confusion penalty.');
+      const calls = h.calls.filter(body => body.command?.type === 'link');
+      assert.equal(calls.length, 2);
+      assert.deepEqual(calls[1], { ...calls[0], session_id: reload ? 'newly-claimed-device' : 'fixture-device' });
+    }
   }
 });

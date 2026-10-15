@@ -59,6 +59,16 @@
 .td-structured-report-v2 > footer button { min-height: 44px; font-size: 14px; }
 .td-structured-report-v2 .td-report-error { font-size: 14px; }
 .td-structured-report-v2 button:focus-visible { outline: 2px solid #d8b97d; outline-offset: 2px; }
+.td-report-evidence-search { display: grid; gap: 6px; margin: 14px 0; font-size: 14px; color: #c8cdc5; }
+.td-report-evidence-search input { width: 100%; min-height: 44px; padding: 9px; color: #ddd9cc; background: #15252e; border: 1px solid #70817f88; border-radius: 6px; font-size: 16px; }
+.td-dimension-evidence .td-evidence-options { display: grid; grid-template-columns: 1fr; }
+.td-report-evidence-record { min-width: 0; display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid #70817f44; }
+.td-report-evidence-record > button { width: 100%; text-align: left; }
+.td-link-source { padding: 4px 10px; flex-shrink: 0; }
+.td-link-feedback { padding: 12px; margin: 8px 10px; border: 1px solid #c19a6377; border-radius: 7px; color: #d9cebb; font: 14px/1.65 system-ui, sans-serif; flex-shrink: 0; }
+.td-link-feedback.is-valid { border-color: #8aaa91; }
+.td-link-feedback p { margin-top: 5px; white-space: pre-wrap; }
+.td-link-workspace > .td-link-relations { flex-shrink: 0; }
 .td-npc-v2 button { min-height: 44px; }
 .td-npc-v2 > div:first-child > button { min-width: 44px; }
 .td-npc-v2 .td-interrogation-questions > button header span { font-size: 14px; }

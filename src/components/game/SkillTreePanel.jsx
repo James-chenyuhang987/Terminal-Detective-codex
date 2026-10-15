@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState, useCallback, useId } from 'react';
 import { SKILL_TREES, getLevelFromXP } from '@/game/agentProgression';
 import { useLang } from '@/lib/lang.jsx';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
+import { INVESTIGATION_SKILLS_REVISION, investigationSkillDescription } from '@/game/investigationSkills.js';
 
 // ── 每个探员的技能链定义（线性解锁关系）─────────────────────────────────────
 // skills[0] → skills[1] → skills[2] → ...
@@ -33,8 +34,11 @@ export function reachableSkillIds(skills, level) {
   return ids;
 }
 
-export function skillEffectScope(skill, lang, investigationVersion = 2) {
+export function skillEffectScope(skill, lang, investigationVersion = 2, skillsRevision = 0) {
   const zh = lang === 'zh';
+  if (investigationVersion === 2 && skillsRevision === INVESTIGATION_SKILLS_REVISION) {
+    return investigationSkillDescription(skill, lang);
+  }
   if (skill.effect_key === 'auto_unlock_first') return zh
     ? investigationVersion === 1 ? '旧版自动调查：开局取得一条当前区域可用线索（存在时）。' : '手动调查：首次核验免 1 AP；仍需选择方法、消耗体力并推进一回合。'
     : investigationVersion === 1 ? 'Legacy investigation: reveal one available clue in the starting area, if any.' : 'Manual investigation: the first check waives 1 AP; choose its method, spend stamina and advance one turn.';
@@ -208,12 +212,14 @@ function SkillNode({ skill, prerequisite, position, color, state, onClick, onHov
 }
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
-function SkillTooltip({ id, skill, prerequisite, position, color, state, investigationVersion = 2 }) {
+function SkillTooltip({ id, skill, prerequisite, position, color, state, investigationVersion = 2, skillsRevision = 0 }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   if (!skill) return null;
   const name = zh ? skill.name : (skill.nameEn || skill.name);
-  const desc = zh ? skill.desc : (skill.descEn || skill.desc);
+  const usesNewSkills = investigationVersion === 2 && skillsRevision === INVESTIGATION_SKILLS_REVISION;
+  const desc = usesNewSkills ? skillEffectScope(skill, lang, investigationVersion, skillsRevision)
+    : zh ? skill.desc : (skill.descEn || skill.desc);
   const belowNode = position.y < CANVAS_H / 2;
   return (
     <div id={id} role="tooltip" className="td-skill-tooltip" style={{
@@ -244,7 +250,8 @@ function SkillTooltip({ id, skill, prerequisite, position, color, state, investi
         </div>
       </div>
       <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.52rem', lineHeight: 1.6 }}>
-        {zh ? '原始技能说明（以适用范围为准）：' : 'CATALOG DESCRIPTION (CHECK APPLICABILITY): '}{desc}
+        {usesNewSkills ? (zh ? '新调查效果：' : 'NEW INVESTIGATION EFFECT: ')
+          : (zh ? '原始技能说明（以适用范围为准）：' : 'CATALOG DESCRIPTION (CHECK APPLICABILITY): ')}{desc}
       </div>
       <div style={{ color: '#c19a63', fontSize: '0.49rem', lineHeight: 1.6, marginTop: 5 }}>
         {skillStateReason(skill, state, prerequisite, zh)}
@@ -256,12 +263,12 @@ function SkillTooltip({ id, skill, prerequisite, position, color, state, investi
         }}>
           <span style={{ color: '#8aaa91', fontSize: '0.44rem', fontWeight: 900 }}>◉ {zh ? '本局效果说明' : 'ACTIVE EFFECT DETAILS'}</span>
           <div style={{ color: '#8aaa91cc', fontSize: '0.46rem', marginTop: 2, lineHeight: 1.5 }}>
-            {skillEffectScope(skill, lang, investigationVersion)}
+            {skillEffectScope(skill, lang, investigationVersion, skillsRevision)}
           </div>
         </div>
       )}
       {state !== 'equipped' && <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.46rem', lineHeight: 1.6, marginTop: 6 }}>
-        {skillEffectScope(skill, lang, investigationVersion)}
+        {skillEffectScope(skill, lang, investigationVersion, skillsRevision)}
       </div>}
       {state === 'available' && (
         <div style={{ marginTop: 6, color, fontSize: '0.48rem', background: color + '15', borderRadius: 4, padding: '3px 6px', textAlign: 'center' }}>
@@ -279,7 +286,8 @@ function SkillTooltip({ id, skill, prerequisite, position, color, state, investi
 }
 
 // ── Main SkillTreePanel ────────────────────────────────────────────────────────
-export default function SkillTreePanel({ agentIdx, progression = [], loadout = [], onChange, disabled = false, investigationVersion = 2 }) {
+export default function SkillTreePanel({ agentIdx, progression = [], loadout = [], onChange, disabled = false,
+  investigationVersion = 2, skillsRevision = INVESTIGATION_SKILLS_REVISION }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const color = AGENT_COLORS[agentIdx];
@@ -364,6 +372,10 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
 
       <div style={{ marginBottom: 10, fontSize: '0.5rem', lineHeight: 1.7, color: 'rgba(255,255,255,0.6)' }}>
         <div>{zh ? '按链依次装备；卸下前置技能会同时卸下后续技能。配置仅影响之后新开的案件。' : 'Equip in chain order; removing a prerequisite also removes later skills. Changes apply to newly started cases.'}</div>
+        {investigationVersion === 2 && skillsRevision === INVESTIGATION_SKILLS_REVISION && <div>
+          {zh ? '新调查使用下列有限次数技能；已经开始的案件继续沿用开案时的效果。技能不会替你选择正确方法或自动取得关键证据。'
+            : 'New investigations use these capped benefits. Active cases keep the effects saved at entry. Skills do not choose the correct method or acquire key evidence for you.'}
+        </div>}
         <button type="button" disabled={disabled || !canEquipAll} onClick={handleEquipAll}
           style={{ marginTop: 7, padding: '7px 10px', borderRadius: 6, border: `1px solid ${color}60`, color, background: `${color}12`,
             cursor: disabled || !canEquipAll ? 'not-allowed' : 'pointer', opacity: disabled || !canEquipAll ? 0.5 : 1 }}>
@@ -432,7 +444,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
           <SkillTooltip
             id={tooltipId} skill={activeSkill} position={activePos}
             prerequisite={skills.slice(0, skills.indexOf(activeSkill)).find(item => !equippedIds.includes(item.id))}
-            color={color} state={activeState} investigationVersion={investigationVersion}
+            color={color} state={activeState} investigationVersion={investigationVersion} skillsRevision={skillsRevision}
           />
         )}
       </div>
@@ -454,7 +466,7 @@ export default function SkillTreePanel({ agentIdx, progression = [], loadout = [
                 <span style={{ fontSize: 12 }}><Icon name={s.icon} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: '0.58rem', color, fontWeight: 700 }}>{zh ? s.name : (s.nameEn || s.name)}</span>
-                  <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, marginTop: 3 }}>{skillEffectScope(s, lang, investigationVersion)}</div>
+                  <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, marginTop: 3 }}>{skillEffectScope(s, lang, investigationVersion, skillsRevision)}</div>
                 </div>
               </div>
             );

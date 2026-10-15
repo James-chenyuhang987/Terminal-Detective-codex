@@ -1,0 +1,22 @@
+.td-investigation-journal { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; color: #d9e0d9; font: 13px/1.65 system-ui, sans-serif; }
+.td-journal-heading { flex-shrink: 0; padding: 12px; border-bottom: 1px solid #8aa09b35; }
+.td-journal-heading h3 { margin: 0; font-size: 16px; font-weight: 700; color: #d1bc8f; }
+.td-journal-heading p, .td-journal-explanation { margin: 6px 0 0; color: #b1c1bd; font-size: 12px; }
+.td-journal-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; flex-shrink: 0; border-bottom: 1px solid #8aa09b35; }
+.td-journal-tabs button { flex: 1; min-height: 44px; padding: 8px; border: 1px solid #8aa09b50; border-radius: 7px; color: #c6d4d1; background: #14262d; font: inherit; cursor: pointer; }
+.td-journal-tabs button[aria-selected="true"] { background: #344335; border-color: #c5ad7e; color: #f0e1bf; }
+.td-journal-tabs button span { display: inline-block; min-width: 18px; margin-left: 5px; color: #b4c1b4; font-size: 11px; }
+.td-journal-panel { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+.td-journal-panel[hidden] { display: none; }
+.td-journal-panel > .td-journal-explanation { margin: 0 0 12px; }
+.td-journal-record { margin-bottom: 12px; padding: 12px; border: 1px solid #8aa09b45; border-radius: 8px; background: #10232bd9; overflow-wrap: anywhere; }
+.td-journal-record h4 { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 8px; color: #dfc99b; font-size: 14px; font-weight: 700; }
+.td-journal-record h4 small { color: #aebfbc; font-size: 12px; font-weight: 400; }
+.td-journal-record p { margin: 8px 0; white-space: pre-wrap; }
+.td-journal-statement { margin-top: 9px; border-top: 1px solid #8aa09b25; padding-top: 5px; }
+.td-journal-statement summary { min-height: 44px; padding: 9px 0; box-sizing: border-box; color: #bdcfca; cursor: pointer; }
+.td-journal-record .td-journal-references { color: #b4cbb6; font-size: 12px; }
+.td-journal-empty { color: #aebfbc; font-size: 12px; }
+.td-journal-deduction > small { color: #a9c6a7; font-size: 12px; }
+.td-journal-relation-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.td-investigation-journal :is(button, summary, [tabindex]):focus-visible { outline: 2px solid #d7bd8c; outline-offset: 3px; }

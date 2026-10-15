@@ -9,7 +9,7 @@ const COMMAND_FIELDS = Object.freeze({
   visit_lobby: [], save_team: ['team_config'], skill_loadout: ['skill_loadout'],
   purchase_agent: ['agent_id'], activate_support: ['agent_id'],
   mail_read: ['mail_id'], mail_reply: ['mail_id', 'choice_id'],
-  start_case: ['case_id', 'team_config'], settle_case: ['run_id'],
+  start_case: ['case_id', 'team_config', 'investigation_version'], settle_case: ['run_id'],
 });
 const IDENTITY_FIELDS = new Set(['detective_name', 'avatar', 'signature', 'identity_badge', 'detective_tags']);
 const FORBIDDEN = new Set(['__proto__', 'prototype', 'constructor']);
@@ -48,6 +48,8 @@ export function profileCommand(type, args = {}) {
   if (type === 'identity' && (!plain(args.patch) || Object.keys(args.patch).some(key => !IDENTITY_FIELDS.has(key)))) {
     fail('PROFILE_COMMAND_INVALID');
   }
+  if (type === 'start_case' && Object.hasOwn(args, 'investigation_version')
+    && ![1, 2].includes(args.investigation_version)) fail('PROFILE_COMMAND_INVALID');
   return canonicalJson({ type, ...args });
 }
 

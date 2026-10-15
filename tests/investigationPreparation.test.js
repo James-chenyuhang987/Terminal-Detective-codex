@@ -201,8 +201,9 @@ test('throttle-funded checks remain available at zero AP and exhausted or stale 
   assert.equal(JSON.stringify(exhausted.run), before);
 });
 
-test('throttle applies to evidence questioning but ordinary questions and completed testimony preserve credit', () => {
+test('pre-strategy v2 throttle applies to evidence questioning but ordinary questions and reviews preserve credit', () => {
   let run = activateThrottle(fresh({ contingency: 'emergency_throttle' }));
+  delete run.investigation.interview_revision;
   run.state.unlocked_clues = run.case_data.clue_dictionary.map(item => item.clue_id);
   const npc = Object.keys(SPEC.testimonies)[0];
   const gentle = question(run, npc, 'gentle');

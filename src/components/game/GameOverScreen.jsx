@@ -1,11 +1,12 @@
 import Icon, { IconText } from '@/components/ui/Icon';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  getLevelFromXP, getXPToNextLevel, SKILL_TREES, LEVEL_XP_TABLE, MAX_LEVEL,
+  getLevelFromXP, getXPToNextLevel, LEVEL_XP_TABLE, MAX_LEVEL,
 } from '@/game/agentProgression';
 import { DETECTIVE_LEVEL_CAP, XP_PER_LEVEL, normalizeAgentProgression } from '@/game/playerProfile';
 import { useProfile } from '@/lib/ProfileContext.jsx';
-import LevelUpModal from '@/components/game/LevelUpModal';
+import CaseReconstruction from '@/components/game/investigation/CaseReconstruction.jsx';
+import { agentAdvancementSummary } from '@/game/settlementPresentation.js';
 import { useLang } from '@/lib/lang.jsx';
 import { normalizeCaseScore } from '@/game/caseEvaluation';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
@@ -85,7 +86,7 @@ function Counter({ target, duration = 1200, color = '#709f9a', suffix = '' }) {
 }
 
 // ── XP Bar ────────────────────────────────────────────────────────────────────
-function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0, onLevelUp }) {
+function XPBar({ oldXP, newXP, color, agentIdx, agentName, agentIcon, delay = 0, onLevelUp = null }) {
   const { lang } = useLang();
   const { motionEnabled } = usePresentationMotion();
   const reported = useRef(new Set());
@@ -263,7 +264,7 @@ const AGENT_NAMES  = ['隼目', '破心', '幽灵'];
 const AGENT_ICONS  = ['👁️', '🔥', '💻'];
 const AGENT_COLORS = ['#709f9a', '#c77c78', '#9b9aae'];
 
-export default function GameOverScreen({ judgeResult, gameState, caseData, onReturnToLobby, onReturnToLanding, onSettlement }) {
+export default function GameOverScreen({ judgeResult, gameState, caseData, investigation = null, onReturnToLobby, onReturnToLanding, onSettlement }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const { profile } = useProfile();
@@ -276,10 +277,6 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
   const [phase, setPhase] = useState('summary');
   const settlementSentRef = useRef(false);
   const [settlementStatus, setSettlementStatus] = useState('saving');
-
-  // Level-up modal queue
-  const [modalQueue, setModalQueue] = useState([]); // [{agentIdx, fromLevel, toLevel}]
-  const [currentModal, setCurrentModal] = useState(null);
 
   useEffect(() => {
     if (!motionEnabled) { setPhase('xp'); return; }
@@ -311,22 +308,7 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
 
   useEffect(() => { void syncSettlement(); }, [syncSettlement]);
 
-  // Process modal queue sequentially
-  useEffect(() => {
-    if (!currentModal && modalQueue.length > 0) {
-      setCurrentModal(modalQueue[0]);
-      setModalQueue(q => q.slice(1));
-    }
-  }, [currentModal, modalQueue]);
-
-  const handleLevelUp = useCallback(({ fromLevel, toLevel, agentIdx }) => {
-    // Collect all newly unlocked skills between fromLevel+1 and toLevel
-    const newSkills = (SKILL_TREES[agentIdx] || []).filter(
-      s => s.unlock_level > fromLevel && s.unlock_level <= toLevel
-    );
-    setModalQueue(q => [...q, { agentIdx, fromLevel, toLevel, newSkills }]);
-  }, []);
-
+  const advancements = agentAdvancementSummary(oldProg, newProg);
   const score = normalizeCaseScore(judgeResult?.score);
   const isPassed = judgeResult?.is_passed === true;
   const scoreTitle = zh ? (SCORE_TITLES[score] || '见习侦探') : (SCORE_TITLES_EN[score] || 'DETECTIVE TRAINEE');
@@ -392,6 +374,8 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
           </div>
         </div>
 
+        <CaseReconstruction gameState={gameState} investigation={investigation} judgeResult={judgeResult} npcs={caseData?.npcs} zones={caseData?.scene?.zones} />
+
         {/* XP breakdown */}
         <div className="td-ui-card td-result-panel" style={{ border: '1px solid rgba(112, 159, 154,0.15)', borderRadius: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', padding: '16px 18px', marginBottom: 20, animation: 'go-in 0.6s 0.3s cubic-bezier(.22,1,.36,1) both' }}>
           <div style={{ color: 'rgba(112, 159, 154,0.7)', fontSize: '0.58rem', letterSpacing: '0.2em', marginBottom: 10, fontFamily: 'monospace' }}>◈ {zh ? '经验值结算明细' : 'XP BREAKDOWN'}</div>
@@ -446,9 +430,16 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
                 agentIcon={AGENT_ICONS[i]} color={AGENT_COLORS[i]}
                 oldXP={oldProg[i]?.xp || 0} newXP={newProg[i]?.xp || 0}
                 delay={i * 350}
-                onLevelUp={({ fromLevel, toLevel }) => handleLevelUp({ fromLevel, toLevel, agentIdx: i })}
               />
             ))}
+            {advancements.length > 0 && <details className="td-advancement-summary">
+              <summary>{zh ? `${advancements.length} 名探员晋升 · 查看新技能` : `${advancements.length} agents advanced · view new skills`}</summary>
+              {advancements.map(item => <article key={item.agentIdx}>
+                <h3>{zh ? AGENT_NAMES[item.agentIdx] : ['NEXUS-01', 'AURORA-09', 'CIPHER-47'][item.agentIdx]} · Lv.{item.fromLevel} → Lv.{item.toLevel}</h3>
+                {item.newSkills.length > 0 ? <ul>{item.newSkills.map(skill => <li key={skill.id}><strong>{zh ? skill.name : skill.nameEn}</strong> · {zh ? skill.desc : skill.descEn}</li>)}</ul>
+                  : <p>{zh ? '属性成长已记入探员档案。' : 'Progress has been recorded in the agent file.'}</p>}
+              </article>)}
+            </details>}
           </div>
         )}
 
@@ -488,19 +479,6 @@ export default function GameOverScreen({ judgeResult, gameState, caseData, onRet
           </button>
         </div>
       </div>
-
-      {/* Level-up modal */}
-      {currentModal && (
-        <LevelUpModal
-          agentName={zh ? AGENT_NAMES[currentModal.agentIdx] : ['NEXUS-01', 'AURORA-09', 'CIPHER-47'][currentModal.agentIdx]}
-          agentIcon={AGENT_ICONS[currentModal.agentIdx]}
-          color={AGENT_COLORS[currentModal.agentIdx]}
-          fromLevel={currentModal.fromLevel}
-          toLevel={currentModal.toLevel}
-          newSkills={currentModal.newSkills || []}
-          onClose={() => setCurrentModal(null)}
-        />
-      )}
 
       <style>{`
         @keyframes go-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }

@@ -1,0 +1,27 @@
+.td-evidence-library { min-width: 0; color: #ddd9cc; font: 14px/1.65 system-ui, sans-serif; }
+.td-evidence-library-search label { display: block; margin-bottom: 6px; font-weight: 600; }
+.td-evidence-library-search-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.td-evidence-library-search input { flex: 1 1 180px; min-width: 0; width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid #718680; border-radius: 7px; background: #111c23; color: #e3e0d5; font: inherit; }
+.td-evidence-library-search input::placeholder { color: #a3b1ab; opacity: 1; }
+.td-evidence-library-search button { min-height: 44px; padding: 9px 12px; border: 1px solid #718680; border-radius: 7px; color: #ddd9cc; background: #1b2a2e; font: inherit; cursor: pointer; }
+.td-evidence-library-count { margin: 8px 0 12px; color: #b8c5ba; font-size: 12px; }
+.td-evidence-library-records { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.td-evidence-library-records > li { min-width: 0; }
+.td-evidence-library-new { display: inline-block; margin: 0 0 4px 2px; color: #c8c39a; font-size: 12px; }
+.td-evidence-library-empty { margin: 0; padding: 14px; border: 1px dashed #718680; border-radius: 8px; color: #b8c5ba; }
+.td-evidence-reference { min-width: 0; border: 1px solid #637975; border-radius: 8px; background: #142129; color: #ddd9cc; font: 14px/1.65 system-ui, sans-serif; overflow-wrap: anywhere; }
+.td-evidence-reference > summary { min-height: 44px; padding: 10px 12px; cursor: pointer; }
+.td-evidence-reference-title { font-weight: 600; }
+.td-evidence-reference-hint { display: inline-block; margin-inline-start: 10px; color: #bcc6bc; font-size: 12px; }
+.td-evidence-reference[open] > summary { border-bottom: 1px solid #637975; color: #e5cf9f; }
+.td-evidence-reference-body { padding: 12px; }
+.td-evidence-reference-body p { margin: 0; white-space: pre-wrap; }
+.td-evidence-reference-body dl { margin: 14px 0 0; }
+.td-evidence-reference-body dt { margin-top: 10px; color: #b8c5ba; font-size: 12px; }
+.td-evidence-reference-body dd { margin: 3px 0 0; white-space: pre-wrap; }
+.td-evidence-library-search input:focus-visible, .td-evidence-library-search button:focus-visible, .td-evidence-reference > summary:focus-visible { outline: 2px solid #e5c17d; outline-offset: 3px; }
+@media (max-width: 600px) {
+  .td-evidence-library-search input { font-size: 16px; }
+  .td-evidence-reference > summary { padding: 10px; }
+  .td-evidence-reference-body { padding: 10px; }
+}
