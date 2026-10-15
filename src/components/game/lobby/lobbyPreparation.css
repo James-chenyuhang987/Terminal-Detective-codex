@@ -1,0 +1,54 @@
+.td-lobby-briefing-tabs { display: flex; gap: 6px; padding: 10px 12px; flex-shrink: 0; border-bottom: 1px solid #a5c8c024; background: #07131de8; z-index: 4; }
+.td-lobby-briefing-tabs button, .td-preparation button { color: #bdd2d3; border: 1px solid #789da348; background: #182b35; border-radius: 6px; padding: 8px 10px; font: inherit; cursor: pointer; line-height: 1.4; }
+.td-lobby-briefing-tabs button[aria-pressed="true"], .td-preparation button[aria-pressed="true"] { background: #284039; border-color: #a5c8c0; color: #e5e8d5; }
+.td-preparation button:disabled { cursor: default; opacity: .5; }
+.td-preparation button:focus-visible, .td-lobby-briefing-tabs button:focus-visible, .td-roster-agent:focus-visible { outline: 2px solid #e8c98a; outline-offset: 2px; }
+.td-preparation { padding: 16px; overflow: auto; flex: 1; min-height: 0; color: #d2dddc; font: 12px/1.65 ui-monospace, monospace; background: linear-gradient(155deg,#10202aee,#060e17f5); }
+.td-preparation-heading > span { color: #c3ac7b; font-size: 10px; letter-spacing: .12em; }
+.td-preparation h2 { color: #edf1e7; font-size: 20px; font-weight: 700; margin: 5px 0; }
+.td-preparation p { margin: 6px 0; color: #a9bfc1; }
+.td-preparation-resources { display: flex; align-items: center; gap: 20px; padding: 12px 0; margin-bottom: 10px; border-bottom: 1px solid #a5c8c024; }
+.td-preparation-resources > div { flex-shrink: 0; }
+.td-preparation-resources small { display: block; color: #92aeb3; font-size: 10px; }
+.td-preparation-resources strong { font-size: 24px; color: #e7d09d; }
+.td-preparation-resources em { font-size: 11px; font-style: normal; }
+.td-preparation-resources > p { font-size: 10px; max-width: 190px; }
+.td-preparation-agents { display: grid; gap: 8px; }
+.td-preparation-agent { border: 1px solid #8babb735; border-radius: 9px; padding: 10px 12px; background: #152633a6; }
+.td-preparation-agent.is-primary { border-left: 3px solid #d0b47c; }
+.td-preparation-agent-title { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.td-preparation-agent-title > strong { font-size: 13px; color: #e0e9e5; }
+.td-preparation-agent-title > span { color: #e7d09d; font-size: 10px; }
+.td-preparation-agent p { font-size: 11px; }
+.td-preparation-agent-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.td-preparation-agent-actions button { font-size: 11px; }
+.td-preparation .is-ready { color: #aed4b9; }
+.td-preparation .is-tradeoff { color: #e4bf94; }
+.td-preparation-presets { border-top: 1px solid #a5c8c024; margin-top: 16px; padding-top: 12px; }
+.td-preparation-presets > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.td-preparation h3 { font-size: 14px; color: #e7d09d; font-weight: 700; margin: 0; }
+.td-preparation-presets p, .td-preparation-presets button { font-size: 11px; }
+.td-preparation-preset-options { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.td-preparation-preview { background: #060d14a6; border: 1px solid #c3ac7b45; border-radius: 8px; padding: 12px; }
+.td-preparation-preview table { width: 100%; table-layout: fixed; font-size: 11px; text-align: left; }
+.td-preparation-preview caption { text-align: left; color: #e7d09d; padding-bottom: 8px; }
+.td-preparation-preview th, .td-preparation-preview td { padding: 8px 4px; vertical-align: top; border-bottom: 1px solid #a5c8c017; overflow-wrap: anywhere; }
+.td-preparation-preview th:first-child { width: 32%; }
+.td-preparation-preview td span, .td-preparation-preview td small { display: block; }
+.td-preparation-preview small { color: #a9bfc1; }
+.td-preparation-preview .td-preparation-apply { width: 100%; margin-top: 10px; background: #344438; border-color: #afc6a4; color: #e8eddf; }
+.td-preparation-note { font-size: 10px; padding-top: 10px; border-top: 1px solid #a5c8c024; margin-top: 16px !important; }
+.td-priority-mobile-buttons { display: inline-flex !important; }
+@media (max-width: 1100px), (max-height: 700px) {
+  .td-preparation { padding: 12px; }
+  .td-preparation h2 { font-size: 18px; }
+  .td-preparation button { min-height: 44px; }
+  .td-preparation-agent-actions > button { flex: 1; }
+  .td-preparation-resources { gap: 14px; }
+  .td-lobby-controls { flex-wrap: wrap; }
+  .td-lobby-controls .td-lobby-deploy-button { flex: 1 0 100% !important; max-width: none !important; margin-left: 0 !important; padding: 10px 12px !important; min-height: 44px; font-size: 14px !important; letter-spacing: .12em !important; }
+  .td-lobby-tools-wrap { flex: 1; min-width: 0; }
+  .td-lobby-controls .td-lobby-synergy-compact { flex: 1; min-width: 0 !important; }
+}
+.td-lobby-main { overflow: clip !important; }
+.td-lobby-roster { overflow: auto; }

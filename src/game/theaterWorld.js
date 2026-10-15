@@ -254,6 +254,101 @@ export function stageNpcs(npcs, room, caseId = '') {
   });
 }
 
+/** Preserve authored roles, but version 2 has canonical contact locations. */
+export function stageInvestigationNpcs(npcs, room, caseId, zoneId, investigation) {
+  const staged = stageNpcs(npcs, room, caseId);
+  if (!investigation?.npc_zones) return staged;
+  return staged.filter(npc => investigation.npc_zones[npc.npcId] === zoneId);
+}
+
+export function investigationPropKind(kind) {
+  if (/document|log|record|paper|timeline/i.test(String(kind))) return 'document';
+  if (/terminal|console|screen|script|monitor/i.test(String(kind))) return 'terminal';
+  if (/sample|trace|fluid|resin|fiber|blood/i.test(String(kind))) return 'sample';
+  return 'device';
+}
+
+/** Connected cells keep public target positions reachable around furniture. */
+function reachableCells(room) {
+  const step = .4, origin = room.spawn;
+  const cells = new Map([['0,0', [...origin]]]), queue = [[0, 0]];
+  for (let index = 0; index < queue.length && index < 4000; index++) {
+    const [x, z] = queue[index];
+    for (const [nx, nz] of [[x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]]) {
+      const key = `${nx},${nz}`;
+      if (cells.has(key)) continue;
+      const point = [origin[0] + nx * step, 0, origin[2] + nz * step];
+      if (!isWalkable(point, room, .35)) continue;
+      cells.set(key, point); queue.push([nx, nz]);
+    }
+  }
+  return [...cells.values()];
+}
+
+/** Uses only already-public observations; it cannot infer reward/clue IDs. */
+export function investigationTargets(room, npcs, investigation, zoneId) {
+  if (!Array.isArray(investigation?.targets)) return [];
+  const sources = investigation.targets.filter(target => target?.zone_id === zoneId && typeof target.target_id === 'string').slice(0, 8);
+  const movementRoom = withNpcColliders(room, npcs);
+  const reached = reachableCells(movementRoom), occupied = [];
+  return sources.map((target, index) => {
+    const preferred = Array.isArray(target.position) && target.position.length === 3 && target.position.every(Number.isFinite)
+      ? target.position : room.hotspots[index % room.hotspots.length]?.position || room.spawn;
+    const candidates = reached.filter(point => Math.hypot(point[0] - room.spawn[0], point[2] - room.spawn[2]) > 1
+      && occupied.every(other => Math.hypot(point[0] - other[0], point[2] - other[2]) >= 1.0)
+      && npcs.every(npc => Math.hypot(point[0] - npc.position[0], point[2] - npc.position[2]) >= .9)
+      && room.doors.every(door => Math.hypot(point[0] - door.position[0], point[2] - door.position[2]) >= 1));
+    candidates.sort((a, b) => Math.hypot(a[0] - preferred[0], a[2] - preferred[2]) - Math.hypot(b[0] - preferred[0], b[2] - preferred[2]));
+    const position = candidates[0];
+    if (!position) return null;
+    occupied.push(position);
+    const label = typeof target.label?.zh === 'string' ? target.label.zh.slice(0, 120) : '现场物件';
+    const labelEn = typeof target.label?.en === 'string' ? target.label.en.slice(0, 160) : 'Scene object';
+    const checks = investigation.completed_checks;
+    const completed = Boolean(target.completed || (!Array.isArray(checks) && checks?.[target.target_id])
+      || (Array.isArray(checks) && checks.some(check => check === target.target_id || check?.target_id === target.target_id)));
+    return { kind: 'investigate', id: target.target_id, position: [...position], focusPosition: [position[0], 1.03, position[2]], radius: 1.25,
+      label, labelEn, presentationLabel: label, presentationLabelEn: labelEn,
+      propKind: investigationPropKind(target.kind), hotspotType: 'object', accent: completed ? '#96c5a5' : '#d8bb85', completed };
+  }).filter(Boolean);
+}
+
+function investigationCollider(target) {
+  return { id: `object-${target.id}`, min: [target.position[0] - .22, target.position[2] - .22], max: [target.position[0] + .22, target.position[2] + .22] };
+}
+
+export function withInvestigationColliders(room, targets) {
+  return { ...room, colliders: [...room.colliders, ...targets.map(investigationCollider)] };
+}
+
+export function createInvestigationCollisionState() { return { known: new Set(), pending: new Set() }; }
+
+/** New corroboration can appear under a stationary actor. Let them leave first. */
+export function updateInvestigationColliders(state, room, targets, actorPosition = null) {
+  const colliders = targets.map(investigationCollider);
+  const active = colliders.filter(box => {
+    const clear = !actorPosition || isWalkable(actorPosition, { ...room, colliders: [box] });
+    if (!state.known.has(box.id)) {
+      state.known.add(box.id);
+      if (!clear) state.pending.add(box.id);
+    }
+    if (state.pending.has(box.id) && clear) state.pending.delete(box.id);
+    return !state.pending.has(box.id);
+  });
+  return { ...room, colliders: [...room.colliders, ...active] };
+}
+
+/** Small bounded upper-body additions; detective chin IK stays authored. */
+export function conversationOffsets(time, speaking, listening, emotion = 'calm') {
+  const t = Number.isFinite(time) ? time : 0;
+  const pitch = emotion === 'broken' ? .065 : emotion === 'shaken' ? .025 : 0;
+  return {
+    headX: pitch + (listening ? Math.sin(t * 1.4) * .016 : speaking ? Math.sin(t * 2.2) * .018 : 0),
+    headY: listening ? Math.sin(t * .7) * .018 : 0,
+    forearmX: speaking ? Math.sin(t * 2.2 - .35) * .026 : 0,
+  };
+}
+
 export function interactionTargets(room, npcs, sceneName = 'office') {
   return [
     ...npcs.map(npc => ({ kind: 'npc', npcId: npc.npcId, position: [...npc.position], radius: 1.6, label: 'Talk / 交谈' })),

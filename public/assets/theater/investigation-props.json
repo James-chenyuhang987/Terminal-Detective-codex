@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "file": "investigation-props.glb",
+  "nodes": {
+    "document": "DocumentProp",
+    "terminal": "TerminalProp",
+    "sample": "SampleProp",
+    "device": "DeviceProp"
+  },
+  "bytes": 158576,
+  "triangles": 2128,
+  "meshes": 4,
+  "materials": 7,
+  "animations": [],
+  "durations": {},
+  "skinnedMeshes": 0,
+  "bounds": {
+    "min": [
+      -0.195,
+      0.0,
+      -0.165
+    ],
+    "max": [
+      0.195,
+      0.318,
+      0.1645
+    ]
+  }
+}

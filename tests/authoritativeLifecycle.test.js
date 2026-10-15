@@ -33,6 +33,8 @@ function gateway() {
   const stored = { commits: [], ready: [], errors: [], loading: [] };
   const client = { resume: () => pending.promise, command: () => pending.promise };
   const bindings = {
+    dialogueLanguageRef: { current: 'en' },
+    investigationV2: false,
     useCallback: fn => fn, runClient: client, runViewRef: { current: { active: true, client } },
     lang: 'en', commandInFlightRef: { current: false }, recoveryPresentationRef: { current: null }, commitServerRun: value => stored.commits.push(value),
     setAuthorityReady: value => stored.ready.push(value), setAuthorityError: value => stored.errors.push(value), setAuthorityLoading: value => stored.loading.push(value),
@@ -95,6 +97,7 @@ test('BSoD recovery, priority and end handlers await server instead of invoking 
     const pending = deferred();
     const command = type === 'priority' ? { type, priority_list: PRIORITY_ACTIONS.map(action => action.id).reverse() } : { type };
     const fn = handler('handleRunIntent', {
+      selectedNPC: null, handleNPCDialogueClose: () => {},
       authorityReady: true, isProcessing: false, commandInFlightRef: { current: false }, finalizingRef: { current: false },
       executeRunCommand: body => { calls.push(body); return pending.promise; },
       setIsProcessing: value => processing.push(value), notifyCommand: () => {}, lang: 'en',
@@ -130,6 +133,8 @@ function roundHarness(choice, offline = false) {
   const packs = { 'NEXUS-01': [{ option_id: 'server-choice', action_tag: 'search_area', label: 'Inspect' }] };
   const refs = { decisionResolveRef: { current: null }, gameStateRef: { current: initial }, activeRunRef: { current: 1 }, abortCtrlRef: { current: null } };
   const bindings = {
+    dialogueLanguageRef: { current: 'en' },
+    investigationV2: false,
     ...refs, authorityReady: true, isProcessing: false, finalizingRef: { current: false }, crisisPendingRef: { current: false }, showBSoD: false,
     lang: 'en', t: {}, activeAgentStrategy: { team: [] }, caseData: { clue_dictionary: [] }, settings: { cinematicsEnabled: false },
     activeTerminalTurnRef: { current: 2 }, viewedTerminalTurnRef: { current: 2 },
@@ -207,6 +212,8 @@ async function interviewRuntime({ lost = false, deferredAnswer = false } = {}) {
   const client = createPlayerRunClient(options);
   await client.resume();
   const bindings = {
+    dialogueLanguageRef: { current: 'en' },
+    investigationV2: false,
     useCallback: fn => fn, lang: 'en', t: {}, authorityReady: true, isProcessing: false, selectedNPC: npc,
     caseData: Case_Data_Lvl_01, theaterMode: true, configuredAgentStrategy: { team: [{ agent_id: 'NEXUS-01' }] }, npcExecutorId: 'NEXUS-01',
     runClient: client, runViewRef: { current: { client, active: true } }, commandInFlightRef: { current: false },

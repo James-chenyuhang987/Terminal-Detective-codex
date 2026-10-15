@@ -20,6 +20,7 @@ function find(root, name) {
   return found.initializer;
 }
 function handler(name, bindings, root = owner) {
+  bindings = { investigationV2: false, investigation: null, ...bindings };
   const { outputText } = ts.transpileModule(`const result = (${find(root, name).getText()});`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } });
   return compileFunction(`${outputText}\nreturn result;`, Object.keys(bindings))(...Object.values(bindings));
 }
@@ -70,7 +71,7 @@ test('actual commit stores exact server state and dependent crisis, links, emoti
 });
 
 test('public acquired clue projection overrides local labels in the selected language without granting evidence', () => {
-  const local = { clue_dictionary: [{ clue_id: 'c_01', keyword: 'Old label', description: 'Old text' }, { clue_id: 'c_02', keyword: 'Locked label' }] };
+  const local = { npcs: [], clue_dictionary: [{ clue_id: 'c_01', keyword: 'Old label', description: 'Old text' }, { clue_id: 'c_02', keyword: 'Locked label' }] };
   const clue = { clue_id: 'c_01', keyword: '云端线索', description: '云端记录', visual_icon: '🔎', en: { keyword: 'Cloud clue', description: 'Cloud record' } };
   for (const lang of ['en', 'zh']) {
     const result = handler('caseData', {

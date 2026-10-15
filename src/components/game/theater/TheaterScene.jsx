@@ -8,7 +8,8 @@ import { useLang } from '@/lib/lang.jsx';
 import {
   CHARACTER_FILES, MAX_FRAME_DELTA, SCENE_FILES, cameraRelativeMovement, interactionIntent,
   interactionTargets, isViewportKeyTarget, nearestTarget, restoreSpatial,
-  sceneForZone, stageNpcs, targetKey, validateTheaterManifest, withNpcColliders, SPRINT_SPEED,
+  sceneForZone, stageNpcs, stageInvestigationNpcs, investigationTargets, createInvestigationCollisionState, updateInvestigationColliders,
+  conversationOffsets, targetKey, validateTheaterManifest, withNpcColliders, SPRINT_SPEED,
 } from '@/game/theaterWorld.js';
 import { createAvatarAnimation, createFootLock, createSoleGrounding, soleGroundOffset, stepLocomotion, stopLocomotion, updateAvatarAnimation, updateFootLock } from '@/game/theaterMotion.js';
 import { buildCameraCollision, cameraClearance } from '@/game/theaterCamera.js';
@@ -16,11 +17,13 @@ import { fieldFraming, npcAppearance, npcDemeanor } from '@/game/theaterVisuals.
 import { fieldMaterial } from '@/game/theaterMaterials.js';
 import { cancelDeferredDispose, deferDispose } from '@/lib/deferredDispose.js';
 import { FieldFeedback, FieldLighting, FootShadow } from './FieldAtmosphere.jsx';
+import InvestigationProps, { INVESTIGATION_PROP_FILE } from './InvestigationProps.jsx';
+import { createTheaterAudio } from '@/game/theaterAudio.js';
+import { createQualitySampler, sampleTheaterQuality, theaterPerformanceSnapshot, theaterQualitySettings } from '@/game/theaterQuality.js';
 
 const ASSET_ROOT = `${import.meta.env.BASE_URL}assets/theater/`;
 const EMPTY_CONTROLS = { forward: false, backward: false, left: false, right: false, sprint: false };
 const KEY_DIRECTIONS = { KeyW: 'forward', ArrowUp: 'forward', KeyS: 'backward', ArrowDown: 'backward', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
-const QUALITY = { low: { dpr: 1, shadows: false, shadowSize: 512, antialias: false }, auto: { dpr: 1.35, shadows: true, shadowSize: 512, antialias: true }, high: { dpr: 1.75, shadows: true, shadowSize: 1024, antialias: true } };
 
 class TheaterAssetErrorBoundary extends Component {
   state = { failed: false };
@@ -130,6 +133,7 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       input.current.orbitX = 0;
       input.current.orbitY = 0;
       input.current.stopMotion?.();
+      input.current.audio?.stopSteps();
       // Demand rendering has no clock of its own. Wake one frame so a
       // release/blur can apply the stopped locomotion and settle the camera.
       input.current.invalidate?.();
@@ -145,6 +149,8 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       if (live.current.paused || live.current.suspended || document.hidden || !document.hasFocus()) return false;
       if (!input.current.windowActive) clear();
       input.current.windowActive = true;
+      input.current.audio?.setActive(true);
+      input.current.audio?.unlock();
       input.current.invalidate?.();
       return true;
     };
@@ -223,6 +229,7 @@ function useViewportInput(viewportRef, controlsRef, live, input, interact) {
       input.current.windowActive = false;
       input.current.focused = false;
       clear();
+      input.current.audio?.setActive(false);
     };
     const visibility = () => { if (document.hidden) suspend(); };
     // Keep listeners local; only fresh input, not window focus, can resume after blur.
@@ -279,6 +286,24 @@ function RendererLifecycle({ live, input, suspended }) {
       window.removeEventListener('focus', wake);
     };
   }, [gl, invalidate, live, input]);
+  return null;
+}
+
+function AdaptiveQuality({ sampler, live, input, viewport, onTierChange }) {
+  const lastPublish = useRef(0);
+  useFrame((_, delta) => {
+    const active = !live.current.suspended && input.current.windowActive && !document.hidden;
+    const changed = sampleTheaterQuality(sampler.current, delta, active);
+    if (changed && live.current.qualityMode === 'auto') onTierChange(sampler.current.tier);
+    if (sampler.current.elapsed < lastPublish.current) lastPublish.current = 0;
+    if (sampler.current.elapsed - lastPublish.current >= 1 && viewport.current) {
+      const metrics = theaterPerformanceSnapshot(sampler.current);
+      viewport.current.dataset.theaterFrameMs = String(metrics.frameMs);
+      viewport.current.dataset.theaterSamples = String(metrics.samples);
+      viewport.current.dataset.theaterSampledSeconds = String(metrics.sampledSeconds);
+      lastPublish.current = sampler.current.elapsed;
+    }
+  });
   return null;
 }
 
@@ -348,6 +373,8 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
     return result;
   }, [model]);
   const appliedSpineOffset = useRef({ x: 0, y: 0, z: 0 });
+  const presentationBones = useMemo(() => ({ head: model.getObjectByName('Head'), forearm: model.getObjectByName('Forearm.R') || model.getObjectByName('ForearmR') }), [model]);
+  const appliedConversation = useRef({ headX: 0, headY: 0, forearmX: 0 });
   const animation = useMemo(() => {
     const result = createAvatarAnimation(new AnimationMixer(model), gltf.animations, gait);
     result.actions.Idle.time = appearance?.phase || 0;
@@ -383,16 +410,21 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
       previous.x = 0;
       previous.y = 0;
       previous.z = 0;
+      const conversation = appliedConversation.current;
+      if (presentationBones.head) { presentationBones.head.rotation.x -= conversation.headX; presentationBones.head.rotation.y -= conversation.headY; }
+      if (presentationBones.forearm) presentationBones.forearm.rotation.x -= conversation.forearmX;
+      conversation.headX = 0; conversation.headY = 0; conversation.forearmX = 0;
     }
     updateAvatarAnimation(animation, delta, {
       speed: !live.current.paused ? player?.current.speed : 0,
       distance: !live.current.paused ? player?.current.distance : 0,
       authoredSpeed: locomotion.speed,
-      talking: talking || interacting,
+      talking: talking || Boolean(interacting && (player || !live.current.investigationV2)),
       frozen: background,
       reducedMotion: reduced,
       gait,
     });
+    if (player) input.current.audio?.step(animation, player.current, !background && !live.current.paused && !reduced);
     // Keep a short demand-render chain for walk/talk fade-outs. The World
     // subscriber may stop locomotion later in this frame, so it cannot by
     // itself know that the mixer still needs a few frames to settle.
@@ -436,6 +468,17 @@ function Avatar({ role, position, rotationY = 0, player = null, talking = false,
         spine.rotation.x += offset.x;
         spine.rotation.y += offset.y;
         spine.rotation.z += offset.z;
+        if (!player) {
+          const conversation = appliedConversation.current;
+          const pose = conversationOffsets(animation.mixer.time + (appearance?.phase || 0), talking, interacting && !talking, emotion);
+          // The base Talk remains responsible for sleeves and elbow anatomy.
+          // Add only a small nod and delayed wrist-level emphasis to NPCs.
+          conversation.headX = pose.headX;
+          conversation.headY = pose.headY;
+          conversation.forearmX = pose.forearmX * animation.talkWeight;
+          if (presentationBones.head) { presentationBones.head.rotation.x += conversation.headX; presentationBones.head.rotation.y += conversation.headY; }
+          if (presentationBones.forearm) presentationBones.forearm.rotation.x += conversation.forearmX;
+        }
       }
       // Lock only a single foot during its authored mid-stance contact. The
       // compensation lives on the render model; player.current.position stays
@@ -474,17 +517,26 @@ function HotspotRing({ target, nearby, selected }) {
   </mesh>;
 }
 
-function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = null, npcEmotionLevels = {}, progress = { evidenceCount: 0, terminalActive: false }, focusTargetType = '', controlsRef, spatialRef, live, input, nearbyRef, sceneReady, quality }) {
+function World({ caseData, zoneId, manifest, investigation = null, lang = 'zh', selectedNpcId, speakerNpcId = undefined, interactionNpcId = null, npcEmotionLevels = {}, progress = { evidenceCount: 0, terminalActive: false }, focusTargetType = '', controlsRef, spatialRef, live, input, nearbyRef, sceneReady, quality }) {
   const sceneName = sceneForZone(zoneId);
   const room = manifest.scenes[sceneName];
-  const staged = useMemo(() => stageNpcs(caseData.npcs, room, caseData.case_id), [caseData.npcs, caseData.case_id, room]);
+  const npcZonesKey = JSON.stringify(investigation?.npc_zones || null);
+  const staged = useMemo(() => investigation ? stageInvestigationNpcs(caseData.npcs, room, caseData.case_id, zoneId, investigation) : stageNpcs(caseData.npcs, room, caseData.case_id), [caseData.npcs, caseData.case_id, room, zoneId, npcZonesKey]);
   const appearances = useMemo(() => Object.fromEntries(staged.map(npc => [npc.npcId, npcAppearance(caseData.case_id, npc.npcId, npc.role)])), [staged, caseData.case_id]);
-  const movementRoom = useMemo(() => withNpcColliders(room, staged), [room, staged]);
-  const targets = useMemo(() => interactionTargets(room, staged, sceneName), [room, staged, sceneName]);
+  const objectTargets = useMemo(() => investigation ? investigationTargets(room, staged, investigation, zoneId) : [], [room, staged, investigation, zoneId]);
+  const player = useRef(null);
+  const objectCollisionState = useRef(createInvestigationCollisionState());
+  const movementRoom = useMemo(() => {
+    const geometry = withNpcColliders(room, staged);
+    return investigation ? updateInvestigationColliders(objectCollisionState.current, geometry, objectTargets, player.current?.position) : geometry;
+  }, [room, staged, investigation, objectTargets]);
+  const targets = useMemo(() => {
+    const base = interactionTargets(room, staged, sceneName);
+    return investigation ? [...base.filter(target => target.kind !== 'investigate'), ...objectTargets] : base;
+  }, [room, staged, sceneName, investigation, objectTargets]);
   const interactionNpc = staged.find(npc => npc.npcId === (interactionNpcId || selectedNpcId)) || null;
   const interactionTarget = useMemo(() => interactionNpc ? { current: { position: interactionNpc.position } } : null, [interactionNpc]);
   const spatialKey = JSON.stringify([caseData.case_id, zoneId]);
-  const player = useRef(null);
   if (!player.current) player.current = { ...restoreSpatial(spatialRef.current?.rooms?.[spatialKey], movementRoom), walking: false };
   // Local decoder-free GLB; collision broadphase is cached once per loaded scene.
   const roomGltf = useGLTF(`${ASSET_ROOT}${SCENE_FILES[sceneName]}`, false, false);
@@ -522,6 +574,11 @@ function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = n
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, MAX_FRAME_DELTA);
     const state = player.current;
+    if (investigation && objectCollisionState.current.pending.size) {
+      // The room owns this collider array. Arm a newly revealed object's
+      // collision only after the actor leaves it; never teleport the actor.
+      movementRoom.colliders = updateInvestigationColliders(objectCollisionState.current, withNpcColliders(room, staged), objectTargets, state.position).colliders;
+    }
     const movingAllowed = !live.current.paused && !live.current.suspended && input.current.windowActive && !document.hidden;
     if (movingAllowed) {
       const touch = controlsRef.current || EMPTY_CONTROLS;
@@ -553,7 +610,7 @@ function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = n
     }
 
     const view = cameraState;
-    const spot = room.hotspots.find(spot => spot.id === live.current.focusTargetId);
+    const spot = (investigation ? objectTargets : room.hotspots).find(spot => spot.id === live.current.focusTargetId);
     const { distance, yaw, pitch } = fieldFraming({ position: state.position, yaw: orbit.current.yaw, pitch: orbit.current.pitch, aspect: 'aspect' in camera ? camera.aspect : 1.6, contact: live.current.paused ? selected : null, focus: live.current.paused ? spot?.focusPosition : null, overview: live.current.overview }, view.framing);
     // Portrait panels occupy the bottom half; lift the composition without moving its collision target.
     const shift = 'aspect' in camera && camera.aspect < 1.1 && (live.current.overview || (live.current.paused && (selected || spot))) ? (spot ? .26 : .20) : 0;
@@ -606,45 +663,71 @@ function World({ caseData, zoneId, manifest, selectedNpcId, interactionNpcId = n
     <FieldLighting sceneName={sceneName} room={room} quality={quality} />
     <RoomModel gltf={roomGltf} quality={quality} />
     <FootShadow position={player.current.position} player={player} />
-    <FieldFeedback room={room} progress={progress} focusedId={live.current.focusTargetId} focusedType={focusTargetType} sceneName={sceneName} caseData={caseData} zoneId={zoneId} />
+    {!investigation && <FieldFeedback room={room} progress={progress} focusedId={live.current.focusTargetId} focusedType={focusTargetType} sceneName={sceneName} caseData={caseData} zoneId={zoneId} />}
+    {investigation && <InvestigationProps targets={objectTargets} nearbyKey={nearbyKey} focusedId={live.current.focusTargetId} lang={lang} shadows={quality.shadows} />}
     <Avatar role="detective" position={player.current.position} rotationY={player.current.rotationY} player={player} interacting={Boolean(interactionNpc)} interactionTarget={interactionTarget} locomotion={manifest.characters.detective.locomotion} gait={manifest.characters.detective.gait} live={live} input={input} quality={quality} />
-    {staged.map(npc => <group key={npc.npcId}><FootShadow position={npc.position} scale={appearances[npc.npcId].stature} /><Avatar role={npc.role} position={npc.position} rotationY={npc.rotationY} talking={npc.npcId === selectedNpcId} interacting={npc.npcId === interactionNpcId} targetPosition={player} appearance={appearances[npc.npcId]} emotion={npcEmotionLevels[npc.npcId] || 'calm'} locomotion={manifest.characters[npc.role].locomotion} gait={manifest.characters[npc.role].gait} live={live} input={input} quality={quality} /></group>)}
+    {staged.map(npc => <group key={npc.npcId}><FootShadow position={npc.position} scale={appearances[npc.npcId].stature} /><Avatar role={npc.role} position={npc.position} rotationY={npc.rotationY} talking={npc.npcId === (speakerNpcId === undefined ? selectedNpcId : speakerNpcId)} interacting={npc.npcId === interactionNpcId || npc.npcId === selectedNpcId} targetPosition={player} appearance={appearances[npc.npcId]} emotion={npcEmotionLevels[npc.npcId] || 'calm'} locomotion={manifest.characters[npc.role].locomotion} gait={manifest.characters[npc.role].gait} live={live} input={input} quality={quality} /></group>)}
     {targets.map(target => <HotspotRing key={targetKey(target)} target={target} nearby={targetKey(target) === nearbyKey} selected={target.kind === 'npc' && target.npcId === selectedNpcId} />)}
   </>;
 }
 
-export default function TheaterScene({ caseData, zoneId, selectedNpcId, interactionNpcId = null, npcEmotionLevels, progress, focusTargetId = null, focusTargetType = '', overview = false, paused, suspended = false, quality, reducedMotion, onInteract, onReady, onFailure, controlsRef, spatialRef, onNearbyChange }) {
+export default function TheaterScene({ caseData, zoneId, investigation = null, sfxEnabled = true, selectedNpcId, speakerNpcId = undefined, interactionNpcId = null, npcEmotionLevels, progress, focusTargetId = null, focusTargetType = '', overview = false, paused, suspended = false, quality, reducedMotion, onInteract, onReady, onFailure, controlsRef, spatialRef, onNearbyChange }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const viewport = useRef(null);
   const manifest = useTheaterManifest(onFailure);
   const [readyRoom, setReadyRoom] = useState(null);
   const roomKey = JSON.stringify([caseData.case_id, zoneId]);
-  const settings = QUALITY[quality] || QUALITY.auto;
+  const sampler = useRef(null);
+  if (!sampler.current) sampler.current = createQualitySampler();
+  const [autoTier, setAutoTier] = useState(1);
+  const settings = theaterQualitySettings(quality, { tier: autoTier });
+  useEffect(() => { sampler.current = createQualitySampler(); setAutoTier(1); }, [quality]);
   const assetUrls = useMemo(() => [
     `${ASSET_ROOT}${SCENE_FILES[sceneForZone(zoneId)]}`,
     ...Object.values(CHARACTER_FILES).map(file => `${ASSET_ROOT}${file}`),
-  ], [zoneId]);
+    ...(investigation ? [`${ASSET_ROOT}${INVESTIGATION_PROP_FILE}`] : []),
+  ], [zoneId, investigation]);
   const nearby = useRef(null);
-  const live = useRef({ paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, focusTargetId, overview });
-  live.current = { paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, focusTargetId, overview };
-  const input = useRef({ keys: { ...EMPTY_CONTROLS }, focused: false, windowActive: !document.hidden && document.hasFocus(), orbitX: 0, orbitY: 0, clear: null });
+  const live = useRef({ paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, focusTargetId, overview, qualityMode: 'auto', investigationV2: Boolean(investigation) });
+  live.current = { paused, suspended, reducedMotion, onInteract, onReady, onFailure, onNearbyChange, focusTargetId, overview, investigationV2: Boolean(investigation), qualityMode: quality === 'low' || quality === 'high' ? quality : 'auto' };
+  const input = useRef({ keys: { ...EMPTY_CONTROLS }, focused: false, windowActive: !document.hidden && document.hasFocus(), orbitX: 0, orbitY: 0, clear: null, audio: null });
   const interact = useCallback(() => {
     if (live.current.paused || live.current.suspended || document.hidden || !input.current.windowActive) return;
     const intent = interactionIntent(nearby.current);
-    if (intent) live.current.onInteract?.(intent);
+    if (intent) { input.current.audio?.cue('inspect'); live.current.onInteract?.(intent); }
   }, []);
   const ready = useCallback(() => { setReadyRoom(roomKey); live.current.onReady?.(); }, [roomKey]);
   useViewportInput(viewport, controlsRef, live, input, interact);
-  useEffect(() => { if (paused || suspended) input.current.clear?.(); }, [paused, suspended]);
+  useEffect(() => {
+    const audio = createTheaterAudio();
+    input.current.audio = audio;
+    const suspendAudio = () => { if (document.hidden || !document.hasFocus()) audio.setActive(false); };
+    window.addEventListener('blur', suspendAudio); document.addEventListener('visibilitychange', suspendAudio);
+    return () => { window.removeEventListener('blur', suspendAudio); document.removeEventListener('visibilitychange', suspendAudio); audio.dispose(); input.current.audio = null; };
+  }, []);
+  useEffect(() => { input.current.audio?.setEnabled(sfxEnabled); }, [sfxEnabled]);
+  useEffect(() => { input.current.audio?.setScene(sceneForZone(zoneId)); }, [zoneId]);
+  useEffect(() => {
+    if (paused || suspended) input.current.clear?.();
+    input.current.audio?.setActive(!suspended && !document.hidden && document.hasFocus());
+    if (paused) input.current.audio?.stopSteps();
+  }, [paused, suspended]);
+  const previousEvidence = useRef(progress?.evidenceCount || 0);
+  useEffect(() => {
+    const count = progress?.evidenceCount || 0;
+    if (count > previousEvidence.current && !suspended && !document.hidden) input.current.audio?.cue('discovery');
+    previousEvidence.current = count;
+  }, [progress?.evidenceCount, suspended]);
   useExplorationFocus(viewport, readyRoom === roomKey && !paused && !suspended);
 
   // Fiber always mounts native canvas fallback content, including on working WebGL devices.
-  return <div ref={viewport} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：WASD 或方向键移动，按住 R 疾跑，拖动视角，E 交互；关闭面板后可直接继续移动' : '3D detective scene: WASD or arrows to move, hold R to sprint, drag to orbit, E to interact; movement is ready after closing panels'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>
-    {manifest && <Canvas frameloop="demand" dpr={[1, settings.dpr]} shadows={settings.shadows} gl={{ antialias: settings.antialias, alpha: false, powerPreference: 'low-power' }} camera={{ position: [0, 3.2, 6], fov: 52, near: 0.06, far: 70 }} aria-label={zh ? '以第三人称探索案件现场' : 'Explore the case scene in third person'} fallback={<p>{zh ? '此设备无法显示 3D 场景，请切换文字模式继续调查。' : 'This device cannot display the 3D scene. Continue your investigation in text mode.'}</p>}>
+  return <div ref={viewport} data-theater-dpr={settings.dpr} data-theater-shadows={String(settings.shadows)} tabIndex={0} role="group" aria-label={zh ? '3D 侦探现场：WASD 或方向键移动，按住 R 疾跑，拖动视角，E 交互；关闭面板后可直接继续移动' : '3D detective scene: WASD or arrows to move, hold R to sprint, drag to orbit, E to interact; movement is ready after closing panels'} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 320, touchAction: 'none', outlineOffset: -3 }}>
+    {manifest && <Canvas frameloop="demand" dpr={[1, settings.dpr]} shadows={settings.shadows} gl={{ antialias: settings.antialias, alpha: false, powerPreference: 'low-power' }} camera={{ position: [0, 3.2, 6], fov: 52, near: 0.06, far: 70 }} aria-label={zh ? '以第三人称探索案件现场' : 'Explore the case scene in third person'} fallback={<p>{zh ? '三维案件现场画面。可使用现场调查台核验物件，或切换文字模式探索。' : '3D case scene. Use the field desk to verify objects, or explore in text mode.'}</p>}>
       <RendererLifecycle live={live} input={input} suspended={suspended} />
+      <AdaptiveQuality sampler={sampler} live={live} input={input} viewport={viewport} onTierChange={setAutoTier} />
       <TheaterAssetErrorBoundary assetUrls={assetUrls} clear={useGLTF.clear} onFailure={onFailure}>
-        <Suspense fallback={null}><World key={roomKey} caseData={caseData} zoneId={zoneId} manifest={manifest} selectedNpcId={selectedNpcId} interactionNpcId={interactionNpcId} npcEmotionLevels={npcEmotionLevels} progress={progress} focusTargetType={focusTargetType} controlsRef={controlsRef} spatialRef={spatialRef} live={live} input={input} nearbyRef={nearby} sceneReady={ready} quality={settings} /></Suspense>
+        <Suspense fallback={null}><World key={roomKey} caseData={caseData} zoneId={zoneId} manifest={manifest} investigation={investigation} lang={lang} selectedNpcId={selectedNpcId} speakerNpcId={speakerNpcId} interactionNpcId={interactionNpcId} npcEmotionLevels={npcEmotionLevels} progress={progress} focusTargetType={focusTargetType} controlsRef={controlsRef} spatialRef={spatialRef} live={live} input={input} nearbyRef={nearby} sceneReady={ready} quality={settings} /></Suspense>
       </TheaterAssetErrorBoundary>
     </Canvas>}
     <LoadingProgress zh={zh} preparing={readyRoom !== roomKey} />

@@ -56,8 +56,8 @@ async function runRequest(request, env, session, context) {
   const prior = await readOperation(env, session.user_id, body.operation_id);
   if (prior || body.expected_revision !== Number(row.run_revision)) return replayOrConflict(env, session, body, hash, prior);
   if (row.settled) return error('RUN_SETTLED', 'This run has already settled.', 409);
-  validateRunCommand(body.command);
   const original = storedRun(row);
+  validateRunCommand(body.command, original.investigation_version || 1);
   let outcome;
   try {
     outcome = applyRunCommand(original, body.command, new Date());

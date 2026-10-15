@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { generateKeyPair, SignJWT } from 'jose';
 
 import worker, { handleRequest } from '../cloudflare/worker/index.js';
+import { authInternals } from '../cloudflare/worker/auth.js';
+import { authorityDB, SESSION_ID, USER_ID } from './cloudflareAuthorityDB.js';
 
 const APP_ID = 'terminal-detective';
 const env = {
@@ -182,6 +185,7 @@ test('public backend endpoints enforce their HTTP methods', async () => {
     ['/api/auth/session', 'POST', 'GET'],
     ['/api/auth/logout', 'GET', 'POST'],
     ['/api/cloudflare/status', 'POST', 'GET'],
+    [`/api/apps/${APP_ID}/functions/detectiveRules`, 'GET', 'POST'],
   ]) {
     const response = await handleRequest(new Request(`https://game.example${path}`, { method }), env);
     assert.equal(response.status, 405);
@@ -208,6 +212,83 @@ test('deterministic detective rules require a Cloudflare session', async () => {
   const payload = await response.json();
   assert.equal(response.status, 401);
   assert.equal(payload.code, 'UNAUTHENTICATED');
+});
+
+test('authenticated stateless rule probes are retired before private evaluation for unpaid and both paid versions', async () => {
+  const projectId = 'terminal-detective-gateway-test';
+  const pair = await generateKeyPair('RS256');
+  const now = Math.floor(Date.now() / 1000);
+  const token = await new SignJWT({
+    sub: USER_ID, email: 'detective@example.com', email_verified: true,
+    aud: projectId, iss: `https://securetoken.google.com/${projectId}`,
+    iat: now - 30, auth_time: now - 60, exp: now + 3600,
+  }).setProtectedHeader({ alg: 'RS256', kid: 'gateway-retired-rule-key' }).sign(pair.privateKey);
+  authInternals.resetKeyCache();
+  try {
+    // Prime the existing verifier with a test public key; no network or real
+    // Firebase account is involved. The gateway still verifies the signed JWT.
+    await authInternals.firebaseKey('gateway-retired-rule-key', async () =>
+      new Response(JSON.stringify({ 'gateway-retired-rule-key': 'test-certificate' }), {
+        headers: { 'cache-control': 'public, max-age=120' },
+      }), async () => pair.publicKey);
+    const authenticatedRequest = (path, body) => new Request(`https://game.example${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      ...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }),
+    });
+    const forged = {
+      caseId: 'Lvl_01', runId: 'unearned-forged-run', turn: 12, lang: 'en',
+      unlockedClueIds: ['c_01', 'c_02', 'c_03', 'c_04', 'c_05', 'c_06', 'c_secret_99'],
+      clueAId: 'c_04', clueBId: 'c_06', npcId: 'npc_01', questionId: 'forged-question',
+      executorAgentId: 'NEXUS-01', emotionLevel: 'broken', evidenceIds: ['c_04', 'c_06'],
+      conclusionId: 'conclusion:accident', methodId: 'method:network_only',
+      motiveId: 'motive:revenge', timelineId: 'timeline:public_record',
+      team: [{ agentId: 'NEXUS-01', logicPower: 100, observationFocus: 100,
+        hackLevel: 100, confusionResistance: 100, stamina: 100 }],
+    };
+    for (const investigationVersion of [null, 1, 2]) {
+      const DB = authorityDB();
+      const authenticatedEnv = { ...env, FIREBASE_PROJECT_ID: projectId, DB };
+      try {
+        const login = await handleRequest(authenticatedRequest('/api/auth/session'), authenticatedEnv);
+        assert.equal(login.status, 200, 'The fixture must exercise a verified authenticated request');
+        if (investigationVersion !== null) {
+          const paid = await handleRequest(authenticatedRequest(`/api/apps/${APP_ID}/functions/playerProfile`, {
+            action: 'command', session_id: SESSION_ID, expected_revision: 0,
+            operation_id: `retired-rule-paid-start-version-${investigationVersion}`,
+            command: { type: 'start_case', case_id: 'Lvl_01', investigation_version: investigationVersion },
+          }), authenticatedEnv);
+          assert.equal(paid.status, 200);
+          const payload = await paid.json();
+          assert.ok(payload.result.run.id);
+          assert.equal(payload.result.run.investigation_version || 1, investigationVersion);
+        }
+        const profileBefore = DB.profile();
+        const runsBefore = DB.sqlite.prepare('SELECT run_json, run_revision, settled FROM player_runs').all();
+        const operationsBefore = DB.count('profile_operations');
+        for (const body of [
+          ...['decision_options', 'interrogation_options', 'interrogation_resolve',
+            'link_check', 'link_cinematic', 'report_options', 'report_judge']
+            .map(task => ({ task, payload: forged })),
+          '{"task":',
+        ]) {
+          const response = await handleRequest(authenticatedRequest(
+            `/api/apps/${APP_ID}/functions/detectiveRules`, body), authenticatedEnv);
+          assert.equal(response.status, 410);
+          assert.deepEqual(await response.json(), {
+            error: 'STATELESS_RULES_RETIRED', code: 'STATELESS_RULES_RETIRED',
+            detail: 'Use the paid playerRun endpoint to read options and submit investigation commands.',
+            authoritative_endpoint: `/api/apps/${APP_ID}/functions/playerRun`,
+          });
+          assert.equal(response.headers.get('cache-control'), 'no-store');
+        }
+        assert.deepEqual(DB.profile(), profileBefore);
+        assert.deepEqual(DB.sqlite.prepare('SELECT run_json, run_revision, settled FROM player_runs').all(), runsBefore);
+        assert.equal(DB.count('profile_operations'), operationsBefore);
+        assert.equal(DB.count('run_operations'), 0);
+      } finally { DB.sqlite.close(); }
+    }
+  } finally { authInternals.resetKeyCache(); }
 });
 
 test('profile read and write routes fail closed before database access', async () => {

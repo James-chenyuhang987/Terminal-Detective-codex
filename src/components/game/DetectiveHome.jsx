@@ -39,7 +39,7 @@ function HomeModuleSkeleton({ lang }) {
   );
 }
 
-export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase, onRegister, onStartInvestigation = null, suspendedCase = null, hasLocalSelectedCase = false, onResume = () => {} }) {
+export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase, onRegister, onStartInvestigation = null, suspendedCase = null, onResume = () => {} }) {
   const { lang } = useLang();
   const { settings, updateSetting } = useSettings();
   const {
@@ -168,6 +168,11 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
     // The routed app always supplies onEnterLobby; retain the old embedded
     // caller fallback for integrations that only expose a resume action.
     if (typeof profile !== 'undefined' && !profile?.detective_name) { onRegister?.(); return; }
+    if (suspendedCase && targetCaseId && targetCaseId !== suspendedCase.case_id) {
+      setModule(null);
+      onOpenCases(targetCaseId);
+      return;
+    }
     if (suspendedCase && typeof onEnterLobby !== 'function') { onResume(); return; }
     onEnterLobby(targetCaseId, 'HOME', { previewActiveRun: Boolean(suspendedCase) });
     if (!isReadOnly) {
@@ -177,7 +182,6 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
 
   const openCase = (caseId) => {
     setModule(null);
-    if (suspendedCase) { onResume(); return; }
     onOpenCases(caseId);
   };
 
@@ -400,7 +404,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
                   border: '1px solid #c5a66f', background: 'rgba(197, 166, 111,0.22)',
                   color: '#e1d0ac', fontFamily: 'monospace', fontWeight: 900, letterSpacing: '0.18em', fontSize: '0.78rem',
                 }}>{lang === 'zh' ? '调取案件卷宗' : 'RETRIEVE CASE DOSSIER'}</button>
-                {onSelectCase && !hasLocalSelectedCase && <button className="td-ui-button td-button-ghost td-button-compact" onClick={onSelectCase} style={{
+                {onSelectCase && <button className="td-ui-button td-button-ghost td-button-compact" onClick={onSelectCase} style={{
                   width: '100%', marginTop: 8, minHeight: 38, padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
                   border: '1px solid rgba(197, 166, 111, .58)', background: 'rgba(197, 166, 111, .08)',
                   color: '#d8c18a', fontFamily: 'monospace', fontWeight: 800, letterSpacing: '0.12em', fontSize: '0.68rem',

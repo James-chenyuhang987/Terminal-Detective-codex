@@ -35,10 +35,12 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor: l
   const zoneLayout = Object.fromEntries(Object.entries(caseData?.zone_layout || DEFAULT_ZONE_LAYOUT)
     .map(([id, zone]) => [id, { ...zone, color: noirColor(zone.color) }]));
   const connections = caseData?.zone_connections || DEFAULT_CONNECTIONS;
-  const clueZoneMap = caseData?.zone_clue_map   || DEFAULT_CLUE_ZONE_MAP;
+  const clueZoneMap = caseData?.zone_clue_map
+    ? Object.fromEntries(Object.entries(caseData.zone_clue_map).flatMap(([zone, ids]) => ids.map(id => [id, zone])))
+    : DEFAULT_CLUE_ZONE_MAP;
 
-  const currentZone  = agentPath?.[agentPath.length - 1] || Object.keys(zoneLayout)[0];
-  const visitedZones = new Set(agentPath || []);
+  const currentZone = gameState?.current_zone || agentPath?.[agentPath.length - 1] || Object.keys(zoneLayout)[0];
+  const visitedZones = new Set(gameState?.visited_zones || agentPath || []);
 
   // Clues per zone
   const zoneClues = {};
@@ -155,7 +157,7 @@ export default function MiniMap({ gameState, caseData, agentPath, accentColor: l
             const clueCount = zoneClues[zk]?.length || 0;
             const color = isCurrent ? zd.color : isVisited ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
             return (
-              <div key={zk} style={{
+              <div key={zk} role="group" aria-label={`${zh ? zd.label : (zd.labelEn || zd.label)} · ${isCurrent ? (zh ? '当前' : 'Current') : isVisited ? (zh ? '已探索' : 'Visited') : (zh ? '未探索' : 'Unexplored')} · ${clueCount} ${zh ? '线索' : 'clues'}`} style={{
                 position: 'absolute', left: `${zd.x}%`, top: `${zd.y}%`,
                 transform: 'translate(-50%,-50%)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center',

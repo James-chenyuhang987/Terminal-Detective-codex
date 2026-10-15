@@ -1,0 +1,329 @@
+{
+  "reportType": "synthetic_agent_playtest",
+  "notHumanResearch": true,
+  "playerId": "P02",
+  "persona": {
+    "language": "English",
+    "interactionPreference": "keyboard-oriented",
+    "resourcePreference": "careful about costs"
+  },
+  "case": "Ghost Protocol / LVL-02",
+  "url": "http://127.0.0.1:5192/__case-test",
+  "accessConstraints": {
+    "visibleUIOnly": true,
+    "repositorySourceRead": false,
+    "testsRead": false,
+    "serverFilesRead": false,
+    "hiddenStateRead": false,
+    "directAPICalls": false,
+    "otherPlayerReportsRead": false
+  },
+  "timing": {
+    "startedAt": "2026-10-14T12:36:00.504Z",
+    "sceneEntryAt": "2026-10-14T12:36:37.195Z",
+    "firstVerifiedClueAt": "2026-10-14T12:39:19.058Z",
+    "secondsToFirstVerifiedClue": 162,
+    "firstClue": "Burned Chips",
+    "finishedAt": "2026-10-14T13:03:07.050Z",
+    "secondsSceneEntryToCompletion": 1590,
+    "note": "Wall-clock includes tutorial reading, reasoning, and browser tool latency; measured scene entry from Home Resume activation."
+  },
+  "entryFlow": [
+    "Enter Case Terminal",
+    "Confirm default 3D Detective Story",
+    "Home Resume via Return key",
+    "Read all five onboarding steps",
+    "Switch to text at no cost"
+  ],
+  "presentation": {
+    "initial": "3D",
+    "completed": "text",
+    "observedAXWarning": "This device cannot display the 3D scene. Continue your investigation in text mode.",
+    "visualObservation": "Screenshot behind onboarding showed a dim rendered-looking lab, props and avatar. Therefore actual WebGL failure was not independently established.",
+    "reasonForTextSwitch": "Took the visible accessibility warning literally; switched to text.",
+    "limitation": "Did not play 3D movement/control after switch. Parent later stated this was native canvas fallback text; report retains the original independent observation."
+  },
+  "outcome": {
+    "completed": true,
+    "finalGrade": "B",
+    "finalRank": "SENIOR INVESTIGATOR",
+    "clues": "9/9",
+    "turns": 15,
+    "apRemaining": 1,
+    "confusionPercent": 17,
+    "hpPercent": 100,
+    "displayedXp": 321,
+    "realAccountOrRewards": false,
+    "reportAttempts": 2,
+    "firstReportVerdict": "D / rejected / Missing support: opportunity",
+    "successfulReportChangedAP": false
+  },
+  "resources": {
+    "startingAP": 20,
+    "paidActions": {
+      "successfulInspections": 9,
+      "wrongInspection": 1,
+      "testimonyAdvances": 4,
+      "reconstruction": 1,
+      "evidencePurgeSecure": 3,
+      "rejectedReport": 1
+    },
+    "freeActionsObserved": [
+      "room travel",
+      "opening/reading objects",
+      "changing investigating agent",
+      "evidence review",
+      "opening testimony/public account",
+      "text/3D presentation switch",
+      "accepted evidence-link verification"
+    ],
+    "costClarity": "Inspection and questioning buttons explicitly state AP/stamina; travel and presentation switches explicitly state no AP. Crisis prompts state costs and penalties. Report rejection consumed 1 AP and +4 confusion, but the submit button and report instructions did not disclose that cost. Invalid relation consumed +3 confusion but Verify relation did not disclose that penalty. Successful report consumed no additional AP.",
+    "staminaExperience": "Rotated investigators on inspections and selected Cipher for Zoe; costs were predictable. Interrogator selection was visually highlighted but did not produce a selected state in accessibility text."
+  },
+  "hintUsage": [
+    {
+      "count": 1,
+      "trigger": "Could not locate residual signature objective after eight clues",
+      "visibleHint": "Compare visible records and measurements; obtain original material before checking accounts.",
+      "helpfulness": "Low: no location or prerequisite information; located object by revisiting server room."
+    }
+  ],
+  "wrongChoices": [
+    {
+      "type": "inspection",
+      "object": "Arrangement of burned chips",
+      "choice": "Inspect color and shape",
+      "reason": "Uniform orientation and absent blast marks looked like a shape/arrangement discrepancy.",
+      "visibleFeedback": "This method does not verify the visible discrepancy. Try another measurement or original record.",
+      "cost": "1 AP, +3 confusion",
+      "correction": "Sample and compare against a reference; secured deliberate-burning clue."
+    },
+    {
+      "type": "relation",
+      "first": "Phase-shift prototype recovered at the roof",
+      "relation": "Supports",
+      "second": "Roof Weight Sensor",
+      "reason": "Depleted prototype recovered at roof and sensor jointly support escape.",
+      "visibleFeedback": "The selected relationship is not supported by these two records.",
+      "cost": "+3 confusion"
+    },
+    {
+      "type": "relation",
+      "first": "Roof Weight Sensor",
+      "relation": "Precedes",
+      "second": "Phase-shift prototype recovered at the roof",
+      "reason": "Visible sensor timestamp is02:34; visible security recovery timestamp is02:41.",
+      "visibleFeedback": "The selected relationship is not supported by these two records.",
+      "cost": "+3 confusion",
+      "concern": "Potential content/rule mismatch: chronologically valid visible claim rejected without proposition explanation."
+    },
+    {
+      "type": "report",
+      "dimension": "opportunity",
+      "attached": [
+        "Aria's Badge",
+        "Phase-shift prototype recovered at the roof",
+        "Synchronized Outage"
+      ],
+      "reason": "Badge establishes presence/access, borrowed QPS allows locked-door escape, outage conceals it.",
+      "visibleFeedback": "Missing support: opportunity. You can revise the report.",
+      "cost": "1 AP, +4 confusion",
+      "correction": "Added Roof Weight Sensor to opportunity; next report accepted."
+    }
+  ],
+  "verifiedDeductions": [
+    {
+      "first": "Harlan's Server Log",
+      "relation": "Supports",
+      "second": "Hidden Backup Drive",
+      "visibleResult": "The independent backup shows the download was not routine security work"
+    }
+  ],
+  "reconstruction": {
+    "attempts": 1,
+    "success": true,
+    "costAP": 1,
+    "keyboardCompleted": true,
+    "order": [
+      "Core lab at02:18",
+      "QPS spends its core crossing the locked door",
+      "Internal emergency passage",
+      "Roof pressure trigger at02:34"
+    ]
+  },
+  "testimony": {
+    "Harlan": {
+      "advances": 2,
+      "strategies": [
+        "Present matching evidence",
+        "Present matching evidence"
+      ],
+      "facts": [
+        "Harlan admitted initiating the archive download without researcher notification.",
+        "He said the overseas call concerned delivery of keys."
+      ]
+    },
+    "Zoe": {
+      "advances": 2,
+      "strategies": [
+        "Present matching evidence",
+        "Present matching evidence"
+      ],
+      "facts": [
+        "Aria asked whether QPS could cross a locked door; Zoe did not operate it.",
+        "Aria asked her not to throw out the drink can; the burned chips were a decoy."
+      ]
+    },
+    "Otto": {
+      "formallyQuestioned": false,
+      "reason": "Preserved final2AP for reporting; main signed/physical evidence already established departure."
+    }
+  },
+  "crises": [
+    {
+      "name": "Evidence purge",
+      "choice": "Secure now",
+      "cost": "3AP",
+      "reason": "Protect original server-record credibility."
+    },
+    {
+      "name": "Public account needs check",
+      "person": "Zoe Park",
+      "choice": "Reinterrogate",
+      "cost": "0AP,+4confusion",
+      "reason": "Lower stated penalty than setting aside; later completed Zoe testimony."
+    }
+  ],
+  "finalExplanation": {
+    "conclusion": "Aria staged her own exit; Harlan's key sale was the misconduct she preserved evidence of.",
+    "opportunity": "Aria had borrowed QPS the previous night; her badge records entry at02:18, external cameras went down at02:17 from the internal controller, and the roof sensor confirms a physical exit event at02:34.",
+    "method": "She used QPS to cross the locked door and leave by the internal emergency route. The depleted device was recovered at the roof at02:41. Uniformly burned chips were a decoy while real records survived in the drink-can drive. Her signed prior message says she left alone using QPS.",
+    "motive": "Preserve evidence of key sales and escape institutional control. The backup, unauthorized01:55 download, overseas call and Harlan's delivery-of-keys admission support this.",
+    "timeline": "23:40 Harlan overseas call;01:55 archive download;02:17 exterior camera outage;02:18 Aria enters core lab; phase door crossing and internal passage;02:34 roof pressure event/departure;02:41 depleted QPS recovered."
+  },
+  "finalReportAttachments": {
+    "opportunity": [
+      "Aria's Badge",
+      "Phase-shift prototype recovered at the roof",
+      "Synchronized Outage",
+      "Roof Weight Sensor"
+    ],
+    "method": [
+      "Burned Chips",
+      "Phase-shift prototype recovered at the roof",
+      "Residual signature in the recycle store"
+    ],
+    "motive": [
+      "Harlan's Server Log",
+      "Hidden Backup Drive",
+      "Harlan's Call Log",
+      "Residual signature in the recycle store"
+    ],
+    "timeline": [
+      "Aria's Badge",
+      "Phase-shift prototype recovered at the roof",
+      "Roof Weight Sensor",
+      "Synchronized Outage"
+    ]
+  },
+  "blockers": [
+    {
+      "type": "misleading_accessibility_warning",
+      "resolved": true,
+      "detail": "Initially interpreted canvas fallback text as actual3D display failure and switched to text."
+    },
+    {
+      "type": "remaining_clue_location",
+      "resolved": true,
+      "detail": "Residual-signature objective lacks room location; generic hint did not help. Server revisit revealed the newly available object."
+    }
+  ],
+  "actionableFindings": [
+    {
+      "priority": "P1",
+      "title": "Explain or accept visibly valid chronological links",
+      "detail": "Roof Weight Sensor02:34 precedes prototype recovery02:41 was rejected with generic feedback. Make rules align with visible timestamps or name the proposition being checked."
+    },
+    {
+      "priority": "P1",
+      "title": "Disclose report rejection and relation penalties before commit",
+      "detail": "Report rejection deducted1AP/+4confusion; invalid relations added3confusion. Neither commit button showed those penalties."
+    },
+    {
+      "priority": "P2",
+      "title": "Show objective room and tailored hint for newly unlocked residual signature",
+      "detail": "Player at exit was told to inspect recycle-store signature without server-room direction. Hint repeated generic advice."
+    },
+    {
+      "priority": "P2",
+      "title": "Make report support requirements explainable",
+      "detail": "Opportunity rejected badge+prototype+outage despite plausible access/method reasoning, then accepted after adding roof sensor. Feedback should identify missing physical route corroboration, not only dimension name."
+    },
+    {
+      "priority": "P2",
+      "title": "Remove false3D failure text from accessibility tree",
+      "detail": "Canvas fallback warning caused player to abandon3D despite rendered-looking screenshot."
+    },
+    {
+      "priority": "P3",
+      "title": "Expose selected interrogator in accessibility semantics",
+      "detail": "Changing investigator had only visual border feedback; accessibility tree did not announce which agent was selected."
+    },
+    {
+      "priority": "P3",
+      "title": "Clarify chips verification method from observation",
+      "detail": "Seven uniformly oriented chips/no blast marks strongly suggest visual inspection to this player, yet only sampling/reference succeeds."
+    }
+  ],
+  "artifacts": {
+    "screenshot": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P02.jpg",
+    "report": "/tmp/td-agent-playtest/P02-report.json"
+  },
+  "events": [
+    {
+      "time": "2026-10-14T12:36:37.195Z",
+      "action": "Scene entry through Home Resume"
+    },
+    {
+      "time": "2026-10-14T12:38:16.198Z",
+      "action": "Switched to text because AX reports device cannot display 3D scene"
+    },
+    {
+      "time": "2026-10-14T12:38:48.519Z",
+      "action": "Chips: Inspect color and shape; chose because arrangement and no blast marks suggest staged pattern"
+    },
+    {
+      "time": "2026-10-14T12:39:19.058Z",
+      "action": "Chips: sample and compare after measurement/reference feedback",
+      "elapsedSinceSceneSec": 162
+    },
+    {
+      "time": "2026-10-14T12:43:47.488Z",
+      "action": "Evidence purge crisis: paid3AP secure now; costs clearly stated"
+    },
+    {
+      "time": "2026-10-14T12:49:15.948Z",
+      "action": "Public account crisis: reinterrogate0AP confusion+4, chosen over set aside+8 and rep-5"
+    },
+    {
+      "time": "2026-10-14T12:49:41.967Z",
+      "action": "Used first investigation hint; next objective residual signature location unclear"
+    },
+    {
+      "time": "2026-10-14T12:51:48.012Z",
+      "action": "Reconstruction submitted: core02:18, phase-cross locked door, internal passage, roof02:34;1AP"
+    },
+    {
+      "time": "2026-10-14T12:53:31.587Z",
+      "action": "Wrong relation2: sensor02:34 precedes prototype recovery02:41"
+    }
+  ],
+  "authority_event_log_sha256": "e0531ea86d4221dde786bb3651f72f3883a56c5620c585773ec67bad4fb8e6ec",
+  "verification_scope": "Synthetic visible-UI session; local isolated Worker/D1 fixture; no real users or production rewards.",
+  "root_screenshot_review": {
+    "stage": "Post-settlement landing page",
+    "shows_final_grade": false,
+    "note": "Root visually inspected the saved screenshot. B completion comes from the prior visible UI observation and successful authoritative report event, not this image."
+  },
+  "authority_event_log_artifact": "docs/verification/agent-P02-events.jsonl"
+}

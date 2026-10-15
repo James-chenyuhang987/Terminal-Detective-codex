@@ -8,18 +8,18 @@ import {
 } from '@/game/specialtySystem';
 
 // 专长槽属性面板 — 基础属性只读 + 专长方向内分配 20 点
-function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChange }) {
+function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChange, disabled = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const color = noirColor(meta.color);
   const cap = ATTR_MAX[meta.key];
   const effective = Math.min(base + bonus, cap);
-  const canInc = isSpecialty && !locked && bonus < maxBonus;
-  const canDec = isSpecialty && bonus > 0;
-  const disabled = !isSpecialty || (locked && bonus === 0);
+  const canInc = isSpecialty && !disabled && !locked && bonus < maxBonus;
+  const canDec = isSpecialty && !disabled && bonus > 0;
+  const muted = !isSpecialty || (locked && bonus === 0);
 
   const btn = (enabled, onClick, symbol) => (
-    <button className="td-icon-button" disabled={!enabled} aria-label={`${symbol === '+' ? (zh ? '增加' : 'Increase') : (zh ? '减少' : 'Decrease')} ${zh ? meta.labelZh : meta.label}`} onClick={enabled ? onClick : undefined} style={{
+    <button type="button" className="td-icon-button" disabled={!enabled} aria-label={`${symbol === '+' ? (zh ? '增加' : 'Increase') : (zh ? '减少' : 'Decrease')} ${zh ? meta.labelZh : meta.label}`} onClick={enabled ? onClick : undefined} style={{
       width: 30, height: 30, borderRadius: 5,
       border: `1px solid ${enabled ? color + '60' : 'rgba(255,255,255,0.08)'}`,
       background: enabled ? `${color}18` : 'rgba(255,255,255,0.02)',
@@ -32,7 +32,7 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
   );
 
   return (
-    <div style={{ marginBottom: 13, opacity: disabled && !isSpecialty ? 0.6 : 1 }}>
+    <div style={{ marginBottom: 13, opacity: muted && !isSpecialty ? 0.6 : 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
         <div>
           <div style={{ fontSize: '0.48rem', fontWeight: 700, color, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
@@ -46,7 +46,7 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
           {isSpecialty && btn(canDec, () => onChange(bonus - 1), '−')}
           <div style={{ minWidth: 52, textAlign: 'center', fontFamily: 'monospace' }}>
             <span style={{ fontSize: '0.78rem', fontWeight: 900, color, textShadow: 'none' }}>
-              {meta.isPercent ? `${effective}%` : effective}
+              {effective}
             </span>
             {isSpecialty && bonus > 0 && (
               <span style={{ fontSize: '0.44rem', color: '#8aaa91', marginLeft: 3 }}>+{bonus}</span>
@@ -76,7 +76,7 @@ function SpecAttrRow({ meta, base, bonus, isSpecialty, locked, maxBonus, onChang
   );
 }
 
-export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agentColor: legacyColor, attributeBonus = {} }) {
+export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agentColor: legacyColor, attributeBonus = {}, disabled = false }) {
   const agentColor = noirColor(legacyColor);
   const { lang } = useLang();
   const zh = lang === 'zh';
@@ -113,6 +113,10 @@ export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agent
         </div>
       </div>
 
+      <p style={{ font: '10px/1.6 monospace', color: '#9cb7bd', marginBottom: 12 }}>{zh
+        ? '数值为能力点数。手动调查中，逻辑 / 观察 / 黑客提供专业分析与首检优惠；抗干扰可配合幽灵协议减少危机混乱；行动折扣属性用于旧版自动调查，不直接降低手动核验的报价。'
+        : 'Values are ability points. In manual investigations, Logic, Observation and Hack enable analysis and first-check benefits. Anti-Chaos can activate Ghost Protocol against crisis confusion. AP Discount applies to legacy automatic investigation, not manual-check quotes.'}</p>
+
       {/* budget bar */}
       <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', marginBottom: 14 }}>
         <div style={{
@@ -131,6 +135,7 @@ export default function SpecialtyAttrPanel({ agentIdx, spec, onSpecChange, agent
             base={Math.min(ATTR_MAX[meta.key], def.base_attrs[meta.key] + (Number(attributeBonus?.[meta.key]) || 0))}
             bonus={isSpecialty ? (spec?.[meta.key] || 0) : 0}
             isSpecialty={isSpecialty}
+            disabled={disabled}
             locked={locked}
             maxBonus={maxBonusFor(agentIdx, spec, meta.key, attributeBonus)}
             onChange={(v) => onSpecChange({ ...spec, [meta.key]: Math.max(0, v) })}

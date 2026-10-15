@@ -4,36 +4,38 @@
 
 **在线体验：** [terminal-detective-codex.terminal-detective.workers.dev](https://terminal-detective-codex.terminal-detective.workers.dev/)
 
-## 核心玩法
+## 核心玩法：现场调查版本 2
 
 ```text
-购买与编组探员 → 选择案件 → 回合调查 → 审讯与证据连线
-       ↑                                      ↓
-       └──── 奖励、升级、科技与装备 ← 结案报告 ┘
+编组探员 → 选择案件 → 免费观察现场 → 自选核验对象、方法与探员
+    ↑                                      ↓
+奖励与成长 ← 四维证据报告 ← 专属操作、证据对峙与关系推理
 ```
 
-1. **编组探员**：从探员市场招募支援或高级核心探员，配置主探员、技能、行动顺序、指挥学说和应急预案。
-2. **调查案件**：八个案件拥有独立场景、人物、线索图谱和真相；玩家在每回合选择执行探员与行动方案。
-3. **判断选项**：探员能力决定选项质量、行动效果，以及“事实贴近度”估算的准确性；高评分是探员预测，不是系统直接公布的答案。
-4. **指挥行动**：使用指挥点发动联合行动、战术预演或紧急稳态；关键回合会播放可跳过的轻量 3D 情节演示。
-5. **推理取证**：通过选项式审讯发现矛盾，将已取得的线索连接成证据链；NOVA 助理只根据公开信息提供非剧透提示。
-6. **提交报告**：选择核心结论、作案方式、动机、时间线和支持证据，由服务端规则给出 S–D 评级。
-7. **持续成长**：案件奖励会推进侦探等级、探员经验、等级之路、成就、科技、仓库和货币系统。
+1. **走进现场**：八个案件各有8个具名物件、3名分区人物和1个条件隐藏对象。3D与文字模式共享进度；WASD/方向键移动、按住R疾跑、E交互，触屏有方向按钮。
+2. **主动核验**：观察、放大、旋转与开放通道往返免费；核验前选择方法和探员并查看费用。基础核验1 AP、1回合，正确方法稳定取得关键证据，能力影响减免与补充反馈。
+3. **拆解证词**：温和询问、明确追问、匹配证据对峙产生不同反应，每名NPC有两次专属事实进展；无辜者用证据澄清，不统一认罪。
+4. **建立推理**：两条证据选择“支持、矛盾、先后关系”，形成可读命题。每案另有时间排序、并列比对或路线重建操作，服务端判定结果。
+5. **提交报告**：为机会、手段、动机、时间线分别附完整支持链。结论或证据不足可修改；C为完整报告，B另需专属操作，A另需排除两种替代解释，S另需独立隐藏旁证。
+6. **结算成长**：首次通过的报告结束该运行，服务端结算一次奖励、探员经验与成就；若想取得更高评级，应在提交前完成额外调查。
+
+已付费旧案件属于**调查版本1**，继续使用旧随机取证、选项式审讯、无关系类型连线与旧报告评分，不在刷新时强行改为新版。服务端支持版本2时，新客户端开局显式请求新版；省略内容版本仍创建版本1。档案权威协议继续是`authority_version: 1`。
 
 ## 主要游戏规则
 
 | 系统 | 规则摘要 |
 | --- | --- |
-| 案件与体力 | 当前共 8 个案件；`NORMAL / HARD / OMEGA` 开始调查分别消耗 10 / 15 / 20 体力。 |
-| 回合资源 | 行动消耗 AP；错误判断、陷阱和高压审讯会增加混乱；混乱过高会提高调查风险。 |
-| 探员能力 | 观察影响搜索与法证，黑客影响数字入侵，逻辑与抗干扰影响审讯、证据对峙和事实判断。 |
-| 指挥系统 | 指挥点只在当前案件生效，可用于联合行动、战术预演和紧急稳态，不属于永久货币。 |
-| 线索安全 | 浏览器只接收已经公开的线索；隐藏线索、真实相关度和案件答案只存在于服务端规则中。 |
-| 审讯 | 先选择执行探员，再从三个问题中选择一个；新证据会解锁矛盾追问与证据对峙。 |
-| 结案评级 | `C` 级及以上视为结案成功；`D` 级表示核心结论错误，但仍会获得有限的过程经验。 |
-| 奖励防重 | 每个 `run_id` 只结算一次，避免刷新、重试或重复提交带来重复货币与经验。 |
+| 案件与体力 | 共8案；`NORMAL / HARD / OMEGA`开局消耗10 / 15 / 20体力，既有付费与奖励协议不变。 |
+| 回合资源 | 新版基础核验、证词推进与专属操作消耗AP；错误方法、错误推理、高压审讯及危机会影响资源、混乱与信誉。 |
+| 关键证据 | 正确核验稳定取证；错选允许重试，已完成物件免费复查，危机不会永久销毁新版唯一主线原件。 |
+| 探员能力 | 观察、黑客、逻辑和抗干扰仍影响专业反馈、费用减免与对话反应；匹配证据的核心进展不被能力概率封死。 |
+| 指挥系统 | 指挥点只在当前案件生效；新版支持紧急稳态，旧版保留联合行动、战术预演等回合策略。 |
+| 审讯与推理 | 新版按人物当前阶段选问题，取得材料后证据对峙；连线明确选择关系并保留已确认命题。 |
+| 结案评级 | 新版C及以上通过并结束运行，D保持可调查、可修正；已结案不能原地继续提高评级。旧版付费运行保留原C–D规则。 |
+| 奖励防重 | 每个`run_id`只结算一次，换案须确认放弃和结算，避免恢复旧案或再次扣费。 |
+| 秘密边界 | 正确方法、未来证词、操作答案、报告支持映射及隐藏奖励只在服务端；浏览器接收观察材料和已确认事实。 |
 
-常规调查不调用生成式 AI。探员思考、行动叙述和 NOVA 提示由本地双语表达库即时生成；敏感裁定由 Cloudflare Worker 中的确定性规则完成，因此不消耗模型积分。
+常规调查不调用生成式AI。公开表现由本地双语表达库生成，敏感裁定由Cloudflare Worker中的确定性规则完成。完整版本接口、八案通关记录和未执行的新人试玩模板见[调查版本2说明](docs/investigation-v2.md)。
 
 ## 技术架构
 
@@ -60,7 +62,7 @@ Cloudflare D1
 | React 18 | 游戏界面、状态交互、抽屉与调查终端。 |
 | Vite 8 | 本地开发、生产构建、懒加载和 Cloudflare 静态资源输出。 |
 | Tailwind CSS + 自定义 CSS | 响应式布局、赛博朋克视觉、动效与移动端适配。 |
-| Three.js + React Three Fiber + Drei | 按需加载的调查回合 3D 情节演示。 |
+| Three.js + React Three Fiber + Drei | 可探索的3D调查现场、人物与物件交互，以及按需加载的情节演示。 |
 | 本地 Narrative Engine | 确定性生成双语战术思考、行动演出和提示，不请求模型。 |
 
 ### 后端核心技术
@@ -166,7 +168,7 @@ Worker 不接受客户端提交的 UID。它从 ID Token 读取用户身份，�
 | `GET /api/apps/:appId/entities/User/me` | Firebase ID Token | 读取当前 Token UID 对应的账户和档案。 |
 | `POST /api/apps/:appId/functions/playerProfile` | Firebase ID Token | `claim_session`、`status` 和幂等 `command`；档案 owner 只取自服务端验证后的 Token UID。 |
 | `POST /api/apps/:appId/functions/playerRun` | Firebase ID Token | 已付费案件的 `status` 与白名单 `command`；服务端验证会话、运行 owner、revision 和业务状态。 |
-| `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID Token | 执行白名单内的确定性案件规则。 |
+| `POST /api/apps/:appId/functions/detectiveRules` | Firebase ID Token | 已退休：登录后返回 `410 STATELESS_RULES_RETIRED`，引导使用已付费案件的 `playerRun`；未登录仍为 `401`。 |
 
 所有 `/api/*` 未知路径直接返回 JSON 404，不会回退到 SPA。未知服务端故障只向玩家返回匿名 `TD-XXXXXXXXXX` 故障编号；原始异常只写入 Worker 日志。
 
@@ -204,7 +206,7 @@ Worker 不接受客户端提交的 UID。它从 ID Token 读取用户身份，�
 1. Worker 入口是 `cloudflare/worker/index.js`，所有 `/api/*` 请求都会优先进入这里。
 2. `cloudflare/worker/auth.js` 使用 Firebase 公钥验证浏览器提交的 ID Token，确认签名、项目、有效期、UID 和邮箱验证状态。
 3. `cloudflare/worker/profile.js` 处理玩家档案；数据库目标只能来自已验证 Token 的 Firebase UID，客户端不能指定另一个玩家。
-4. `server/detectiveRules/` 保存案件秘密和确定性裁定规则，由 Wrangler 打包进 Worker，不会进入浏览器的 `dist/`。
+4. `server/detectiveRules/`保留版本1裁定；`server/investigationV2/`保存新版对象、证词、关系、报告支持与操作答案。两者由Wrangler打包进Worker，不进入浏览器的`dist/`。
 5. Worker 通过名为 `DB` 的 binding 访问 Cloudflare D1。D1 保存玩家档案、货币、探员和调查进度。
 6. 未命中的 `/api/*` 请求直接返回 404，不会回退到静态页面或旧后端。
 
@@ -216,7 +218,7 @@ Firebase 在这套架构中只负责身份认证，不保存游戏档案；Cloud
 | --- | --- | --- |
 | `src/`、`public/` | `dist/` 静态文件 | Cloudflare Static Assets/CDN |
 | `cloudflare/worker/` | Worker 服务代码 | Cloudflare Workers Runtime |
-| `server/detectiveRules/` | 合并进 Worker 的规则代码 | Cloudflare Workers Runtime |
+| `server/detectiveRules/`、`server/investigationV2/` | 合并进Worker的分版本规则及私有内容 | Cloudflare Workers Runtime |
 | `cloudflare/migrations/` | D1 表结构变更脚本 | 只有显式执行 migration 才会进入 D1 |
 | Firebase 控制台配置 | 登录方式和 OAuth Provider | Firebase Authentication |
 
@@ -244,12 +246,15 @@ Firebase 在这套架构中只负责身份认证，不保存游戏档案；Cloud
 | 内容库 | 仓库中的来源 | 生产环境中的存储位置 | 更新方式 |
 | --- | --- | --- | --- |
 | 双语表达库 | `src/game/narrativeEngine.js`、`src/game/caseNarrativeLibrary.js` | 通用行动句式与八案专属开场、阶段推进、区域氛围分开维护；经 Vite 编译为带内容哈希的浏览器 JS，存放在 Worker Static Assets 中 | 修改语料并通过测试后执行 `npm run cloudflare:deploy` |
-| 公开案件资料库 | `src/game/caseData.js`、`caseDataExtra.js`、`caseDataExpansion.js` | 编译到前端静态资源；只包含可向玩家公开的场景、人物、区域和线索描述 | 新增或修改案件后重新构建并部署 Worker |
+| 公开案件资料库 | `src/game/caseData.js`、`caseDataExtra.js`、`caseDataExpansion.js`；`scripts/browser-case-projection.mjs`负责浏览器投影 | Vite保留场景、人物、区域和线索ID等目录信息，词条名统一为“待核验证据”，权重统一为`MEDIUM`，移除未发现证据描述与正确关系解释；已取得真实词条和描述通过权威`revealed_clues`返回。Node/Worker继续读取原始版本1目录 | 新增或修改案件后重新构建，运行完整生产包秘密检查，再部署Worker |
 | 服务端案件秘密库 | `server/detectiveRules/caseSecrets.js` | 由 Wrangler 打包进 Cloudflare Worker 代码，不进入 `dist`，浏览器无法直接下载 | 修改后执行安全测试和 `npm run cloudflare:deploy` |
-| 确定性裁定规则库 | `server/detectiveRules/rules.js` | 与 Worker API 一起部署，在服务端处理决策、审讯、连线和报告评分 | 修改规则后重新部署 Worker，不需要重建 D1 表结构 |
+| 旧版确定性裁定库 | `server/detectiveRules/rules.js` | 版本1已付费运行的决策、审讯、连线和报告评分继续在服务端执行 | 修改兼容代码后重新部署Worker，不需要重建D1表结构 |
+| 新版调查内容与规则 | `server/investigationV2/content.js`、`rules.js` | 八案私有方法、证词、支持链、隐藏奖励与服务端核验，不进入浏览器产物 | 部署Worker；现有`run_json`保存版本2状态，无新增D1迁移 |
 | 玩家档案与设备会话 | `cloudflare/migrations/` 定义表结构 | Cloudflare D1 数据库 `terminal-detective-prod`，账号主键为 Firebase UID | 仅在表结构变化时执行 D1 migration；普通代码部署不会清空玩家数据 |
 | 图片与 3D 道具库 | `public/assets/` | 构建后进入 `dist/assets/`，由 Worker Static Assets/CDN 分发 | 添加素材、登记许可并重新部署；运行时不依赖外部素材 CDN |
 | 第三方程序库 | `package.json`、`package-lock.json` | 前端依赖进入按需 JS 分块；Worker 依赖进入 Worker bundle | 使用 `npm ci` 锁定版本，升级依赖后重新测试和部署 |
+
+结案档案的关系图通过服务端只读`archive_clue_labels`恢复已发现证据的双语名称，只包含档案记载的已取得ID，不提供未发现词条、证据描述或未来答案。该显示投影不写回付费运行、档案存储或待重试命令，也不改变旧案判定规则。
 
 行动叙事为十二种合法调查行动各维护至少五组中英文语义配对场景，并按开场、追索、升级、收束四个阶段追加案件节奏；模板选择由案件、回合和行动种子确定，不读取服务端秘密。3D 行动演出为每种行动提供两套程序化几何、镜头和运动组合，共二十四套确定性变体；变体按事件 ID 选择，继续遵守画质设置、减少动态效果、数据节省、WebGL 检测和 2D 降级策略。
 
@@ -261,13 +266,13 @@ src/game/narrativeEngine.js ├─ Vite build ─ dist/ ─ Worker Static Assets
 src/game/caseNarrativeLibrary.js ┤
 public/assets/ ─────────────┘
 
-server/detectiveRules/ ─ Wrangler bundle ─ Cloudflare Worker API
+server/detectiveRules/、server/investigationV2/ ─ Wrangler bundle ─ Cloudflare Worker API
 
 cloudflare/migrations/ ─ 显式执行 migration ─ Cloudflare D1
 ```
 
 - 表达库在浏览器本地运行，负责呈现气氛、探员思考和行动叙述，因此其中只能使用玩家已经可以知道的信息。
-- 案件答案、真实事实贴近度、正确报告选项和 NPC 深层秘密只能放在 `server/detectiveRules/`，禁止从 `src/` 或 `public/` 导入。
+- 案件答案、真实事实贴近度、正确报告选项和 NPC 深层秘密只能放在服务端的`server/detectiveRules/`或`server/investigationV2/`，禁止从 `src/` 或 `public/` 导入。
 - D1 保存会变化的账号、进度、货币和档案；这些数据不会写进静态文件，也不会因为发布新版前端或规则库而被覆盖。
 - GitHub Client Secret 等凭据不属于内容库，只能保存在 Firebase Authentication Provider 配置中，不能写进仓库或任何 `VITE_` 变量。
 
@@ -392,7 +397,7 @@ Firebase 默认认证邮件的共享发件基础设施、发送信誉和收件�
 - 每次档案操作先写入按完整 Firebase UID、operation ID 和 lineage 隔离的指令回执，服务端再验证并计算结果，通过 D1 操作账本和版本 CAS 原子更新；跨标签页分叉会失败关闭，重复请求不会重复结算。
 - GitHub 优先使用 Firebase 弹窗授权，受限浏览器自动降级到 Firebase redirect；游戏页面不再承担 OAuth callback。
 - 登录前会核对前后端 Firebase Project ID、D1 binding 和必要表字段；`/api/cloudflare/status` 未就绪时返回 `503`，不会伪报成功。
-- 规则与档案接口均要求有效 Firebase Bearer Token；规则接口拒绝客户端身份字段、原型污染键和异常深层数据；401 只强制刷新并重试一次，未知 API 路由不会代理到旧后端。
+- 案件与档案接口均要求有效 Firebase Bearer Token；案件操作由 `playerRun` 验证已付费运行、会话、已发现材料及 revision。无状态 `detectiveRules` 公网接口已退休，无法通过伪造线索或能力查询秘密；版本1私有裁定和结算继续保留。401 只强制刷新并重试一次，未知 API 路由不会代理到旧后端。
 - 项目默认忽略 `.mcp.json`、`.claude/`、`.cursor/`、私钥和本地环境文件；需要引入项目级自动执行配置时必须先人工审核。
 - 依赖版本使用精确锁定，`.npmrc` 固定官方 npm registry；`npm run security:check` 会检查隐藏执行配置、常见密钥痕迹和锁文件下载域名。
 - 项目不依赖 Base44，也不调用 `InvokeLLM` 或其他生成式 AI 模型。
@@ -402,7 +407,9 @@ Firebase 默认认证邮件的共享发件基础设施、发送信誉和收件�
 ```text
 cloudflare/worker/          Worker 路由、Firebase Token 校验和档案 API
 cloudflare/migrations/      D1 数据库迁移
-server/detectiveRules/      服务端案件秘密与确定性规则
+server/detectiveRules/      版本1服务端案件秘密与确定性规则
+server/investigationV2/     版本2现场对象、专属证词、推理与报告裁定
+docs/investigation-v2.md    新版协议、玩法与自动通关/新人试玩模板
 src/components/game/        首页、大厅、调查终端、结算和功能模块
 src/game/                   游戏状态、经济、探员、案件与表达引擎
 src/game/profileCommands.js 按 UID/operation/lineage 隔离的权威指令回执

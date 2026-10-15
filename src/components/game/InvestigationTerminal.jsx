@@ -58,15 +58,29 @@ import {
 import { applyStaminaToTeam, canAgentInvestigate } from '@/game/agentStamina';
 import Icon, { IconText } from '@/components/ui/Icon';
 import { noirColor } from '@/components/ui/palette';
+import InvestigationFieldPanel from '@/components/game/investigation/InvestigationFieldPanel';
+import { REPORT_DIMENSIONS, reportEvidenceIds, selectAutomaticInvestigationCard, overlayKnownClueZones } from '@/game/investigationChoices';
 
 const LazyActionCinematic = React.lazy(loadActionCinematic);
 
 const PHASE_COLORS = Phase_Color_Map;
 
+const reportOptionsFromResponse = response => {
+  // Replays retain the original options but attach the latest saved run.
+  // Its current allowance and prices take precedence over the old offer.
+  const policy = response.run?.investigation?.report_policy;
+  return response.result && response.run?.investigation_version === 2 && policy?.balance_revision === 2
+    ? { ...response.result, report_policy: policy } : response.result;
+};
+
 export default function InvestigationTerminal({ agentStrategy, authoritativeRun = null, selectedCase, onGameEnd, onBackToLobby, onSettlement, onOpenHome, presentationActive = true, narrativeBriefed = false }) {
   const { lang, t } = useLang();
   const { sessionId, account } = useProfile();
   const [serverRun, setServerRun] = useState(authoritativeRun);
+  const investigation = serverRun?.investigation || null;
+  const investigationV2 = serverRun?.investigation_version === 2;
+  const [fieldTargetId, setFieldTargetId] = useState(null);
+  const [fieldDeskOpen, setFieldDeskOpen] = useState(true);
   const [authorityReady, setAuthorityReady] = useState(false);
   const [authorityError, setAuthorityError] = useState(null);
   const [authorityLoading, setAuthorityLoading] = useState(false);
@@ -88,6 +102,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const theaterSpatialRef = useRef({ arrived: narrativeBriefed });
   const dialogueSequenceRef = useRef(0);
   const closedDialogueRef = useRef(0);
+  const dialogueLanguageRef = useRef(lang);
   const recoveryPresentationRef = useRef(null);
   const pendingQuestionPresentationRef = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -101,6 +116,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     const revealed = new Map((serverRun?.state?.revealed_clues || []).map(clue => [clue.clue_id, clue]));
     return {
       ...localized,
+      zone_clue_map: investigation ? overlayKnownClueZones(localized.zone_clue_map, investigation.clue_zones) : localized.zone_clue_map,
+      npcs: localized.npcs.map(npc => ({ ...npc, initial_statement: investigation?.initial_statements?.[npc.npc_id]?.[lang] || npc.initial_statement })),
       clue_dictionary: localized.clue_dictionary.map(clue => {
         const confirmed = revealed.get(clue.clue_id);
         if (!confirmed) return clue;
@@ -109,10 +126,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           keyword: lang === 'en' ? confirmed.en?.keyword || confirmed.keyword : confirmed.keyword,
           description: lang === 'en' ? confirmed.en?.description || confirmed.description : confirmed.description,
           visual_icon: confirmed.visual_icon,
+          weight: confirmed.weight || clue.weight,
         };
       }),
     };
-  }, [caseDataResolved, lang, serverRun]);
+  }, [caseDataResolved, lang, serverRun, investigation]);
   // 本地表达库与确定性规则的语言跟随界面语言。
   useEffect(() => { setInvestigationLang(lang); }, [lang]);
 
@@ -138,7 +156,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const [showBSoD, setShowBSoD] = useState(false);
   const [reportMode, setReportMode] = useState(false);
   const [reportOptions, setReportOptions] = useState(null);
-  const [structuredReport, setStructuredReport] = useState({ conclusionId: '', methodId: '', motiveId: '', timelineId: '', evidenceIds: [] });
+  const [structuredReport, setStructuredReport] = useState({ conclusionId: '', methodId: '', motiveId: '', timelineId: '', evidenceIds: [], evidenceByDimension: {} });
   const [reportError, setReportError] = useState(null);
   const [judgeResult, setJudgeResult] = useState(null);
   const [selectedNPC, setSelectedNPC] = useState(null);
@@ -213,6 +231,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
 
   const commitServerRun = useCallback((run) => {
     setServerRun(run);
+    if (run.investigation_version === 2 && run.investigation?.report_policy?.balance_revision === 2) {
+      // Every authoritative snapshot carries the current allowance and prices.
+      // Preserve loaded choices and drafts without creating another offer/revision.
+      setReportOptions(options => options ? { ...options, report_policy: run.investigation.report_policy } : options);
+    }
     gameStateRef.current = run.state;
     setGameState(run.state);
     setLinkedPairs(run.linked_pairs);
@@ -311,9 +334,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     setReportOptions(null);
     setReportError(null);
     executeRunCommand({ type: 'report_options' })
-      .then(response => response.result)
-      .then(options => {
-        if (!cancelled) setReportOptions(options);
+      .then(response => {
+        if (!cancelled) setReportOptions(reportOptionsFromResponse(response));
       })
       .catch(error => {
         if (!cancelled && error?.name !== 'AbortError') {
@@ -625,7 +647,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           || Object.keys(packs)[0];
         const preferredPack = packs[preferredAgentId]
           || eligibleAutomaticAgents.map(agent => packs[agent.agent_id]).find(pack => pack?.cards?.length);
-        const automaticCard = preferredPack?.cards?.[0];
+        const automaticCard = selectAutomaticInvestigationCard(preferredPack?.cards, gameStateRef.current.priority_list || configuredAgentStrategy.priority_list);
         if (!automaticCard) throw new Error('No server-issued investigation option is available.');
         actionTag = automaticCard.actionTag || automaticCard.action_tag || 'search_area';
         chosenExecutorId = preferredAgentId || null;
@@ -778,10 +800,12 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     const state = gameStateRef.current;
     const runtimeTeam = applyStaminaToTeam(configuredAgentStrategy.team, state.agent_stamina);
     const primary = runtimeTeam.find(agent => agent.agent_id === configuredAgentStrategy.primary_agent_id);
-    const executor = (primary && canAgentInvestigate(primary.stamina, false) ? primary : null)
-      || runtimeTeam.find(agent => canAgentInvestigate(agent.stamina, false));
+    const executor = (primary && canAgentInvestigate(primary.stamina, investigationV2) ? primary : null)
+      || runtimeTeam.find(agent => canAgentInvestigate(agent.stamina, investigationV2))
+      || (investigationV2 && investigation?.testimony_stages?.[npc.npc_id] >= 2 ? runtimeTeam[0] : null);
     if (selectedNPC) handleNPCDialogueClose();
     dialogueSequenceRef.current += 1;
+    dialogueLanguageRef.current = lang;
     setSelectedNPC(npc);
     setNpcDialogue([{ role: 'system', text: `— ${npc.name} ${t.npcEnters} —\n"${npc.initial_statement}"` }]);
     setNpcQuestionPacks(null);
@@ -815,7 +839,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     const theaterAtQuestion = theaterMode;
     const state = gameStateRef.current;
     const staminaAgent = configuredAgentStrategy.team.find(agent => agent.agent_id === npcExecutorId);
-    if (!staminaAgent || !canAgentInvestigate(state.agent_stamina?.[npcExecutorId], false)) {
+    if (!staminaAgent || !(investigationV2 ? question.available && (question.stamina_cost === 0 || canAgentInvestigate(state.agent_stamina?.[npcExecutorId], true)) : canAgentInvestigate(state.agent_stamina?.[npcExecutorId], false))) {
       setNpcQuestionError(lang === 'zh'
         ? '该探员体力不足 10%，请更换探员或返回行动界面整备。'
         : 'THIS AGENT HAS LESS THAN 10% STAMINA. SWITCH AGENTS OR RECOVER FROM THE ACTION SCREEN.');
@@ -859,7 +883,14 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
         dispatchNarrative({ type: 'close', runId: state.run_id, dialogueId });
         return;
       }
-      if (result.packs) {
+      if (run.pending_crisis) {
+        setNpcQuestionPacks({});
+        setNpcQuestionError(lang === 'zh'
+          ? '本次提问已经保存。请先处理现场危机，之后关闭并重新打开对话继续。'
+          : 'Your answer was saved. Resolve the field crisis, then close and reopen the dialogue to continue.');
+        return;
+      }
+      if (result.packs && !investigationV2) {
         setNpcQuestionPacks(result.packs);
         return;
       }
@@ -899,6 +930,24 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     setNpcQuestionError(null);
   };
 
+  useEffect(() => {
+    if (!selectedNPC || dialogueLanguageRef.current === lang || !authorityReady || authorityLoading || isProcessing || crisisPending) return undefined;
+    let cancelled = false;
+    const npc = caseData.npcs.find(item => item.npc_id === selectedNPC.npc_id);
+    if (!npc) return undefined;
+    setSelectedNPC(npc);
+    setNpcQuestionPacks(null);
+    setNpcQuestionError(null);
+    // Historical dialogue remains a record in its original language; new offers
+    // are always localized afresh and bound to the latest server revision.
+    executeRunCommand({ type: 'interrogation_options', npc_id: npc.npc_id }).then(response => {
+      if (!cancelled) { dialogueLanguageRef.current = lang; setNpcQuestionPacks(response.result.packs || {}); }
+    }).catch(error => {
+      if (!cancelled && error?.name !== 'AbortError') setNpcQuestionError(lang === 'zh' ? '请关闭对话后重新读取当前语言的选项。' : 'Close and reopen the dialogue to reload localized options.');
+    });
+    return () => { cancelled = true; };
+  }, [lang, selectedNPC?.npc_id, authorityReady, authorityLoading, isProcessing, crisisPending, executeRunCommand]);
+
   const presentRecoveredResponse = async (response) => {
     const command = response.recovered_command;
     if (!command) return;
@@ -934,18 +983,30 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
         dispatchNarrative({ type: 'close', runId: response.run.id, dialogueId });
         return;
       }
-      if (result.packs) {
+      if (response.run.pending_crisis) {
+        setNpcQuestionPacks({});
+        setNpcQuestionError(lang === 'zh'
+          ? '本次提问已经保存。请先处理现场危机，之后关闭并重新打开对话继续。'
+          : 'Your answer was saved. Resolve the field crisis, then close and reopen the dialogue to continue.');
+        return;
+      }
+      if (result.packs && !investigationV2) {
         setNpcQuestionPacks(result.packs);
         return;
       }
       const refreshed = await executeRunCommand({ type: 'interrogation_options', npc_id: npc.npc_id });
       if (closedDialogueRef.current < dialogueId) setNpcQuestionPacks(refreshed.result.packs || {});
     } else if (command.type === 'interrogation_options') {
-      if (selectedNPC?.npc_id === command.npc_id) setNpcQuestionPacks(result.packs || {});
+      if (selectedNPC?.npc_id === command.npc_id) {
+        if (response.run.investigation_version === 2) {
+          const refreshed = await executeRunCommand({ type: 'interrogation_options', npc_id: command.npc_id });
+          setNpcQuestionPacks(refreshed.result.packs || {});
+        } else setNpcQuestionPacks(result.packs || {});
+      }
     } else if (command.type === 'report_options') {
-      if (reportMode) setReportOptions(result);
+      if (reportMode) setReportOptions(reportOptionsFromResponse(response));
     } else {
-      const text = result.settlement?.action_narration || result.reveal || result.resultText;
+      const text = result.settlement?.action_narration || result.narration || result.reveal || result.resultText;
       if (text) addLine(text, 'narration');
     }
   };
@@ -959,7 +1020,12 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       if (result.resultText) addLine(`\n🚨 ${result.resultText}`, 'system');
       if (result.changes?.reopen_npc) {
         const npc = caseData.npcs.find(n => n.npc_id === result.changes.reopen_npc);
-        if (npc) await handleNPCTalk(npc);
+        if (npc) {
+          const npcZone = investigation?.npc_zones?.[npc.npc_id];
+          if (investigationV2 && npcZone !== gameStateRef.current.current_zone) {
+            notifyCommand(lang === 'zh' ? `请前往${caseData.scene?.zones?.[npcZone]?.label || npcZone}与${npc.name}核对陈述。` : `Visit ${caseData.scene?.zones?.[npcZone]?.label || npcZone} to check ${npc.name}'s account.`);
+          } else await handleNPCTalk(npc);
+        }
       }
     } catch (error) {
       setCrisisError(error.confirmed ? publicErrorMessage(error, lang) : runRecoveryMessage(error, lang));
@@ -976,19 +1042,21 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   };
 
   // ── 推理连线：受保护的确定性规则判定 ─────────────────────────────────────
-  const handleLink = async (aId, bId) => {
+  const handleLink = async (aId, bId, relation = 'supports') => {
     const clueA = caseData.clue_dictionary.find(c => c.clue_id === aId);
     const clueB = caseData.clue_dictionary.find(c => c.clue_id === bId);
     if (!authorityReady || !clueA || !clueB || isLinkChecking || isProcessing || abortCtrlRef.current
       || finalizingRef.current || crisisPendingRef.current) return;
+    if (selectedNPC) handleNPCDialogueClose();
     const { ctrl, operationId } = beginAbortableOperation();
     setIsLinkChecking(true);
     setIsProcessing(true);
     try {
-      const { result, run } = await executeRunCommand({ type: 'link', clue_ids: [aId, bId] });
+      const { result, run } = await executeRunCommand({ type: 'link', clue_ids: [aId, bId], ...(investigationV2 ? { relation_type: relation } : {}) });
       if (!isOperationCurrent(ctrl, operationId)) return;
       if (result.is_valid) {
         addLine(`\n${t.insightBreak}${clueA.visual_icon} ${clueA.keyword} ⟺ ${clueB.visual_icon} ${clueB.keyword}`, 'success');
+        if (investigationV2) { addLine(result.reveal, 'success'); return; }
         // 规则响应已经包含安全的双语过场，不再发起第二次重复请求。
         const data = {
           ...(result.cinematic || {}),
@@ -1030,7 +1098,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       && structuredReport.methodId
       && structuredReport.motiveId
       && structuredReport.timelineId
-      && evidenceCount >= 1;
+      && evidenceCount >= 1
+      && (!investigationV2 || REPORT_DIMENSIONS.every(key => structuredReport.evidenceByDimension?.[key]?.length));
     if (!authorityReady || !isComplete || isProcessing || abortCtrlRef.current
       || finalizingRef.current || crisisPendingRef.current) return;
     const { ctrl, operationId } = beginAbortableOperation();
@@ -1041,13 +1110,16 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       const { result, run } = await executeRunCommand({
         type: 'report', conclusion_id: structuredReport.conclusionId,
         method_id: structuredReport.methodId, motive_id: structuredReport.motiveId,
-        timeline_id: structuredReport.timelineId, evidence_ids: structuredReport.evidenceIds,
+        timeline_id: structuredReport.timelineId,
+        evidence_ids: investigationV2 ? reportEvidenceIds(structuredReport.evidenceByDimension) : structuredReport.evidenceIds,
+        ...(investigationV2 ? { evidence_by_dimension: structuredReport.evidenceByDimension } : {}),
       });
       if (!isOperationCurrent(ctrl, operationId)) return;
       const judgment = run.judge_result || result;
       setJudgeResult(judgment);
       addLine(`\n${t.judgeVerdict} [${judgment.score}]: ${judgment.critique}`, judgment.is_passed ? 'success' : 'warning');
       if (judgment.branch?.narrative) addLine(`\n${t.narrativeCollapse}${judgment.branch.narrative}`, 'trap');
+      if (judgment.wrong_outcome) addLine(judgment.wrong_outcome, 'warning');
     } catch (err) {
       if (err?.name !== 'AbortError' && isOperationCurrent(ctrl, operationId)) {
         setReportError(err.confirmed ? publicErrorMessage(err, lang) : runRecoveryMessage(err, lang));
@@ -1064,10 +1136,54 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
 
   const handleRunIntent = async (command) => {
     if (!authorityReady || isProcessing || commandInFlightRef.current || finalizingRef.current) return;
+    if (selectedNPC) handleNPCDialogueClose();
     setIsProcessing(true);
     try { await executeRunCommand(command); }
     catch (error) { notifyCommand(error.confirmed ? publicErrorMessage(error, lang) : runRecoveryMessage(error, lang), 'error'); }
     finally { setIsProcessing(false); }
+  };
+
+  const handleFieldCommand = async (command) => {
+    if (!authorityReady || isProcessing || abortCtrlRef.current || commandInFlightRef.current || finalizingRef.current || crisisPendingRef.current) {
+      throw Object.assign(new Error('RUN_REQUEST_BUSY'), { code: 'RUN_REQUEST_BUSY' });
+    }
+    if (selectedNPC) handleNPCDialogueClose();
+    const { ctrl, operationId } = beginAbortableOperation();
+    setIsProcessing(true);
+    const before = gameStateRef.current;
+    try {
+      // Puzzle offers are bound to the latest authoritative revision.
+      if (command.type === 'puzzle') await executeRunCommand({ type: 'puzzle_options' });
+      if (!isOperationCurrent(ctrl, operationId)) throw new DOMException('Run view changed', 'AbortError');
+      const response = await executeRunCommand(command);
+      if (!isOperationCurrent(ctrl, operationId)) throw new DOMException('Run view changed', 'AbortError');
+      const confirmedTurn = response.run.state.turn_count;
+      activeTerminalTurnRef.current = confirmedTurn; viewedTerminalTurnRef.current = confirmedTurn;
+      setActiveTerminalTurn(confirmedTurn); setViewedTerminalTurn(confirmedTurn);
+      if (response.result.narration) addLine(response.result.narration, 'narration');
+      const discovered = response.run.state.unlocked_clues.filter(id => !before.unlocked_clues.includes(id));
+      if (discovered.length) {
+        setNewClueIds(prev => [...new Set([...prev, ...discovered])]);
+        schedule(() => setNewClueIds(prev => prev.filter(id => !discovered.includes(id))), 3000);
+      }
+      if (command.type === 'travel') setFieldTargetId(null);
+      return response;
+    } finally {
+      if (activeRunRef.current === operationId) { abortCtrlRef.current = null; setIsProcessing(false); }
+    }
+  };
+
+  const fieldPanel = investigationV2 && investigation && <InvestigationFieldPanel
+    investigation={investigation} gameState={gameState} team={activeAgentStrategy.team} caseData={caseData}
+    targetId={fieldTargetId} onTargetChange={setFieldTargetId} onCommand={handleFieldCommand}
+    busy={interactionLocked} active={authorityReady && !authorityLoading && presentationActive && !showSettings && !showOnboarding && !isFinalizing} />;
+
+  const openInvestigation = () => {
+    if (interactionLocked) return;
+    if (selectedNPC) handleNPCDialogueClose();
+    setReportMode(false);
+    if (investigationV2) { setFieldDeskOpen(value => !value); setFieldTargetId(null); }
+    else void runReActCycle();
   };
 
   const assistantBrief = useMemo(() => buildInvestigationBrief({
@@ -1080,7 +1196,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     hasNewEvidence: newClueIds.length > 0,
     linkedPairs,
     selectedNpcId: selectedNPC?.npc_id || null,
-  }), [caseData, decisionCards, gameState, isProcessing, lang, linkedPairs, newClueIds.length, reportMode, selectedNPC?.npc_id]);
+    investigationVersion: investigationV2 ? 2 : 1,
+    currentGoal: investigation?.current_goal,
+  }), [caseData, decisionCards, gameState, investigation?.current_goal, investigationV2, isProcessing, lang, linkedPairs, newClueIds.length, reportMode, selectedNPC?.npc_id]);
 
   const bgColor = noirColor(phaseColor.bg);
   const accentColor = noirColor(phaseColor.accent);
@@ -1105,6 +1223,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               emotion={getEmotion(npcEmotionState, selectedNPC.npc_id)}
               team={activeAgentStrategy.team}
               error={npcQuestionError}
+              investigationVersion={investigationV2 ? 2 : 1}
+              actionPoints={gameState.action_points_left}
             />
           );
 
@@ -1122,6 +1242,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               isProcessing={interactionLocked}
               judgeResult={judgeResult}
               error={reportError}
+              investigationVersion={investigationV2 ? 2 : 1}
+              actionPoints={gameState.action_points_left}
             />
           );
 
@@ -1149,6 +1271,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               unlockedIds={gameState.unlocked_clues}
               linkedPairs={linkedPairs}
               onLink={handleLink}
+              relationsEnabled={investigationV2}
               isChecking={isLinkChecking || interactionLocked}
               accentColor={accentColor}
             />
@@ -1279,6 +1402,8 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       {showOnboarding && presentationActive && !showSettings && (
         <OnboardingGuide
           accentColor={accentColor}
+          investigationVersion={investigationV2 ? 2 : 1}
+          theaterMode={theaterMode}
           onClose={() => {
             setShowOnboarding(false);
           }}
@@ -1406,7 +1531,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           ))}
         </div>
         <div className="td-investigation-hud-actions flex gap-2">
-          <button type="button" onClick={() => setShowCommandConsole(true)}
+          <button type="button" onClick={() => { if (selectedNPC) handleNPCDialogueClose(); setShowCommandConsole(true); }}
             aria-label={lang === 'zh' ? '打开调查指挥台' : 'Open investigation command'}
             title={lang === 'zh' ? '打开调查指挥台' : 'Open Investigation Command'}
             className="td-ui-button td-command-hud-button td-hud-tool-button text-xs px-3 py-1 rounded border transition-all"
@@ -1478,25 +1603,30 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
           busy={interactionLocked}
           paused={Boolean(narrativeVisible || showSettings || showOnboarding || showCommandConsole || decisionCards || actionCinematic || cinematic || crisis || showBSoD || isFinalizing)}
           selectedNpcId={selectedNPC?.npc_id}
+          speakerNpcId={investigationV2 ? (npcDialogue.at(-1)?.role === 'npc' ? selectedNPC?.npc_id : null) : undefined}
           npcEmotionLevels={Object.fromEntries(caseData.npcs.map(npc => [npc.npc_id, getEmotion(npcEmotionState, npc.npc_id).level]))}
           quality={settings.cinematicQuality}
           spatialRef={theaterSpatialRef}
           dialoguePanel={dialoguePanel}
           reportPanel={reportPanel}
           toolsPanel={toolsPanel}
+          investigation={investigation}
+          sfxEnabled={settings.sfxEnabled}
+          fieldPanel={fieldPanel}
+          onInspect={id => { setFieldTargetId(id); setFieldDeskOpen(true); }}
           brief={assistantBrief}
           lines={terminalLines}
           streamingText={streamingTerminal?.fullText}
           phase={phaseColor.label}
           canAbort={isProcessing && !isFinalizing && !crisisPending}
           onAbort={handleAbort}
-          onExecute={() => { if (interactionLocked) return; if (selectedNPC) handleNPCDialogueClose(); setReportMode(false); runReActCycle(); }}
+          onExecute={openInvestigation}
           onTalk={npc => { if (interactionLocked) return; setReportMode(false); handleNPCTalk(npc); }}
           onCloseDialogue={handleNPCDialogueClose}
-          onOpenTools={tab => { setToolTab(tab); setMobileToolsOpen(true); }}
+          onOpenTools={tab => { if (selectedNPC) handleNPCDialogueClose(); setToolTab(tab); setMobileToolsOpen(true); }}
           onCloseTools={() => setMobileToolsOpen(false)}
-          onReport={() => { setReportMode(value => !value); setJudgeResult(null); }}
-          onCommand={() => setShowCommandConsole(true)}
+          onReport={() => { if (selectedNPC) handleNPCDialogueClose(); setReportMode(value => !value); setJudgeResult(null); }}
+          onCommand={() => { if (selectedNPC) handleNPCDialogueClose(); setShowCommandConsole(true); }}
           onGuide={() => setShowOnboarding(true)}
           onEnd={() => void handleRunIntent({ type: 'abandon' })}
           onTextMode={() => setSetting('storyMode', 'terminal')}
@@ -1517,7 +1647,9 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
             {visibleTerminalLines.length === 0 && (
               <div className="td-turn-page-empty" style={{ color: accentColor }}>
                 {viewedTerminalTurn === 0
-                  ? (lang === 'zh' ? '系统准备完成。点击下方“执行循环”开始第一回合。' : 'SYSTEM READY. USE EXECUTE CYCLE TO BEGIN TURN ONE.')
+                  ? investigationV2
+                    ? (lang === 'zh' ? '现场调查台已准备。免费观察物件，选择核验方式和执行探员，确认成本后开始调查。' : 'FIELD DESK READY. OBSERVE AN OBJECT FOR FREE, CHOOSE A METHOD AND INVESTIGATOR, THEN CONFIRM THE COST.')
+                    : (lang === 'zh' ? '系统准备完成。点击下方“执行循环”开始第一回合。' : 'SYSTEM READY. USE EXECUTE CYCLE TO BEGIN TURN ONE.')
                   : (lang === 'zh' ? '本回合正在建立记录…' : 'BUILDING THIS TURN RECORD…')}
               </div>
             )}
@@ -1564,18 +1696,19 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
 
           {dialoguePanel}
           {reportPanel}
+          {investigationV2 && fieldDeskOpen && !selectedNPC && !reportMode && <div className="td-v2-terminal-desk">{fieldPanel}</div>}
 
           {/* Action Bar */}
           <div className="td-investigation-actions td-action-dock p-4 border-t flex items-center gap-3 flex-wrap"
             style={{ borderColor: `${accentColor}30`, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <button data-onboarding-target="execute" onClick={runReActCycle} disabled={interactionLocked || gameState.action_points_left <= 0}
+            <button data-onboarding-target="execute" onClick={openInvestigation} disabled={interactionLocked}
               className="td-ui-button td-button-primary px-6 py-2 text-xs font-bold tracking-widest rounded border transition-all disabled:opacity-30"
               style={{
                 borderColor: accentColor, color: accentColor,
                 backgroundColor: `${accentColor}15`,
                 boxShadow: `inset 0 -2px 0 ${accentColor}60`,
               }}>
-              <IconText text={t.executeCycle} />
+              <IconText text={investigationV2 ? (lang === 'zh' ? '现场调查 / 整备' : 'FIELD INVESTIGATION / RECOVER') : t.executeCycle} />
             </button>
             {isProcessing && !isFinalizing && (
               <button onClick={handleAbort} disabled={crisisPending}
@@ -1586,7 +1719,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
             )}
             <button type="button" className="td-ui-button td-button-secondary td-mobile-only px-4 py-2 text-xs rounded border" onClick={() => setMobileToolsOpen(true)} style={{ borderColor: `${accentColor}60`, color: accentColor }}><Icon name="briefcase" /> {lang === 'zh' ? '工具' : 'TOOLS'}</button>
             <div data-onboarding-target="interrogate" className="td-investigation-npc-list flex gap-2 flex-wrap">
-              {caseData.npcs.map(npc => (
+              {caseData.npcs.filter(npc => !investigationV2 || investigation?.npc_zones?.[npc.npc_id] === gameState.current_zone).map(npc => (
                 <button key={npc.npc_id} onClick={() => handleNPCTalk(npc)}
                   disabled={interactionLocked}
                   className="td-ui-button td-npc-chip px-3 py-1 text-xs rounded border transition-all disabled:opacity-30 inline-flex items-center gap-2"

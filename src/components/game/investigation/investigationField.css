@@ -1,0 +1,66 @@
+.td-field-desk { color: #ddd9cc; font: 14px/1.65 system-ui, sans-serif; padding: 18px; max-width: 1040px; margin: auto; }
+.td-field-desk button { min-height: 44px; padding: 9px 13px; border: 1px solid #6d7d7d66; border-radius: 8px; color: inherit; background: #19252c; cursor: pointer; font: inherit; }
+.td-field-desk button:disabled { opacity: .45; cursor: default; }
+.td-field-desk button:focus-visible { outline: 2px solid #d8b97d; outline-offset: 3px; }
+.td-field-desk button[aria-pressed="true"], .td-field-desk button.is-selected { border-color: #d8b97d; background: #3a3427; }
+.td-field-desk h3, .td-field-desk h4 { margin: 0 0 8px; font-weight: 600; }
+.td-field-desk p { margin: 9px 0; }
+.td-field-objective { border-left: 3px solid #c4a269; padding: 4px 16px 14px; }
+.td-field-objective small { color: #c4a269; letter-spacing: .12em; }
+.td-field-objective h3 { font-size: 18px; }
+.td-field-summary, .td-field-agents, .td-field-secondary-actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 15px 0; }
+.td-field-summary span { padding: 4px 10px; background: #101c23; border-radius: 4px; }
+.td-field-objects, .td-field-methods, .td-field-routes { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 16px 0; }
+.td-field-objects button, .td-field-methods button, .td-field-routes button { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; }
+.td-field-objects small, .td-field-methods small, .td-field-routes small { color: #b6bdba; font-size: 12px; }
+.td-field-inspection, .td-field-puzzle { padding: 16px; border: 1px solid #8b9b9766; border-radius: 12px; background: #111b23; }
+.td-field-inspection > header { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.td-object-canvas { height: 220px; border-radius: 10px; overflow: hidden; background: radial-gradient(ellipse, #2c3b43, #11191f); margin: 14px 0; }
+.td-object-view-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.td-object-view-controls span { color: #a3b3ae; font-size: 12px; }
+.td-field-finding, .td-field-notice { padding: 12px; border-left: 2px solid #95b099; background: #15281f; white-space: pre-wrap; }
+.td-field-error { padding: 12px; color: #e2aaa0; background: #342422; }
+.td-puzzle-source { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 9px; margin: 15px 0; }
+.td-field-puzzle ol { padding: 0; list-style: none; counter-reset: node; }
+.td-field-puzzle li { counter-increment: node; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #52666644; padding: 8px 0; }
+.td-field-puzzle li::before { content: counter(node); color: #d8b97d; }
+.td-field-puzzle li span { flex: 1; }
+.td-field-propositions { padding: 15px; border-top: 1px solid #6d7d7d66; }
+.td-dimension-evidence { display: grid; gap: 12px; }
+.td-dimension-evidence fieldset { border: 1px solid #6d7d7d66; padding: 12px; border-radius: 8px; }
+.td-dimension-evidence legend { color: #d8b97d; }
+.td-dimension-evidence .td-evidence-guidance { margin: 4px 0 10px; color: #b4bdb6; font-size: 13px; }
+.td-dimension-evidence .td-evidence-selection { display: grid; gap: 4px; margin: 6px 0 10px; color: #c8cdc5; font-size: 13px; overflow-wrap: anywhere; }
+.td-dimension-evidence .td-evidence-selection strong { color: #a9bf9f; }
+.td-dimension-evidence .td-evidence-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.td-dimension-evidence .td-evidence-options[hidden] { display: none; }
+.td-dimension-evidence button { min-height: 44px; padding: 9px 12px; border: 1px solid #6d7d7d66; border-radius: 7px; color: #d6d9cf; background: #17262c; }
+.td-dimension-evidence .td-evidence-edit-toggle { width: 100%; text-align: left; cursor: pointer; }
+.td-dimension-evidence .td-evidence-edit-toggle[aria-expanded="true"] { border-color: #d8b97d; background: #3a3427; }
+.td-dimension-evidence button.is-selected { background: #354330; border-color: #9bb387; }
+.td-link-relations { display: flex; gap: 6px; flex-wrap: wrap; padding: 9px; }
+.td-link-relations button { min-height: 44px; border: 1px solid #70817f66; border-radius: 6px; padding: 7px 10px; color: #ddd9cc; background: #19252c; }
+.td-link-relations button[aria-pressed="true"] { border-color: #d8b97d; background: #3a3427; }
+.td-v2-terminal-desk { overflow-y: auto; max-height: min(62vh, 700px); border-bottom: 1px solid #7b8d8c55; }
+@media (max-width: 600px) { .td-field-desk { padding: 12px; font-size: 13px; } .td-field-objects, .td-field-methods, .td-field-routes { grid-template-columns: 1fr; } .td-object-canvas { height: 190px; } .td-v2-terminal-desk { max-height: 66vh; } }
+
+.td-link-relations label { display: grid; gap: 5px; width: 100%; color: #bbc9c5; font-size: 12px; }
+.td-link-relations select { min-height: 44px; width: 100%; padding: 7px; background: #15252e; color: #ddd9cc; border: 1px solid #70817f66; border-radius: 6px; }
+.td-theater-panel .td-link-relations { max-width: 500px; margin: auto; }
+
+.td-structured-report-v2 { font: 14px/1.65 system-ui, sans-serif; }
+.td-structured-report-v2 > header small { font-size: 12px; color: #b4c4b7; }
+.td-structured-report-v2 > header h3 { font-size: 16px; line-height: 1.5; }
+.td-structured-report-v2 > header button { min-width: 44px; min-height: 44px; }
+.td-structured-report-v2 .td-report-fields { grid-template-columns: 1fr; }
+.td-structured-report-v2 .td-report-fields label { font-size: 14px; color: #c8cdc5; }
+.td-structured-report-v2 .td-report-fields select { min-height: 44px; font-size: 16px; }
+.td-structured-report-v2 > p { font-size: 13px; color: #b4bdb6; }
+.td-structured-report-v2 > footer button { min-height: 44px; font-size: 14px; }
+.td-structured-report-v2 .td-report-error { font-size: 14px; }
+.td-structured-report-v2 button:focus-visible { outline: 2px solid #d8b97d; outline-offset: 2px; }
+.td-npc-v2 button { min-height: 44px; }
+.td-npc-v2 > div:first-child > button { min-width: 44px; }
+.td-npc-v2 .td-interrogation-questions > button header span { font-size: 14px; }
+.td-npc-v2 .td-interrogation-questions > button footer, .td-npc-v2 .td-npc-stamina-note { font-size: 12px; line-height: 1.6; }
+.td-npc-v2 button:focus-visible { outline: 2px solid #d8b97d; outline-offset: 2px; }

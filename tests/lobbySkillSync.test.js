@@ -41,7 +41,8 @@ function skillSyncHarness(initialLoadout = loadout(), readOnly = false) {
     // Deliberately remains stale even when a local write succeeds.
     profile: { skill_loadout: loadout() },
     lang: 'zh',
-    selectedIdx: 0,
+    selectedIdx: 2,
+    primaryAgentIdx: 0,
     activeSupport: null,
     targetCase: null,
     matchForecast: 55,
@@ -122,6 +123,7 @@ test('deployment waits for a skill save before capturing the confirmed loadout',
   assert.equal(harness.teamWrites.length, 1);
   assert.equal(harness.state.showSequence, true);
   assert.deepEqual(plain(harness.state.snapshot.skillLoadout), loadout('s0_1'));
+  assert.equal(harness.state.snapshot.selectedIdx, 0, 'deployment uses the assigned primary even while viewing another agent');
 });
 
 test('a rejected write restores the latest confirmed local skills despite a stale profile', async () => {

@@ -7,22 +7,22 @@ export const AGENT_DEFS = [
   {
     id: 'NEXUS-01', name: 'NEXUS-01', role: 'Lead Investigator', roleZh: '首席调查员',
     icon: '👁️', color: '#00e5ff', stance: 'analytical', traitEn: 'Logic',
-    desc: '逻辑主宰：在复杂推理链中获得额外15%逻辑加成。复杂推理优先。',
-    descEn: 'Logic Sovereign: gains a 15% logic bonus on complex deduction chains. Prioritizes advanced reasoning.',
+    desc: '逻辑主宰：擅长复杂证据链的逻辑核对，可强化逻辑与抗干扰。',
+    descEn: 'Logic Sovereign: specializes in complex evidence chains, with specialties in Logic and Anti-Chaos.',
     attrs: { logic_power: 20, observation_focus: 10, confusion_resistance: 10, ap_cost_discount: 10, hack_level: 10 },
   },
   {
     id: 'AURORA-09', name: 'AURORA-09', role: 'Forensic Analyst', roleZh: '法证分析师',
     icon: '🔬', color: '#a78bfa', stance: 'analytical', traitEn: 'Observation',
-    desc: '精准之眼：证据分析时线索发现率提升20%。观察型行动优先。',
-    descEn: 'Precision Eye: increases clue discovery by 20% during evidence analysis. Prioritizes observation actions.',
+    desc: '精准之眼：擅长物证观察与法证分析，可强化观察与逻辑。',
+    descEn: 'Precision Eye: specializes in physical evidence and forensic analysis, with specialties in Observation and Logic.',
     attrs: { logic_power: 10, observation_focus: 20, confusion_resistance: 10, ap_cost_discount: 10, hack_level: 10 },
   },
   {
     id: 'CIPHER-47', name: 'CIPHER-47', role: 'Tech Specialist', roleZh: '技术专家',
     icon: '💻', color: '#ff6b35', stance: 'cautious', traitEn: 'Hacker',
-    desc: '幽灵协议：数字渗透时被发现风险降低30%。黑客类行动优先。',
-    descEn: 'Ghost Protocol: reduces detection risk by 30% during digital infiltration. Prioritizes hacking actions.',
+    desc: '幽灵协议：擅长数字记录与终端核验，可强化黑客与行动折扣。手动调查费用以选项报价为准。',
+    descEn: 'Ghost Protocol: specializes in digital records and terminal checks, with Hack and AP Discount specialties. Manual investigation uses the quoted action cost.',
     attrs: { logic_power: 10, observation_focus: 10, confusion_resistance: 10, ap_cost_discount: 10, hack_level: 20 },
   },
 ];

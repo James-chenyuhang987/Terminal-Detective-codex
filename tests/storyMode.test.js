@@ -95,6 +95,7 @@ function entryBindings() {
   const changes = [];
   const state = { screen: 'LANDING', busy: false, error: '', open: false };
   const bindings = {
+    supportedInvestigationVersions: [1],
     profile: null, startRef: { current: false }, entryRequestRef: { current: 0 },
     normalizeStoryMode, lang: 'en',
     updateSetting: (key, value) => changes.push([key, value]),
@@ -278,6 +279,7 @@ test('HOME and resume change only visibility; explicit exit clears selection for
   let selection = selectedCase;
   let preferred = selectedCase.case_id;
   const bindings = {
+    supportedInvestigationVersions: [1],
     selectedCase, setScreen: value => { screen = value; },
     setSelectedCase: value => { selection = value; }, setPreferredCaseId: value => { preferred = value; },
     setAuthoritativeRun: () => {}, refresh: async () => {},
@@ -293,7 +295,7 @@ test('HOME and resume change only visibility; explicit exit clears selection for
   assert.equal(selection, null);
   assert.equal(preferred, null);
   const writes = findNodes(page, node => ts.isCallExpression(node) && node.expression.getText() === 'setSelectedCase');
-  assert.deepEqual(writes.map(node => node.arguments[0].getText()).sort(), ['caseData', 'null']);
+  assert.deepEqual(writes.map(node => node.arguments[0].getText()).sort(), ['caseData', 'null', 'null']);
 });
 
 test('settlement completing during HOME does not clear the ending or GameOver run before reward UI exits', async () => {
@@ -309,7 +311,8 @@ test('settlement completing during HOME does not clear the ending or GameOver ru
       return new Promise(resolve => { resolveSettlement = resolve; });
     },
   });
-  const bindings = { selectedCase, setScreen: value => { screen = value; } };
+  const bindings = {
+    supportedInvestigationVersions: [1], selectedCase, setScreen: value => { screen = value; } };
   const pending = settle(summary);
   handler(page, 'handleOpenHome', bindings)();
   assert.equal(screen, 'HOME');
@@ -323,22 +326,25 @@ test('settlement completing during HOME does not clear the ending or GameOver ru
   assert.doesNotMatch(variable(page, 'handleSettlement').getText(), /setSelectedCase|setScreen|leaveRun/);
 });
 
-test('every case and team entry resumes an existing run before strategy writes, module loading or another energy charge', async () => {
-  for (const name of ['handleDeploy', 'handleCaseSelect', 'openLobbyForCase', 'openCasesWithSavedTeam']) {
+test('same-case and explicit resume entries preserve the run while other case requests keep their chosen target', async () => {
+  for (const name of ['handleDeploy', 'handleCaseSelect', 'openLobbyForCase']) {
     const screens = [];
     const result = await handler(page, name, {
       selectedCase: { case_id: 'Lvl_01' }, setScreen: value => screens.push(value),
-    })({ case_id: 'Lvl_02' });
+    })(name === 'openLobbyForCase' ? 'Lvl_01' : { case_id: 'Lvl_01' });
     assert.deepEqual(screens, ['GAME'], name);
     if (name.startsWith('handle')) assert.deepEqual(result, { error: null });
   }
-  for (const name of ['enterLobby', 'openCase', 'quickStart']) {
+  for (const name of ['enterLobby', 'quickStart']) {
     let resumes = 0;
     await handler(home, name, {
       suspendedCase: { case_id: 'Lvl_01' }, onResume: () => { resumes += 1; }, setModule: () => {},
-    })('Lvl_02');
+    })('Lvl_01');
     assert.equal(resumes, 1, name);
   }
+  const targets = [];
+  handler(home, 'openCase', { setModule: () => {}, onOpenCases: id => targets.push(id) })('Lvl_02');
+  assert.deepEqual(targets, ['Lvl_02']);
   assert.match(home.text, /onClick=\{onResume\}/);
   assert.match(home.text, /Resume current investigation/);
 });
@@ -353,6 +359,7 @@ test('starting a case is single-flight and successful starts retain the selected
   const strategy = { skill_effects: { insight: 2 } };
   let savedStrategy;
   const bindings = {
+    supportedInvestigationVersions: [1],
     selectedCase: null, activeRun: null, caseStartRef, teamIntentRef: { current: null }, profile: {},
     loadInvestigationTerminal: () => { loads += 1; return new Promise(resolve => { resolveLoad = resolve; }); },
     command: async (type, args) => {

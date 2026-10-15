@@ -43,6 +43,27 @@ export const AGENT_SPECIALTIES = [
   },
 ];
 
+/** Keep role-compatible whole points, returning capped points to the balance. */
+export function normalizeSpecialtyAllocation(agentIdx, spec, attributeBonus = {}) {
+  const def = AGENT_SPECIALTIES[agentIdx];
+  if (!def || !spec || typeof spec !== 'object' || Array.isArray(spec)) return {};
+  const allocation = {};
+  let remaining = SPECIALTY_BUDGET;
+  // Role order makes recovery deterministic even if a saved object has a
+  // different property order. Capped points remain unspent, never reassigned.
+  for (const key of def.specialty_slots) {
+    const requested = typeof spec[key] === 'number' && Number.isFinite(spec[key])
+      ? Math.max(0, Math.floor(spec[key])) : 0;
+    const rawBonus = Number(attributeBonus?.[key]);
+    const bonus = Number.isFinite(rawBonus) ? Math.max(0, rawBonus) : 0;
+    const capacity = Math.max(0, Math.floor(ATTR_MAX[key] - def.base_attrs[key] - bonus));
+    const points = Math.min(requested, capacity, remaining);
+    if (points > 0) allocation[key] = points;
+    remaining -= points;
+  }
+  return allocation;
+}
+
 export function specUsed(spec) {
   return Object.values(spec || {}).reduce((s, v) => s + (v || 0), 0);
 }

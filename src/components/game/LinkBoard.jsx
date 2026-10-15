@@ -6,7 +6,7 @@ import { noirColor } from '@/components/ui/palette';
 // 推理连线板 — 拖拽两条已解锁线索，由受保护的确定性规则判定有效性。
 const WEIGHT_COLORS = { CRITICAL: '#c77c78', HIGH: '#c19a63', MEDIUM: '#709f9a', LOW: '#9b9aae' };
 
-export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isChecking, accentColor: _accentColor }) {
+export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isChecking, accentColor: _accentColor, relationsEnabled = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const unlocked = clues.filter(c => unlockedIds.includes(c.clue_id));
@@ -15,6 +15,18 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
   const [dragFrom, setDragFrom] = useState(null);
   const [dragPos, setDragPos] = useState(null);
   const [hoverTarget, setHoverTarget] = useState(null);
+  const [relation, setRelation] = useState('supports');
+  const [firstClue, setFirstClue] = useState('');
+  const [secondClue, setSecondClue] = useState('');
+
+  const submitLink = (a, b) => {
+    if (isChecking || !a || !b || a === b) return;
+    const already = linkedPairs.some(p =>
+      (relationsEnabled ? p.valid && p.relation_type === relation && (relation === 'precedes'
+        ? p.a === a && p.b === b : (p.a === a && p.b === b) || (p.a === b && p.b === a))
+        : (p.a === a && p.b === b) || (p.a === b && p.b === a)));
+    if (!already) onLink(a, b, ...(relationsEnabled ? [relation] : []));
+  };
 
   const getCenter = useCallback((clueId) => {
     const el = nodeRefs.current[clueId];
@@ -46,9 +58,7 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
 
   const handlePointerUp = () => {
     if (dragFrom && hoverTarget && hoverTarget !== dragFrom) {
-      const already = linkedPairs.some(p =>
-        (p.a === dragFrom && p.b === hoverTarget) || (p.a === hoverTarget && p.b === dragFrom));
-      if (!already) onLink(dragFrom, hoverTarget);
+      submitLink(dragFrom, hoverTarget);
     }
     setDragFrom(null);
     setDragPos(null);
@@ -64,8 +74,17 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
           <Icon name="link" /> {zh ? '推理连线' : 'LINK BOARD'}
         </div>
         <div style={{ fontSize: '0.44rem', color: 'rgba(255,255,255,0.35)', marginTop: 3, lineHeight: 1.6 }}>
-          {zh ? '按住一条线索拖向另一条线索建立推理连接' : 'Drag one clue onto another to create a deduction link'}<br/>{zh ? 'AI 将判定逻辑是否成立' : 'The AI will validate the logical relationship'}
+          {zh ? '选择两条证据，或拖动建立推理连接' : 'Select two clues or drag one onto another'}<br/>{zh ? '案件规则核验关系；错误关系可以修正' : 'Case rules verify the relation; incorrect relations can be revised'}
         </div>
+      </div>
+      {relationsEnabled && <p role="note" style={{ padding: '4px 10px', fontSize: '.68rem', color: '#9b9aae', lineHeight: 1.6 }}>{zh
+        ? '核验关系不消耗 AP。同一条错误关系仅首次增加 3% 混乱，可修正；“先于”按证据一到证据二的方向核验。'
+        : 'Relations cost no AP. A wrong relation adds 3% confusion only on its first attempt and can be corrected. Precedes checks the direction from the first clue to the second.'}</p>}
+      <div className="td-link-relations" data-onboarding-target="field-deduction">
+        {relationsEnabled && [['supports', zh ? '支持' : 'Supports'], ['contradicts', zh ? '矛盾' : 'Contradicts'], ['precedes', zh ? '先于' : 'Precedes']].map(([id, label]) => <button type="button" key={id} disabled={isChecking} aria-pressed={relation === id} onClick={() => setRelation(id)}>{label}</button>)}
+        <label>{zh ? '证据一' : 'First clue'}<select aria-label={zh ? '证据一' : 'First clue'} value={firstClue} disabled={isChecking} onChange={event => setFirstClue(event.target.value)}><option value="">{zh ? '请选择' : 'Choose'}</option>{unlocked.map(clue => <option key={clue.clue_id} value={clue.clue_id}>{clue.keyword}</option>)}</select></label>
+        <label>{zh ? '证据二' : 'Second clue'}<select aria-label={zh ? '证据二' : 'Second clue'} value={secondClue} disabled={isChecking} onChange={event => setSecondClue(event.target.value)}><option value="">{zh ? '请选择' : 'Choose'}</option>{unlocked.map(clue => <option key={clue.clue_id} value={clue.clue_id}>{clue.keyword}</option>)}</select></label>
+        <button type="button" disabled={isChecking || !firstClue || !secondClue || firstClue === secondClue} onClick={() => submitLink(firstClue, secondClue)}>{zh ? '核验关系' : 'Verify relation'}</button>
       </div>
 
       <div

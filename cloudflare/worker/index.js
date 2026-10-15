@@ -1,4 +1,3 @@
-import { runDetectiveRule } from '../../server/detectiveRules/rules.js';
 import {
   authConfig,
   logoutFirebase,
@@ -9,10 +8,7 @@ import {
   handleProfileFunction,
 } from './profile.js';
 import { handleRunFunction } from './run.js';
-import { readBodyBytes } from './body.js';
-import { validateRuleEnvelope } from './requestSecurity.js';
 
-const RULE_BODY_LIMIT = 96 * 1024;
 const CORS_METHODS = 'GET, POST, OPTIONS';
 const CORS_HEADERS = 'Authorization, Content-Type, Accept';
 const CONTENT_SECURITY_POLICY = [
@@ -35,18 +31,6 @@ const KNOWN_SERVER_ERRORS = new Set([
   'FIREBASE_PROFILE_CONFLICT',
   'PROFILE_DATA_CORRUPT',
   'RUN_DATA_CORRUPT',
-]);
-const PUBLIC_RULE_ERRORS = new Set([
-  'INVALID_CLUES',
-  'INVALID_EVIDENCE',
-  'INVALID_QUESTION',
-  'INVALID_REPORT_OPTION',
-  'INVALID_TEAM',
-  'QUESTION_LOCKED',
-  'STALE_OPTIONS',
-  'UNKNOWN_CASE',
-  'UNKNOWN_NPC',
-  'UNKNOWN_TASK',
 ]);
 
 function securityHeaders(headers = new Headers(), request = null, { page = false } = {}) {
@@ -141,31 +125,6 @@ function withPageHeaders(response, request) {
   });
 }
 
-async function handleRules(request) {
-  if (request.method !== 'POST') return methodNotAllowed('POST');
-  const raw = await readBodyBytes(request, RULE_BODY_LIMIT);
-  let body;
-  try {
-    body = JSON.parse(new TextDecoder().decode(raw) || '{}');
-  } catch {
-    return errorResponse('INVALID_JSON', 400);
-  }
-
-  const envelope = validateRuleEnvelope(body);
-  if (envelope.error) return errorResponse(envelope.error, 400);
-  try {
-    return json({
-      data: runDetectiveRule(envelope.task, envelope.payload),
-      source: 'cloudflare-rules',
-    });
-  } catch (error) {
-    const code = String(error?.code || '');
-    if (!PUBLIC_RULE_ERRORS.has(code)) throw error;
-    const status = code.startsWith('INVALID_') || code.startsWith('UNKNOWN_') ? 400 : 422;
-    return errorResponse(code, status);
-  }
-}
-
 async function handleNativeAuth(request, env, url) {
   if (url.pathname === '/api/auth/config') {
     return request.method === 'GET' ? json(await authConfig(env)) : methodNotAllowed('GET');
@@ -212,7 +171,12 @@ async function routeRequest(request, env) {
   if (url.pathname === rulesPath) {
     if (request.method !== 'POST') return methodNotAllowed('POST');
     const session = await readFirebaseSession(request, env);
-    return session ? handleRules(request) : errorResponse('UNAUTHENTICATED', 401);
+    if (!session) return errorResponse('UNAUTHENTICATED', 401);
+    // A stateless payload cannot prove that evidence was earned. Both paid
+    // content versions now use playerRun; their private reducers remain intact.
+    return errorResponse('STATELESS_RULES_RETIRED', 410,
+      'Use the paid playerRun endpoint to read options and submit investigation commands.',
+      { authoritative_endpoint: runPath });
   }
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === currentUserPath) {

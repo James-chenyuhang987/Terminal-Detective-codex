@@ -1,0 +1,183 @@
+{
+  "playerId": "P01",
+  "simulation": true,
+  "persona": "中文、键鼠、先观察读提示的新玩家",
+  "rules": {
+    "sourceRead": false,
+    "hiddenStateRead": false,
+    "apiCalls": false,
+    "databaseModified": false,
+    "ownTabOnly": true
+  },
+  "entryUrl": "http://127.0.0.1:5191/__case-test",
+  "startedAt": "2026-10-14T12:35:39.848Z",
+  "sceneEnteredAt": "2026-10-14T12:36:11.557Z",
+  "sceneLoadedAt": "2026-10-14T12:36:42.499Z",
+  "firstEffectiveClueAt": "2026-10-14T12:38:47.351Z",
+  "endedAt": "2026-10-14T13:00:44.580Z",
+  "firstEffectiveClueSeconds": 156,
+  "firstEffectiveClueAfterLoadedSeconds": 125,
+  "totalPlaySeconds": 1505,
+  "mode": "text",
+  "threeD": {
+    "initialAXText": "此设备无法显示 3D 场景，请切换文字模式继续调查。",
+    "initialSceneScreenshotNotTaken": true,
+    "initialInterpretation": "按无障碍树文本误认为设备无法渲染，于读完引导后切到文字",
+    "parentCorrection": "父agent确认这是Canvas备用文本误报并修为中性说明；此次未亲自验证3D画面，因此不能判定GPU失败",
+    "movementTested": false
+  },
+  "onboarding": {
+    "stepsRead": 5,
+    "skipped": false
+  },
+  "result": {
+    "completed": true,
+    "grade": "B",
+    "cluesFound": 8,
+    "cluesTotal": 9,
+    "rounds": 15,
+    "remainingAP": 1,
+    "chaosPeakPercent": 18,
+    "xp": 308,
+    "systemCrash": false,
+    "reportSubmissions": 2,
+    "firstReport": "D 驳回：缺少有效证据支持：时间线。",
+    "secondReport": "B 已侦破：四个结论环节均得到所附证据支持。"
+  },
+  "costUnderstanding": {
+    "understoodObservationFree": true,
+    "understoodTravelFree": true,
+    "understoodVerificationAP": 1,
+    "understoodQuestionAP": 1,
+    "understoodTimelineAP": 1,
+    "crisisPreservationAP": 3,
+    "failedReportAP": 1,
+    "failedRelationChaos": 3,
+    "questionStaminaAdvertisedPercent": 10,
+    "actualSelectedAgentNetStaminaChangePercent": -6,
+    "otherAgentsNetRecoveryPercent": 4,
+    "uncertainties": [
+      "体力−10%的预告与回合结算的−6%净变化未说明恢复来源。",
+      "选择执行探员的审讯按钮点击后AX无选中状态，成本结算才可确认。"
+    ]
+  },
+  "hints": {
+    "onboarding": true,
+    "currentTargetsFollowed": true,
+    "failureFeedbackUsed": true,
+    "expandedVerificationHints": 1,
+    "expandedHintText": "比较物件的可见记录与测量结果；先取原始材料，再核对人物说法。",
+    "hintUsefulForMissingPacketLocation": false
+  },
+  "actionsSummary": [
+    "读完整五步指引；依据误报切文字。",
+    "收据表面检查失败1AP，改核原始时间戳成功：23:05高压电容器。",
+    "神经接口采样对照成功：EMP烧痕。",
+    "提取监控原始记录成功：EMP干扰损毁。",
+    "门禁审计成功：23:16复制Mei权限卡，签章不同。",
+    "地下值班原始记录成功：Kenji 23:10至23:25不在案发层，23:31发现。",
+    "3AP紧急保全抹除监控来源。",
+    "Kenji出示记录取得第一补充；第二问温和询问得疏漏解释但未转成免费状态。",
+    "原始签章核验NovaCorp协议；维修井独立诊断核验23:17开启23:19离开。",
+    "公开陈述危机立即核对Voss，0AP混乱+4；出示协议得确认购买方，第二问证据按钮未开放所以暂缓。",
+    "医院原始签章核验Mei姐姐档案。",
+    "Mei出示复制卡承认返回；出示医院/交易材料确认愤怒和利害冲突。",
+    "当前目标匿名数据包不可见，通用提示未给位置。",
+    "按23:05、23:17、23:19、23:31排序完成专属时间轴1AP。",
+    "Mei翻供危机立即核对0AP混乱+4；免费复查相同证词。",
+    "收据支持EMP、NovaCorp协议支持姐姐档案两条连线成功免费。",
+    "克隆卡23:16先于维修井23:17被判逻辑不成立，混乱+3。",
+    "报告第一次时间线只附明确时间记录遭D驳回，消耗1AP混乱+4；加入EMP与监控支持致伤窗口后B结案。"
+  ],
+  "criticalMissteps": [
+    {
+      "action": "检查纸面与表面痕迹",
+      "reason": "观察写纸角暗红斑点、折痕遮住购买项目，因此以为先验血迹合理。",
+      "outcome": "未保全证据，AP-1混乱+3；依失败反馈改核时间戳。"
+    },
+    {
+      "action": "克隆门禁卡 先于 维修管道记录",
+      "reason": "证据分别明确23:16与23:17，按时间先后选择。",
+      "outcome": "逻辑不成立、混乱+3，无具体反驳。"
+    },
+    {
+      "action": "首次报告时间线证据不包括EMP与监控",
+      "reason": "优先选带明确时间的收据、复制卡、维修管道、Kenji不在场记录。",
+      "outcome": "D驳回时间线不足，AP-1；补入致伤类型与监控中断成功。"
+    }
+  ],
+  "stickingPoints": [
+    {
+      "issue": "文字准备页要求点击“执行循环”，但实际按钮未在可见UI出现；当前物件仍能直接核验。",
+      "blocked": false
+    },
+    {
+      "issue": "匿名数据包作为当前目标却当前区域无该物件，提示不说明地点或前置条件。",
+      "blocked": false,
+      "consequence": "以8/9线索结案。"
+    },
+    {
+      "issue": "报告四个select无可用getByLabel关联、点击/End/Return无效；用可见下拉框和ArrowDown键成功。",
+      "blocked": false,
+      "classification": "主要是自动化控件操作问题；不能直接判为普通玩家UI bug。"
+    },
+    {
+      "issue": "结案后晋升遮罩按钮初次点击未更新、影子根错误；点击X后页面回landing。",
+      "blocked": false,
+      "classification": "父agent说明结算后返回入口/大厅是预期流程；此次流程变化缺少可见说明，初时误以为结果页丢失。晋升按钮/截图延迟可能是工具影响。"
+    }
+  ],
+  "bugsAndComprehension": [
+    {
+      "certainty": "确定可见文案问题，父agent已修复",
+      "issue": "Canvas备用3D失败文字出现在AX树，诱导切文字，不能证明实机WebGL失败。"
+    },
+    {
+      "certainty": "确定可见引导问题",
+      "issue": "文字页残留执行循环指令但可见操作是现场调查物件。"
+    },
+    {
+      "certainty": "确定可见目标可达性/提示问题",
+      "issue": "匿名数据包目标缺少位置和前置条件说明。"
+    },
+    {
+      "certainty": "确定规则/反馈问题",
+      "issue": "23:16先于23:17关系被拒绝，而失败说明只说不支持该关系。"
+    },
+    {
+      "certainty": "确定理解问题",
+      "issue": "第一次报告时间线附四份带时刻证据仍不满足规则；未解释所缺支持的具体事实。"
+    },
+    {
+      "certainty": "确定可见成本理解问题",
+      "issue": "体力成本预告−10%，结算净−6%、其他+4，恢复规则未说明。"
+    },
+    {
+      "certainty": "需进一步确认",
+      "issue": "Kenji第二次温和问答产生信息但仍1AP、没有明显完成/失败状态；与匹配证据推进不同。"
+    }
+  ],
+  "evidenceExplanation": {
+    "conclusion": "Mei Lin 返回现场实施袭击后经维修井离开。",
+    "opportunity": "23:16有与Mei权限同名、硬件签章不同的复制卡，不能只据卡名认人。Mei经出示证据承认返回；23:17至23:19维修管道直达案发层并可离开。Kenji的独立地下记录覆盖致伤窗口，排除送报告袭击解释。",
+    "means": "23:05收据购买高压电容器，与Victor颈部神经接口的EMP灼伤一致。所有摄像头同窗口损毁符合EMP干扰；故是高压EMP过载接口，同时掩盖监控。",
+    "motive": "Mei姐姐因NovaCorp神经接口试验受害并处植物人状态；Victor却与NovaCorp签出售技术协议。Mei证词表示Victor承诺停试验又卖技术，她无法接受，因此阻止出售并为姐姐追责。",
+    "timeline": "23:05买高压电容器；23:16复制权限卡被原始审计记录；23:17维修井激活、致伤及监控中断；23:19经维修井离开；Kenji23:10至23:25仍在地下，23:31才发现尸体。发现时间不是致伤时间。",
+    "limits": [
+      "缺少匿名数据包独立旁证。",
+      "Voss第二补充和Kenji第二补充未完整推进，未显式在系统中排除两种替代解释。"
+    ]
+  },
+  "screenshots": {
+    "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P01.jpg",
+    "state": "结算后预期返回的入口页；B结案此前已由可见AX完整验证，截图未保留B面板。"
+  },
+  "exitFlow": {
+    "expectedReturnToEntryPerParent": true,
+    "playerUnderstanding": "没有看到明确的返回入口说明，曾以为结案结果丢失。",
+    "reopenedCase": false
+  },
+  "authority_event_log_sha256": "9a7068073882dbf4d48a96c7427b56b5d3f7da069dfa4fff8bd03ef9bd96f746",
+  "verification_scope": "Synthetic visible-UI session; local isolated Worker/D1 fixture; no real users or production rewards.",
+  "authority_event_log_artifact": "docs/verification/agent-P01-events.jsonl"
+}

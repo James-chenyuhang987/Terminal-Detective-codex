@@ -27,7 +27,7 @@ export const SKILL_TREES = [
     { id: 's0_2', name: '证据联想', nameEn: 'EVIDENCE ASSOCIATION', icon: '🔗', desc: '每回合有15%概率额外发现一条线索', descEn: '15% chance to discover an extra clue each turn', unlock_level: 4, effect_key: 'bonus_clue_chance', effect_value: 0.15 },
     { id: 's0_3', name: '全息扫描', nameEn: 'HOLOGRAPHIC SCAN', icon: '📡', desc: '混乱值每轮自动降低5点', descEn: 'Reduces confusion by 5 each turn', unlock_level: 6, effect_key: 'confusion_regen', effect_value: 5 },
     { id: 's0_4', name: '鹰眼协议', nameEn: 'EAGLE EYE PROTOCOL', icon: '🦅', desc: 'AP消耗再降低15%（叠加）', descEn: 'Further reduces AP costs by 15% (stacks)', unlock_level: 8, effect_key: 'ap_cost_discount', effect_value: 0.15 },
-    { id: 's0_5', name: '全知视界', nameEn: 'OMNISCIENT VISION', icon: '🌐', desc: '游戏开始自动解锁第一条线索', descEn: 'Automatically unlocks the first clue at case start', unlock_level: 10, effect_key: 'auto_unlock_first', effect_value: true },
+    { id: 's0_5', name: '全知视界', nameEn: 'OMNISCIENT VISION', icon: '🌐', desc: '新版：首次核验免 AP，仍需选择方法；旧版：开局解锁一条线索', descEn: 'New investigations: first check costs no AP; choose its method. Legacy investigations: reveal one clue at case start.', unlock_level: 10, effect_key: 'auto_unlock_first', effect_value: true },
   ],
   // Agent 1 — 破心 (Enforcer)
   [

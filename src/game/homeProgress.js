@@ -57,8 +57,8 @@ export const ITEM_CATALOG = [
     zh: { name: '防火墙护盾', desc: '下一局抵消第一次陷阱。' },
     en: { name: 'Firewall Shield', desc: 'Negate the first trap in the next case.' } },
   { id: 'clue_scanner', icon: '📡', currency: 'diamonds', cost: 50, stackLimit: 12, mission: true,
-    zh: { name: '线索扫描器', desc: '下一局自动发现起始区域一条线索。' },
-    en: { name: 'Clue Scanner', desc: 'Reveal one valid clue in the starting zone.' } },
+    zh: { name: '线索扫描器', desc: '下一局首个现场核验免 AP；自动调查时获得一条起始线索。' },
+    en: { name: 'Clue Scanner', desc: 'Waive AP for the next case’s first field check; automatic investigation starts with one clue.' } },
 ];
 
 export const TECH_CATALOG = [
@@ -67,7 +67,7 @@ export const TECH_CATALOG = [
   { id: 'forensics_2', branch: 'forensics', level: 2, cost: 60, effect: { bonus_clue_chance: 0.07 },
     zh: { name: '模式收敛', desc: '额外线索发现率累计至 +10%' }, en: { name: 'Pattern Convergence', desc: 'Bonus clue chance reaches +10%' } },
   { id: 'forensics_3', branch: 'forensics', level: 3, cost: 120, effect: { auto_unlock_first: true },
-    zh: { name: '冷启动扫描', desc: '开局自动扫描一条合法线索' }, en: { name: 'Cold-start Scan', desc: 'Reveal one legal clue at case start' } },
+    zh: { name: '冷启动扫描', desc: '首个现场核验免 AP；自动调查开局获得一条线索' }, en: { name: 'Cold-start Scan', desc: 'Waive AP for the first field check; automatic investigation starts with one clue' } },
   { id: 'network_1', branch: 'network', level: 1, cost: 25, effect: { ap_cost_discount: 0.03 },
     zh: { name: '轻量调度', desc: 'AP 消耗折扣 +3%' }, en: { name: 'Lean Scheduler', desc: '+3% AP cost discount' } },
   { id: 'network_2', branch: 'network', level: 2, cost: 60, effect: { ap_cost_discount: 0.07 },
@@ -475,13 +475,11 @@ function replaceRecord(profile, record) {
   return { ...profile, case_records: [...profile.case_records.filter(item => item.case_id !== record.case_id), record] };
 }
 
-export function startCase(profile, caseData, now = new Date()) {
-  let next = normalizeProfile(profile, now);
-  const cost = CASE_ENERGY_COST[caseData.difficulty] ?? 10;
-  if (next.energy < cost) return { profile: next, error: 'insufficient_energy', cost };
-  const equipped = [...next.equipped_items];
-  const tech = getTechEffects(next);
-  const effects = {
+export function getCasePreparationEffects(profile) {
+  const prepared = normalizeProfile(profile);
+  const equipped = prepared.equipped_items.filter(id => prepared.inventory[id] > 0);
+  const tech = getTechEffects(prepared);
+  return {
     skill_effects: {
       bonus_clue_chance: finite(tech.bonus_clue_chance), ap_cost_discount: finite(tech.ap_cost_discount),
       confusion_resistance: finite(tech.confusion_resistance), auto_unlock_first: tech.auto_unlock_first === true || equipped.includes('clue_scanner'),
@@ -490,6 +488,14 @@ export function startCase(profile, caseData, now = new Date()) {
     initial_ap_bonus: finite(tech.initial_ap_bonus) + (equipped.includes('ap_booster') ? 3 : 0),
     ignore_first_trap: equipped.includes('firewall_shield'),
   };
+}
+
+export function startCase(profile, caseData, now = new Date()) {
+  let next = normalizeProfile(profile, now);
+  const cost = CASE_ENERGY_COST[caseData.difficulty] ?? 10;
+  if (next.energy < cost) return { profile: next, error: 'insufficient_energy', cost };
+  const equipped = [...next.equipped_items];
+  const effects = getCasePreparationEffects(next);
   next = { ...next, energy: next.energy - cost, energy_updated_at: new Date(now).toISOString(), equipped_items: [], inventory: { ...next.inventory },
     activity_stats: { ...next.activity_stats, cases_started: next.activity_stats.cases_started + 1 } };
   equipped.forEach(id => { next.inventory[id] = Math.max(0, finite(next.inventory[id]) - 1); });

@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react'
 import { execFileSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
+import { browserCaseProjection } from './scripts/browser-case-projection.mjs'
 
 function normalizeBasePath(value) {
   if (!value || !value.trim()) return null
@@ -39,7 +40,7 @@ process.env.VITE_BUILD_SHA = resolveBuildSha()
 // https://vite.dev/config/
 export default defineConfig({
   base: resolveBasePath(),
-  plugins: [react()],
+  plugins: [browserCaseProjection(fileURLToPath(new URL('.', import.meta.url))), react()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

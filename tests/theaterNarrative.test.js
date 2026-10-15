@@ -130,6 +130,8 @@ test('every higher-priority panel or transaction postpones rather than consumes 
 function entryHarness(mode = 'theater') {
   const state = { screen: 'CASE_SELECT', narrative: null, busy: false, error: '', charges: 0, routes: 0 };
   const bindings = {
+    dialogueLanguageRef: { current: 'en' },
+    investigationV2: false,
     selectedCase: null, activeRun: null, settings: { storyMode: mode }, lang: 'en',
     get screen() { return state.screen; },
     briefingRequestRef: { current: null }, briefedRunRef: { current: false }, caseStartRef: { current: false },
@@ -217,13 +219,15 @@ test('briefing failed entry stays retryable, does not mark arrival, and cancella
   assert.equal(h.state.narrative, null);
 });
 
-function interviewHarness({ theater = true, failRefresh = false } = {}) {
+function interviewHarness({ theater = true, failRefresh = false, pendingCrisis = null } = {}) {
   const initial = createInitialGameState(Case_Data_Lvl_01);
   initial.run_id = 'run-1'; initial.agent_stamina = { 'NEXUS-01': 100 };
-  const stored = { gameState: initial, dialogue: [], asked: {}, emotions: {}, processing: false, packs: null, error: null, charges: 0, narrative: createTheaterNarrativeState(initial.run_id) };
+  const stored = { gameState: initial, dialogue: [], asked: {}, emotions: {}, processing: false, packs: null, error: null, charges: 0, optionRequests: 0, narrative: createTheaterNarrativeState(initial.run_id) };
   let resolveAnswer, rejectAnswer;
   const team = [{ agent_id: 'NEXUS-01', stamina: 100 }];
   const bindings = {
+    dialogueLanguageRef: { current: 'en' },
+    investigationV2: false,
     authorityReady: true, selectedNPC: Case_Data_Lvl_01.npcs[0], theaterMode: theater, dialogueSequenceRef: { current: 1 },
     closedDialogueRef: { current: 0 }, pendingQuestionPresentationRef: { current: null },
     gameStateRef: { current: initial }, activeRunRef: { current: 0 }, abortCtrlRef: { current: null },
@@ -240,11 +244,12 @@ function interviewHarness({ theater = true, failRefresh = false } = {}) {
     setIsProcessing: value => { stored.processing = value; },
     setNpcQuestionPacks: value => { stored.packs = value; }, setNpcQuestionError: value => { stored.error = value; },
     setSelectedNPC: value => { bindings.selectedNPC = value; },
+    setNpcExecutorId: value => { bindings.npcExecutorId = value; },
     setNewClueIds: () => {}, schedule: () => {}, addLine: () => {}, triggerSynergy: () => {},
     executeRunCommand: command => command.type === 'interrogation_options'
       ? bindings.getInterrogationOptionPacks().then(result => ({ result }))
       : new Promise((resolve, reject) => { resolveAnswer = resolve; rejectAnswer = reject; }),
-    getInterrogationOptionPacks: async () => { if (failRefresh) throw new Error('refresh offline'); return { packs: {} }; },
+    getInterrogationOptionPacks: async () => { stored.optionRequests++; if (failRefresh) throw new Error('refresh offline'); return { packs: {} }; },
   };
   bindings.beginAbortableOperation = handler(owner, 'beginAbortableOperation', bindings);
   bindings.isOperationCurrent = handler(owner, 'isOperationCurrent', bindings);
@@ -257,16 +262,44 @@ function interviewHarness({ theater = true, failRefresh = false } = {}) {
   };
   const ask = (...args) => handler(owner, 'handleNPCQuestion', bindings)(...args);
   const close = handler(owner, 'handleNPCDialogueClose', bindings);
-  return { stored, bindings, ask: () => ask({ questionId: 'q-1', text: 'Question' }), close, resolve: value => {
+  return { stored, bindings, ask: () => ask({ questionId: 'q-1', text: 'Question', available: true }), close, resolve: value => {
     // Fixture stands in for the server transition, not a client-side award.
     stored.charges++;
     const next = { ...stored.gameState, agent_stamina: { 'NEXUS-01': 90 }, unlocked_clues: value.revealedClueIds || [] };
     stored.gameState = next;
     bindings.gameStateRef.current = next;
     stored.asked[Case_Data_Lvl_01.npcs[0].npc_id] = ['q-1'];
-    resolveAnswer({ result: value, run: { state: next } });
+    resolveAnswer({ result: value, run: { state: next, pending_crisis: pendingCrisis } });
   }, reject: e => rejectAnswer(e) };
 }
+
+test('a committed interview that opens a crisis preserves its answer and waits instead of fetching blocked options', async () => {
+  const h = interviewHarness({ failRefresh: true, pendingCrisis: { id: 'source-check' } });
+  h.bindings.investigationV2 = true;
+  const pending = h.ask();
+  h.resolve({ response: 'The record is preserved.', npc_name: 'Witness', repeated: false });
+  await pending;
+  assert.equal(h.stored.charges, 1);
+  assert.equal(h.stored.optionRequests, 0);
+  assert.ok(h.stored.dialogue.some(line => line.text === 'The record is preserved.'));
+  assert.deepEqual(h.stored.packs, {});
+  assert.match(h.stored.error, /Resolve the field crisis/);
+  assert.equal(h.stored.processing, false);
+});
+
+test('a recovered interview with a pending crisis displays its committed answer without replaying or refreshing', async () => {
+  const h = interviewHarness({ failRefresh: true });
+  h.bindings.investigationV2 = true;
+  const present = handler(owner, 'presentRecoveredResponse', h.bindings);
+  await present({ recovered_command: { type: 'question', npc_id: Case_Data_Lvl_01.npcs[0].npc_id, executor_agent_id: 'NEXUS-01' },
+    result: { response: 'Recovered statement.', npc_name: 'Witness', repeated: false },
+    run: { id: 'run-1', state: h.stored.gameState, pending_crisis: { id: 'source-check' } } });
+  assert.equal(h.stored.charges, 0);
+  assert.equal(h.stored.optionRequests, 0);
+  assert.ok(h.stored.dialogue.some(line => line.text === 'Recovered statement.'));
+  assert.deepEqual(h.stored.packs, {});
+  assert.match(h.stored.error, /Resolve the field crisis/);
+});
 
 test('actual question commits once across Home and mode switches; refresh failure does not lose interlude', async () => {
   for (const failRefresh of [false, true]) {
@@ -355,6 +388,8 @@ function timerHarness(overrides = {}) {
   const query = { ...events(), matches: false };
   const window = { ...events(), matchMedia: () => query, setInterval(cb) { callbacks.set(1, cb); return 1; }, clearInterval: id => callbacks.delete(id) };
   const bindings = {
+    dialogueLanguageRef: { current: 'en' },
+    investigationV2: false,
     document, window, reducedMotion: false, active: true, foreground: true, busy: false, complete: false, characters: Array.from('Test passage'),
     setReveal: update => { state.reveal = update(state.reveal); }, setForeground: value => { state.foreground = value; },
     setReducedMotion: value => { state.reducedMotion = value; }, ...overrides,

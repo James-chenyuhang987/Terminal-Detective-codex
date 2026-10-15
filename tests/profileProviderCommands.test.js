@@ -106,6 +106,38 @@ test('real provider sends only persisted intent and never displays an optimistic
   app.unmount();
 });
 
+test('archive clue labels are owner-bound read-only display data and never enter profile or receipts', async () => {
+  const pending = deferred();
+  const records = [{ case_id: 'Lvl_01', discovered_clues: ['c_01'], valid_links: [] }];
+  const labels = { Lvl_01: { c_01: { zh: '染血收据', en: 'Bloody Receipt' }, c_03: { zh: '未发现', en: 'Undiscovered' } },
+    Lvl_02: { d_01: { zh: '未发现第二案', en: 'Undiscovered second case' } } };
+  let owner = 'owner-a';
+  const app = harness(async action => {
+    if (action === 'command') return pending.promise;
+    return payload(owner, 0, { profile: { profile_revision: 0, gold: 1000, case_records: owner === 'owner-a' ? records : [] },
+      archive_clue_labels: labels });
+  });
+  await app.flush();
+  assert.deepEqual(app.value.archiveClueLabels, { Lvl_01: { c_01: labels.Lvl_01.c_01 } });
+  assert.equal(Object.isFrozen(app.value.archiveClueLabels.Lvl_01.c_01), true);
+  assert.equal(Object.hasOwn(app.value.profile, 'archive_clue_labels'), false);
+  assert.equal(Object.hasOwn(app.value.profile, 'archiveClueLabels'), false);
+  const command = app.value.command('checkin');
+  const cancelled = assert.rejects(command, { code: 'PROFILE_REQUEST_CANCELLED' });
+  await app.flush();
+  const journalText = JSON.stringify(journal.readProfileCommands('owner-a', app.store));
+  assert.ok(!journalText.includes('Bloody Receipt') && !journalText.includes('archive'));
+  owner = 'owner-b';
+  app.switchOwner(owner);
+  await app.flush();
+  assert.deepEqual(app.value.archiveClueLabels, {});
+  pending.resolve(payload('owner-a', 1, { profile: { profile_revision: 1, case_records: records }, archive_clue_labels: labels, result: {} }));
+  await cancelled;
+  await app.flush();
+  assert.deepEqual(app.value.archiveClueLabels, {});
+  app.unmount();
+});
+
 test('lost response remains pending; same intent reuses original operation/revision once without double charge', async () => {
   const calls = []; let offline = true;
   const app = harness(async (action, args) => {

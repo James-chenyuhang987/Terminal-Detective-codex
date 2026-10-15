@@ -10,7 +10,6 @@ import SynergyUnlockFX from '@/components/game/SynergyUnlockFX';
 import { calcTeamSynergy, getEquippedSkillEffects } from '@/game/specialtySystem';
 import AgentLoreTooltip from '@/components/game/AgentLoreTooltip';
 import AgentDossierPanel from '@/components/game/AgentDossierPanel';
-import PresetChips from '@/components/game/PresetChips';
 import DeploySequence from '@/components/game/DeploySequence';
 import { getLore } from '@/game/agentLore';
 import { GENERAL_FORMATION_CONFIG, buildCaseMatchReadout, calcCaseMatchScore, compareCaseMatchReadouts, getCaseMatchConfig } from '@/game/casePresets';
@@ -22,9 +21,13 @@ import {
 import { getLobbyLighting } from '@/game/lobbyLighting';
 import { useTeamBuilder } from '@/components/game/lobby/useTeamBuilder';
 import CommandPlanPanel from '@/components/game/lobby/CommandPlanPanel';
+import LobbyGuideModal from '@/components/game/lobby/LobbyGuideModal';
+import LobbyPreparationPanel from '@/components/game/lobby/LobbyPreparationPanel';
+import { useModalFocusTrap } from '@/components/game/lobby/useModalFocusTrap';
 import { CASE_ENERGY_COST } from '@/game/playerProfile';
 import TacticalRehearsalPanel from '@/components/game/TacticalRehearsalPanel';
 import { buildTacticalRehearsal } from '@/game/tacticalRehearsal';
+import { describeLobbySynergy } from '@/game/lobbyPreparation';
 import { usePresentationMotion } from '@/components/ui/usePresentationMotion';
 
 function getDisplayLore(agentDef, slot, lang) {
@@ -422,8 +425,9 @@ function PriorityList({ priorityList, onChange, disabled = false }) {
         fontSize: '0.5rem', color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace',
         letterSpacing: '0.12em', marginBottom: 8,
       }}>
-        ◈ {zh ? '行动优先级' : 'ACTION PRIORITY'} <span style={{ opacity: 0.5 }}>{zh ? '优先执行前 3 项' : 'TOP 3 EXECUTE FIRST'}</span>
+        ◈ {zh ? '行动偏好' : 'ACTION PREFERENCES'}
       </div>
+      <p style={{ fontSize: 10, color: '#9cb7bd', lineHeight: 1.6, marginBottom: 8 }}>{zh ? '用于旧版自动调查与战术试演。新版现场行动由你逐次选择。' : 'Used by legacy automatic investigation and rehearsals. Choose each action yourself in manual investigations.'}</p>
       {visiblePriorities.map((id, idx) => {
         const action = getAction(id);
         if (!action) return null;
@@ -479,7 +483,7 @@ function PriorityList({ priorityList, onChange, disabled = false }) {
 }
 
 // ── Left: Team Roster + Priority ──────────────────────────────────────────────
-function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression, onPriorityChange, onHover, onOpenCoreMarket, mobileActive, locked = false }) {
+function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression, onPriorityChange, onHover, onOpenCoreMarket, mobileActive, locked = false, readOnly = false }) {
   const { lang } = useLang();
   const lvls = agentDefs.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
   return (
@@ -504,12 +508,12 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
           const isSelected = selectedIdx === i;
           const xpInfo = getXPToNextLevel(progression[i]?.xp || 0);
           return (
-            <div className={`td-roster-agent ${isSelected ? 'td-roster-agent-selected' : ''}`} key={i} onClick={() => !locked && onSelect(i)}
+            <button type="button" aria-pressed={isSelected} disabled={locked} className={`td-roster-agent ${isSelected ? 'td-roster-agent-selected' : ''}`} key={i} onClick={() => !locked && onSelect(i)}
               onMouseEnter={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseMove={e => onHover?.(i, e.clientX, e.clientY)}
               onMouseLeave={() => onHover?.(null)}
               style={{
-              display: 'flex', alignItems: 'center', gap: 8,
+              display: 'flex', width: '100%', textAlign: 'left', border: 'none', alignItems: 'center', gap: 8,
               padding: '10px 12px', cursor: locked ? 'default' : 'pointer',
               borderLeft: `3px solid ${isSelected ? def.color : 'transparent'}`,
               background: isSelected ? `${def.color}12` : 'transparent',
@@ -535,10 +539,10 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
                   <div style={{ width: `${xpInfo.pct}%`, height: '100%', background: def.color, borderRadius: 1, transition: 'width 0.5s ease' }}/>
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
-        <button type="button" disabled={locked} onClick={() => !locked && onOpenCoreMarket?.(selectedIdx)} style={{
+        <button type="button" disabled={locked || readOnly} onClick={() => !locked && !readOnly && onOpenCoreMarket?.(selectedIdx)} style={{
           width: 'calc(100% - 20px)', margin: '8px 10px 10px', minHeight: 34, borderRadius: 8,
           border: '1px solid rgba(232,201,138,.48)', background: 'rgba(232,201,138,.08)',
           color: '#f0d28b', fontFamily: 'monospace', fontSize: '.5rem', fontWeight: 900, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.45 : 1,
@@ -554,7 +558,7 @@ function TeamRosterPanel({ agents, agentDefs, selectedIdx, onSelect, progression
         <PriorityList
           priorityList={agents[selectedIdx]?.priority_list || PRIORITY_ACTIONS.map(p => p.id)}
           onChange={(list) => onPriorityChange(selectedIdx, list)}
-          disabled={locked}
+          disabled={locked || readOnly}
         />
       </div>
     </div>
@@ -620,12 +624,17 @@ function FormationChangeFeedback({ change }) {
 }
 
 // ── Center: Holographic Stage ─────────────────────────────────────────────────
-function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive, targetCase, activeSupport, supportCount, commanderName, matchDetails, locked = false }) {
+function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, progression, synergy, onHover, mobileActive, targetCase, activeSupport, supportCount, commanderName, matchDetails, locked = false, view, onViewChange, preparation }) {
   const { lang } = useLang();
   const lvls = agentDefs.map((_, i) => getLevelFromXP(progression[i]?.xp || 0));
 
   return (
     <div className={`td-lobby-stage td-lobby-panel ${mobileActive ? 'td-mobile-active' : ''}`} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      <div className="td-lobby-briefing-tabs" role="group" aria-label={lang === 'zh' ? '简报视图' : 'Briefing views'}>
+        <button type="button" aria-pressed={view === 'prepare'} onClick={() => onViewChange('prepare')}>{lang === 'zh' ? '出勤准备' : 'PREPARATION'}</button>
+        <button type="button" aria-pressed={view === 'holo'} onClick={() => onViewChange('holo')}>{lang === 'zh' ? '全息编组' : 'HOLOGRAM'}</button>
+      </div>
+      {view === 'prepare' ? preparation : <div className="td-lobby-stage-scene">
       {/* Grid bg */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 0,
@@ -707,14 +716,14 @@ function HoloStage({ agents, agentDefs, selectedIdx, onSelect, accentColor, prog
         @keyframes spin-ring { from{stroke-dashoffset:0} to{stroke-dashoffset:100} }
         @keyframes plat-dot { 0%,100%{opacity:0.3} 50%{opacity:1} }
       `}</style>
+      </div>}
     </div>
   );
 }
 
 // ── Right: Attribute Config + Skill Tree ─────────────────────────────────────
-function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive, locked = false, readOnly = false, skillSyncPending = false }) {
+function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgents, progression, skillLoadout, onSkillLoadout, mobileActive, locked = false, readOnly = false, skillSyncPending = false, tab, setTab }) {
   const { lang } = useLang();
-  const [tab, setTab] = useState('attrs'); // 'attrs' | 'skills' | 'dossier'
 
   const tabs = [
     { key: 'attrs', label: lang === 'zh' ? '属性配置' : 'ATTRIBUTES', icon: '⚙️' },
@@ -778,7 +787,8 @@ function AttributePanel({ agent, agentDef, agentIdx, spec, onSpecChange, allAgen
               <SpecialtyAttrPanel
                 agentIdx={agentIdx}
                 spec={spec}
-                onSpecChange={locked ? () => {} : onSpecChange}
+                onSpecChange={locked || readOnly ? () => {} : onSpecChange}
+                disabled={locked || readOnly}
                 agentColor={agentDef.color}
                 attributeBonus={agentDef.attribute_bonus}
               />
@@ -861,7 +871,7 @@ function StatusBar({ onBack, backLabel, onOpenSettings, profile, readOnly, light
 }
 
 // ── Deploy Controls ───────────────────────────────────────────────────────────
-function DeployControls({ onDeploy, onSave, onLoad, onTutorial, onRehearsal, synergyOver, synergy, onApplyPreset, disabled = false, locked = false }) {
+function DeployControls({ onDeploy, onSave, onLoad, onTutorial, onRehearsal, synergyOver, synergy, onComparePresets, toolsRef, canLoad = false, disabled = false, locked = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const [deploying, setDeploying] = useState(false);
@@ -901,7 +911,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, onRehearsal, syn
 
   const btns = [
     { label: saving ? (zh ? '同步中' : 'SYNCING') : (zh ? '保存编队' : 'SAVE SQUAD'), icon: '💾', onClick: async () => { await handleSave(); setToolsOpen(false); }, color: '#00e5ff', disabled: saving || deploying || disabled || locked },
-    { label: zh ? '加载预设' : 'LOAD PRESET', icon: '📂', onClick: () => { if (!locked) onLoad(); setToolsOpen(false); }, color: '#a78bfa', disabled: saving || deploying || locked },
+    { label: zh ? '恢复已保存编队' : 'RESTORE SAVED SQUAD', icon: '📂', onClick: () => { if (!locked && !disabled) onLoad(); setToolsOpen(false); }, color: '#a78bfa', disabled: !canLoad || disabled || saving || deploying || locked },
     { label: zh ? '战术台指南' : 'TACTICAL DESK GUIDE', icon: '❓', onClick: () => { if (!locked) onTutorial(); setToolsOpen(false); }, color: 'rgba(255,255,255,0.58)', disabled: saving || deploying || locked },
   ];
 
@@ -913,12 +923,12 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, onRehearsal, syn
       flexShrink: 0, transition: 'background 0.4s, border-color 0.4s',
     }}>
       <div className="td-lobby-tools-wrap">
-        <button className="td-lobby-tools-toggle" type="button" aria-expanded={toolsOpen} disabled={locked} onClick={() => setToolsOpen(value => !value)}>
+        <button ref={toolsRef} className="td-lobby-tools-toggle" type="button" aria-expanded={toolsOpen} disabled={locked} onClick={() => setToolsOpen(value => !value)}>
           <span>☰</span><span>{zh ? '编队工具' : 'SQUAD TOOLS'}</span><small>{toolsOpen ? (zh ? '收起' : 'CLOSE') : (zh ? '预设 / 保存' : 'PRESETS / SAVE')}</small>
         </button>
         {toolsOpen && <div className="td-lobby-tools-popover">
           <div className="td-lobby-tool-actions">{btns.map((button) => <button key={button.label} onClick={button.onClick} disabled={button.disabled} style={{ color: button.color, borderColor: `${button.color}45`, background: `${button.color}0d` }}><span>{button.icon}</span>{button.label}</button>)}</div>
-          <PresetChips onApply={preset => { if (!locked) onApplyPreset(preset); setToolsOpen(false); }} />
+          <button type="button" onClick={() => { onComparePresets(); setToolsOpen(false); }}>{zh ? '比较编队预设' : 'COMPARE FORMATIONS'}</button>
         </div>}
       </div>
 
@@ -937,6 +947,7 @@ function DeployControls({ onDeploy, onSave, onLoad, onTutorial, onRehearsal, syn
 
       {/* Main deploy */}
       <button
+        className="td-lobby-deploy-button"
         onClick={handleDeploy}
         disabled={locked || deploying || saving || disabled}
         title={disabled
@@ -999,25 +1010,20 @@ function CoreAgentMarket({ profile, slot, currentId, busy, onConfirm, onClose })
   const currentAgent = getAgentById(currentId) || candidates[0];
   const pendingAgent = candidates.find(agent => agent.id === pendingId) || null;
   const slotNames = zh ? ['调查核心席', '法证核心席', '技术核心席'] : ['INVESTIGATION CORE', 'FORENSIC CORE', 'TECHNICAL CORE'];
+  const dialogRef = useRef(null);
+  useModalFocusTrap(true, dialogRef, onClose, null);
 
   useEffect(() => { setPendingId(null); }, [currentId, slot]);
-  useEffect(() => {
-    const onKeyDown = event => {
-      if (event.key === 'Escape' && !busy) onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [busy, onClose]);
 
   const bonusTags = agent => Object.entries(agent?.attribute_bonus || {}).map(([key, value]) => {
     const label = CORE_ATTRIBUTE_LABELS[key]?.[zh ? 0 : 1] || key;
-    return `${label} +${value}${key === 'ap_cost_discount' ? '%' : ''}`;
+    return `${label} +${value}`;
   });
   const pendingOwned = pendingAgent ? owned.has(pendingAgent.id) : false;
   const diamonds = Math.max(0, Number(profile?.diamonds) || 0);
   const affordable = !pendingAgent || pendingOwned || diamonds >= pendingAgent.cost;
 
-  return <div role="dialog" aria-modal="true" aria-label={slotNames[slot]} onClick={onClose} style={{
+  return <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={slotNames[slot]} onClick={onClose} style={{
     position: 'fixed', inset: 0, zIndex: 120, display: 'grid', placeItems: 'center', padding: 18,
     background: 'rgba(0,3,10,.84)', backdropFilter: 'blur(10px)',
   }}>
@@ -1072,19 +1078,27 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
   const { settings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const closeTutorial = useCallback(() => setShowTutorial(false), []);
+  const toolsRef = useRef(null);
   const [saveNotice, setSaveNotice] = useState(null);
   const noticeTimerRef = useRef(null);
   const {
-    agents, agentDefs, coreAgentIds, replaceCoreAgent, specs, selectedIdx, setSelectedIdx, skillLoadout, setSkillLoadout,
-    commandPlan, setCommandPlan, updateSpec, updatePriority, applyPreset, currentConfig, loadSaved,
+    agents, agentDefs, coreAgentIds, replaceCoreAgent, specs, selectedIdx, setSelectedIdx, primaryAgentIdx, setPrimaryAgentIdx, skillLoadout, setSkillLoadout,
+    commandPlan, setCommandPlan, updateSpec, updatePriority, applyPreset, canUndoPreset, undoPreset, currentConfig, loadSaved,
   } = useTeamBuilder(profile);
   const progression = profile?.agent_progression || [];
   const activeSupport = getActiveSupportAgent(profile);
   const supportCount = getOwnedAgents(profile).filter(agent => !agent.core).length;
   const [mobileTab, setMobileTab] = useState('briefing');
+  const [briefingView, setBriefingView] = useState('prepare');
+  const [selectedPresetId, setSelectedPresetId] = useState(null);
+  const [agentTab, setAgentTab] = useState('attrs');
   const [coreMarketSlot, setCoreMarketSlot] = useState(null);
   const [corePurchaseBusy, setCorePurchaseBusy] = useState(false);
   const corePurchaseBusyRef = useRef(false);
+  const closeCoreMarket = useCallback(() => {
+    if (!corePurchaseBusyRef.current) setCoreMarketSlot(null);
+  }, []);
   const [skillSyncPending, setSkillSyncPending] = useState(false);
   const skillSyncLockRef = useRef(false);
   const [showRehearsal, setShowRehearsal] = useState(false);
@@ -1122,7 +1136,7 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
     const ids = synergy.active.map(s => s.id);
     const fresh = synergy.active.filter(s => !prevActiveRef.current.includes(s.id));
     prevActiveRef.current = ids;
-    if (fresh.length) setUnlockQueue(q => [...q, ...fresh]);
+    if (fresh.length) setUnlockQueue(q => [...q, ...fresh.map(describeLobbySynergy)]);
   }, [synergy.active.map(s => s.id).join(',')]);
 
   const [hover, setHover] = useState(null); // { idx, x, y }
@@ -1206,7 +1220,7 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
     const config = cloneDeploymentConfig(currentConfig());
     const snapshot = {
       config,
-      selectedIdx,
+      selectedIdx: primaryAgentIdx,
       skillLoadout: cloneDeploymentLoadout(skillLoadout),
       supportAgentId: activeSupport?.id || null,
       targetCaseId: targetCase?.case_id || null,
@@ -1341,42 +1355,11 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
         minHeight: 30, padding: '6px 14px', borderBottom: '1px solid rgba(232,201,138,.28)',
         background: 'linear-gradient(90deg,rgba(57,38,12,.88),rgba(10,18,28,.94),rgba(57,38,12,.88))',
         color: '#f0d28b', font: '800 9px/1.45 ui-monospace,monospace', letterSpacing: '.05em', textAlign: 'center',
-      }}>{lang === 'zh' ? '当前调查已暂存 · 战术预览只读，部署将继续原调查' : 'CURRENT INVESTIGATION PAUSED · TACTICAL PREVIEW IS READ ONLY; DEPLOYMENT RESUMES THE ACTIVE CASE'}</div>}
+      }}>{lang === 'zh' ? '当前调查已暂存 · 此处仅查看编队，返回后可继续原调查' : 'CURRENT INVESTIGATION PAUSED · VIEW THE SQUAD HERE; RETURN TO CONTINUE THE ACTIVE CASE'}</div>}
 
       {showSettings && <SettingsDrawer onClose={() => setShowSettings(false)} />}
 
-      {showTutorial && (
-        <div onClick={() => setShowTutorial(false)} style={{
-          position: 'fixed', inset: 0, zIndex: 80, display: 'grid', placeItems: 'center',
-          padding: 20, background: 'rgba(0,4,12,.82)', backdropFilter: 'blur(8px)',
-        }}>
-          <div onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" style={{
-            width: 'min(560px, 94vw)', padding: 24, borderRadius: 16,
-            border: '1px solid rgba(0,229,255,.45)', background: '#06101d',
-            boxShadow: '0 0 45px rgba(0,229,255,.18)', fontFamily: 'monospace',
-          }}>
-            <div style={{ color: '#7df1ff', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '战术台快速指南' : 'TACTICAL DESK QUICK GUIDE'}</div>
-            <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
-              {(lang === 'zh' ? [
-                '查看案件简报，再选择主探员并分配专长点数。',
-                '调整每名探员的行动优先级，决定其执行倾向。',
-                '在指挥方案台选择一项指挥学说和应急预案。',
-                targetCase ? '保存方案后部署，将直接开始目标案件。' : '保存方案后部署，将进入案件簿选择目标。',
-              ] : [
-                'Review the briefing, then select a primary agent and allocate specialty points.',
-                'Set each agent’s action priorities to define their execution style.',
-                'Choose one command doctrine and one contingency plan.',
-                targetCase ? 'Save and deploy to begin the target case directly.' : 'Save and deploy to choose a target in the case archive.',
-              ]).map(item => <li key={item}>{item}</li>)}
-            </ol>
-            <button onClick={() => setShowTutorial(false)} style={{
-              width: '100%', padding: 10, borderRadius: 8, cursor: 'pointer',
-              border: '1px solid #00e5ff80', background: 'rgba(0,229,255,.12)', color: '#7df1ff',
-              fontFamily: 'monospace', fontWeight: 900,
-            }}>{lang === 'zh' ? '明白了' : 'CONTINUE'}</button>
-          </div>
-        </div>
-      )}
+      {showTutorial && <LobbyGuideModal targetCase={targetCase} onClose={closeTutorial} restoreRef={toolsRef} />}
 
       {saveNotice && <div role="status" aria-live="polite" className={`td-lobby-notice is-${saveNotice.type}`}>
         <span>{saveNotice.type === 'error' ? '!' : '✓'}</span>
@@ -1407,7 +1390,7 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
         <div className="td-lobby-readiness">
           <div title={matchDetails.advice}><small>{targetCase ? (lang === 'zh' ? '案件适配度' : 'CASE FIT') : (lang === 'zh' ? '编组适配度' : 'SQUAD FIT')}</small><strong style={{ color: matchDetails.color }}>{matchForecast}<em>%</em></strong></div>
           <i />
-          <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: agentDefs[selectedIdx].color }}>{agentDefs[selectedIdx].icon} {agentDefs[selectedIdx].id}</strong></div>
+          <div className="td-lobby-primary"><small>PRIMARY AGENT</small><strong style={{ color: agentDefs[primaryAgentIdx].color }}>{agentDefs[primaryAgentIdx].icon} {agentDefs[primaryAgentIdx].id}</strong></div>
         </div>
       </div>
 
@@ -1446,6 +1429,7 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
           onOpenCoreMarket={slot => !readOnly && !deploymentLocked && setCoreMarketSlot(slot)}
           mobileActive={mobileTab === 'formation'}
           locked={deploymentLocked}
+          readOnly={readOnly}
         />
         <HoloStage
           agents={agents} agentDefs={agentDefs} selectedIdx={selectedIdx}
@@ -1460,13 +1444,32 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
           commanderName={profile?.detective_name}
           matchDetails={matchDetails}
           locked={deploymentLocked}
+          view={briefingView}
+          onViewChange={setBriefingView}
+          preparation={<LobbyPreparationPanel profile={profile} agents={agents} agentDefs={agentDefs} specs={specs}
+            primaryAgentIdx={primaryAgentIdx} commandPlan={commandPlan} activeSupport={activeSupport}
+            selectedPresetId={selectedPresetId} onPreviewPreset={setSelectedPresetId}
+            onApplyPreset={preset => {
+              if (readOnly || deploymentLocked) return;
+              if (applyPreset(preset)) showNotice(lang === 'zh' ? '✓ 预设已应用，可撤回或继续分点；部署时保存' : '✓ PRESET APPLIED. UNDO OR REFINE IT; DEPLOYMENT SAVES IT.', 2600);
+            }}
+            canUndoPreset={canUndoPreset} onUndoPreset={() => {
+              if (readOnly || deploymentLocked) return;
+              if (undoPreset()) showNotice(lang === 'zh' ? '✓ 已撤回上次预设' : '✓ LAST PRESET UNDONE');
+            }}
+            onAdjustAgent={slot => { if (!deploymentLocked) { setSelectedIdx(slot); setAgentTab('attrs'); setMobileTab('agent'); } }}
+            onPrimaryAgent={slot => {
+              if (readOnly || deploymentLocked) return;
+              setPrimaryAgentIdx(slot);
+              showNotice(lang === 'zh' ? `✓ ${agentDefs[slot].id} 已设为主探员` : `✓ ${agentDefs[slot].id} IS NOW PRIMARY`);
+            }} disabled={readOnly || deploymentLocked} />}
         />
         <AttributePanel
           agent={agents[selectedIdx]}
           agentDef={agentDefs[selectedIdx]}
           agentIdx={selectedIdx}
           spec={specs[selectedIdx]}
-          onSpecChange={spec => !deploymentLocked && updateSpec(spec)}
+          onSpecChange={spec => !readOnly && !deploymentLocked && updateSpec(spec)}
           allAgents={agents}
           progression={progression}
           skillLoadout={skillLoadout}
@@ -1475,11 +1478,14 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
           locked={deploymentLocked}
           readOnly={readOnly}
           skillSyncPending={skillSyncPending}
+          tab={agentTab}
+          setTab={setAgentTab}
         />
         <CommandPlanPanel
           className="td-command-plan-mobile"
           value={commandPlan}
-          onChange={value => !deploymentLocked && setCommandPlan(value)}
+          onChange={value => !readOnly && !deploymentLocked && setCommandPlan(value)}
+          disabled={readOnly || deploymentLocked}
           targetCase={targetCase}
           mobileActive={mobileTab === 'command'}
         />
@@ -1488,7 +1494,8 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
       <CommandPlanPanel
         className="td-command-plan-desktop"
         value={commandPlan}
-        onChange={value => !deploymentLocked && setCommandPlan(value)}
+        onChange={value => !readOnly && !deploymentLocked && setCommandPlan(value)}
+        disabled={readOnly || deploymentLocked}
         targetCase={targetCase}
       />
 
@@ -1509,7 +1516,7 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
           slot={coreMarketSlot}
           currentId={coreAgentIds[coreMarketSlot]}
           busy={corePurchaseBusy}
-          onClose={() => !corePurchaseBusy && setCoreMarketSlot(null)}
+          onClose={closeCoreMarket}
           onConfirm={commitCoreReplacement}
         />
       )}
@@ -1558,10 +1565,12 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
       )}
 
       <DeployControls
-        onApplyPreset={preset => !deploymentLocked && applyPreset(preset)}
+        toolsRef={toolsRef}
+        onComparePresets={() => { setBriefingView('prepare'); setMobileTab('briefing'); setSelectedPresetId('brute_force'); }}
         onDeploy={prepareDeploy}
         onRehearsal={() => !deploymentLocked && setShowRehearsal(true)}
         onSave={async () => {
+          if (readOnly || deploymentLocked) return;
           const config = currentConfig();
           try {
             await onTeamSave?.(config);
@@ -1571,7 +1580,14 @@ export default function HolographicLobby({ profile, readOnly = false, previewAct
             throw cause;
           }
         }}
-        onLoad={() => !deploymentLocked && loadSaved()}
+        onLoad={() => {
+          if (readOnly || deploymentLocked) return;
+          const restored = loadSaved();
+          showNotice(restored
+            ? (lang === 'zh' ? '✓ 已恢复保存的编队' : '✓ SAVED SQUAD RESTORED')
+            : (lang === 'zh' ? '⚠ 暂无可恢复的编队' : '⚠ NO SAVED SQUAD TO RESTORE'), 2200, restored ? 'success' : 'error');
+        }}
+        canLoad={Array.isArray(profile?.saved_team_config?.specs) && profile.saved_team_config.specs.length === AGENT_DEFS.length}
         synergy={Math.round(synergy.matchScore * 100)}
         synergyOver={synergy.overload}
         onTutorial={() => !deploymentLocked && setShowTutorial(true)}

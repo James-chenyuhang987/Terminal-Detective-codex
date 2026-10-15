@@ -1,0 +1,677 @@
+{
+  "schema_version": 1,
+  "investigation_version": 2,
+  "balance_revision": 2,
+  "verification_kind": "automated_authoritative_worst_case_budget",
+  "generated_at": "2026-10-15T00:40:07.243Z",
+  "source_test": "tests/investigationV2Authority.test.js",
+  "source_test_sha256": "41c5c1f27a3573b8523ff5d11cba4a0cc136a353701c3f1dadeaeedc521965ac",
+  "source_log": "/tmp/td-v2-balance-authority.log",
+  "source_log_sha256": "20607d2984ae1dbad2c94bfb524e8a043ee9391e0b4642474b6a0e41b6ffed39",
+  "source_test_clock": "2026-10-14T12:00:00Z",
+  "command": "node --test tests/investigationV2Authority.test.js",
+  "suite_result": {
+    "tests": 69,
+    "passed": 69,
+    "failed": 0
+  },
+  "baseline_reference": "docs/verification/v2-playthroughs.json",
+  "configuration_notes": {
+    "default-team": "buildTeamConfig() default three investigators, with no specialist/scanner AP waiver.",
+    "zero-ability": "Same default team with all ability and base-ability values set to zero; a boundary fixture, not a production upgrade."
+  },
+  "measurement_notes": {
+    "budget": "20 initial AP: eight correct core checks (8), six evidence-backed testimony stages (6), one correct special verification (1), one wrong inspection (1), and two preservation responses (4).",
+    "crisis_injection": "The fixture disables naturally generated crises and injects two real createRunCrisis evidence events at turns 6 and 12, then resolves secure_now through the authoritative reducer. It tests the highest AP cost for two crises without depending on favorable RNG. Separate authority tests cover real 6–8 turn scheduling.",
+    "reports": "The first report has all four conclusions correct but one dimension missing attachments; it consumes the single free correction. The second report supplies the complete causal evidence chain after serialize/restore and receives B at zero AP.",
+    "comparison": "These 16 deliberately adverse budget runs are separate from the original baseline playthroughs; the baseline artifact is preserved.",
+    "scope": "Local deterministic authority tests, not independent player attempts, production transactions, device performance measurements or a guarantee against unlimited mistakes."
+  },
+  "implementation_sha256": {
+    "server/investigationV2/balance.js": "9728d1f41845b45c26363c715afb114564f5b1525f438c3f66abbec261d86655",
+    "server/investigationV2/rules.js": "cf64aef8c223a31883b4804fad450636545994db945e0843a3fe0c5382435133",
+    "server/gameAuthority/runCrisis.js": "a5bb1dc70c0b151fae53e738a9021c74e19d1f4a2d5f18c4d8129357f34740c3"
+  },
+  "runs": [
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_01",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_01",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_02",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_02",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_03",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_03",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_04",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_04",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_05",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_05",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_06",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_06",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_07",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_07",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_08",
+      "configuration": "zero-ability",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    },
+    {
+      "record_type": "difficulty_budget",
+      "case_id": "Lvl_08",
+      "configuration": "default-team",
+      "investigation_version": 2,
+      "balance_revision": 2,
+      "initial_ap": 20,
+      "total_ap_cost": 20,
+      "remaining_ap": 0,
+      "turns": 16,
+      "grade": "B",
+      "passed": true,
+      "successful_core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "special_verification_completed": true,
+      "wrong_inspections": 1,
+      "wrong_inspection_ap_cost": 1,
+      "preservation_crises": [
+        {
+          "turn": 6,
+          "ap_cost": 2
+        },
+        {
+          "turn": 12,
+          "ap_cost": 2
+        }
+      ],
+      "preservation_ap_cost": 4,
+      "evidence_correction_used": true,
+      "evidence_correction_penalty": {
+        "apLoss": 0,
+        "reputationLoss": 0,
+        "confusionIncrease": 0
+      },
+      "report_attempts": 2
+    }
+  ]
+}

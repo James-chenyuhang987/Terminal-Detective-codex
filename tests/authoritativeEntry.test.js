@@ -19,6 +19,7 @@ const serverRun = { id: 'paid-run-001', case_id: ALL_CASES[0].case_id, team_conf
 function harness({ activeRun = null, selectedCase = null, response, saved = rawConfig } = {}) {
   const state = { screen: 'HOME', run: null, strategy: null, selected: null, calls: [], narrative: null };
   const bindings = {
+    supportedInvestigationVersions: [1],
     ALL_CASES, selectedCase, activeRun, profile: { saved_team_config: saved }, settings: { storyMode: 'theater' }, lang: 'en',
     teamIntentRef: { current: null }, caseStartRef: { current: false }, briefingRequestRef: { current: null }, briefedRunRef: { current: false }, preferredCaseId: null, lobbyReturnScreen: 'HOME',
     setScreen: value => { state.screen = value; }, setAuthoritativeRun: value => { state.run = value; },
@@ -45,10 +46,10 @@ test('paid entry sends only raw case/team intent and adopts server strategy with
   assert.deepEqual(defaults.state.calls[0].args, { case_id: ALL_CASES[0].case_id });
 });
 
-test('every entry path resumes an existing paid cloud run without charging or playing entry narrative', async () => {
-  for (const name of ['handleCaseSelect', 'requestCaseSelect', 'handleHomeStartInvestigation', 'handleResume', 'openLobbyForCase', 'openCasesWithSavedTeam', 'handleDeploy']) {
+test('explicit resume and same-case entry retain a paid cloud run without charging or replaying narrative', async () => {
+  for (const name of ['handleCaseSelect', 'requestCaseSelect', 'handleHomeStartInvestigation', 'handleResume', 'openLobbyForCase', 'handleDeploy']) {
     const app = harness({ activeRun: serverRun });
-    await app.call(name, ALL_CASES[1], rawConfig);
+    await app.call(name, name === 'openLobbyForCase' ? serverRun.case_id : ALL_CASES[0], rawConfig);
     assert.strictEqual(app.state.run, serverRun, name);
     assert.equal(app.state.screen, 'GAME', name);
     assert.equal(app.state.calls.length, 0, name);
@@ -66,17 +67,18 @@ test('cloud confirmation recovered after a lost start reply is resumable, includ
   assert.strictEqual(app.state.run, serverRun);
   assert.equal(app.state.calls.length, 1);
   const race = harness({ response: async () => ({ profile: {}, error: 'active_run_exists', active_run: serverRun, run: serverRun }) });
-  assert.equal((await race.call('handleCaseSelect', ALL_CASES[1])).error, null);
+  assert.equal((await race.call('handleCaseSelect', ALL_CASES[0])).error, null);
   assert.strictEqual(race.state.run, serverRun);
 });
 
-test('start replay routes only the current active run and never resurrects the immutable original result', async () => {
-  for (const active_run of [null, { ...serverRun, id: 'newer-paid-run', case_id: ALL_CASES[1].case_id }]) {
+test('start replay only enters a current run for the requested case and never resurrects its old receipt', async () => {
+  for (const active_run of [null, { ...serverRun, id: 'newer-paid-run' }, { ...serverRun, id: 'other-paid-run', case_id: ALL_CASES[1].case_id }]) {
     const app = harness({ response: async () => ({ profile: {}, active_run, run: serverRun, result: { run: serverRun } }) });
     const result = await app.call('handleCaseSelect', ALL_CASES[0]);
-    assert.strictEqual(app.state.run, active_run);
-    assert.equal(app.state.screen, active_run ? 'GAME' : 'HOME');
-    assert.equal(result.error, active_run ? null : 'cloud_run_unavailable');
+    const matches = active_run?.case_id === ALL_CASES[0].case_id;
+    assert.strictEqual(app.state.run, matches ? active_run : null);
+    assert.equal(app.state.screen, matches ? 'GAME' : 'HOME');
+    assert.equal(result.error, matches ? null : active_run ? 'active_run_exists' : 'cloud_run_unavailable');
     assert.equal(app.state.calls.length, 1);
   }
 });

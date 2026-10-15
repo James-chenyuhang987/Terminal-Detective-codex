@@ -35,7 +35,7 @@ function ScreenFallback() {
 
 export default function TerminalDetective() {
   const { lang } = useLang();
-  const { profile, activeRun, command, refresh, loadProfile, settle, isReadOnly, account, sessionId } = useProfile();
+  const { profile, activeRun, supportedInvestigationVersions = [1], command, refresh, loadProfile, settle, isReadOnly, account, sessionId } = useProfile();
   const { settings, updateSetting } = useSettings();
   const [screen, setScreen] = useState('LANDING');
   const [showModeChooser, setShowModeChooser] = useState(false);
@@ -56,6 +56,7 @@ export default function TerminalDetective() {
   const [lobbyPreviewRun, setLobbyPreviewRun] = useState(false);
   const [caseSelectReturnScreen, setCaseSelectReturnScreen] = useState('LOBBY');
   const [abandonRunBusy, setAbandonRunBusy] = useState(false);
+  const abandonRunRef = useRef(false);
   const [abandonRunError, setAbandonRunError] = useState('');
   const [entryNarrative, setEntryNarrative] = useState(null);
   const [narrativeBusy, setNarrativeBusy] = useState(false);
@@ -204,6 +205,7 @@ export default function TerminalDetective() {
 
   const handleCaseSelect = async (caseData) => {
     if (selectedCase) {
+      if (selectedCase.case_id !== caseData.case_id) return { error: 'active_run_exists' };
       setScreen('GAME');
       return { error: null };
     }
@@ -212,14 +214,17 @@ export default function TerminalDetective() {
     try {
       await loadInvestigationTerminal();
       if (activeRun) {
+        if (activeRun.case_id !== caseData.case_id) return { error: 'active_run_exists' };
         resumeCloudRun(activeRun);
         return { run: activeRun };
       }
       const teamConfig = teamIntentRef.current || profile?.saved_team_config;
       const result = await command('start_case', {
         case_id: caseData.case_id, ...(teamConfig ? { team_config: teamConfig } : {}),
+        ...(supportedInvestigationVersions.includes(2) ? { investigation_version: 2 } : {}),
       });
       if (!result?.active_run) return { ...result, error: result?.error || 'cloud_run_unavailable' };
+      if (result.active_run.case_id !== caseData.case_id) return { ...result, error: 'active_run_exists' };
       resumeCloudRun(result.active_run);
       return { ...result, run: result.active_run, error: null };
     } finally {
@@ -228,6 +233,8 @@ export default function TerminalDetective() {
   };
 
   const requestCaseSelect = (caseData) => {
+    if ((selectedCase && selectedCase.case_id !== caseData.case_id)
+      || (activeRun && activeRun.case_id !== caseData.case_id)) return Promise.resolve({ error: 'active_run_exists' });
     if (selectedCase) { setScreen('GAME'); return Promise.resolve({ error: null }); }
     if (activeRun) { resumeCloudRun(activeRun); return Promise.resolve({ run: activeRun }); }
     if (briefingRequestRef.current || caseStartRef.current) return Promise.resolve({ error: 'busy' });
@@ -303,47 +310,46 @@ export default function TerminalDetective() {
   };
 
   const abandonActiveRun = async () => {
-    if (abandonRunBusy || !activeRun?.id) return false;
+    const run = activeRun || authoritativeRun;
+    if (abandonRunRef.current || abandonRunBusy || !run?.id) return false;
     if (isReadOnly) {
       setAbandonRunError(lang === 'zh' ? '档案当前为只读状态，请先恢复同步后重试。' : 'The profile is read-only. Restore sync before trying again.');
       return false;
     }
+    abandonRunRef.current = true;
     setAbandonRunBusy(true);
     setAbandonRunError('');
     try {
       const client = createPlayerRunClient({
         ownerUid: account?.id,
-        runId: activeRun.id,
+        runId: run.id,
         sessionId,
         invoke: cloudflareApi.functions.invoke,
       });
-      await client.resume();
-      const response = await client.command({ type: 'abandon' });
-      if (response?.run?.status !== 'abandoned') throw new Error('The active investigation was not ended.');
-      await refresh();
+      const resumed = await client.resume();
+      if (resumed.run.status === 'active') {
+        const response = await client.command({ type: 'abandon' });
+        if (response?.run?.status !== 'abandoned') throw new Error('The active investigation was not ended.');
+      }
+      // Abandon ends gameplay, but the server's paid slot remains occupied
+      // until settlement. Confirm its release before enabling another case.
+      const result = requireConfirmed(await command('settle_case', { run_id: run.id }));
+      if (result.active_run !== null) throw new Error('The cloud investigation slot is still occupied.');
+      setSelectedCase(null);
+      setAuthoritativeRun(null);
+      teamIntentRef.current = null;
+      briefedRunRef.current = false;
       return true;
     } catch (cause) {
       setAbandonRunError(publicErrorMessage(cause, lang));
       return false;
     } finally {
+      abandonRunRef.current = false;
       setAbandonRunBusy(false);
     }
   };
 
   const openCaseSelection = () => {
-    if (selectedCase) {
-      setScreen('GAME');
-      return;
-    }
-    setAbandonRunError('');
-    setPreferredCaseId(null);
-    setLobbyReturnScreen('HOME');
-    setCaseSelectReturnScreen('HOME');
-    if (activeRun) {
-      void loadCaseSelect();
-      setScreen('CASE_SELECT');
-      return;
-    }
     void openCasesWithSavedTeam();
   };
 
@@ -356,6 +362,11 @@ export default function TerminalDetective() {
   };
 
   const openLobbyForCase = (caseId = null, returnScreen = 'HOME', options = {}) => {
+    const currentCaseId = selectedCase?.case_id || activeRun?.case_id;
+    if (caseId && currentCaseId && caseId !== currentCaseId) {
+      void openCasesWithSavedTeam(caseId);
+      return;
+    }
     if (selectedCase && !options.previewActiveRun) {
       setScreen('GAME');
       return;
@@ -369,24 +380,22 @@ export default function TerminalDetective() {
   };
 
   const openCasesWithSavedTeam = async (caseId = null) => {
-    if (selectedCase) {
-      setScreen('GAME');
-      return;
-    }
-    if (activeRun) { resumeCloudRun(activeRun); return; }
+    setAbandonRunError('');
     void loadCaseSelect();
     const saved = profile?.saved_team_config;
-    if (!saved) {
+    if (!saved && !selectedCase && !activeRun) {
       openLobbyForCase(caseId);
       return;
     }
-    teamIntentRef.current = { ...saved, core_agent_ids: getSelectedCoreAgentIds(profile) };
-    setAgentStrategy(buildTeamConfig(
-      teamIntentRef.current,
-      saved.primary_agent_index,
-      profile?.skill_loadout,
-      getActiveSupportAgentId(profile),
-    ));
+    if (!selectedCase && !activeRun && saved) {
+      teamIntentRef.current = { ...saved, core_agent_ids: getSelectedCoreAgentIds(profile) };
+      setAgentStrategy(buildTeamConfig(
+        teamIntentRef.current,
+        saved.primary_agent_index,
+        profile?.skill_loadout,
+        getActiveSupportAgentId(profile),
+      ));
+    }
     setPreferredCaseId(caseId);
     setLobbyReturnScreen('HOME');
     setCaseSelectReturnScreen('HOME');
@@ -414,7 +423,6 @@ export default function TerminalDetective() {
         onStartInvestigation={settings.storyMode === 'theater' ? handleHomeStartInvestigation : null}
         onRegister={() => setScreen('REGISTRATION')}
         suspendedCase={selectedCase || ALL_CASES.find(item => item.case_id === activeRun?.case_id)}
-        hasLocalSelectedCase={Boolean(selectedCase)}
         onResume={handleResume}
       />
     );
@@ -456,7 +464,7 @@ export default function TerminalDetective() {
         onAbandonRun={abandonActiveRun}
         abandonBusy={abandonRunBusy}
         abandonError={abandonRunError}
-        activeRun={activeRun}
+        activeRun={activeRun || (selectedCase ? authoritativeRun : null)}
         returnToHome={caseSelectReturnScreen === 'HOME'}
         preferredCaseId={preferredCaseId}
       />

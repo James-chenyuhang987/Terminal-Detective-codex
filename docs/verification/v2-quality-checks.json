@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-15",
+  "environment": "local workspace, automated tests and standalone Worker dry-run; not deployed",
+  "checks": {
+    "tests": {
+      "command_log": "/tmp/td-v2-all-tests.log",
+      "sha256": "8c887c958ebe92416bb98741c34e31716d446bebd2ac45c60df6183beb90dda7",
+      "result": "passed",
+      "tests": 818,
+      "pass": 818,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 11258.9795
+    },
+    "typecheck": {
+      "command_log": "/tmp/td-v2-typecheck.log",
+      "sha256": "793790b71777b78e0f07d09a98897e5bfe97951b8ede6ff4a44d20af6b9be692",
+      "result": "passed"
+    },
+    "lint": {
+      "command_log": "/tmp/td-v2-lint.log",
+      "sha256": "5075cf6b57285711dfae3ccf64d42c9c09090486b64187f5028df0e348a9da43",
+      "result": "passed"
+    },
+    "security": {
+      "command_log": "/tmp/td-v2-security.log",
+      "sha256": "75c66bd5463c8865f41c6c7fbb17177dac5ca0cf5a048df391bfd9309ac69592",
+      "result": "passed",
+      "source_files": 398
+    },
+    "assets": {
+      "command_log": "/tmp/td-v2-assets.log",
+      "sha256": "093a4a7bd0aa1e0407879814ffdafbb7417824820d808c594a26a6692d24c808",
+      "result": "passed"
+    },
+    "build": {
+      "command_log": "/tmp/td-v2-build.log",
+      "sha256": "2db9d80fd9870c0c3dbba5b090001387b4a8fa8815ae292c04b358aa75ba6980",
+      "result": "passed"
+    },
+    "worker_dry_run": {
+      "command_log": "/tmp/td-v2-worker-dry-run.log",
+      "sha256": "5a36eb8208ffedce586070c3fc77d8db11e9876846ca79761c2e72d36cb42f9e",
+      "result": "passed",
+      "worker_kib": 755.36,
+      "gzip_kib": 212.02,
+      "static_assets": 46
+    },
+    "release_config_gate": {
+      "command_log": "/tmp/td-v2-release-check.log",
+      "sha256": "61a0f9f8fedee9cebbba7a60fdfa06082b0cf2f23706b55e8aa98da8d94b6b48",
+      "result": "blocked_by_missing_public_firebase_config"
+    },
+    "production_privacy": {
+      "artifact": "docs/verification/v2-public-build-baseline.json",
+      "private_texts": 698,
+      "matched": 0,
+      "source_import_violations": 0,
+      "result": "passed",
+      "browser_js_files": 20,
+      "decoded_literals": 26652,
+      "artifact_sha256": "e696b4baacb41d4a00c53c32c0287657acaf75da6a9c6f56d637fb9b351512c9"
+    },
+    "diff_check": {
+      "command_log": "/tmp/td-v2-diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "passed"
+    },
+    "stateless_rules_retired": {
+      "suite": "tests/cloudflareGateway.test.js",
+      "result": "passed_in_full_suite",
+      "authenticated_response": "410 STATELESS_RULES_RETIRED",
+      "probe_count": 24,
+      "notes": "Real JWT verification and SQLite fixture; legacy live run state remains unchanged."
+    },
+    "report_guidance_regression": {
+      "before_log": "/tmp/td-v2-report-guidance-before.log",
+      "before_sha256": "eaf3340c3d38aab94d1847ee1f6172f1795afdec238ba3b167fe486afa9909ff",
+      "before_result": "failed_as_expected: evidence role missing",
+      "after_log": "/tmp/td-v2-report-guidance-after.log",
+      "after_sha256": "bc54bf65406e3dd08dc5048bbf7706b94a200fc848e2f2dbb7e35666abd6073b",
+      "after_result": "passed: 3/3 rendered component tests",
+      "mobile_ui": "docs/verification/v2-report-guidance-mobile.jpg",
+      "mobile_cost_ui": "docs/verification/v2-report-guidance-mobile-top.jpg",
+      "scope": "Separate final QA fixture at zero clues; no report submitted or investigation progressed. Not an additional synthetic player."
+    },
+    "final_ui_source_sha256": {
+      "src/components/game/investigation/TerminalPanels.jsx": "7391904876adaa7014537c584612403db0b36b397f31d0f9e84553fb044f86b6",
+      "src/components/game/investigation/investigationField.css": "d0357f23fe6dcef9be17ac66a6bd92ad352871538640db02169dda4769dcefb9",
+      "tests/investigationPanelAccessibility.test.js": "2c928a2c434bc8f873f90a65f87180c145764fae241f618d5079c7c8234f9b18"
+    }
+  },
+  "notes": [
+    "Original nine GLBs, original art/theater/*.blend and locomotion generator are unchanged.",
+    "Complete Cloudflare release gate is preserved; real public Firebase client settings are absent locally.",
+    "Agent UI simulations are documented separately and do not constitute human playtests."
+  ],
+  "timezone": "Asia/Singapore",
+  "sessions_started_date": "2026-10-14",
+  "verification_finished_at_utc": "2026-10-14T16:02:04Z",
+  "verification_phase": "pre_difficulty_adjustment_baseline",
+  "superseded_for_current_source_by": "docs/verification/v2-difficulty-checks.json"
+}

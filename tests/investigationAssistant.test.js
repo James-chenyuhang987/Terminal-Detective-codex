@@ -17,6 +17,22 @@ test('assistant starts by directing the player to execute a cycle in both langua
   assert.notEqual(zh.messageKey, en.messageKey);
 });
 
+test('version 2 guidance directs manual inspection and four evidence groups without legacy cycle instructions', () => {
+  for (const lang of ['zh', 'en']) {
+    const base = { gameState: state(), caseData: localizeCase(Case_Data_Lvl_01, lang), lang, investigationVersion: 2,
+      currentGoal: { zh: '核验大堂的新记录', en: 'Inspect the new lobby record' } };
+    const start = buildInvestigationBrief(base);
+    assert.ok(start.message.includes(lang === 'zh' ? '现场调查台' : 'field investigation desk'));
+    const continuing = buildInvestigationBrief({ ...base, gameState: state({ unlocked_clues: ['c_01'], turn_count: 2 }) });
+    assert.ok(continuing.message.includes(base.currentGoal[lang]));
+    const reporting = buildInvestigationBrief({ ...base, reportMode: true });
+    assert.ok(reporting.message.includes(lang === 'zh' ? '机会、手段、动机和时间线' : 'opportunity, method, motive and timeline'));
+    const processing = buildInvestigationBrief({ ...base, isProcessing: true });
+    for (const brief of [start, continuing, reporting, processing]) assert.doesNotMatch(brief.message, /执行循环|EXECUTE CYCLE|white EVIDENCE|白色/);
+    assert.doesNotMatch(continuing.message, /Mei|Anonymous Hacker|Sofia/);
+  }
+});
+
 test('assistant summarizes discovered public evidence without leaking hidden clues', () => {
   const publicBrief = buildInvestigationBrief({
     gameState: state({ unlocked_clues: ['c_01', 'c_02'] }),

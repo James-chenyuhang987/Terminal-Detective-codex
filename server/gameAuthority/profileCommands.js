@@ -117,7 +117,7 @@ const COMMAND_FIELDS = Object.freeze({
   claim_achievement: ['achievement_id'], claim_task: ['kind', 'task_id'], claim_weekly: [], claim_level: ['level'],
   visit_lobby: [], save_team: ['team_config'], skill_loadout: ['skill_loadout'],
   purchase_agent: ['agent_id'], activate_support: ['agent_id'], mail_read: ['mail_id'],
-  mail_reply: ['mail_id', 'choice_id'], start_case: ['case_id', 'team_config'], settle_case: ['run_id'],
+  mail_reply: ['mail_id', 'choice_id'], start_case: ['case_id', 'team_config', 'investigation_version'], settle_case: ['run_id'],
 });
 
 export function validateProfileCommand(command) {
@@ -128,6 +128,8 @@ export function validateProfileCommand(command) {
   }
   if (command.type === 'claim_task' && !['tutorial', 'seven'].includes(command.kind)) throw invalidCommand();
   if (command.type === 'claim_level' && !Number.isSafeInteger(command.level)) throw invalidCommand();
+  if (command.type === 'start_case' && command.investigation_version !== undefined
+    && ![1, 2].includes(command.investigation_version)) throw invalidCommand('Unsupported investigation version.');
   if (command.type === 'purchase_item' && command.quantity !== undefined
     && (!Number.isSafeInteger(command.quantity) || command.quantity < 1 || command.quantity > 10)) throw invalidCommand();
   if (command.type === 'identity') {
@@ -204,7 +206,7 @@ export function prepareCaseStart(profile, command, now) {
   // Mission bonuses only apply when an owned item is consumed by this paid start.
   const equipped_items = profile.equipped_items.filter(id => profile.inventory[id] > 0);
   const outcome = startCase({ ...profile, equipped_items }, caseData, now);
-  return { ...outcome, caseData, teamConfig };
+  return { ...outcome, caseData, teamConfig, investigationVersion: command.investigation_version ?? 1 };
 }
 
 export function settleAuthoritativeCase(profile, summary, now) {

@@ -7,7 +7,7 @@ import {
   normalizeCommandPlan,
 } from '@/game/commandSystem';
 
-function PlanOption({ item, selected, onClick, lang }) {
+function PlanOption({ item, selected, onClick, lang, disabled }) {
   const zh = lang === 'zh';
   return (
     <button
@@ -16,20 +16,23 @@ function PlanOption({ item, selected, onClick, lang }) {
       onClick={onClick}
       style={/** @type {React.CSSProperties & {'--command-color': string}} */ ({ '--command-color': item.color })}
       aria-pressed={selected}
+      disabled={disabled}
     >
       <span><Icon name={item.icon} /></span>
       <strong>{zh ? item.name : item.nameEn}</strong>
-      <small>{zh ? item.desc : item.descEn}</small>
+      <small>{item.id === 'emergency_throttle'
+        ? (zh ? 'AP 首次不高于 6 时获得 2 AP 额度，逐次抵扣后续收费核验、证据问询或专属核验。' : 'At 6 AP or less, gain 2 AP credit toward subsequent paid inspections, evidence questions or special verification.')
+        : zh ? item.desc : item.descEn}</small>
       {selected && <i>✓</i>}
     </button>
   );
 }
 
-export default function CommandPlanPanel({ value, onChange, targetCase = null, mobileActive = false, className = '', id = undefined, labelledBy = undefined }) {
+export default function CommandPlanPanel({ value, onChange, targetCase = null, mobileActive = false, className = '', id = undefined, labelledBy = undefined, disabled = false }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const plan = normalizeCommandPlan(value);
-  const set = (patch) => onChange?.(normalizeCommandPlan({ ...plan, ...patch }));
+  const set = (patch) => !disabled && onChange?.(normalizeCommandPlan({ ...plan, ...patch }));
 
   return (
     <section id={id} role={labelledBy ? 'tabpanel' : undefined} aria-labelledby={labelledBy} tabIndex={labelledBy ? 0 : undefined} className={`td-command-plan ${mobileActive ? 'td-mobile-active' : ''} ${className}`}>
@@ -53,12 +56,13 @@ export default function CommandPlanPanel({ value, onChange, targetCase = null, m
                 selected={plan.doctrine_id === item.id}
                 onClick={() => set({ doctrine_id: item.id })}
                 lang={lang}
+                disabled={disabled}
               />
             ))}
           </div>
         </div>
         <div>
-          <label>{zh ? '一次性应急预案' : 'ONE-SHOT CONTINGENCY'}</label>
+          <label>{zh ? '一次性应急预案 · 自动消耗 1 CP' : 'ONE-SHOT CONTINGENCY · COSTS 1 CP'}</label>
           <div className="td-command-options">
             {COMMAND_CONTINGENCIES.map(item => (
               <PlanOption
@@ -67,6 +71,7 @@ export default function CommandPlanPanel({ value, onChange, targetCase = null, m
                 selected={plan.contingency_id === item.id}
                 onClick={() => set({ contingency_id: item.id })}
                 lang={lang}
+                disabled={disabled}
               />
             ))}
           </div>

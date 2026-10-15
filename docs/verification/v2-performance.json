@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "measurement_date": "2026-10-14",
+  "kind": "local_foreground_render_interval",
+  "environment": {
+    "os": "macOS",
+    "hardware_model": "not recorded",
+    "browser": "Codex in-app browser",
+    "build": "Vite development build",
+    "viewport_css_pixels": [1280, 720],
+    "quality_mode": "auto",
+    "observed_dpr": 1.5,
+    "observed_shadows": true,
+    "backend": "Local authoritative handlers with in-memory SQLite/D1 fixture; no production account"
+  },
+  "procedure": "Open the active 3D scene with no investigation panel, focus the viewport and hold W for 12 seconds towards a door until collision stops translation; read renderer data attributes after the continuous sample window.",
+  "instrumentation": {
+    "source": "src/game/theaterQuality.js:sampleTheaterQuality",
+    "input": "R3F useFrame delta between rendered frames",
+    "statistic": "Exponential moving average with weight 1-exp(-delta*2), approximately 0.5-second time constant",
+    "excluded": "Idle/background, non-finite, non-positive and over-120ms frame gaps",
+    "sampled_seconds": "Sum of accepted frame intervals, not total session or key-hold duration",
+    "estimated_fps": "1000 divided by the EMA interval; not GPU time or a full-session average"
+  },
+  "observations": [
+    {
+      "case_id": "Lvl_01",
+      "room": "datacenter",
+      "frame_interval_ema_ms": 8.39,
+      "estimated_fps": 119.2,
+      "accepted_samples": 724,
+      "sampled_seconds": 6.03,
+      "dpr": 1.5,
+      "shadows": true
+    },
+    {
+      "case_id": "Lvl_01",
+      "room": "laboratory",
+      "frame_interval_ema_ms": 8.35,
+      "estimated_fps": 119.8,
+      "accepted_samples": 713,
+      "sampled_seconds": 6.03,
+      "dpr": 1.5,
+      "shadows": true
+    }
+  ],
+  "layout_verification": {
+    "viewport_css_pixels": [390, 844],
+    "horizontal_overflow": false,
+    "special_operation_button_min_height_css_pixels": 44,
+    "verified_operations": ["Inspect options", "Comparison choice correction and submit"],
+    "input": "Browser mobile viewport emulation and pointer/keyboard; not physical touchscreen"
+  },
+  "assets": {
+    "glb_count": 10,
+    "total_glb_bytes": 7880636,
+    "new_investigation_props_bytes": 158576,
+    "new_investigation_props_triangles": 2128,
+    "original_nine_glbs_changed": false,
+    "original_blend_sources_changed": false
+  },
+  "limitations": [
+    "No physical-phone GPU or touchscreen measurement was performed.",
+    "These two local development samples are not production, low-end hardware or all-eight-case performance benchmarks.",
+    "Frame interval EMA is not CPU render duration, GPU timing, loading latency or 1% low frame rate.",
+    "No hardware model was recorded; the result cannot represent a specified ordinary-computer configuration."
+  ]
+}

@@ -158,13 +158,17 @@ export function prepareCoreAgentReplacement(profile, teamConfig, slot, agentId) 
   if (!getOwnedAgentIds(profile).includes(agent.id)) return { error: 'not_owned' };
   const base = teamConfig && typeof teamConfig === 'object' && !Array.isArray(teamConfig) ? teamConfig : {};
   const currentIds = normalizeCoreAgentIds(base.core_agent_ids || profile?.saved_team_config?.core_agent_ids);
+  const adjusted = Array.isArray(base.specs) ? {
+    specs: base.specs.map((spec, slot) => slot === index
+      ? normalizeSpecialtyAllocation(slot, spec, agent.attribute_bonus) : spec),
+  } : {};
   if (currentIds[index] === agent.id) {
-    return { config: { ...base, core_agent_ids: currentIds }, agent, unchanged: true };
+    return { config: { ...base, ...adjusted, core_agent_ids: currentIds }, agent, unchanged: true };
   }
   const nextIds = [...currentIds];
   nextIds[index] = agent.id;
   return {
-    config: { ...base, core_agent_ids: normalizeCoreAgentIds(nextIds) },
+    config: { ...base, ...adjusted, core_agent_ids: normalizeCoreAgentIds(nextIds) },
     agent,
     previousAgent: getAgentById(currentIds[index]),
   };
@@ -230,3 +234,4 @@ export function getSupportAgentEffects(profileOrAgentId) {
     : getActiveSupportAgent(profileOrAgentId);
   return agent && !agent.core ? { ...(agent.effects || {}) } : {};
 }
+import { normalizeSpecialtyAllocation } from './specialtySystem.js';

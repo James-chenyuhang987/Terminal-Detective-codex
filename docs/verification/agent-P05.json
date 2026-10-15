@@ -1,0 +1,305 @@
+{
+  "playerId": "P05",
+  "simulation": "independent agent simulation; not a human playtest",
+  "case": "Abyssal Echo",
+  "language": "English",
+  "persona": "exploratory; explains clues before choosing",
+  "status": "incomplete_due_to_environment",
+  "completed": false,
+  "finalGrade": null,
+  "finalAP": 3,
+  "finalClues": 9,
+  "finalHPPercent": 100,
+  "finalConfusionPercent": 7,
+  "firstSceneEntryAt": "2026-10-14T12:59:56.307Z",
+  "firstVerifiedClueAt": "2026-10-14T13:01:35.910Z",
+  "timeToFirstVerifiedClueSeconds": 100,
+  "totalWallSeconds": 5499,
+  "timingNotes": "First-clue time includes onboarding and tool latency. Long tool waits and the development refresh/recovery are environment pauses, not player deliberation. Exact active-player duration was not measured. The recorded5499-second session wall time also includes a long unmeasured orchestration/context-continuation pause; it must not be presented as gameplay duration. Active-player duration is unknown.",
+  "environmentPauses": [
+    {
+      "kind": "unexpected_frontend_reload",
+      "details": "During the robot trail inspection, the tab returned to the landing page. Normal Start -> confirm3D -> HomeResume restored the same scene, AP17 and3 clues; onboarding repeated and was skipped. No reset/new case."
+    },
+    {
+      "kind": "long_tool_wait",
+      "action": "submit voiceprint reconstruction",
+      "seconds": 74.857
+    },
+    {
+      "kind": "long_tool_wait",
+      "action": "verify first evidence relation",
+      "seconds": 86.994
+    },
+    {
+      "kind": "automatic_approval_timeout",
+      "action": "select report conclusion",
+      "seconds": 205.201,
+      "details": "Automatic review timed out without a decision; tool explicitly permitted one retry."
+    },
+    {
+      "kind": "automatic_approval_timeout",
+      "action": "allowed retry of report conclusion",
+      "seconds": 172.022,
+      "details": "Same timeout; no further game mutations attempted."
+    },
+    {
+      "kind": "automatic_review_rejection",
+      "action": "read-only final screenshot",
+      "seconds": 18.521,
+      "reason": "Origin access after the permitted retry had timed out would bypass the documented browser security control and proceed without the required prerequisite."
+    },
+    {
+      "kind": "orchestration_context_continuation_pause",
+      "seconds": null,
+      "details": "Long unmeasured pause while root context continued; total session wall clock is not player gameplay time."
+    }
+  ],
+  "entryFlow": "Start -> confirm default3D -> HomeResume; default NEXUS-01/AURORA-09/CIPHER-47,20AP",
+  "presentation": "Started3D; used field desk, switched to text after8 clues to make contacts easier to find. No viewport changes.",
+  "wrongInspectionMethods": [],
+  "wrongRelations": [
+    {
+      "first": "Recovered sampler black box",
+      "relation": "Supports",
+      "second": "Remote Pressure Command",
+      "reasonChosen": "The visible black-box text explicitly says it independently records the pressure increase and corroborates the command/concealment chain.",
+      "feedback": "LOGIC INVALID: selected relationship is not supported by these two records.",
+      "consequence": "Confusion rose4% ->7%; AP stayed3."
+    }
+  ],
+  "hints": [
+    {
+      "count": 1,
+      "objective": "Recovered sampler black box",
+      "text": "Compare visible records and measurements; obtain original material before checking accounts.",
+      "usefulness": "Generic and did not identify the room; returning to uplink found the black box."
+    }
+  ],
+  "longestGameplayBlocker": {
+    "topic": "Finding recovered sampler black box",
+    "details": "Objective named the object but not its location; current biology-lab desk did not contain it. Read hint, did available voiceprint reconstruction, then returned to the uplink and found it.",
+    "overThreeActiveMinutes": false,
+    "exactSeconds": null,
+    "notes": "Environment waits make wall-clock duration unsuitable as player deliberation."
+  },
+  "costClarity": {
+    "overall": "Mostly clear",
+    "clear": "Inspections and testimony stated1AP,−10% stamina, advancing one turn; travel/free review stated noAP; reconstruction stated1AP; crises stated3AP or explicit delay consequences.",
+    "unclear": "3D agent percentages lacked the Stamina label, and post-action selected stamina fell6 points rather than the advertised10 because recovery is not explained there. Verify relation showed no confusion risk before the rejected natural relation.",
+    "apAccounting": {
+      "initial": 20,
+      "inspections": 9,
+      "testimony": 4,
+      "securedPurge": 3,
+      "reconstruction": 1,
+      "remaining": 3
+    }
+  },
+  "verifiedEvidence": [
+    {
+      "name": "Remote Pressure Command",
+      "method": "Read independent diagnostics and execution logs",
+      "agent": "NEXUS-01",
+      "fact": "Pressure valve controlled from trench uplink, bypassing internal manual safety."
+    },
+    {
+      "name": "Draft Insurance Claim",
+      "method": "Extract original audit records and verify their source",
+      "agent": "CIPHER-47",
+      "fact": "Neris drafted equipment-fatigue death report two hours before incident."
+    },
+    {
+      "name": "Looped Distress Voiceprint",
+      "method": "Sample and compare against a reference",
+      "agent": "AURORA-09",
+      "fact": "Call assembled from Oren safety drill three days earlier; breath repeats every47 seconds."
+    },
+    {
+      "name": "Sana's Robot Trail",
+      "method": "Extract original audit records and verify their source",
+      "agent": "NEXUS-01",
+      "fact": "Robot hijacked nine minutes before death while Sana remained in pump bay."
+    },
+    {
+      "name": "Neris's Navigation Key",
+      "method": "Check original timestamps and signatures",
+      "agent": "CIPHER-47",
+      "fact": "Private key authorized sampler with destination rewritten as abandoned mining zone."
+    },
+    {
+      "name": "Protected Colony Sample",
+      "method": "Sample and compare against a reference",
+      "agent": "CIPHER-47",
+      "fact": "Colony exists only in protected thermal vent; valuable for longevity research."
+    },
+    {
+      "name": "Oren's Disclosure Packet",
+      "method": "Check original timestamps and signatures",
+      "agent": "CIPHER-47",
+      "fact": "Six illegal collections and approving station account recorded."
+    },
+    {
+      "name": "Lio's Medical Record",
+      "method": "Read independent diagnostics and execution logs",
+      "agent": "CIPHER-47",
+      "fact": "Separate medical lock and patient vitals establish continuous clinic presence."
+    },
+    {
+      "name": "Recovered sampler black box",
+      "method": "Verify independent source",
+      "agent": "NEXUS-01",
+      "fact": "Independently records Neris key approving pressure increase, sonar cover, then robot erase token."
+    }
+  ],
+  "testimony": {
+    "Lio": {
+      "advances": 2,
+      "strategy": "Present matching evidence",
+      "agent": "AURORA-09",
+      "facts": "Continuous clinic presence; protected vent colonies; Oren intended to disclose six collections, buyer funds longevity research."
+    },
+    "Neris": {
+      "advances": 2,
+      "strategy": "Present matching evidence",
+      "agent": "AURORA-09",
+      "facts": "Manages navigation key and approved departures; prepared failure template in advance; Oren upload would affect outside contract."
+    },
+    "Sana": {
+      "advances": 0
+    }
+  },
+  "reconstruction": {
+    "completed": true,
+    "costAP": 1,
+    "selected": "Drill three days earlier matching background valve noise; seconds1 and48 identical breath-noise waveform",
+    "feedback": "Verified. The reconstruction is recorded."
+  },
+  "acceptedRelations": [
+    {
+      "first": "Remote Pressure Command",
+      "relation": "Supports",
+      "second": "Neris's Navigation Key",
+      "proposition": "Remote pressure session matches private navigation authority"
+    },
+    {
+      "first": "Protected Colony Sample",
+      "relation": "Supports",
+      "second": "Oren's Disclosure Packet",
+      "proposition": "Protected samples corroborate disclosure of six collections"
+    },
+    {
+      "first": "Draft Insurance Claim",
+      "relation": "Precedes",
+      "second": "Remote Pressure Command",
+      "proposition": "Failure-claim draft predates actual pressure increase"
+    }
+  ],
+  "crisisChoices": [
+    {
+      "event": "Public account needs check",
+      "choice": "Reinterrogate",
+      "costAP": 0,
+      "confusionChange": 4
+    },
+    {
+      "event": "Navigation key evidence purge",
+      "choice": "Secure now",
+      "costAP": 3
+    },
+    {
+      "event": "Disclosure packet evidence purge",
+      "choice": "Defer",
+      "costAP": 0,
+      "reason": "Only3AP remained; UI says original retained, delayed verification risks reputation/confusion after next two-turn deadline."
+    }
+  ],
+  "ownExplanation": {
+    "conclusion": "Neris remotely raised pressure and falsified accident timing.",
+    "opportunity": "Neris controlled the private navigation key at trench uplink. Remote pressure source matches that authority, and independent black box ties the same key to commands. Sana remained at pump bay and Lio continuously treated divers.",
+    "method": "Remote uplink pressure increase bypassed manual safety; sonar/old distress loop concealed timing; hijacked repair robot erased records.",
+    "motive": "Prevent Oren exposing six illegal protected-area collections and their valuable longevity-research buyer/outside contract.",
+    "timeline": "Neris drafted equipment-fatigue report two hours before incident, remotely raised pressure, replayed an old drill with47-second breath repetition, then used hijacked robot for concealment. Robot hijack began nine minutes before death; precise ordering of every cover step relies on visible report options/black-box description."
+  },
+  "reportAttempt": {
+    "opened": true,
+    "selectionsApplied": false,
+    "submitted": false,
+    "plannedSelections": [
+      "Neris remotely raised pressure and falsified accident timing",
+      "Uplink pressure increase, old distress playback, and log erasure",
+      "Stop disclosure of protected-area collection and its high-value buyer",
+      "Prewritten claim, remote pressure, old voice loop, hijacked robot erasure"
+    ],
+    "plannedAttachments": {
+      "opportunity": [
+        "Neris's Navigation Key",
+        "Remote Pressure Command",
+        "Recovered sampler black box"
+      ],
+      "method": [
+        "Remote Pressure Command",
+        "Looped Distress Voiceprint",
+        "Sana's Robot Trail",
+        "Recovered sampler black box"
+      ],
+      "motive": [
+        "Protected Colony Sample",
+        "Oren's Disclosure Packet"
+      ],
+      "timeline": [
+        "Draft Insurance Claim",
+        "Remote Pressure Command",
+        "Looped Distress Voiceprint",
+        "Sana's Robot Trail",
+        "Recovered sampler black box"
+      ]
+    },
+    "blocker": "Browser security approval availability prevented first selection; one permitted retry timed out; no workaround."
+  },
+  "issues": [
+    {
+      "severity": "medium",
+      "title": "Natural black-box support relation rejected",
+      "detail": "Black-box text literally corroborates the remote command, yet that support relation is invalid and costs3 confusion without explained rule."
+    },
+    {
+      "severity": "medium",
+      "title": "Black-box objective lacks location",
+      "detail": "The lab objective points to black box not present in its desk; hint offers generic reasoning only. Uplink contains it."
+    },
+    {
+      "severity": "low",
+      "title": "Route unlock requirement inconsistent",
+      "detail": "Moon-pool initial Sonar route says verify Repair-robot credential trail, but verifying Insurance-draft console unlocked it; the robot trail is only inside that destination."
+    },
+    {
+      "severity": "low",
+      "title": "English crisis shows Chinese evidence names",
+      "detail": "Purge notices used Neris 航行密钥 and Oren 的检举包 in otherwise English UI."
+    },
+    {
+      "severity": "low",
+      "title": "Reload repeats onboarding",
+      "detail": "Progress survives normal re-entry but initial tutorial repeats and agent selection reverts; interruption appears environmental."
+    },
+    {
+      "severity": "low",
+      "title": "3D percent label unclear",
+      "detail": "Agent selector displays bare percent; text testimony later clarifies it is stamina."
+    }
+  ],
+  "screenshots": {
+    "requested": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P05.jpg",
+    "saved": false,
+    "reason": "Read-only screenshot denied after automatic origin-review retry timeout; no screenshot workaround attempted."
+  },
+  "tabCleanup": {
+    "closed": true,
+    "scope": "Only own P05 tab"
+  },
+  "constraints": "Only visibleUI, normal clicks/selections, hint and presentation switch. No source/tests/server/other-player reports/hidden state/fetch/API/database actions; no real payment/reward.",
+  "authority_event_log_sha256": "cb95e75da31f7c2162ad99ef8151089df2a774ace6fe7a0b8e3771096b940c22",
+  "verification_scope": "Synthetic visible-UI session; local isolated Worker/D1 fixture; no real users or production rewards.",
+  "authority_event_log_artifact": "docs/verification/agent-P05-events.jsonl"
+}

@@ -1,8 +1,10 @@
 import { applyCrisisChoice } from '../../src/game/crisisEvents.js';
 import { runRoll } from './runSettlement.js';
+import { usesBalancedInvestigation } from '../investigationV2/balance.js';
 
 export function nextRunCrisisTurn(run) {
-  return run.state.turn_count + 4 + runRoll(`${run.id}:${run.state.turn_count}`, 'crisis-interval', 3);
+  return run.state.turn_count + (usesBalancedInvestigation(run) ? 6 : 4)
+    + runRoll(`${run.id}:${run.state.turn_count}`, 'crisis-interval', 3);
 }
 
 export function createRunCrisis(run, lang) {
@@ -21,7 +23,7 @@ export function createRunCrisis(run, lang) {
     const clue = caseData.clue_dictionary.find(item => item.clue_id === clueId);
     return { type, icon: '🔥', title: zh ? '证据危机' : 'EVIDENCE PURGE',
       payload: { clue_id: clueId, keyword: clue.keyword },
-      choices: [choice('secure_now', 3, 'SECURE NOW', '紧急保全'), choice('defer', 0, 'DEFER', '稍后处理')] };
+      choices: [choice('secure_now', usesBalancedInvestigation(run) ? 2 : 3, 'SECURE NOW', '紧急保全'), choice('defer', 0, 'DEFER', '稍后处理')] };
   }
   if (type === 'npc_recant') {
     const npc = caseData.npcs[runRoll(seed, 'crisis-npc', caseData.npcs.length)];
@@ -30,13 +32,26 @@ export function createRunCrisis(run, lang) {
       choices: [choice('reinterrogate', 0, 'REINTERROGATE', '立即重新审讯'), choice('ignore', 0, 'SET ASIDE', '暂时搁置')] };
   }
   return { type, icon: '👁️', title: zh ? '追踪者逼近' : 'HOSTILE TRACE', payload: {},
-    choices: [choice('evade', 2, 'EVADE', '甩脱'), choice('confront', 0, 'CONFRONT', '对峙'), choice('hide', 0, 'HIDE', '隐匿')] };
+    choices: [choice('evade', usesBalancedInvestigation(run) ? 1 : 2, 'EVADE', '甩脱'), choice('confront', 0, 'CONFRONT', '对峙'), choice('hide', 0, 'HIDE', '隐匿')] };
 }
 
 export function resolveRunCrisis(run, optionId, lang) {
   const event = run.pending_crisis;
   if (event.type !== 'tracker' || optionId !== 'confront' || !event.choices?.some(choice => choice.id === optionId)) {
-    return applyCrisisChoice(event, optionId, run.state, run.team_config, lang);
+    const result = applyCrisisChoice(event, optionId, run.state, run.team_config, lang);
+    if (!result.error && usesBalancedInvestigation(run)) {
+      const cost = event.choices.find(choice => choice.id === optionId).ap_cost;
+      if (event.type === 'evidence' && optionId === 'secure_now') {
+        result.resultText = lang === 'zh'
+          ? `✅ 证据「${event.payload.keyword}」已紧急加密封存，威胁解除。（AP -${cost}）`
+          : `✅ Evidence “${event.payload.keyword}” encrypted and secured. Threat cleared. (AP -${cost})`;
+      } else if (event.type === 'tracker' && optionId === 'evade') {
+        result.resultText = lang === 'zh'
+          ? `🛰️ 信道已切换，追踪者失去目标。混乱冲击被完全抵消。（AP -${cost}）`
+          : `🛰️ Channel switched. The tracker lost your signal and the confusion impact was negated. (AP -${cost})`;
+      }
+    }
+    return result;
   }
   // Only the confrontation roll in the shared resolver is nondeterministic.
   const win = runRoll(`${run.id}:${run.state.turn_count}`, 'crisis-confront') < 50;

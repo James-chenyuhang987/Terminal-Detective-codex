@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "investigation_version": 2,
+  "verification_kind": "automated_authoritative_rules",
+  "source_test": "tests/investigationV2Authority.test.js",
+  "source_log": "/tmp/td-v2-authority-tests.log",
+  "source_log_sha256": "0e13331c029e6cbe302d53b03f0c502c5062e1bd19bfe45ddb76371e4b7b8c32",
+  "source_test_clock": "2026-10-14T12:00:00Z",
+  "command": "node --test tests/investigationV2Authority.test.js",
+  "suite_result": {
+    "tests": 47,
+    "passed": 47,
+    "failed": 0
+  },
+  "configuration_notes": {
+    "default-team": "buildTeamConfig() with its default three investigators; no specialist/scanner AP waiver.",
+    "zero-ability": "Boundary fixture using the same team with all four ability and base-ability values set to zero; not a player upgrade or a production account."
+  },
+  "measurement_notes": {
+    "core_ap_cost": "Initial 20 AP minus remaining AP after eight correct core checks, six evidence-backed testimony stages and one correct special verification; current crisis choices resolved through the reducer.",
+    "core_turns": "Recorded turn_count on the successful B branch; observation, travel and relationships do not add turns.",
+    "grade_progression": "B, A and S verdicts are asserted on separate branches of the same pre-report state. A requires two verified alternative exclusions; S adds the independent hidden check. A successful report ends its live run.",
+    "saved_bytes": "UTF-8 Buffer.byteLength of serialize(best S run, MAX_RUN_BYTES); includes the private stored run and is not browser-transfer size or latency.",
+    "limits": "Current MAX_RUN_BYTES = 524288 (512 KiB). This fixture stays below the limit; it does not establish an unlimited play-history size.",
+    "scope": "Local deterministic rule fixtures, not production players, mobile GPU measurements or human usability tests."
+  },
+  "runs": [
+    {
+      "case_id": "Lvl_01",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 22047
+    },
+    {
+      "case_id": "Lvl_01",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21766
+    },
+    {
+      "case_id": "Lvl_02",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 22240
+    },
+    {
+      "case_id": "Lvl_02",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21903
+    },
+    {
+      "case_id": "Lvl_03",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 22316
+    },
+    {
+      "case_id": "Lvl_03",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 22036
+    },
+    {
+      "case_id": "Lvl_04",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21599
+    },
+    {
+      "case_id": "Lvl_04",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21317
+    },
+    {
+      "case_id": "Lvl_05",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 22013
+    },
+    {
+      "case_id": "Lvl_05",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21738
+    },
+    {
+      "case_id": "Lvl_06",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21977
+    },
+    {
+      "case_id": "Lvl_06",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21695
+    },
+    {
+      "case_id": "Lvl_07",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21636
+    },
+    {
+      "case_id": "Lvl_07",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 21354
+    },
+    {
+      "case_id": "Lvl_08",
+      "configuration": "zero-ability",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 22889
+    },
+    {
+      "case_id": "Lvl_08",
+      "configuration": "default-team",
+      "core_ap_cost": 15,
+      "core_turns": 15,
+      "core_checks": 8,
+      "testimony_stages": {
+        "npc_01": 2,
+        "npc_02": 2,
+        "npc_03": 2
+      },
+      "puzzle_completed": true,
+      "grade": "B",
+      "best_grade": "S",
+      "retained_evidence": 9,
+      "saved_bytes": 22666
+    }
+  ],
+  "implementation_sha256": {
+    "server/investigationV2/content.js": "00173453d24c0403478fbaf7ca7ad5db23259d63d4b6d17d0e40755f2aa5b26e",
+    "server/investigationV2/rules.js": "3d32295f4f7a1679ec2dea03e230c8572a33a066c4086b7910e5d1fffc071d10"
+  },
+  "verification_phase": "pre_difficulty_adjustment_baseline",
+  "current_budget_verification": "docs/verification/v2-difficulty-budget.json"
+}

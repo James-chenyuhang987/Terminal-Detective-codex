@@ -1,0 +1,178 @@
+{
+  "participantId": "P04",
+  "participantType": "agent_simulation",
+  "isHuman": false,
+  "language": "zh-CN",
+  "playStyle": "详细比较证据，先理解责任归因再提交报告",
+  "url": "http://127.0.0.1:5194/__case-test",
+  "caseName": "白塔悖论",
+  "caseLevel": "Lvl_08",
+  "constraints": {
+    "visibleUIOnly": true,
+    "sourceRead": false,
+    "serverRead": false,
+    "hiddenStateRead": false,
+    "directFetchOrApi": false,
+    "otherPlayerReportsRead": false,
+    "databaseMutation": false,
+    "defaultSquad": "NEXUS-01+AURORA-09+CIPHER-47",
+    "initialAP": 20
+  },
+  "presentation": {
+    "initialMode": "3D",
+    "actualSceneScreenshot": "可见暗色房间、人物、物件与引导面板",
+    "accessibilityFallback": "此设备无法显示 3D 场景，请切换文字模式继续调查。",
+    "fallbackMismatch": true,
+    "switchedToText": true,
+    "rootReportedFixMidSession": true,
+    "fixVerifiedIn3D": false
+  },
+  "timing": {
+    "firstEffectiveClueSecondsFromSceneEntry": 123,
+    "firstEffectiveClueIncludesFullFiveStepTutorial": true,
+    "firstEffectiveClue": "独立气样与氧浓度记录",
+    "totalSecondsFromSceneEntryAtFinalScreenshot": 1151
+  },
+  "outcome": {
+    "completed": true,
+    "grade": "B",
+    "gradeTitle": "资深调查官",
+    "remainingAP": 1,
+    "turns": 15,
+    "clues": "9/9",
+    "finalChaosPercent": 13,
+    "peakChaosPercent": 13,
+    "totalXP": 323,
+    "reportAttempts": 2,
+    "firstReportRejected": "缺少有效证据支持：机会",
+    "successfulCorrection": "在机会环节补上 Tomas 的电梯轨迹，证明复制工牌进入空气机房的接近机会"
+  },
+  "reasoning": {
+    "opportunity": "工牌被复制进入空气机房；Tomas 本人持续被困故障电梯并求救，不能用工牌刷卡直接证明本人到场。Lucan 的人类加密签章与主任权限控制了环境授权和风险删除。",
+    "means": "安静演示关闭独立空气报警，但气体混合未停止；异常氩氙惰性气体降低氧浓度至致窒息区间，常规毒气报警不覆盖此类低氧。",
+    "motive": "Amara 准备公开两万低信用居民的情绪诱导试验名单，Lucan 控制的咨询公司按社会稳定指标收款，公开名单会让试验与合同暂停。",
+    "timeline": "专属审计一次验证了克隆卡进入、签署静默环境、低氧执行、删除风险路径的顺序。风险审计记载死亡前六分钟删除 Amara 高危预测；只读快照把低氧执行和删除风险连接到同一人类命令链。",
+    "responsibility": "系统执行人类授权；只读快照显示无该授权时安全报警保持启用，不能把责任归于无须人类授权的自主杀人。Lucan 在对峙中承认签署和删除权限操作。",
+    "alternativeExplanations": "Iria 的事故时段连续塔外直播有独立节点原始帧。Tomas 的求救和不同硬件签章解释了克隆工牌。Iria 只完成一次温和询问，未继续其完整两轮证词；Tomas 和 Lucan 各完成两次证据对峙。"
+  },
+  "verification": {
+    "specialAudit": "签名与指令因果审计，一次通过",
+    "independentSideEvidence": "白塔只读因果快照已核验",
+    "validRelations": [
+      "Lucan 环境指令 支持 独立气样与氧浓度记录：独立低氧记录与空气报警关闭对应",
+      "秘密试验名单 支持 预测偏差合同：试验名单与稳定指数付款形成收益关联"
+    ],
+    "invalidRelations": [
+      {
+        "relation": "删除的风险路径 支持 Lucan 环境指令",
+        "reasoning": "同一人类权限连接两项操作，尝试建立责任归因支持关系",
+        "uiResult": "这两份记录不支持所选关系",
+        "cost": "混乱 +3%，AP 未变",
+        "retries": 0
+      }
+    ]
+  },
+  "mistakes": [
+    {
+      "type": "推理关系选择失败",
+      "detail": "尝试共同权限支持关系被拒绝，只收到通用不支持说明，没有枚举其他答案。"
+    },
+    {
+      "type": "报告机会附件不足",
+      "detail": "初次机会附删除风险、环境指令和因果快照；报告驳回后补充复制工牌电梯记录，一次修正通过。",
+      "cost": "AP -1、混乱 +4%"
+    }
+  ],
+  "hints": {
+    "tutorialRead": "完整 5 步",
+    "explicitHintButtonsUsed": 0,
+    "passiveNOVAUsed": true,
+    "notes": "未展开核验提示；依据物件观察、证据文字、人物证词和专属核验说明推理。"
+  },
+  "costUnderstanding": {
+    "actionCostsClear": true,
+    "freeObservationClear": true,
+    "freeTravelClear": true,
+    "freeRelationshipVerificationInferredFromUnchangedAP": true,
+    "specialAuditCostClear": "提交核验 · 1 AP",
+    "crisisCostsClear": true,
+    "rejectedReportCostUnclearBeforeSubmission": true,
+    "energyAccountingNote": "动作标体力 -10%，每回合执行者净 -6、其他探员 +4；界面观察显示回血但未在当前操作说明中解释。"
+  },
+  "crises": [
+    {
+      "trigger": "Iria 首次温和询问后",
+      "event": "追踪者逼近",
+      "choice": "隐匿，0 AP，混乱 +6%",
+      "dialogFailure": "本次提问结果和体力消耗已保存，但下一组选项刷新失败。请关闭对话后重新打开。"
+    },
+    {
+      "trigger": "直播存证核验后",
+      "event": "Lucan 环境指令的证据危机",
+      "choice": "紧急保全，AP -3"
+    },
+    {
+      "trigger": "Tomas 第二次证据对峙后",
+      "event": "Iria 公开广播的证据危机",
+      "choice": "稍后处理，0 AP；AP 2 不足以选择紧急保全 3 AP",
+      "dialogMessageAfterRootFix": "本次提问已经保存。请先处理现场危机，之后关闭并重新打开对话继续。",
+      "fixVerified": true
+    }
+  ],
+  "largestFriction": {
+    "name": "机会环节语义与有效证据缺少解释",
+    "detail": "我把人类权限和环境授权视为作案机会，报告只告知机会证据不足；实际补上复制工牌的机房接近记录才成立。此前所有四个结论均有证据，但附件要求只能通过泛化拒绝理解。",
+    "blockedOverThreeMinutes": false
+  },
+  "issues": [
+    {
+      "severity": "P2",
+      "status": "root reported fixed",
+      "title": "3D Canvas备用文字被可访问树当作设备失败",
+      "observed": "AX提示无法显示3D，截图却有渲染房间和人物，导致我主动切文字。"
+    },
+    {
+      "severity": "P2",
+      "status": "fix verified during later crisis",
+      "title": "问询保存后危机导致下一组选项刷新失败",
+      "observed": "Iria 首问遭危机时展示加载中与失败提示；Tomas 第二轮危机时已展示先处理危机的新提示。"
+    },
+    {
+      "severity": "P2",
+      "status": "open UX finding",
+      "title": "驳回报告的 AP 和混乱成本未预告",
+      "observed": "提交按钮没有成本文字，第一次驳回才发现 AP 2→1、混乱9→13。"
+    },
+    {
+      "severity": "P2",
+      "status": "open UX finding",
+      "title": "关系或报告证据不足反馈缺少具体解释",
+      "observed": "共同权限支持关系仅给不支持；机会报告只给缺少有效证据支持，未指出有效机会要证明物理接近或复制卡进入。"
+    },
+    {
+      "severity": "P3",
+      "status": "open UX finding",
+      "title": "文字模式残留执行循环提示",
+      "observed": "任务准备页及 NOVA 反复要求点击下方执行循环，但可见操作是现场物件核验，没有执行循环按钮。"
+    },
+    {
+      "severity": "P3",
+      "status": "open UX finding",
+      "title": "随机证据危机压缩证词预算",
+      "observed": "保全一次消耗3AP，另一危机出现时AP仅2，稳健选项禁用；Iria 尚未完整两轮证据询问。"
+    }
+  ],
+  "artifacts": {
+    "screenshot": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P04.jpg",
+    "report": "/tmp/td-agent-playtest/P04-report.json"
+  },
+  "stoppingReason": "案件已成功归档；无AP耗尽或超过3分钟卡点。",
+  "authority_event_log_sha256": "06c9abfeb5d04218dcb679b420091990825ad3f57a6cd00d2d857ee5c8e8f671",
+  "verification_scope": "Synthetic visible-UI session; local isolated Worker/D1 fixture; no real users or production rewards.",
+  "root_screenshot_review": {
+    "stage": "Post-settlement promotion overlay",
+    "shows_final_grade": false,
+    "note": "Root visually inspected the saved screenshot. B completion comes from the prior visible UI observation and successful authoritative report event, not this image."
+  },
+  "authority_event_log_artifact": "docs/verification/agent-P04-events.jsonl"
+}

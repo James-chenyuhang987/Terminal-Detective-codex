@@ -72,20 +72,39 @@ const STEPS = [
   },
 ];
 
+const FIELD_STEPS = [
+  { icon: 'map', target: '[data-onboarding-target="field-objective"]', label: 'EXPLORE',
+    zh: { t: '走进现场，免费观察', d: 'WASD / 方向键移动，按住 R 疾跑，靠近物件或人物按 E 交互；触屏也有方向按钮。当前目标会随已发现事实更新。', hint: '打开现场调查台也可选择物件。观察、放大、旋转和往返探索不消耗 AP。' },
+    en: { t: 'EXPLORE AND OBSERVE', d: 'Move with WASD or arrows, hold R to sprint, and press E near an object or contact. Touch direction buttons are also available. Your objective follows discovered facts.', hint: 'The investigation desk also lists objects. Observation, zoom, rotation and return travel are free.' } },
+  { icon: 'search', target: '[data-onboarding-target="field-inspect"]', label: 'VERIFY',
+    zh: { t: '选择首次核验', d: '先读物件观察，再选择探员和核验方式。确认前核对 AP、体力和风险；正确方式稳定保全关键证据，已完成核验可免费复查。' },
+    en: { t: 'CHOOSE AN INSPECTION', d: 'Read the observation, select an agent and choose a method. Review AP, stamina and risk before confirming. Correct methods secure core evidence; completed checks are free to review.' } },
+  { icon: 'chat', target: '[data-onboarding-target="interrogate"]', label: 'TESTIMONY',
+    zh: { t: '用证据推进证词', d: '人物分布在各自的区域。交谈后选择温和询问、明确追问或证据对峙；匹配已保全证据可稳定获得两次补充证词。无辜者也能澄清事实。' },
+    en: { t: 'TEST ACCOUNTS WITH EVIDENCE', d: 'Contacts occupy their own areas. Choose gentle questioning, firm follow-up or evidence confrontation. Matching secured evidence unlocks two testimony advances, including clarifications from innocent people.' } },
+  { icon: 'link', target: '[data-onboarding-target="field-deduction"]', label: 'DEDUCTION',
+    zh: { t: '核验关系与重建过程', d: '用证据连线选择支持、矛盾或先后关系，形成具体命题。材料齐备后完成案件专属核验；排序、比对和路径均可用按钮、键盘或触屏完成。', hint: '错误关系可以修正；关键证据不会因试错永久销毁。' },
+    en: { t: 'VERIFY RELATIONS AND RECONSTRUCT', d: 'Connect evidence using support, contradiction or sequence to establish a proposition. Once materials are collected, complete the case reconstruction using keyboard, touch or buttons.', hint: 'Incorrect relations can be revised. Core evidence survives experimentation.' } },
+  { icon: 'file', target: '[data-onboarding-target="report"]', label: 'REPORT',
+    zh: { t: '提交可说明的证据链', d: '分别选择结论、方式、动机和时间线，为机会、手段、动机、时间线附上证据。报告不足可修正；错误指控会造成案件对应后果。专属核验、排除替代解释和隐藏旁证提高评级。' },
+    en: { t: 'SUBMIT AN EXPLAINABLE REPORT', d: 'Select the conclusion, method, motive and timeline, then attach evidence to opportunity, method, motive and timeline. Incomplete reports can be revised; false accusations have consequences. Reconstruction, alternative exclusions and hidden corroboration improve grades.' } },
+];
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-export default function OnboardingGuide({ onClose, accentColor = '#709f9a' }) {
+export default function OnboardingGuide({ onClose, accentColor = '#709f9a', investigationVersion = 1, theaterMode = false }) {
   const { lang } = useLang();
   const { motionEnabled } = usePresentationMotion();
   const zh = lang === 'zh';
   const [i, setI] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
   const dialogRef = useRef(null);
-  const step = STEPS[i];
+  const steps = investigationVersion === 2 ? FIELD_STEPS : STEPS;
+  const step = steps[i];
   const c = zh ? step.zh : step.en;
-  const isLast = i === STEPS.length - 1;
+  const isLast = i === steps.length - 1;
 
   useLayoutEffect(() => {
     if (!step.target) {
@@ -139,12 +158,12 @@ export default function OnboardingGuide({ onClose, accentColor = '#709f9a' }) {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowRight') setI(current => Math.min(STEPS.length - 1, current + 1));
+      if (event.key === 'ArrowRight') setI(current => Math.min(steps.length - 1, current + 1));
       if (event.key === 'ArrowLeft') setI(current => Math.max(0, current - 1));
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, [onClose, steps.length]);
 
   const cardStyle = useMemo(() => {
     if (!targetRect || typeof window === 'undefined') return undefined;
@@ -191,7 +210,7 @@ export default function OnboardingGuide({ onClose, accentColor = '#709f9a' }) {
         tabIndex={-1}
       >
         <header className="td-onboarding-header">
-          <div>{zh ? '新 手 指 引' : 'FIELD BRIEFING'} · {i + 1}/{STEPS.length}</div>
+          <div>{zh ? '新 手 指 引' : 'FIELD BRIEFING'} · {i + 1}/{steps.length}</div>
           <button type="button" onClick={onClose}>{zh ? '跳过' : 'SKIP'} <Icon name="close" size={14} /></button>
         </header>
 
@@ -200,7 +219,7 @@ export default function OnboardingGuide({ onClose, accentColor = '#709f9a' }) {
           <h2 id="td-onboarding-title">{c.t}</h2>
         </div>
 
-        <p id="td-onboarding-description" className="td-onboarding-description">{c.d}</p>
+        <p id="td-onboarding-description" className="td-onboarding-description">{investigationVersion === 2 && i === 0 && !theaterMode ? (zh ? '文字模式与 3D 模式共用同一调查进度。打开现场调查台，选择当前区域的物件；区域通道可免费往返。' : 'Text and 3D modes share investigation progress. Open the field desk to select objects in your current area and travel through available routes for free.') : c.d}</p>
         {c.hint && <p className="td-onboarding-hint"><Icon name="help" size={14} style={{ color: 'var(--onboarding-accent)' }} />{c.hint}</p>}
         {step.abilityDemo && (
           <div className="td-onboarding-ability-demo" aria-label={zh ? '机制示例' : 'Mechanic example'}>
@@ -211,7 +230,7 @@ export default function OnboardingGuide({ onClose, accentColor = '#709f9a' }) {
         )}
 
         <nav className="td-onboarding-progress" aria-label={zh ? '引导步骤' : 'Tutorial steps'}>
-          {STEPS.map((item, idx) => (
+          {steps.map((item, idx) => (
             <button
               type="button"
               key={item.en.t}

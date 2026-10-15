@@ -90,6 +90,7 @@ test('public projection reveals only acquired clue descriptions and no protected
   assert.deepEqual(revealed.state.revealed_clues.map(clue => clue.clue_id), ['c_01']);
   assert.equal(revealed.state.revealed_clues[0].description, Case_Data_Lvl_01.clue_dictionary[0].description);
   assert.equal(revealed.state.revealed_clues[0].en.description, Case_Data_Lvl_01.en.clue_dictionary[0].description);
+  assert.equal(revealed.state.revealed_clues[0].weight, Case_Data_Lvl_01.clue_dictionary[0].weight);
   assert.deepEqual(revealed.agent_strategy, run.team_config);
   revealed.agent_strategy.team[0].logic_power = 999;
   assert.notEqual(run.team_config.team[0].logic_power, 999);

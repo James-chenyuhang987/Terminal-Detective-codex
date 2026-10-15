@@ -33,6 +33,8 @@ function makeBrief(lang, key, tone, message) {
  *   hasNewEvidence?: boolean,
  *   linkedPairs?: Array<Record<string, any>>,
  *   selectedNpcId?: string | null,
+ *   investigationVersion?: number,
+ *   currentGoal?: string | Record<string, string> | null,
  * }} [options]
  */
 export function buildInvestigationBrief({
@@ -45,6 +47,8 @@ export function buildInvestigationBrief({
   hasNewEvidence = false,
   linkedPairs = [],
   selectedNpcId = null,
+  investigationVersion = 1,
+  currentGoal = null,
 } = {}) {
   const zh = lang === 'zh';
   const unlockedIds = safeArray(gameState?.unlocked_clues);
@@ -69,6 +73,25 @@ export function buildInvestigationBrief({
     return makeBrief(lang, 'warning:ap', 'red', zh
       ? '行动点即将耗尽，不要继续盲目探索，先复核证据链并准备报告。'
       : 'Action points are nearly depleted, so stop blind exploration and review the evidence chain before reporting.');
+  }
+
+  if (investigationVersion === 2) {
+    if (isProcessing) return makeBrief(lang, `field-processing:${turn}`, 'cyan', zh
+      ? '正在确认本次操作，结果保存后再选择下一次核验。'
+      : 'This action is being confirmed; wait for its saved result before choosing another inspection.');
+    if (reportMode) return makeBrief(lang, `field-report:${unlockedIds.length}:${validLinkCount}`, 'green', zh
+      ? '分别为机会、手段、动机和时间线附上完整支持链，核对提交前显示的驳回代价。'
+      : 'Attach a complete evidence chain for opportunity, method, motive and timeline, and review the displayed rejection cost before submitting.');
+    if (selectedNpcId) return makeBrief(lang, `field-interview:${selectedNpcId}:${unlockedIds.length}`, 'cyan', zh
+      ? '先阅读这名人物的已知陈述，再选择探员、询问策略和匹配的已发现证据。'
+      : 'Read this witness’s known account, then choose an investigator, question strategy and matching discovered evidence.');
+    const goal = typeof currentGoal === 'string' ? currentGoal : currentGoal?.[lang] || currentGoal?.zh || currentGoal?.en || '';
+    if (!unlockedIds.length) return makeBrief(lang, 'field-start', 'cyan', zh
+      ? '在现场调查台免费观察物件，再选择核验方式和执行探员，确认成本后开始调查。'
+      : 'Observe an object for free at the field investigation desk, then choose a method and investigator and confirm the cost.');
+    return makeBrief(lang, `field-continue:${turn}:${goal}`, hasNewEvidence ? 'gold' : 'cyan', zh
+      ? `核验记录已保存；${goal || '继续在现场调查台检查未核验物件，或用已发现证据核对证词。'}`
+      : `Inspection records are saved; ${goal || 'check an unverified object at the field investigation desk or compare testimony with discovered evidence.'}`);
   }
 
   if (decisionPending) {

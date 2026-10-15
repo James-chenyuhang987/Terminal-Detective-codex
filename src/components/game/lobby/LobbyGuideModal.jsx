@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useLang } from '@/lib/lang.jsx';
 import { useModalFocusTrap } from './useModalFocusTrap';
 
-export default function LobbyGuideModal({ targetCase, onClose, restoreRef }) {
+export default function LobbyGuideModal({ targetCase, onClose, restoreRef = null }) {
   const { lang } = useLang();
   const dialogRef = useRef(null);
   useModalFocusTrap(true, dialogRef, onClose, restoreRef);
@@ -19,13 +19,15 @@ export default function LobbyGuideModal({ targetCase, onClose, restoreRef }) {
       <div style={{ color: '#a5c8c0', fontWeight: 900, fontSize: '1rem' }}>{lang === 'zh' ? '探员大厅快速指南' : 'AGENT HALL QUICK GUIDE'}</div>
       <ol style={{ color: 'rgba(235,249,255,.7)', fontSize: '.68rem', lineHeight: 1.9, paddingLeft: 20 }}>
         {(lang === 'zh' ? [
-          '查看案件简报，再选择主探员并分配专长点数。',
-          '调整每名探员的行动优先级，决定其执行倾向。',
+          '查看出勤准备：能力达到 24 点可提供专业观察，达到 30 点可获得每案首检 1 AP 优惠。',
+          '比较预设后应用，或逐人分配专长；应用可撤回。查看档案不会改变主探员，请单独指定。',
+          '新版现场行动由你选择对象、方法和执行探员；行动偏好仅用于旧版自动调查与战术试演。',
           '在指挥方案台选择一项指挥学说和应急预案。',
           targetCase ? '保存方案后部署，将直接开始目标案件。' : '保存方案后部署，将进入案件簿选择目标。',
         ] : [
-          'Review the briefing, then select a primary agent and allocate specialty points.',
-          'Set each agent’s action priorities to define their execution style.',
+          'Review readiness: an ability of 24 enables professional observations; 30 enables a first-check 1 AP benefit per case.',
+          'Preview and apply a preset, or allocate points individually. You can undo presets. Assign your primary agent explicitly.',
+          'In manual investigations, choose each target, method and executor. Action preferences apply to legacy automatic investigation and rehearsals.',
           'Choose one command doctrine and one contingency plan.',
           targetCase ? 'Save and deploy to begin the target case directly.' : 'Save and deploy to choose a target in the case archive.',
         ]).map(item => <li key={item}>{item}</li>)}

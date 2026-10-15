@@ -20,8 +20,16 @@ function createSessionId() {
   return `web-${random}`;
 }
 
-function normalizeRemote(remote) {
-  return normalizeProfile(remote || {}, undefined, { regenerateEnergy: false });
+function normalizeRemote(remote, archiveClueLabels = {}) {
+  const profile = normalizeProfile(remote || {}, undefined, { regenerateEnergy: false });
+  const labels = Object.fromEntries(profile.case_records.map(record => [record.case_id,
+    Object.freeze(Object.fromEntries(record.discovered_clues.flatMap(id => {
+      const label = archiveClueLabels?.[record.case_id]?.[id];
+      return label && typeof label.zh === 'string' && typeof label.en === 'string'
+        ? [[id, Object.freeze({ zh: label.zh, en: label.en })]] : [];
+    }))) ]));
+  // This display projection stays outside profileRef and command receipts.
+  return { profile, archiveClueLabels: Object.freeze(labels) };
 }
 
 function profileError(code, message = code) {
@@ -68,6 +76,8 @@ export function ProfileProvider({ children }) {
   const syncStatusRef = useRef('loading');
   const [profile, setProfile] = useState(null);
   const [activeRun, setActiveRun] = useState(null);
+  const [archiveClueLabels, setArchiveClueLabels] = useState({});
+  const [supportedInvestigationVersions, setSupportedInvestigationVersions] = useState([1]);
   const [account, setAccount] = useState(user || null);
   const [syncStatus, setSyncStatus] = useState('loading');
   const [pendingCount, setPendingCount] = useState(0);
@@ -136,11 +146,15 @@ export function ProfileProvider({ children }) {
     }
     if (!isCurrentOwner(ownerUid, generation)) throw profileError('PROFILE_REQUEST_CANCELLED');
     if (payload.profile.profile_revision < (profileRef.current?.profile_revision ?? 0)) return profileRef.current;
-    const next = normalizeRemote(payload.profile);
+    const { profile: next, archiveClueLabels: labels } = normalizeRemote(payload.profile, payload.archive_clue_labels);
     if (!commitProfile(next, ownerUid, generation)) {
       throw profileError('PROFILE_REQUEST_CANCELLED', 'The active account changed.');
     }
+    setArchiveClueLabels(labels);
     if (payload?.account) setAccount(payload.account);
+    setSupportedInvestigationVersions(Array.isArray(payload.supported_investigation_versions)
+      ? payload.supported_investigation_versions.filter(version => version === 1 || version === 2)
+      : [1]);
     // Investigation commands advance the run revision independently of the profile.
     const currentRun = activeRunRef.current;
     if (!currentRun || currentRun.id !== payload.active_run?.id || currentRun.revision <= payload.active_run.revision) {
@@ -410,6 +424,8 @@ export function ProfileProvider({ children }) {
     syncStatusRef.current = ownerUid ? 'loading' : 'offline';
     setProfile(null);
     setActiveRun(null);
+    setArchiveClueLabels({});
+    setSupportedInvestigationVersions([1]);
     setAccount(user || null);
     setError(null);
     setPendingCount(0);
@@ -445,6 +461,8 @@ export function ProfileProvider({ children }) {
   const value = useMemo(() => ({
     profile,
     activeRun,
+    archiveClueLabels,
+    supportedInvestigationVersions,
     sessionId: sessionIdRef.current,
     account,
     syncStatus,
@@ -460,6 +478,8 @@ export function ProfileProvider({ children }) {
   }), [
     account,
     activeRun,
+    archiveClueLabels,
+    supportedInvestigationVersions,
     discardPendingChanges,
     error,
     command,

@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-15",
+  "timezone": "Asia/Singapore",
+  "verification_finished_at_utc": "2026-10-15T00:42:01.713366+00:00",
+  "verification_phase": "difficulty_balance_revision_2",
+  "environment": "Local automated authority/UI regressions, isolated preset browser QA and standalone Worker dry-run. Not deployed.",
+  "checks": {
+    "tests": {
+      "command_log": "/tmp/td-balance-all-tests.log",
+      "sha256": "ffebbd42b46c490161853f0513fa7e0880b59f83e650adb467b1c067c791978b",
+      "result": "passed",
+      "tests": 852,
+      "pass": 852,
+      "fail": 0,
+      "skipped": 0
+    },
+    "typecheck": {
+      "command_log": "/tmp/td-balance-typecheck.log",
+      "sha256": "793790b71777b78e0f07d09a98897e5bfe97951b8ede6ff4a44d20af6b9be692",
+      "result": "passed"
+    },
+    "lint": {
+      "command_log": "/tmp/td-balance-lint.log",
+      "sha256": "5075cf6b57285711dfae3ccf64d42c9c09090486b64187f5028df0e348a9da43",
+      "result": "passed"
+    },
+    "security": {
+      "command_log": "/tmp/td-balance-security.log",
+      "sha256": "f619137d3b72d77538dea78d6a853f5183ac1b83c2a77def8e5e2b7d1f1268fe",
+      "result": "passed",
+      "source_files": 407
+    },
+    "assets": {
+      "command_log": "/tmp/td-balance-assets.log",
+      "sha256": "093a4a7bd0aa1e0407879814ffdafbb7417824820d808c594a26a6692d24c808",
+      "result": "passed"
+    },
+    "build": {
+      "command_log": "/tmp/td-balance-build.log",
+      "sha256": "4c74156950c38f206e6995a51c5ceb9ef24f1c63232ff1eb5b5f4688830c2b03",
+      "result": "passed"
+    },
+    "worker_dry_run": {
+      "command_log": "/tmp/td-balance-worker-dry-run.log",
+      "sha256": "04d3472bb3f37207c616ad78ef890cd9cca7988ec46349476980a1b12385d928",
+      "result": "passed",
+      "worker_kib": 759.69,
+      "gzip_kib": 213.03,
+      "static_assets": 46
+    },
+    "production_privacy": {
+      "command_log": "/tmp/td-balance-public-build.log",
+      "sha256": "11c1dbf87517076a7e035fcf1a48ec615abc1ab38acb6198e862929758a3c2c3",
+      "result": "passed",
+      "artifact": "docs/verification/v2-public-build.json",
+      "artifact_sha256": "26339da1586e1a52f05cd3ceb9d11e08434be386126f70565e6a57ba745c9f38",
+      "private_texts": 698,
+      "browser_js_files": 20,
+      "decoded_literals": 26739,
+      "matched": 0,
+      "source_import_violations": 0
+    },
+    "diff_check": {
+      "command_log": "/tmp/td-balance-diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "passed"
+    }
+  },
+  "source_sha256": {
+    "server/investigationV2/balance.js": "9728d1f41845b45c26363c715afb114564f5b1525f438c3f66abbec261d86655",
+    "server/investigationV2/rules.js": "cf64aef8c223a31883b4804fad450636545994db945e0843a3fe0c5382435133",
+    "server/gameAuthority/runCrisis.js": "a5bb1dc70c0b151fae53e738a9021c74e19d1f4a2d5f18c4d8129357f34740c3",
+    "src/components/game/InvestigationTerminal.jsx": "ec5337fcb167cc51391ea398cb6b0dc8a0d9efbcb33a977ce8bd50039ecfbb85",
+    "src/components/game/investigation/TerminalPanels.jsx": "b6c31eb040c7ef902f435ee779d0b317c7396e4c244b9bf3b2badad2f47a2794",
+    "src/components/game/investigation/InvestigationFieldPanel.jsx": "a1ac2ba6d600dbb10f499a1896f2cbdfa11cf42075422cef8d226022896c9e9c",
+    "src/components/game/investigation/investigationField.css": "2c1ac9a1faf5eb6831ca73deef18dfdd6190f0bc798c853d9be427a45ee31879",
+    "tests/investigationV2Authority.test.js": "41c5c1f27a3573b8523ff5d11cba4a0cc136a353701c3f1dadeaeedc521965ac",
+    "tests/authoritativeRunContract.test.js": "9b06fa67c33a5204298162d5c5ca9ba40007a7e625f44874bf5374b1eac0e8b1",
+    "tests/authoritativeLifecycle.test.js": "b251f4583e4c8f32689f779b649f1708ab3b1293bdd7080541c8a01469643435",
+    "tests/investigationPanelAccessibility.test.js": "84cca9f96d0cd5a5e1eac4d2c3ce3fba5bcaf950913d753f4297f0902908344d",
+    "tests/investigationFieldFeedback.test.js": "3abc95e83f60e275e81910329f58ff504d45f489d11a41a3fa3f308a868b540a"
+  },
+  "artifact_sha256": {
+    "docs/verification/v2-difficulty-budget.json": "ac8b273ecea2c00a49b094ef81f10c1a55475fb29ca6d36ad9983a1c665cd658",
+    "docs/verification/v2-difficulty-inspection-mobile.jpg": "ef802ccb6f4aa2a48e580826b30cb4c7b132878fb64c8f745061be3f9948e87c",
+    "docs/verification/v2-difficulty-report-policy-mobile.jpg": "cf7840832bf94fdf733fee8819a787b85259a28e57165ccb9ae086b033f6fe9d",
+    "docs/verification/v2-difficulty-report-accordion-mobile.jpg": "d5d2ed613cae8f5dd957e6af079cfadcebcde6b9bd13fb62299ab11eb9f6ff50"
+  },
+  "budget": {
+    "record_count": 16,
+    "source": "docs/verification/v2-difficulty-budget.json",
+    "authority_suite_tests": 69,
+    "scope": "Eight cases × default/zero ability. Full 15-AP content, one wrong inspection, two forced paid preservation crises, one free evidence correction. Final 16 turns, zero AP, B."
+  },
+  "browser_qa": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "fixture": "Local SQLite preset of eight known clues and five AP; not an independent player or playthrough.",
+    "observed": [
+      "Displayed +3% failed inspection confusion and stamina recovery order.",
+      "Displayed remaining free correction and subsequent report costs.",
+      "Selected opportunity attachment survives switching to method and reopening opportunity."
+    ],
+    "reports_submitted": 0,
+    "scope": "Visual layout and pointer interactions only; automated handler tests cover report policy after submission, lost replies and second-tab progress.",
+    "cleanup": "QA tab and server closed, viewport reset, original user localhost:5177 untouched."
+  },
+  "baseline_artifacts": [
+    "docs/verification/v2-quality-checks.json",
+    "docs/verification/v2-playthroughs.json",
+    "docs/verification/v2-public-build-baseline.json",
+    "docs/verification/v2-agent-playtests.json"
+  ],
+  "notes": [
+    "Existing v1 and pre-balance v2 runs retain original costs and pacing. New v2 runs persist balance_revision=2.",
+    "Original nine GLBs, source blend files and locomotion assets/code are unchanged.",
+    "Original five agent player results remain pre-balance formative observations, not new-balance human measurements.",
+    "Firebase release configuration and deployment were not performed in this adjustment; Worker command is dry-run only."
+  ]
+}

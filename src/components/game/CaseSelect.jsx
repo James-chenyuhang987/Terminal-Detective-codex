@@ -21,6 +21,9 @@ export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => 
   const [error, setError] = useState('');
   const [runBlocked, setRunBlocked] = useState(Boolean(activeRun));
   const startingRef = useRef(false);
+  const currentCase = ALL_CASES.find(item => item.case_id === activeRun?.case_id);
+  const targetCase = ALL_CASES.find(item => item.case_id === selected);
+  const caseTitle = (caseData) => lang === 'en' ? (caseData?.en?.title || caseData?.title) : caseData?.title;
 
   useEffect(() => { setError(''); }, [readOnly]);
   useEffect(() => { setRunBlocked(Boolean(activeRun)); }, [activeRun]);
@@ -28,6 +31,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => 
   const handleStart = async (caseData) => {
     if (startingRef.current || readOnly) return;
     if (runBlocked) {
+      setSelected(caseData.case_id);
       setError(lang === 'zh' ? '当前调查仍在进行中。请继续当前调查，或先结束它再选择新的案件。' : 'An investigation is still in progress. Resume it or end it before choosing a new case.');
       return;
     }
@@ -45,6 +49,11 @@ export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => 
       if (result?.error) {
         startingRef.current = false;
         setStartingId(null);
+        if (result.error === 'active_run_exists') {
+          setRunBlocked(true);
+          setError(lang === 'zh' ? '云端还有未结束的调查，请先处理当前调查后再进入所选案件。' : 'A cloud investigation is still open. Resolve it before entering the selected case.');
+          return;
+        }
         setSelected(preferredCaseId);
         setError(result.error === 'insufficient_energy'
           ? (lang === 'zh' ? `体力不足，需要 ${result.cost} 点体力。请返回侦探之家补给。` : `Not enough energy. This case requires ${result.cost}.`)
@@ -82,7 +91,7 @@ export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => 
       {/* Back button */}
       <button
         onClick={onBack}
-        disabled={Boolean(startingId)}
+        disabled={abandonBusy || Boolean(startingId)}
         className="td-case-back td-ui-button td-button-ghost td-button-compact self-start text-xs opacity-70 hover:opacity-100 transition-opacity"
         style={{ color: '#709f9a', fontFamily: 'monospace' }}
       >
@@ -112,7 +121,10 @@ export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => 
       {runBlocked && <section className="td-case-run-guard" role="alert" aria-label={lang === 'zh' ? '当前调查已暂存' : 'Investigation in progress'}>
         <div>
           <strong>{lang === 'zh' ? '当前调查已暂存' : 'INVESTIGATION IN PROGRESS'}</strong>
+          {currentCase && <p>{lang === 'zh' ? '当前案件：' : 'Current case: '}{caseTitle(currentCase)}</p>}
+          {targetCase && targetCase.case_id !== currentCase?.case_id && <p>{lang === 'zh' ? '准备切换到：' : 'Selected case: '}{caseTitle(targetCase)}</p>}
           <p>{lang === 'zh' ? '新案件不会覆盖当前进度。继续原调查，或明确结束当前调查后再选择新的案件。' : 'A new case will not overwrite your saved progress. Resume the current investigation, or explicitly end it before selecting another case.'}</p>
+          <p>{lang === 'zh' ? '结束会放弃当前调查，已消耗的体力与道具不会返还；新案件按所示消耗另行开案。' : 'Ending abandons the current investigation. Spent energy and items are not refunded; a new case uses its displayed cost.'}</p>
         </div>
         <div className="td-case-run-guard-actions">
           <button type="button" className="td-ui-button td-button-gold" onClick={onResume} disabled={abandonBusy || Boolean(startingId)}>

@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "check": "v2_private_phrases_absent_from_browser_build",
+  "command": "node scripts/check-investigation-public-build.mjs",
+  "content_sha256": "00173453d24c0403478fbaf7ca7ad5db23259d63d4b6d17d0e40755f2aa5b26e",
+  "corpus_sha256": "146c7a25a4cd70c93ea9121e995ead96a110aa1c28fccec5bca18220d64a2b5c",
+  "source_sha256": {
+    "scripts/check-investigation-public-build.mjs": "6d2c618c2a5cb6996165a623de31eaa74a54ae59ceabd833b5ec328a6cdf0d81",
+    "scripts/browser-case-projection.mjs": "e65a1e973e1e0b4a38f325097f69063d99827e2b5672173c0da5f5f03bc5d936",
+    "src/game/caseData.js": "9703710eedb61c7a0064af2994e6af9f4b738447589a0bf50b54eb35f7149951",
+    "src/game/caseDataExtra.js": "a2175f7dc69b8cafddd9ffc38a1fc6b02d5b9c2d957983877bde18fccf31a972",
+    "src/game/caseDataExpansion.js": "b2efed1c94a1b9b963fa69733f87e1ceab48573a19b9510e5a1bc92000f3b8fd"
+  },
+  "counts": {
+    "testimony_response": 288,
+    "hidden_result": 16,
+    "wrong_outcome": 32,
+    "expert_observation": 48,
+    "investigation_result": 128,
+    "confirmed_proposition": 150,
+    "legacy_clue_description": 144,
+    "legacy_conflict_reason": 8
+  },
+  "private_strings_checked": 698,
+  "browser_js_files": 20,
+  "decoded_literals": 26652,
+  "matched": 0,
+  "matched_by_category": {
+    "testimony_response": 0,
+    "hidden_result": 0,
+    "wrong_outcome": 0,
+    "expert_observation": 0,
+    "investigation_result": 0,
+    "confirmed_proposition": 0,
+    "legacy_clue_description": 0,
+    "legacy_conflict_reason": 0
+  },
+  "source_files_checked": 176,
+  "source_import_violations": [],
+  "files": [
+    {
+      "path": "dist/assets/ActionCinematic-C0bQvUpK.js",
+      "bytes": 27266,
+      "sha256": "be3d2b5314093d8654a914d6459476c39f02754561cb16853606f14c8935de43",
+      "decoded_literals": 451,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/AgentLobby-BmsLjlTD.js",
+      "bytes": 136103,
+      "sha256": "7b29e8a39307e5636aec2936462cf0d2a4fbd23978969d150e9c16ca12af5d54",
+      "decoded_literals": 3649,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/CaseSelect-BVmf7jEy.js",
+      "bytes": 10549,
+      "sha256": "663c3072d5712392293e01f17e93d1b6f0a1749ee0a9aa48c0f61427d6bc5314",
+      "decoded_literals": 309,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/DetectiveHome-CXjzAEXl.js",
+      "bytes": 42402,
+      "sha256": "9d33375e3c7edd860cc6c38d866a8b91d8c17ec2ae700a0cc286636da77fed72",
+      "decoded_literals": 1408,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/EvidenceObjectViewer-DpHcM_vv.js",
+      "bytes": 17213,
+      "sha256": "ed7f7d93656c6a81142169394a83a92492192a2b91051d46940101d0bfb0ff2e",
+      "decoded_literals": 145,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/FieldAtmosphere-CANTLTuX.js",
+      "bytes": 16564,
+      "sha256": "df8647a0bcb8f11338f0a4e1f82598a75e4ffdba286a4fe212a1f74021a578af",
+      "decoded_literals": 100,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/GraphModule-BCY4-YC7.js",
+      "bytes": 2381,
+      "sha256": "eb1ff94b392b5b862b83b38db404b96eba8d3b64130836fe431957a01ac71705",
+      "decoded_literals": 69,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/HomeModules-C3NyYrz1.js",
+      "bytes": 45428,
+      "sha256": "a09e0516448850ce948ea0a8fd47fb8d1a8c4983a1b8dd8db1999d288ef311d1",
+      "decoded_literals": 1444,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/InvestigationProps-yDKGxqMd.js",
+      "bytes": 9795,
+      "sha256": "36a326a1c590caa34e0364c6fd145eeab6fb50d919833d8b3f38796f37a14148",
+      "decoded_literals": 107,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/InvestigationTerminal-0lB33Dqi.js",
+      "bytes": 295560,
+      "sha256": "441cc886c4734166ed3f983018fb509946d1c17aa5e5751d5addc43da5d4bf22",
+      "decoded_literals": 6586,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/ProfileAppShell-CS3Z7B1-.js",
+      "bytes": 20958,
+      "sha256": "e0cb8569dc628c24f605195d5dce660dc1a8f81ffbba7997aeea8982a82032c8",
+      "decoded_literals": 342,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/SettingsDrawer-50mrWcM3.js",
+      "bytes": 24859,
+      "sha256": "8d5a1a4c2fe7f1763dc43ff28e4ea6721e210cb0c9c9ae69a567d7546d09b412",
+      "decoded_literals": 595,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/StatusToast-CBVzZUdh.js",
+      "bytes": 789,
+      "sha256": "5750faa8db08a6efb2a4dee228beaebc4b9429a0ced7703057e4c48590338490",
+      "decoded_literals": 30,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/TerminalDetective-DonmkhSf.js",
+      "bytes": 103341,
+      "sha256": "327a6ebcf524dcb0fa5505d50d605ac4cc537a1cb91951d8c3c586892e7377f4",
+      "decoded_literals": 2031,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/TheaterScene-CeGvpH83.js",
+      "bytes": 31055,
+      "sha256": "fdd1985083c53f0da5f4569010dfcf249831aa4ff3fe2e85cbba78a964bd5227",
+      "decoded_literals": 211,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/index-CyX-JyCT.js",
+      "bytes": 310950,
+      "sha256": "1fcaa15846756ade464f45c086efef00c7d16b65c66e8923a0c695fd6031096a",
+      "decoded_literals": 3175,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/lang-CkB1UxsQ.js",
+      "bytes": 16761,
+      "sha256": "32d41394e5f8857f63c11a56a36facb016618d2b397c4a3be65883c54d7c1502",
+      "decoded_literals": 314,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/palette-BNES1PBB.js",
+      "bytes": 4529,
+      "sha256": "bd1683fba9d12146f3b0e2843fabbe5f7951d22eeab822d3d046d3b0f8900983",
+      "decoded_literals": 147,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/playerProfile-CmtpSWUl.js",
+      "bytes": 106508,
+      "sha256": "cc78245ee277dbad9b6e013cf05521b2351a98f727c0ad1c2fa655bcb5c8d207",
+      "decoded_literals": 2718,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/theaterWorld-Cc2q4m5s.js",
+      "bytes": 891337,
+      "sha256": "ec0f2f87d38bf38bd18761e96f4d0819945f69550bb400948ee985ffeafd09fd",
+      "decoded_literals": 2821,
+      "matched": 0
+    }
+  ],
+  "result": "passed",
+  "limitations": "All private v2 responses, hidden results, consequences and present expert observations plus canonical legacy clue descriptions and correct-conflict reasons are checked as decoded literal containment. No legacy description is exempted, including generic hidden metadata. Short clue labels and weights are validated separately by browser projection and authority tests. Source import boundaries are also checked. This does not audit live API projections, arbitrary derived paraphrases or production deployment; those require separate authority tests."
+}

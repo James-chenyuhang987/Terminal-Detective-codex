@@ -1,0 +1,373 @@
+{
+  "playerId": "P03",
+  "caseName": "红蝶陷阱",
+  "locale": "zh-CN",
+  "role": "独立中文新玩家；手机布局与指针/键盘操作",
+  "scope": {
+    "url": "http://127.0.0.1:5193/__case-test",
+    "browser": "Codex In-app Browser (2)",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "simulation": "仅 mobile viewport + 指针/键盘模拟；不是真机触屏测试，也不是真机 GPU 测试。",
+    "allowedObservations": "可见 DOM、AX 文本和截图；正常 UI 操作。",
+    "sourceRead": false,
+    "hiddenStateRead": false,
+    "directApi": false,
+    "answerBruteforce": false
+  },
+  "timing": {
+    "measurementStartedAt": "2026-10-14T14:37:39.836Z",
+    "measurementStart": "开页完成后，读完官方 viewport 工具说明时开始记录 Date.now。",
+    "firstValidClueElapsedSecFromMeasurement": 276,
+    "firstValidClue": "过载神经舱：功率为上限4.7倍且安全锁在软件层绕过。",
+    "pageOpenToFirstValidClueSec": null,
+    "pageOpenToFirstValidClueApproxSec": 284,
+    "pageOpenApproximationNote": "曾以276秒计时加约8秒开页工具耗时口头估计284秒；开页精确时刻未记录，因此不是可严格比较的开页计时。",
+    "sceneEntryToFirstValidClueSec": null,
+    "sceneEntryTimingNote": "进入场景的准确时刻未单独记录，标记未知。首线索计时包括已记录起点之后的五步教程、工具、viewport设置及移动尝试耗时。",
+    "environmentPauseSec": 82,
+    "totalElapsedSecFromMeasurement": 3840
+  },
+  "initial": {
+    "ap": 20,
+    "clues": 0,
+    "round": 0,
+    "hpPercent": 100,
+    "confusionPercent": 0,
+    "team": [
+      {
+        "name": "NEXUS-01",
+        "staminaPercent": 50,
+        "selected": true
+      },
+      {
+        "name": "AURORA-09",
+        "staminaPercent": 50,
+        "selected": false
+      },
+      {
+        "name": "CIPHER-47",
+        "staminaPercent": 50,
+        "selected": false
+      }
+    ]
+  },
+  "tutorial": {
+    "stepsRead": 5,
+    "initiallySkipped": false,
+    "freeObservationUnderstood": true,
+    "quotedRules": [
+      "观察、放大、旋转与往返探索不消耗AP。",
+      "核验前查看AP、体力、执行者和风险。",
+      "新回合全队先恢复4%体力，再扣执行者费用。",
+      "证据匹配稳定推进两次补充证词。",
+      "关系可修正；报告四项结论附证据。"
+    ],
+    "resumeTutorialSkipped": true
+  },
+  "investigation": [
+    {
+      "round": 1,
+      "object": "3号舱功率诊断口",
+      "agent": "NEXUS-01",
+      "method": "读取独立诊断与执行记录",
+      "costAP": 1,
+      "result": "取得过载神经舱证据；20→19AP，NEXUS50→44%，其余50→54%。"
+    },
+    {
+      "round": 2,
+      "object": "Riku 神经接口消息缓存",
+      "agent": "CIPHER-47",
+      "method": "核对原始时间戳与签章",
+      "costAP": 1,
+      "result": "六条每月5万信用点的向S索款消息。"
+    },
+    {
+      "round": 3,
+      "object": "后台门禁记录台",
+      "agent": "AURORA-09",
+      "method": "提取原始审计记录并校验来源",
+      "costAP": 1,
+      "result": "Sable01:20进入后台，01:26离开，与死亡窗口吻合。"
+    },
+    {
+      "round": 4,
+      "object": "清空的控制平板",
+      "agent": "AURORA-09",
+      "method": "核对原始时间戳与签章",
+      "costAP": 1,
+      "result": "恢复到针对3号舱安全锁的自定义过载脚本。"
+    },
+    {
+      "round": 5,
+      "object": "安全锁脚本差异检查",
+      "method": "选择power=4.7×、safety=false",
+      "costAP": 1,
+      "result": "核验成立，重建结果已记录。"
+    },
+    {
+      "round": 6,
+      "object": "寄存处录音终端",
+      "agent": "NEXUS-01",
+      "method": "提取原始审计记录并校验来源",
+      "costAP": 1,
+      "result": "Lena目击Sable01:20左右慌张走向后门。"
+    },
+    {
+      "round": 7,
+      "object": "Riku 用过的酒杯",
+      "agent": "CIPHER-47",
+      "method": "采样并与标准样本对照",
+      "costAP": 1,
+      "result": "神经抑制剂降低防御反应，配合过载致命。"
+    },
+    {
+      "round": 8,
+      "person": "Sable",
+      "agent": "AURORA-09",
+      "method": "出示对应证据：01:20离开吧台的六分钟",
+      "costAP": 1,
+      "result": "承认去后台看过控制台，之前说一直在吧台是不想被一句话定罪。"
+    },
+    {
+      "round": 9,
+      "object": "收货箱中的神经芯片",
+      "agent": "NEXUS-01",
+      "method": "采样并与标准样本对照",
+      "costAP": 1,
+      "result": "12枚改装芯片型号与Sable供应商账单不符，系非法走私货。"
+    },
+    {
+      "round": 10,
+      "object": "后巷离线账本节点",
+      "agent": "NEXUS-01",
+      "method": "核验独立来源",
+      "costAP": 1,
+      "result": "S款项与Sable个人签章对应，附针对Riku付款要求的过载部署备注。"
+    },
+    {
+      "round": 11,
+      "person": "Sable",
+      "agent": "AURORA-09",
+      "method": "出示对应证据：付款提醒中的S和改装芯片",
+      "costAP": 1,
+      "result": "承认消息发给自己，Riku知道收货箱的事，每月索钱且越来越多。"
+    }
+  ],
+  "crises": [
+    {
+      "afterRound": 4,
+      "name": "证据危机",
+      "choice": "紧急保全",
+      "costAP": 3,
+      "understanding": "0AP延期保留原件，但后续2回合期限后信誉−5、混乱+5；选择立即保全。"
+    },
+    {
+      "afterRound": 8,
+      "name": "追踪者逼近",
+      "choice": "甩脱/切换信道",
+      "costAP": 2,
+      "understanding": "另两选项为0AP但分别概率失败或固定混乱+6；选择不增加混乱的2AP方案。"
+    }
+  ],
+  "relations": {
+    "costAP": 0,
+    "visibleRule": "同一错误关系首次+3%混乱；先于具有方向。",
+    "completed": [
+      {
+        "from": "擦除的平板",
+        "type": "支持",
+        "to": "过载神经舱"
+      },
+      {
+        "from": "Lena 的证词",
+        "type": "支持",
+        "to": "Sable 的访问日志"
+      },
+      {
+        "from": "改装神经芯片",
+        "type": "支持",
+        "to": "Riku 的敲诈信息"
+      },
+      {
+        "from": "吧台酒精分析",
+        "type": "支持",
+        "to": "过载神经舱"
+      }
+    ],
+    "errors": []
+  },
+  "report": {
+    "attempts": 1,
+    "rejected": 0,
+    "submitted": true,
+    "conclusion": "Sable 在后台投放过载脚本并利用饮料配合",
+    "method": "定制脚本绕过安全锁，抑制剂配合过载",
+    "motive": "终止对改装芯片走私的持续勒索",
+    "timeline": "01:20离开吧台、01:26离开后台，期间投放脚本",
+    "evidence": {
+      "机会": [
+        "Sable 的访问日志",
+        "Lena 的证词"
+      ],
+      "手段": [
+        "过载神经舱",
+        "擦除的平板",
+        "吧台酒精分析"
+      ],
+      "动机": [
+        "Riku 的敲诈信息",
+        "改装神经芯片",
+        "后巷离线账本节点"
+      ],
+      "时间线": [
+        "Sable 的访问日志",
+        "Lena 的证词"
+      ]
+    },
+    "reasoning": "门禁与目击共同限定接近后台的机会和01:20–01:26窗口；恢复脚本与舱内软件绕锁/4.7倍功率吻合，酒杯抑制剂与过载协同；消息、非法芯片、个人签章账本及本人补充证词建立持续勒索动机。",
+    "costObservations": [
+      {
+        "stage": "第4回合，13AP、4线索",
+        "passAP": 0,
+        "rejectAP": 2,
+        "reputationPenalty": 8,
+        "confusionPenaltyPercent": 4
+      },
+      {
+        "stage": "第11回合，4AP、8线索，首次提交前",
+        "passAP": 0,
+        "rejectAP": 1,
+        "reputationPenalty": 8,
+        "confusionPenaltyPercent": 4
+      }
+    ],
+    "costChangeCause": "未知；仅记录两次可见UI数值，不根据项目或服务端推断。",
+    "rating": "B",
+    "title": "资深调查官",
+    "uiConfirmation": "四个结论环节均得到所附证据支持。"
+  },
+  "final": {
+    "stage": "案件终结/案件归档结果页",
+    "solved": true,
+    "grade": "B",
+    "rounds": 11,
+    "clues": 8,
+    "totalClues": 9,
+    "ap": 4,
+    "confusionPeakPercent": 0,
+    "finalConfusionPercent": 0,
+    "hpLastObservedPercent": 100,
+    "xp": 326,
+    "teamLastObserved": [
+      {
+        "name": "NEXUS-01",
+        "staminaPercent": 44
+      },
+      {
+        "name": "AURORA-09",
+        "staminaPercent": 54
+      },
+      {
+        "name": "CIPHER-47",
+        "staminaPercent": 74
+      }
+    ],
+    "uncollected": "VIP包厢服务记录；未为最高评级额外付费。"
+  },
+  "errors": {
+    "misSelections": [],
+    "failedVerifications": 0,
+    "failedRelations": 0,
+    "failedQuestions": 0,
+    "reportRejections": 0,
+    "staleControlAttempt": "成功取得录音后点击旧酒杯AX元素，提示previous page；随后可见页面已经返回入口，没有消费或误选。"
+  },
+  "hints": {
+    "verificationHintsUsed": 0,
+    "currentGoalTextUsed": true,
+    "onboardingUsed": true,
+    "storyShowFullUsed": 1
+  },
+  "blockers": {
+    "realGameplayOverThreeMinutes": false,
+    "apExhausted": false,
+    "approvalBlocked": false,
+    "environmentEvents": [
+      {
+        "stage": "第6回合、11AP、5线索之后",
+        "event": "突然返回首页，原因未确认。",
+        "recovery": "从进入调查终端→默认3D确认→继续调查正常恢复到同一回合/AP/线索/区域。重复教程已读后跳过。",
+        "durationSec": 82,
+        "reset": false
+      }
+    ]
+  },
+  "mobileObservations": {
+    "actual3dRendered": true,
+    "renderEvidence": "截图可见第三人称侦探、Sable、室内桌面/仪器与地面；方向操作改变相机/人物位置。没有把AX中性canvas文字当设备失败。",
+    "input": [
+      "方向键Up可移动。",
+      "长按可见方向按钮有效；左移及前进后出现E·交谈·Sable。",
+      "键盘E打开对话；触发交谈按钮也有效。",
+      "物件选择、探员选择、关系下拉、核验按钮和报告选择均正常。"
+    ],
+    "layout": "390×844下保持固定顶栏、底部工具栏和可滚动下方面板。报告和核验长内容需要面板内滚动，成本位于报告底部。",
+    "friction": [
+      "报告四组重复证据使表单很长，费用位于最底部，首次需滚动后才能确认。",
+      "长现场字幕局限在右下小框内，部分文字需内滚动；完整记录入口是手记。",
+      "初始入口介绍霓虹血迹，实际继续调查是红蝶陷阱，首次玩家需在主页/现场重新确认案名。",
+      "结案后晋升面板连续弹出；关闭第一张会自动出现下一张。清晰静态经验结算页仅短暂可见，最终采用首次结案截图并保留晋升覆盖截图，不冒充结果页。"
+    ],
+    "notClaimed": "没有验证真实触屏手势、多点触控、移动设备性能或GPU兼容性。"
+  },
+  "screenshots": [
+    {
+      "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P03.jpg",
+      "stage": "首次提交后案件终结B级结果页；经验结算部分仍在出现动画中，B/11回合/8条线索/4AP可见。"
+    },
+    {
+      "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P03-scene.jpg",
+      "stage": "吧台实际3D现场，第10回合、5AP、8线索，接近Sable"
+    },
+    {
+      "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P03-report-costs.jpg",
+      "stage": "第4回合报告底部费用说明：驳回2AP"
+    },
+    {
+      "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P03-report-costs-final.jpg",
+      "stage": "第11回合首次提交前费用说明：驳回1AP"
+    },
+    {
+      "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P03-specialty-costs.jpg",
+      "stage": "脚本差异检查已选两项，提交前1AP报价"
+    },
+    {
+      "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P03-promotion.jpg",
+      "stage": "结案后自动出现的探员晋升覆盖；非结案页"
+    },
+    {
+      "path": "/Users/chenyuhang/Desktop/Terminal-Detective-codex/docs/verification/agent-P03-promotion-stage2.jpg",
+      "stage": "关闭第一张晋升覆盖后自动续出的第二张晋升覆盖；非结案页。"
+    }
+  ],
+  "cleanup": {
+    "viewportReset": true,
+    "ownTabClosed": true
+  },
+  "authority_event_log_sha256": "8f56abee6deaced5d3907b131cac219b4e4eecc69c01824dbc811ecdd1c4c375",
+  "authority_event_log_artifact": "docs/verification/agent-P03-events.jsonl",
+  "verification_scope": "Synthetic visible-UI session; local isolated Worker/D1 fixture; no real users or production rewards.",
+  "root_screenshot_review": {
+    "stage": "First successful report: case completion screen; XP details still animating",
+    "shows_final_grade": true,
+    "visible_grade": "B",
+    "visible_turns": 11,
+    "visible_clues": "8/9",
+    "visible_ap": 4,
+    "visible_xp": 326,
+    "note": "Agent restored its separately captured first-completion image to the primary path; root visually reinspected the updated file. Promotion overlays are separate artifacts."
+  }
+}

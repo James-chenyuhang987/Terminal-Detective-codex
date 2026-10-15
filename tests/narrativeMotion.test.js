@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { compileFunction } from 'node:vm';
 import React from 'react';
 import ts from 'typescript';
+import { REPORT_DIMENSIONS, reportEvidenceIds } from '../src/game/investigationChoices.js';
+import { getRejectedReportPenalty } from '../src/game/caseEvaluation.js';
 import { segmentNarrativeText, narrativeTextTiming } from '../src/game/narrativeMotion.js';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -129,7 +131,9 @@ test('actual NPC panel animates only appended answers and Show all never dispatc
     '@/lib/lang.jsx': { useLang: () => ({ lang: 'en', t: { interrogating: 'Interrogating', close: 'Close' } }) },
     '@/components/game/InterrogationHints': { EmotionBadge: () => null },
     '@/components/game/AgentStaminaMeter': { default: () => null },
-    '@/game/agentStamina': { AGENT_STAMINA_INVESTIGATION_COST: 10, canAgentInvestigate: stamina => stamina >= 10 },
+    '@/game/investigationChoices.js': { REPORT_DIMENSIONS, reportEvidenceIds },
+    '@/game/caseEvaluation': { getRejectedReportPenalty },
+    '@/game/agentStamina': { AGENT_STAMINA_INVESTIGATION_COST: 10, AGENT_STAMINA_RECOVERY_PER_TURN: 4, canAgentInvestigate: stamina => stamina >= 10 },
   }, { React });
   const entries = [{ role: 'system', text: 'Opening' }, { role: 'npc', text: 'Recovered answer' }];
   const props = { npc: { npc_id: 'npc-1' }, dialogue: entries, executorId: 'AXIOM',

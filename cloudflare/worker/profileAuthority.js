@@ -2,6 +2,7 @@ import {
   applyProfileCommand, prepareCaseStart, settleAuthoritativeCase, validateProfileCommand,
 } from '../../server/gameAuthority/profileCommands.js';
 import { createRun, publicRun, deriveRunSummary } from '../../server/gameAuthority/runAuthority.js';
+import { ALL_CASES } from '../../src/game/caseData.js';
 import {
   json, error, readEnvelope, readProfileRow, profilePayload, commandHash, serialize,
   readProfileOperation, matchingOperation, parseObject, readActiveRunRow, readRunRow, storedRun, MAX_RUN_BYTES,
@@ -9,8 +10,20 @@ import {
 
 async function successPayload(env, row, session, result, operationId = '', replayed = false) {
   const active = await readActiveRunRow(env, session.user_id);
+  const profile = profilePayload(row);
+  const archiveClueLabels = Object.fromEntries(profile.case_records.map(record => {
+    const catalog = ALL_CASES.find(item => item.case_id === record.case_id);
+    const discovered = new Set(record.discovered_clues);
+    return [record.case_id, Object.fromEntries((catalog?.clue_dictionary || [])
+      .filter(clue => discovered.has(clue.clue_id)).map(clue => [clue.clue_id, {
+        zh: clue.keyword,
+        en: catalog.en?.clue_dictionary?.find(item => item.clue_id === clue.clue_id)?.keyword || clue.keyword,
+      }]))];
+  }));
   return {
-    profile: profilePayload(row), account: session.user, backend: 'cloudflare', authority_version: 1,
+    profile, archive_clue_labels: archiveClueLabels,
+    account: session.user, backend: 'cloudflare', authority_version: 1,
+    supported_investigation_versions: [1, 2],
     active_run: active ? publicRun(storedRun(active)) : null,
     ...(result !== undefined ? { result } : {}),
     ...(operationId ? { operation_id: operationId, replayed } : {}),
@@ -68,10 +81,10 @@ async function profileRequest(request, env, session) {
     if (active) outcome = { profile, error: 'active_run_exists', run: publicRun(storedRun(active)) };
     else {
       const prepared = prepareCaseStart(profile, command, now);
-      const { caseData, teamConfig, ...startResult } = prepared;
+      const { caseData, teamConfig, investigationVersion, ...startResult } = prepared;
       outcome = startResult;
       if (!prepared.error) {
-        newRun = createRun({ id: crypto.randomUUID(), caseData, teamConfig, effects: prepared.effects, now });
+        newRun = createRun({ id: crypto.randomUUID(), caseData, teamConfig, investigationVersion, effects: prepared.effects, now });
         outcome.run = publicRun(newRun);
       }
     }

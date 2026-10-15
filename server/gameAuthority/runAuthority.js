@@ -12,6 +12,8 @@ import { buildDecisionPacks, buildInterrogationPacks, buildReportOptions,
 import { PRIORITY_ACTIONS } from '../../src/game/teamConfig.js';
 import { settleRunAction, runRoll } from './runSettlement.js';
 import { createRunCrisis, nextRunCrisisTurn, resolveRunCrisis } from './runCrisis.js';
+import { initializeInvestigation, publicInvestigation, applyInvestigationCommand,
+  judgeInvestigationReport } from '../investigationV2/rules.js';
 
 const COMMAND_FIELDS = Object.freeze({
   decision_options: [], round: ['option_id', 'assist_agent_id', 'command_ids'], rest: [],
@@ -24,6 +26,18 @@ const REQUIRED_FIELDS = Object.freeze({
   round: ['option_id'], interrogation_options: ['npc_id'], question: ['npc_id', 'question_id'],
   link: ['clue_ids'], report: ['conclusion_id', 'method_id', 'motive_id', 'timeline_id', 'evidence_ids'],
   command: ['command_id'], crisis: ['option_id'], priority: ['priority_list'],
+});
+const V2_COMMAND_FIELDS = Object.freeze({
+  ...COMMAND_FIELDS,
+  inspect_options: ['target_id'], inspect: ['option_id'], travel: ['zone_id'],
+  puzzle_options: [], puzzle: ['answer_ids'],
+  link: ['clue_ids', 'relation_type'],
+  report: ['conclusion_id', 'method_id', 'motive_id', 'timeline_id', 'evidence_ids', 'evidence_by_dimension'],
+});
+const V2_REQUIRED_FIELDS = Object.freeze({
+  ...REQUIRED_FIELDS, inspect_options: ['target_id'], inspect: ['option_id'], travel: ['zone_id'],
+  puzzle: ['answer_ids'], link: ['clue_ids', 'relation_type'],
+  report: ['conclusion_id', 'method_id', 'motive_id', 'timeline_id', 'evidence_by_dimension'],
 });
 const PUBLIC_STATE_FIELDS = Object.freeze([
   'run_id', 'case_id', 'case_title', 'current_hp', 'action_points_left', 'ap_discount_credit',
@@ -53,19 +67,32 @@ function timestamp(now) {
   if (!Number.isFinite(date.getTime())) fail('INVALID_TIME');
   return date.toISOString();
 }
-export function validateRunCommand(command) {
-  if (!plain(command) || typeof command.type !== 'string' || !Object.hasOwn(COMMAND_FIELDS, command.type)) fail();
-  const allowed = ['type', 'lang', ...COMMAND_FIELDS[command.type]];
+export function validateRunCommand(command, investigationVersion = 1) {
+  const fields = investigationVersion === 2 ? V2_COMMAND_FIELDS : COMMAND_FIELDS;
+  const required = investigationVersion === 2 ? V2_REQUIRED_FIELDS : REQUIRED_FIELDS;
+  if (!plain(command) || typeof command.type !== 'string' || !Object.hasOwn(fields, command.type)) fail();
+  const allowed = ['type', 'lang', ...fields[command.type]];
   if (Object.keys(command).some(key => !allowed.includes(key))
-    || (REQUIRED_FIELDS[command.type] || []).some(key => !Object.hasOwn(command, key))) fail();
+    || (required[command.type] || []).some(key => !Object.hasOwn(command, key))) fail();
   if (Object.hasOwn(command, 'lang') && !['en', 'zh'].includes(command.lang)) fail();
-  for (const key of COMMAND_FIELDS[command.type]) {
-    if (Object.hasOwn(command, key) && !key.endsWith('_ids') && key !== 'priority_list' && !identifier(command[key])) fail();
+  for (const key of fields[command.type]) {
+    if (Object.hasOwn(command, key) && !key.endsWith('_ids') && !['priority_list', 'evidence_by_dimension'].includes(key)
+      && !identifier(command[key])) fail();
   }
   if (Object.hasOwn(command, 'command_ids') && (!ids(command.command_ids, 0, 2)
     || command.command_ids.some(id => !['joint_action', 'tactical_preview'].includes(id)))) fail();
   if (command.type === 'link' && !ids(command.clue_ids, 2, 2)) fail('INVALID_CLUES');
-  if (command.type === 'report' && !ids(command.evidence_ids, 1, 4)) fail('INVALID_EVIDENCE');
+  if (command.type === 'report' && investigationVersion === 1 && !ids(command.evidence_ids, 1, 4)) fail('INVALID_EVIDENCE');
+  if (command.type === 'report' && investigationVersion === 2) {
+    const grouped = command.evidence_by_dimension;
+    const dimensions = ['opportunity', 'method', 'motive', 'timeline'];
+    if (!plain(grouped) || Object.keys(grouped).some(key => !dimensions.includes(key))
+      || dimensions.some(key => !ids(grouped[key], 0, 9))) fail('INVALID_EVIDENCE');
+    if (Object.hasOwn(command, 'evidence_ids') && !ids(command.evidence_ids, 0, 9)) fail('INVALID_EVIDENCE');
+  }
+  if (command.type === 'link' && investigationVersion === 2
+    && !['supports', 'contradicts', 'precedes'].includes(command.relation_type)) fail('INVALID_RELATION');
+  if (command.type === 'puzzle' && !ids(command.answer_ids, 1, 12)) fail('INVALID_PUZZLE');
   if (command.type === 'priority' && (!ids(command.priority_list, PRIORITY_ACTIONS.length, PRIORITY_ACTIONS.length)
     || command.priority_list.some(id => !PRIORITY_ACTIONS.some(action => action.id === id)))) fail('INVALID_PRIORITY');
 }
@@ -133,7 +160,8 @@ function completeTurn(run, lang, investigativeAction = false) {
   return { evidence_outcome: result.outcome, evidence: result.evidence || null };
 }
 
-export function createRun({ id, caseData, teamConfig, effects = {}, now }) {
+export function createRun({ id, caseData, teamConfig, effects = {}, now, investigationVersion = 1 }) {
+  if (![1, 2].includes(investigationVersion)) fail('INVALID_INVESTIGATION_VERSION');
   if (!identifier(id) || !caseData?.case_id || !Array.isArray(caseData.clue_dictionary)
     || !Array.isArray(teamConfig?.team) || teamConfig.team.length < 1 || teamConfig.team.length > 3
     || !ids(teamConfig.team.map(agent => agent.agent_id), 1, 3)) fail('INVALID_RUN');
@@ -169,11 +197,12 @@ export function createRun({ id, caseData, teamConfig, effects = {}, now }) {
       evidence_crisis: null, reputation: 100, checkpoint_stack: [],
     },
   };
-  if (strategy.skill_effects.auto_unlock_first) {
+  if (investigationVersion === 2) initializeInvestigation(run);
+  if (investigationVersion === 1 && strategy.skill_effects.auto_unlock_first) {
     const first = caseData.zone_clue_map?.[initialZone]?.[0] || caseData.clue_dictionary[0]?.clue_id;
     if (first) acquire(run, [first]);
   }
-  acquire(run, getHiddenCluesDue(caseData, run.state).map(clue => clue.clue_id));
+  if (investigationVersion === 1) acquire(run, getHiddenCluesDue(caseData, run.state).map(clue => clue.clue_id));
   delete run.state.unlocked_clues_set;
   run.next_crisis_turn = nextRunCrisisTurn(run);
   return run;
@@ -187,7 +216,7 @@ export function publicRun(run) {
     const english = run.case_data.en?.clue_dictionary?.find(item => item.clue_id === clue.clue_id) || clue;
     return {
       clue_id: clue.clue_id, keyword: clue.keyword, description: clue.description,
-      visual_icon: clue.visual_icon,
+      visual_icon: clue.visual_icon, weight: clue.weight,
       en: { keyword: english.keyword, description: english.description },
     };
   });
@@ -201,6 +230,7 @@ export function publicRun(run) {
     pending_crisis: run.pending_crisis, npc_emotions: run.npc_emotions,
     asked_question_ids: run.asked_question_ids, decision_options: run.decision_options,
     interrogation_options: run.interrogation_options,
+    ...(run.investigation_version === 2 ? { investigation_version: 2, investigation: publicInvestigation(run) } : {}),
   });
 }
 
@@ -360,7 +390,7 @@ function report(run, command, lang, now) {
 }
 
 export function applyRunCommand(input, command, now) {
-  validateRunCommand(command);
+  validateRunCommand(command, input.investigation_version || 1);
   timestamp(now);
   if (input.status !== 'active') fail(input.status === 'settled' ? 'RUN_SETTLED' : 'RUN_NOT_ACTIVE');
   if (input.pending_crisis && !['crisis', 'recover', 'abandon'].includes(command.type)) fail('CRISIS_PENDING');
@@ -369,7 +399,8 @@ export function applyRunCommand(input, command, now) {
   const lang = command.lang || 'zh';
   let result;
   try {
-    switch (command.type) {
+    if (run.investigation_version === 2) result = applyInvestigationCommand(run, command, lang, now);
+    else switch (command.type) {
       case 'priority':
         run.team_config.priority_list = [...command.priority_list];
         run.team_config.team = run.team_config.team.map(agent => agent.agent_id === run.team_config.primary_agent_id
@@ -462,9 +493,12 @@ export function deriveRunSummary(run) {
   if (run.status === 'completed' || (run.status === 'settled' && run.final_report)) {
     if (!run.final_report) fail('RUN_NOT_COMPLETE');
     const selection = run.final_report;
-    validateRunCommand({ type: 'report', ...selection });
+    validateRunCommand({ type: 'report', ...selection }, run.investigation_version || 1);
     if (selection.evidence_ids.some(id => !clues.includes(id))) fail('INVALID_EVIDENCE');
-    judge = normalizeJudgeResult(judgeReport({ ...rulePayload(run, 'en'), unlockedClueIds: clues,
+    judge = run.investigation_version === 2 ? normalizeJudgeResult(judgeInvestigationReport({
+      ...run, state: { ...state, unlocked_clues: clues },
+    }, selection, 'en'))
+      : normalizeJudgeResult(judgeReport({ ...rulePayload(run, 'en'), unlockedClueIds: clues,
       conclusionId: selection.conclusion_id, methodId: selection.method_id,
       motiveId: selection.motive_id, timelineId: selection.timeline_id, evidenceIds: selection.evidence_ids }));
     if (!judge.is_passed) fail('RUN_NOT_COMPLETE');
