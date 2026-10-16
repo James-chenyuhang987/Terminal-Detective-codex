@@ -50,11 +50,16 @@ export default function InvestigationFieldPanel({ investigation, gameState, team
   const [notice, setNotice] = useState(null);
   const [hintLevel, setHintLevel] = useState(0);
   const [localReconstructionDraft, setLocalReconstructionDraft] = useState({ answerIds: [], view: {} });
+  const puzzle = investigation.puzzle;
+  const materialIds = new Set((puzzle?.items || []).map(item => item.id));
+  const currentAnswers = values => [...new Set((Array.isArray(values) ? values : []).filter(id => materialIds.has(id)))];
   const currentReconstructionDraft = reconstructionDraft || localReconstructionDraft;
-  const answerIds = currentReconstructionDraft.answerIds;
+  // The visible selection and the submitted payload must agree, including
+  // after restoring a draft whose source materials have changed.
+  const answerIds = currentAnswers(currentReconstructionDraft.answerIds);
   const setReconstructionDraft = onReconstructionDraftChange || setLocalReconstructionDraft;
   const setAnswerIds = next => setReconstructionDraft(previous => ({ ...previous,
-    answerIds: typeof next === 'function' ? next(previous.answerIds) : next }));
+    answerIds: currentAnswers(typeof next === 'function' ? next(currentAnswers(previous.answerIds)) : next) }));
   const setWorkbenchView = next => setReconstructionDraft(previous => ({ ...previous,
     view: typeof next === 'function' ? next(previous.view) : next }));
   const [showPuzzle, setShowPuzzle] = useState(false);
@@ -69,7 +74,6 @@ export default function InvestigationFieldPanel({ investigation, gameState, team
   commandRef.current = onCommand;
   const target = investigation.targets.find(item => item.target_id === targetId && item.zone_id === gameState.current_zone);
   const targets = investigation.targets.filter(item => item.zone_id === gameState.current_zone);
-  const puzzle = investigation.puzzle;
   const currentPack = packs?.[executorId];
   const locked = busy || pending || !active;
   const currentGoal = text(investigation.current_goal, lang);

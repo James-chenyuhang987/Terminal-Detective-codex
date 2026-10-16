@@ -1,3 +1,5 @@
+import { clearLegacyDraft, localDraftStorage, readLocalDraftRaw } from './localDraftStorage.js';
+
 export const REPORT_DRAFT_PREFIX = 'td-report-draft-v1:';
 export const MAX_REPORT_DRAFT_BYTES = 16_384;
 const DIMENSIONS = Object.freeze(['opportunity', 'method', 'motive', 'timeline']);
@@ -28,9 +30,6 @@ function validContext(context) {
 }
 function contextKey(context) {
   return `${REPORT_DRAFT_PREFIX}${encodeURIComponent(context.ownerUid)}:${encodeURIComponent(context.runId)}`;
-}
-function sessionStorageOrNull() {
-  try { return globalThis.sessionStorage || null; } catch { return null; }
 }
 function empty(value) {
   return CHOICE_FIELDS.every(key => !value[key]) && !value.evidenceIds.length;
@@ -85,11 +84,11 @@ export function sanitizeReportDraft(value, { reportOptions = undefined, knownClu
 }
 
 /** @param {ReportDraftContext} context @returns {ReportDraftResult} */
-export function readReportDraft(context, storage = sessionStorageOrNull()) {
+export function readReportDraft(context, storage = localDraftStorage()) {
   const value = defaultReportDraft();
   if (!validContext(context) || !storage) return { value, status: 'memory' };
   try {
-    const raw = storage.getItem(contextKey(context));
+    const { raw, legacy } = readLocalDraftRaw(storage, contextKey(context));
     if (raw === null) return { value, status: 'empty' };
     if (!smallEnough(raw)) return { value, status: 'memory' };
     const saved = JSON.parse(raw);
@@ -100,23 +99,25 @@ export function readReportDraft(context, storage = sessionStorageOrNull()) {
       return { value, status: 'memory' };
     }
     const restored = normalizeReportDraft(saved.draft, { investigationVersion: context.investigationVersion });
+    if (legacy) return writeReportDraft(context, restored, storage);
     return { value: restored, status: empty(restored) ? 'empty' : 'saved' };
   } catch { return { value, status: 'memory' }; }
 }
 
 /** @param {ReportDraftContext} context @returns {ReportDraftResult} */
-export function removeReportDraft(context, storage = sessionStorageOrNull()) {
+export function removeReportDraft(context, storage = localDraftStorage()) {
   const value = defaultReportDraft();
   if (!validContext(context) || !storage) return { value, status: 'memory' };
   try {
     const key = contextKey(context);
+    clearLegacyDraft(storage, key);
     storage.removeItem(key);
     return { value, status: storage.getItem(key) === null ? 'empty' : 'memory' };
   } catch { return { value, status: 'memory' }; }
 }
 
 /** @param {ReportDraftContext} context @returns {ReportDraftResult} */
-export function writeReportDraft(context, value, storage = sessionStorageOrNull()) {
+export function writeReportDraft(context, value, storage = localDraftStorage()) {
   const normalized = normalizeReportDraft(value, { investigationVersion: context?.investigationVersion });
   if (!validContext(context) || !storage) return { value: normalized, status: 'memory' };
   if (empty(normalized)) return removeReportDraft(context, storage);
@@ -126,6 +127,8 @@ export function writeReportDraft(context, value, storage = sessionStorageOrNull(
     if (!smallEnough(serialized)) return { value: normalized, status: 'memory' };
     const key = contextKey(context);
     storage.setItem(key, serialized);
-    return { value: normalized, status: storage.getItem(key) === serialized ? 'saved' : 'memory' };
+    if (storage.getItem(key) !== serialized) return { value: normalized, status: 'memory' };
+    clearLegacyDraft(storage, key);
+    return { value: normalized, status: 'saved' };
   } catch { return { value: normalized, status: 'memory' }; }
 }

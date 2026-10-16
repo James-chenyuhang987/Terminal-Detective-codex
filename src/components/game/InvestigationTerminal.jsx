@@ -30,8 +30,10 @@ import InvestigationJournal from '@/components/game/investigation/InvestigationJ
 import { useReportDraft } from '@/components/game/investigation/useReportDraft';
 import { useHypothesisNotebook } from '@/components/game/investigation/useHypothesisNotebook';
 import { useReconstructionDraft } from '@/components/game/investigation/useReconstructionDraft';
+import { useTheaterSpatial } from '@/components/game/investigation/useTheaterSpatial';
 import { hypothesisKey, normalizeHypotheses, pendingHypotheses } from '@/game/hypothesisNotebook';
 import { sanitizeReportDraft } from '@/game/reportDraft';
+import { readLinkDraft, writeLinkDraft } from '@/game/runWorkspace';
 import { buildInvestigationEvidence } from '@/game/investigationEvidence';
 import EvidenceBoard from '@/components/game/EvidenceBoard';
 import GlitchOverlay from '@/components/game/GlitchOverlay';
@@ -107,7 +109,10 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   }, [runClient]);
   const { settings, setSetting } = useSettings();
   const theaterMode = settings.storyMode === 'theater';
-  const theaterSpatialRef = useRef({ arrived: narrativeBriefed });
+  const { spatialRef: theaterSpatialRef, status: spatialDraftStatus } = useTheaterSpatial({
+    ownerUid: account?.id, runId: authoritativeRun?.id,
+    caseId: selectedCase?.case_id || authoritativeRun?.case_id, narrativeBriefed,
+  });
   const dialogueSequenceRef = useRef(0);
   const closedDialogueRef = useRef(0);
   const dialogueLanguageRef = useRef(lang);
@@ -212,16 +217,22 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const [crisisError, setCrisisError] = useState(null);
   const [insightEvent, setInsightEvent] = useState(null);
   const [linkedPairs, setLinkedPairs] = useState([]);
-  const [linkWorkspace, setLinkWorkspace] = useState(() => ({ client: runClient, draft: { relation: 'supports', firstClue: '', secondClue: '' }, feedback: null }));
-  const linkDraft = linkWorkspace.client === runClient ? linkWorkspace.draft : { relation: 'supports', firstClue: '', secondClue: '' };
+  const linkScope = useMemo(() => ({ ownerUid: account?.id, runId: authoritativeRun?.id, caseId: caseDataResolved.case_id }),
+    [account?.id, authoritativeRun?.id, caseDataResolved.case_id]);
+  const restoredLinkDraft = useMemo(() => readLinkDraft(linkScope), [linkScope]);
+  const [linkWorkspace, setLinkWorkspace] = useState(() => ({ client: runClient, draft: restoredLinkDraft.value, feedback: null }));
+  const linkDraft = linkWorkspace.client === runClient ? linkWorkspace.draft : restoredLinkDraft.value;
   const linkFeedback = linkWorkspace.client === runClient ? linkWorkspace.feedback : null;
+  useEffect(() => {
+    if (linkWorkspace.client === runClient) writeLinkDraft(linkScope, linkWorkspace.draft);
+  }, [linkScope, linkWorkspace, runClient]);
   const evidenceArchive = useMemo(() => buildInvestigationEvidence({
     state: gameState, investigation, zones: caseData.scene?.zones, lang,
   }), [gameState, investigation, caseData, lang]);
   const { value: hypotheses, status: hypothesisStatus, setValue: setHypotheses } = useHypothesisNotebook({
     ownerUid: account?.id, runId: authoritativeRun?.id, caseId: caseDataResolved.case_id,
   });
-  const { value: reconstructionDraft, setValue: setReconstructionDraft } = useReconstructionDraft({
+  const { value: reconstructionDraft, status: reconstructionDraftStatus, setValue: setReconstructionDraft } = useReconstructionDraft({
     ownerUid: account?.id, runId: authoritativeRun?.id, puzzleId: investigation?.puzzle?.id,
   });
   const knownEvidenceIds = useMemo(() => evidenceArchive.clues.map(clue => clue.clue_id), [evidenceArchive.clues]);
@@ -1375,6 +1386,16 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
             }}
           />
           <button type="button" className="td-ui-button td-mobile-only td-tools-close" onClick={() => setMobileToolsOpen(false)}>↓ {lang === 'zh' ? '收起工具' : 'CLOSE TOOLS'}</button>
+          <details className="p-3 text-xs border-b" style={{ borderColor: `${accentColor}20` }}>
+            <summary>{lang === 'zh' ? '本机草稿与现场位置' : 'LOCAL DRAFTS & SCENE POSITION'}</summary>
+            <p>{lang === 'zh'
+              ? '未提交报告、推理笔记、重建草稿与现场位置按调查分别保存在本机浏览器；切换存档后可恢复，不跨设备同步。清除网站数据会删除这些本机内容。正式调查进度由云端自动保存。'
+              : 'Unsubmitted reports, reasoning notes, reconstruction drafts and scene positions are saved separately for each investigation in this browser. They restore when you switch saves, do not sync between devices, and are removed by clearing site data. Confirmed investigation progress autosaves to the cloud.'}</p>
+            {(spatialDraftStatus === 'memory' || reportDraftStatus === 'memory' || hypothesisStatus === 'memory'
+              || (investigation?.puzzle?.id && reconstructionDraftStatus === 'memory')) && <p role="status">{lang === 'zh'
+                ? '部分本机内容暂未成功保存，刷新或关闭页面可能丢失；云端已确认的调查进度不受影响。'
+                : 'Some local workspace data could not be saved and may be lost on refresh or close. Cloud-confirmed investigation progress is unaffected.'}</p>}
+          </details>
           {toolTab === 'link' ? (
             <LinkBoard
               key={`${account?.id}:${authoritativeRun?.id}`}
@@ -1386,7 +1407,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
               isChecking={isLinkChecking || interactionLocked}
               accentColor={accentColor}
               draft={linkDraft}
-              onDraftChange={draft => setLinkWorkspace({ client: runClient, draft, feedback: null })}
+              onDraftChange={draft => {
+                if (runViewRef.current?.client !== runClient || !runViewRef.current?.active) return;
+                writeLinkDraft(linkScope, draft);
+                setLinkWorkspace({ client: runClient, draft, feedback: null });
+              }}
               feedback={linkFeedback?.lang === lang ? linkFeedback : null}
               sources={evidenceArchive.sources}
               expertNotes={evidenceArchive.expertNotes}
@@ -1767,7 +1792,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
                   ? investigationV2
                     ? (lang === 'zh' ? '现场调查台已准备。免费观察物件，选择核验方式和执行探员，确认成本后开始调查。' : 'FIELD DESK READY. OBSERVE AN OBJECT FOR FREE, CHOOSE A METHOD AND INVESTIGATOR, THEN CONFIRM THE COST.')
                     : (lang === 'zh' ? '系统准备完成。点击下方“执行循环”开始第一回合。' : 'SYSTEM READY. USE EXECUTE CYCLE TO BEGIN TURN ONE.')
-                  : (lang === 'zh' ? '本回合正在建立记录…' : 'BUILDING THIS TURN RECORD…')}
+                  : isViewingActiveTerminalTurn && (isProcessing || streamingTerminal)
+                    ? (lang === 'zh' ? '本回合正在建立记录…' : 'BUILDING THIS TURN RECORD…')
+                    : (lang === 'zh'
+                      ? '本次会话没有此回合的逐项文本。云端已确认的调查进度仍保留，请在调查档案回看证据、证词与推理。'
+                      : 'This session has no detailed text for this turn. Cloud-confirmed progress is preserved; review evidence, testimony and deductions in the investigation journal.')}
               </div>
             )}
             {visibleTerminalLines.map(line => (

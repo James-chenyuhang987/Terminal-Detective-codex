@@ -12,6 +12,24 @@ function storage() {
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 }
 
+test('local hypotheses migrate the exact owner/run legacy notes and survive a new tab session', t => {
+  const previous = Object.fromEntries(['localStorage', 'sessionStorage'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  t.after(() => Object.entries(previous).forEach(([key, descriptor]) => {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+  }));
+  const oldSession = storage(); const durable = storage();
+  writeHypotheses(context, [note], oldSession);
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: durable });
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: oldSession });
+  assert.deepEqual(readHypotheses({ ...context, ownerUid: 'other-owner' }).value, []);
+  assert.deepEqual(readHypotheses(context), { value: [note], status: 'saved' });
+  assert.equal(oldSession.data.size, 0);
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: storage() });
+  assert.deepEqual(readHypotheses(context).value, [note]);
+  writeHypotheses(context, []);
+  assert.deepEqual(readHypotheses(context).value, []);
+});
+
 test('hypotheses reject unknown and malformed evidence while bounding personal notes and storage', () => {
   assert.deepEqual(normalizeHypotheses([null, {}, { ...note, a: undefined }, { ...note, a: 'c_02' },
     { ...note, relation: 'invented' }, { ...note, b: 'unseen' }], ['c_01', 'c_02']), []);

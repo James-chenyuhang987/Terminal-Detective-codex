@@ -1,0 +1,36 @@
+{
+  "environment": "Isolated local Vite UI + actual Worker handlers + in-memory SQLite; simulated auth/profile transport; no production data",
+  "date": "2026-10-16",
+  "old_save": {
+    "run_id": "caa4327e-49c4-45e7-b655-1711b1a4b354",
+    "revision": 3,
+    "ap": 19,
+    "turn": 1,
+    "clue_count": 1
+  },
+  "new_save": {
+    "run_id": "221a811d-dc20-4bc9-b31c-c7fbb094f309",
+    "revision": 0,
+    "ap": 20,
+    "turn": 0,
+    "clue_count": 0
+  },
+  "restored_old_save": {
+    "run_id": "caa4327e-49c4-45e7-b655-1711b1a4b354",
+    "revision": 3,
+    "ap": 19,
+    "turn": 1,
+    "clue_count": 1
+  },
+  "checks": [
+    "Old save collected one clue, spent one AP and advanced one turn",
+    "Home start selected a different case and created another save",
+    "Both cards showed independent progress",
+    "Keyboard Enter restored old save with its exact AP and clue count",
+    "Reload kept both saves and the selected pointer",
+    "Search matched the second case",
+    "390x844 and 1280x900 library layouts inspected"
+  ],
+  "production_migration_applied": false,
+  "deployed": false
+}

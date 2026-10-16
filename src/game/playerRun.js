@@ -30,6 +30,9 @@ export function runRecoveryMessage(error, lang = 'en') {
   if (code === 'RUN_REQUEST_BUSY') return zh
     ? '同一案件的另一个请求仍在处理中。请等待完成或关闭其他调查标签页后重试。'
     : 'Another request for this case is still in progress. Wait for it to finish or close other investigation tabs, then retry.';
+  if (code === 'RUN_NOT_SELECTED') return zh
+    ? '当前调查已在其他页面切换。请返回进度保存库刷新并选择要继续的存档，原进度仍然保留。'
+    : 'The selected investigation changed on another page. Refresh the save library and choose the save to continue; your progress is preserved.';
   if (error?.status === 400 || ['STALE_RUN', 'RUN_SETTLED'].includes(code)) return zh
     ? '云端未接受此行动。请重试以刷新案件，再根据最新状态选择行动；不会自动重新提交。'
     : 'The cloud did not accept this action. Retry to refresh the case, then choose from its latest state; the action will not be resubmitted automatically.';
@@ -152,7 +155,7 @@ export function createPlayerRunClient({ ownerUid, runId, sessionId, invoke, stor
     } catch (error) {
       // Syntax and revision rejection prove this intent did not execute. Never
       // silently rebase it; refresh and let the player choose again.
-      if (error?.status === 400 || ['STALE_RUN', 'RUN_SETTLED'].includes(error?.code)) {
+      if (error?.status === 400 || ['STALE_RUN', 'RUN_SETTLED', 'RUN_NOT_SELECTED'].includes(error?.code)) {
         clearPending(pending);
       }
       throw error;

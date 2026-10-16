@@ -172,6 +172,21 @@ test('World requires a direction with R to sprint and clears sprint on pause or 
   h.cleanup();
 });
 
+test('World publishes a position-only live snapshot before cleanup so pagehide can preserve the current frame', () => {
+  const h = harness();
+  h.controlsRef.current.forward = true;
+  h.controlsRef.current.sprint = true;
+  h.frame(1 / 60);
+  const saved = h.spatialRef.current.rooms['["test","datacenter"]'];
+  assert.deepEqual(saved.position, h.state.position);
+  assert.equal(saved.rotationY, h.state.rotationY);
+  assert.deepEqual(Object.keys(saved).sort(), ['pitch', 'position', 'rotationY', 'yaw']);
+  const position = [...saved.position];
+  h.state.position[0] += .1;
+  assert.deepEqual(saved.position, position, 'the workspace snapshot must not alias mutable locomotion arrays');
+  h.cleanup();
+});
+
 test('movement onboarding only advances once after actual collision-resolved travel', () => {
   const h = harness();
   let notifications = 0;

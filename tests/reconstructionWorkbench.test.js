@@ -142,6 +142,24 @@ test('camera frame scrubbing compares the observed frame and independent star ma
   assert.deepEqual(app.changes, []);
 });
 
+test('restored camera frames stay on actual sampled material rather than showing missing values', () => {
+  const puzzle = puzzleFor('Lvl_05');
+  const step = puzzle.workbench.sample_step;
+  const last = (puzzle.workbench.observed.length - 1) * step;
+  for (const [saved, expected] of [[3_600, last], [-12, 0], [7, step]]) {
+    const app = instance(puzzle);
+    app.props.viewState = { frame: saved };
+    const tree = app.render();
+    const range = descendants(tree, node => node.type === 'input' && node.props['aria-label'] === 'Frame time')[0];
+    assert.equal(range.props.value, expected);
+    assert.equal(range.props.value % step, 0);
+    const status = descendants(tree, node => node.props.role === 'status')[0];
+    assert.ok(label(status).includes(`Current frame: ${expected}s`));
+    assert.doesNotMatch(label(status), /undefined|NaN/);
+    assert.deepEqual(app.changes, [], 'repairing a local view must not choose reconstruction answers');
+  }
+});
+
 test('controlled clock and camera view measurements restore after workbench remounts without altering answer choices', () => {
   for (const caseId of ['Lvl_01', 'Lvl_05']) {
     const puzzle = puzzleFor(caseId);

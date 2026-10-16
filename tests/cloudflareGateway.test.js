@@ -34,7 +34,7 @@ function readyDB(indexResults = [{
         bind() { return this; },
         async all() {
           if (sql.includes('d1_migrations')) {
-            return { results: [{ name: '0004_authoritative_state.sql' }] };
+            return { results: [{ name: '0005_run_library.sql' }] };
           }
           if (sql.includes("pragma_index_list('users')")) {
             return { results: indexResults };

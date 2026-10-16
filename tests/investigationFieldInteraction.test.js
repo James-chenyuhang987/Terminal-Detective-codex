@@ -215,6 +215,26 @@ test('controlled unfinished reconstruction selections and measurements survive f
   assert.deepEqual(commands, [], 'reopening the workspace cannot charge AP or submit an unfinished answer');
 });
 
+test('restored reconstruction submits only the visible current materials and ignores stale or damaged references', async () => {
+  const { props } = fixtures({ rawMaterials: true });
+  const commands = [];
+  const selected = props.investigation.puzzle.items.slice(0, 2).map(item => item.id);
+  props.reconstructionDraft = { answerIds: ['removed-material', ...selected, selected[0]], view: {} };
+  props.onCommand = async command => { commands.push(command); return { result: {} }; };
+  const app = harness(props);
+  button(app.render(), localizedInvestigationText(props.investigation.puzzle.label, 'en')).props.onClick();
+  const workbench = descendants(app.render(), node => node.type === Workbench)[0];
+  assert.deepEqual(workbench.props.answerIds, selected);
+  button(app.render(), 'Submit reconstruction').props.onClick();
+  await flush();
+  assert.deepEqual(commands, [{ type: 'puzzle', answer_ids: selected }],
+    'an invisible restored material must never affect a paid reconstruction');
+  props.reconstructionDraft = { answerIds: ['removed-material'], view: {} };
+  assert.equal(button(app.render(), 'Submit reconstruction').props.disabled, true,
+    'an empty visible selection cannot spend AP');
+  app.unmount();
+});
+
 test('expired or uncertain inspection offers are removed and can be explicitly reloaded without replaying the paid action', async () => {
   for (const code of ['STALE_OPTIONS', 'RUN_REQUEST_UNCONFIRMED']) {
     const { props } = fixtures();

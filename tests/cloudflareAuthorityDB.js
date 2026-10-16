@@ -7,11 +7,13 @@ export const session = { user_id: USER_ID, user: { id: USER_ID, email: 'detectiv
 
 export function authorityDB(profile = {}, options = {}) {
   const sqlite = new DatabaseSync(':memory:');
-  for (const file of ['0001_initial.sql', '0002_reset_for_firebase.sql', '0003_profile_operations.sql', '0004_authoritative_state.sql']) {
+  for (const file of ['0001_initial.sql', '0002_reset_for_firebase.sql', '0003_profile_operations.sql', '0004_authoritative_state.sql', '0005_run_library.sql']) {
     sqlite.exec(readFileSync(new URL(`../cloudflare/migrations/${file}`, import.meta.url), 'utf8'));
   }
   sqlite.exec('CREATE TABLE d1_migrations (name TEXT PRIMARY KEY)');
-  sqlite.prepare('INSERT INTO d1_migrations(name) VALUES (?)').run('0004_authoritative_state.sql');
+  for (const name of ['0004_authoritative_state.sql', '0005_run_library.sql']) {
+    sqlite.prepare('INSERT INTO d1_migrations(name) VALUES (?)').run(name);
+  }
   sqlite.prepare('INSERT INTO users(id,email) VALUES (?,?)').run(USER_ID, session.user.email);
   sqlite.prepare('INSERT INTO users(id,email) VALUES (?,?)').run('another-user-123', 'another@example.com');
   sqlite.prepare('INSERT INTO profiles(user_id,profile_json,active_session_id) VALUES (?,?,?)')

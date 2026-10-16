@@ -2,7 +2,7 @@ import { applyRunCommand, publicRun, validateRunCommand } from '../../server/gam
 import { plainObject } from '../../server/gameAuthority/profileCommands.js';
 import {
   json, error, readEnvelope, readProfileRow, commandHash, serialize, matchingOperation,
-  parseObject, readRunRow, storedRun, MAX_RUN_BYTES,
+  parseObject, readRunRow, readActiveRunRow, storedRun, MAX_RUN_BYTES,
 } from './authorityStore.js';
 
 async function readOperation(env, userId, operationId) {
@@ -28,6 +28,9 @@ async function replayOrConflict(env, session, body, hash, prior) {
     if (Number(row.run_revision) < Number(prior.result_revision)) return error('DATABASE_UNAVAILABLE', 'Operation not yet visible.', 503);
     return json(payload(row, parseObject(prior.result_json, 'RUN_DATA_CORRUPT'), body, true));
   }
+  if (row.settled) return error('RUN_SETTLED', 'This run has already settled.', 409);
+  const active = await readActiveRunRow(env, session.user_id, profile);
+  if (active?.id !== row.id) return error('RUN_NOT_SELECTED', 'Select this saved investigation before continuing.', 409);
   return error('STALE_RUN', 'Run revision changed.', 409, { run: publicRun(storedRun(row)) });
 }
 
@@ -54,8 +57,13 @@ async function runRequest(request, env, session, context) {
   if (body.action !== 'command' || !plainObject(body.command)) return error('INVALID_COMMAND', 'Unknown command.');
   const hash = await commandHash(body.command);
   const prior = await readOperation(env, session.user_id, body.operation_id);
-  if (prior || body.expected_revision !== Number(row.run_revision)) return replayOrConflict(env, session, body, hash, prior);
+  // Receipts can be reconciled after switching saves. A fresh command cannot
+  // keep changing the previous save from an old page or an unconfirmed tab.
+  if (prior) return replayOrConflict(env, session, body, hash, prior);
   if (row.settled) return error('RUN_SETTLED', 'This run has already settled.', 409);
+  const active = await readActiveRunRow(env, session.user_id, profile);
+  if (active?.id !== row.id) return error('RUN_NOT_SELECTED', 'Select this saved investigation before continuing.', 409);
+  if (body.expected_revision !== Number(row.run_revision)) return replayOrConflict(env, session, body, hash, prior);
   const original = storedRun(row);
   validateRunCommand(body.command, original.investigation_version || 1);
   let outcome;
@@ -66,7 +74,7 @@ async function runRequest(request, env, session, context) {
     outcome = { run: original, result: { error: cause.code || 'INVALID_COMMAND' } };
   }
   const revision = Number(row.run_revision);
-  const nextRun = { ...outcome.run, revision: revision + 1 };
+  const nextRun = { ...outcome.run, revision: revision + 1, updated_at: new Date().toISOString() };
   const result = outcome.result || {};
   const serialized = serialize(nextRun, MAX_RUN_BYTES);
   const resultJson = serialize(result, MAX_RUN_BYTES);
@@ -76,17 +84,18 @@ async function runRequest(request, env, session, context) {
       INSERT OR IGNORE INTO run_operations (user_id, run_id, operation_id, base_revision, result_revision, command_hash, result_json)
       SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (
         SELECT 1 FROM player_runs r JOIN profiles p ON p.user_id = r.user_id
-        WHERE r.user_id = ? AND r.id = ? AND r.run_revision = ? AND r.settled = 0 AND p.active_session_id = ?
+        WHERE r.user_id = ? AND r.id = ? AND r.run_revision = ? AND r.settled = 0
+          AND p.active_session_id = ? AND p.profile_revision = ?
       )
     `).bind(session.user_id, body.run_id, body.operation_id, revision, revision + 1, hash, resultJson,
-      session.user_id, body.run_id, revision, body.session_id),
+      session.user_id, body.run_id, revision, body.session_id, profile.profile_revision),
     env.DB.prepare(`
-      UPDATE player_runs SET run_json = ?, run_revision = run_revision + 1, updated_at = CURRENT_TIMESTAMP
+      UPDATE player_runs SET run_json = ?, run_revision = run_revision + 1, updated_at = ?
       WHERE user_id = ? AND id = ? AND run_revision = ? AND settled = 0
-        AND EXISTS (SELECT 1 FROM profiles WHERE user_id = ? AND active_session_id = ?)
+        AND EXISTS (SELECT 1 FROM profiles WHERE user_id = ? AND active_session_id = ? AND profile_revision = ?)
         AND EXISTS (SELECT 1 FROM run_operations WHERE user_id = ? AND run_id = ? AND operation_id = ?
           AND base_revision = ? AND result_revision = ? AND command_hash = ?)
-    `).bind(serialized, session.user_id, body.run_id, revision, session.user_id, body.session_id,
+    `).bind(serialized, nextRun.updated_at, session.user_id, body.run_id, revision, session.user_id, body.session_id, profile.profile_revision,
       session.user_id, body.run_id, body.operation_id, revision, revision + 1, hash),
   ]);
   if (!committed?.[1]?.meta?.changes) return replayOrConflict(env, session, body, hash, await readOperation(env, session.user_id, body.operation_id));

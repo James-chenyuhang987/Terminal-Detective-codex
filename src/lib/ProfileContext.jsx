@@ -38,6 +38,62 @@ function profileError(code, message = code) {
   return error;
 }
 
+function runSummary(run) {
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  const date = value => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)) ? value : null;
+  const identifier = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_:+-]{0,179}$/.test(value) ? value : '';
+  return {
+    id: run.id, case_id: identifier(run.case_id),
+    status: ['active', 'completed', 'failed', 'abandoned', 'settled'].includes(run.status) ? run.status : 'active',
+    revision: run.revision, created_at: date(run.created_at), updated_at: date(run.updated_at),
+    zone_id: identifier(run.zone_id ?? run.state?.current_zone),
+    turn_count: count(run.turn_count ?? run.state?.turn_count),
+    action_points_left: count(run.action_points_left ?? run.state?.action_points_left),
+    clue_count: count(run.clue_count ?? run.state?.unlocked_clues?.length),
+    clue_total: count(run.clue_total),
+    grade: ['S', 'A', 'B', 'C', 'D'].includes(run.grade ?? run.judge_result?.score) ? run.grade ?? run.judge_result.score : null,
+    selected: false,
+  };
+}
+
+function normalizeRunLibrary(payload) {
+  const version = payload.save_library_version === 1 && Array.isArray(payload.run_library) ? 1 : 0;
+  const limit = Number.isSafeInteger(payload.save_library_limit) && payload.save_library_limit > 0
+    && payload.save_library_limit <= 20 ? payload.save_library_limit : 20;
+  if (Object.hasOwn(payload, 'run_library') && (!Array.isArray(payload.run_library) || payload.run_library.length > 40)) {
+    throw profileError('PROFILE_DATA_CORRUPT');
+  }
+  const runs = Object.hasOwn(payload, 'run_library') ? payload.run_library : (payload.active_run ? [payload.active_run] : []);
+  const ids = new Set();
+  const items = runs.map(run => {
+    if (!run || typeof run !== 'object' || Array.isArray(run)
+      || typeof run.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_:+-]{0,179}$/.test(run.id)
+      || !Number.isSafeInteger(run.revision) || run.revision < 0 || ids.has(run.id)) {
+      throw profileError('PROFILE_DATA_CORRUPT');
+    }
+    ids.add(run.id);
+    return runSummary(run);
+  });
+  if (version === 1 && (items.filter(run => run.status === 'settled').length > 20
+    || items.filter(run => run.status !== 'settled').length > 20)) throw profileError('PROFILE_DATA_CORRUPT');
+  return { version, limit, items };
+}
+
+function mergeRunLibrary(previous, incoming, activeRun, sameProfileRevision) {
+  const byId = new Map(previous.map(run => [run.id, run]));
+  const merged = incoming.map(run => {
+    const current = byId.get(run.id);
+    byId.delete(run.id);
+    return current && (current.revision > run.revision
+      || (current.revision === run.revision && (Date.parse(current.updated_at || '') || 0) > (Date.parse(run.updated_at || '') || 0)))
+      ? current : run;
+  });
+  // Membership cannot change without a profile revision. An older poll must
+  // not make an existing save disappear while another run advances.
+  if (sameProfileRevision) merged.push(...byId.values());
+  return merged.slice(0, 40).map(run => Object.freeze({ ...run, selected: run.id === activeRun?.id }));
+}
+
 function isTransient(cause) {
   return (cause?.status !== undefined && TRANSIENT_STATUSES.has(Number(cause.status)))
     || ['PROFILE_NETWORK', 'PROFILE_TIMEOUT', 'DATABASE_UNAVAILABLE', 'FIREBASE_KEYS_UNAVAILABLE']
@@ -67,6 +123,7 @@ export function ProfileProvider({ children }) {
   const ownerRef = useRef('');
   const profileRef = useRef(null);
   const activeRunRef = useRef(null);
+  const savedRunsRef = useRef([]);
   const queueRef = useRef(Promise.resolve());
   const lifecycleRef = useRef(0);
   const requestControllersRef = useRef(new Set());
@@ -76,6 +133,9 @@ export function ProfileProvider({ children }) {
   const syncStatusRef = useRef('loading');
   const [profile, setProfile] = useState(null);
   const [activeRun, setActiveRun] = useState(null);
+  const [savedRuns, setSavedRuns] = useState([]);
+  const [saveLibraryVersion, setSaveLibraryVersion] = useState(0);
+  const [saveLibraryLimit, setSaveLibraryLimit] = useState(20);
   const [archiveClueLabels, setArchiveClueLabels] = useState({});
   const [supportedInvestigationVersions, setSupportedInvestigationVersions] = useState([1]);
   const [account, setAccount] = useState(user || null);
@@ -144,8 +204,11 @@ export function ProfileProvider({ children }) {
         || !Number.isSafeInteger(payload.active_run.revision) || payload.active_run.revision < 0))) {
       throw profileError('PROFILE_DATA_CORRUPT');
     }
+    const library = normalizeRunLibrary(payload);
     if (!isCurrentOwner(ownerUid, generation)) throw profileError('PROFILE_REQUEST_CANCELLED');
-    if (payload.profile.profile_revision < (profileRef.current?.profile_revision ?? 0)) return profileRef.current;
+    const previousProfile = profileRef.current;
+    if (payload.profile.profile_revision < (previousProfile?.profile_revision ?? 0)) return previousProfile;
+    const sameProfileRevision = previousProfile !== null && payload.profile.profile_revision === previousProfile.profile_revision;
     const { profile: next, archiveClueLabels: labels } = normalizeRemote(payload.profile, payload.archive_clue_labels);
     if (!commitProfile(next, ownerUid, generation)) {
       throw profileError('PROFILE_REQUEST_CANCELLED', 'The active account changed.');
@@ -157,10 +220,16 @@ export function ProfileProvider({ children }) {
       : [1]);
     // Investigation commands advance the run revision independently of the profile.
     const currentRun = activeRunRef.current;
-    if (!currentRun || currentRun.id !== payload.active_run?.id || currentRun.revision <= payload.active_run.revision) {
+    const sameRun = currentRun && currentRun.id === payload.active_run?.id;
+    if (sameRun ? currentRun.revision <= payload.active_run.revision : !sameProfileRevision) {
       activeRunRef.current = payload.active_run;
       setActiveRun(payload.active_run);
     }
+    const mergedRuns = mergeRunLibrary(savedRunsRef.current, library.items, activeRunRef.current, sameProfileRevision && library.version === 1);
+    savedRunsRef.current = mergedRuns;
+    setSavedRuns(mergedRuns);
+    setSaveLibraryVersion(library.version);
+    setSaveLibraryLimit(library.limit);
     return next;
   }, [commitProfile, isCurrentOwner]);
 
@@ -210,6 +279,18 @@ export function ProfileProvider({ children }) {
         commitError(cause, ownerUid, generation);
         changeSyncStatus('pending', ownerUid, generation);
         throw profileError('PROFILE_COMMAND_PENDING');
+      }
+      // The authority rejects a missing save before opening a transaction. A
+      // stale save card must not block every later command behind its receipt.
+      if (cause?.code === 'RUN_NOT_FOUND' && cause?.status === 404
+        && ['resume_run', 'settle_case'].includes(entry.command.type)) {
+        try {
+          removeProfileCommand(ownerUid, entry.operationId);
+          updatePendingCount(ownerUid, generation);
+        } catch (storageCause) {
+          setFailureState(storageCause, ownerUid, generation);
+          throw storageCause;
+        }
       }
       setFailureState(cause, ownerUid, generation);
       throw cause;
@@ -421,9 +502,13 @@ export function ProfileProvider({ children }) {
     ownerRef.current = ownerUid;
     profileRef.current = null;
     activeRunRef.current = null;
+    savedRunsRef.current = [];
     syncStatusRef.current = ownerUid ? 'loading' : 'offline';
     setProfile(null);
     setActiveRun(null);
+    setSavedRuns([]);
+    setSaveLibraryVersion(0);
+    setSaveLibraryLimit(20);
     setArchiveClueLabels({});
     setSupportedInvestigationVersions([1]);
     setAccount(user || null);
@@ -461,6 +546,9 @@ export function ProfileProvider({ children }) {
   const value = useMemo(() => ({
     profile,
     activeRun,
+    savedRuns,
+    saveLibraryVersion,
+    saveLibraryLimit,
     archiveClueLabels,
     supportedInvestigationVersions,
     sessionId: sessionIdRef.current,
@@ -478,6 +566,9 @@ export function ProfileProvider({ children }) {
   }), [
     account,
     activeRun,
+    savedRuns,
+    saveLibraryVersion,
+    saveLibraryLimit,
     archiveClueLabels,
     supportedInvestigationVersions,
     discardPendingChanges,

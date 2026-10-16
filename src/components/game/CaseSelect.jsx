@@ -13,7 +13,7 @@ const DIFFICULTY_CONFIG = {
 
 const CASE_COVER_ICONS = ['🏙️', '🔬', '🦋', '🧊', '🛰️', '🏛️', '🌊', '♾️'];
 
-export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => {}, onAbandonRun = null, returnToHome = false, preferredCaseId = null, profile, readOnly = false, activeRun = null, abandonBusy = false, abandonError = '' }) {
+export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => {}, onAbandonRun = null, returnToHome = false, preferredCaseId = null, profile, readOnly = false, activeRun = null, abandonBusy = false, abandonError = '', newSave = false, onOpenSaves = null }) {
   const { lang, t } = useLang();
   const [hovered, setHovered] = useState(null);
   const [selected, setSelected] = useState(preferredCaseId);
@@ -55,9 +55,14 @@ export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => 
           return;
         }
         setSelected(preferredCaseId);
-        setError(result.error === 'insufficient_energy'
+        const saveErrors = {
+          save_library_full: lang === 'zh' ? '保存库已满。请先从保存库继续并结算已有调查。' : 'Your save library is full. Resume and settle an existing investigation first.',
+          selection_changed: lang === 'zh' ? '调查已保存，但当前选择已改变。请从进度保存库选择要继续的存档。' : 'The investigation was saved, but the selection changed. Choose your save from the library.',
+          readonly: lang === 'zh' ? '档案当前为只读，请先恢复同步。' : 'The profile is read-only. Restore sync first.',
+        };
+        setError(saveErrors[result.error] || (result.error === 'insufficient_energy'
           ? (lang === 'zh' ? `体力不足，需要 ${result.cost} 点体力。请返回侦探之家补给。` : `Not enough energy. This case requires ${result.cost}.`)
-          : (lang === 'zh' ? '无法开始案件，请稍后重试。' : 'Unable to start the case. Please retry.'));
+          : (lang === 'zh' ? '无法开始案件，请稍后重试。' : 'Unable to start the case. Please retry.')));
       }
     } catch {
       startingRef.current = false;
@@ -117,6 +122,12 @@ export default function CaseSelect({ onSelect, onPlan, onBack, onResume = () => 
         </div>
         <div className="td-case-wallet"><span><Icon name="bolt" label={lang === 'zh' ? '体力' : 'Energy'} /> {profile?.energy || 0}</span><span><Icon name="coin" label={lang === 'zh' ? '金币' : 'Gold'} /> {(profile?.gold || 0).toLocaleString('en-US')}</span><span><Icon name="gem" label={lang === 'zh' ? '钻石' : 'Diamonds'} /> {(profile?.diamonds || 0).toLocaleString('en-US')}</span></div>
       </header>
+
+      {newSave && <section className="td-case-run-guard" aria-label={lang === 'zh' ? '新建调查存档' : 'New investigation save'}>
+        <div><strong>{lang === 'zh' ? '开始一段新的调查' : 'START A NEW INVESTIGATION'}</strong>
+          <p>{lang === 'zh' ? '选择案件后，按所示体力消耗创建独立存档。已有调查继续保存在进度保存库，恢复不重复扣费。' : 'Selecting a case creates a separate save at its displayed energy cost. Existing investigations stay in the library and resume without another entry charge.'}</p></div>
+        {onOpenSaves && <button type="button" className="td-ui-button" disabled={Boolean(startingId)} onClick={onOpenSaves}><Icon name="archive" /> {lang === 'zh' ? '进度保存库' : 'SAVE LIBRARY'}</button>}
+      </section>}
 
       {runBlocked && <section className="td-case-run-guard" role="alert" aria-label={lang === 'zh' ? '当前调查已暂存' : 'Investigation in progress'}>
         <div>

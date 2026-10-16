@@ -22,6 +22,13 @@ const deferred = () => { let resolve; let reject; const promise = new Promise((y
 const failure = (code, status) => Object.assign(new Error(code), { code, ...(status === undefined ? {} : { status }) });
 const payload = (id = 'owner-a', revision = 0, extra = {}) => ({ authority_version: 1, account: { id },
   profile: { gold: 1000, energy: 100, profile_revision: revision }, active_run: null, ...extra });
+const libraryRun = (id, revision = 0, extra = {}) => ({ id, case_id: 'Lvl_01', revision, status: 'active',
+  created_at: '2026-10-16T00:00:00.000Z', updated_at: '2026-10-16T00:00:00.000Z',
+  zone_id: 'office', turn_count: revision, action_points_left: 20 - revision,
+  clue_count: revision, clue_total: 9, grade: null, selected: false, ...extra });
+const libraryPayload = (revision, activeRun, runs, extra = {}) => payload('owner-a', revision, {
+  active_run: activeRun, save_library_version: 1, save_library_limit: 20, run_library: runs, ...extra,
+});
 
 // Hook adapter executes the real provider, including dependency changes and effect cleanup.
 function harness(invoke, store = memoryStorage()) {
@@ -307,6 +314,271 @@ test('command results expose current active run separately from immutable origin
     assert.deepEqual(result.result.run, original);
     assert.deepEqual(result.active_run, current);
     assert.deepEqual(app.value.activeRun, current);
+    app.unmount();
+  }
+});
+
+test('save library keeps two saves of the same case and exposes only bounded public metadata', async () => {
+  const first = libraryRun('same-case-first', 3);
+  const second = libraryRun('same-case-second', 1, { selected: true });
+  const secret = { state: { private_answer: 'never copy' }, reward: { gold: 99 }, owner_uid: 'owner-a' };
+  const app = harness(async () => libraryPayload(1, second, [{ ...first, ...secret }, second]));
+  await app.flush();
+  assert.equal(app.value.saveLibraryVersion, 1);
+  assert.equal(app.value.saveLibraryLimit, 20);
+  assert.deepEqual(app.value.savedRuns.map(run => [run.id, run.case_id, run.selected]), [
+    [first.id, 'Lvl_01', false], [second.id, 'Lvl_01', true],
+  ]);
+  assert.equal(Object.isFrozen(app.value.savedRuns[0]), true);
+  const serialized = JSON.stringify(app.value.savedRuns);
+  assert.doesNotMatch(serialized, /private_answer|reward|owner_uid|never copy/);
+  assert.equal(Object.hasOwn(app.value.profile, 'run_library'), false);
+  assert.equal(app.store.length, 0);
+  app.unmount();
+});
+
+test('legacy payloads safely summarize the single active run without enabling multiple-save capability', async () => {
+  const run = { id: 'legacy-paid-run', case_id: 'Lvl_01', revision: 4, status: 'active',
+    state: { current_zone: 'balcony', turn_count: 2, action_points_left: 18, unlocked_clues: ['c_01'] } };
+  for (const extra of [{}, { save_library_version: 1 }, { save_library_version: 99 }]) {
+    const app = harness(async () => payload('owner-a', 1, { active_run: run, ...extra }));
+    await app.flush();
+    assert.equal(app.value.saveLibraryVersion, 0);
+    assert.equal(app.value.saveLibraryLimit, 20);
+    assert.deepEqual(app.value.savedRuns.map(item => [item.id, item.zone_id, item.turn_count, item.action_points_left, item.clue_count, item.selected]),
+      [[run.id, 'balcony', 2, 18, 1, true]]);
+    app.unmount();
+  }
+  const app = harness(async () => payload());
+  await app.flush();
+  assert.deepEqual(app.value.savedRuns, []);
+  assert.equal(app.value.saveLibraryVersion, 0);
+  app.unmount();
+});
+
+test('save-library capacity limits unfinished investigations while retaining twenty settlement-history summaries', async () => {
+  const active = libraryRun('current-save', 2);
+  const history = Array.from({ length: 20 }, (_, i) => libraryRun(`history-${i}`, 3, { status: 'settled', grade: 'B' }));
+  const app = harness(async () => libraryPayload(1, active, [active, ...history]));
+  await app.flush();
+  assert.equal(app.value.saveLibraryVersion, 1);
+  assert.equal(app.value.saveLibraryLimit, 20);
+  assert.equal(app.value.savedRuns.length, 21);
+  assert.equal(app.value.savedRuns.filter(run => run.status === 'settled').length, 20);
+  app.unmount();
+});
+
+test('out-of-order polls cannot downgrade save progress, drop another same-case save or change selection at one profile revision', async () => {
+  const replies = [];
+  const first = libraryRun('run-one', 1, { selected: true });
+  const second = libraryRun('run-two', 0);
+  const app = harness(async action => {
+    if (action === 'status') { const reply = deferred(); replies.push(reply); return reply.promise; }
+    return libraryPayload(1, first, [first, second]);
+  });
+  await app.flush();
+  const old = app.value.refresh();
+  const fresh = app.value.refresh();
+  const latest = libraryRun(first.id, 5, { updated_at: '2026-10-16T00:10:00.000Z' });
+  replies[1].resolve(libraryPayload(1, latest, [latest, second]));
+  await fresh;
+  replies[0].resolve(libraryPayload(1, second, [first, { ...second, selected: true }]));
+  await old;
+  await app.flush();
+  assert.equal(app.value.activeRun.id, first.id);
+  assert.equal(app.value.activeRun.revision, 5);
+  assert.deepEqual(app.value.savedRuns.map(run => [run.id, run.revision, run.selected]), [[first.id, 5, true], [second.id, 0, false]]);
+  const incomplete = app.value.refresh();
+  replies[2].resolve(libraryPayload(1, null, [first]));
+  await incomplete;
+  assert.equal(app.value.activeRun.id, first.id);
+  assert.equal(app.value.savedRuns.length, 2);
+  assert.equal(app.value.savedRuns.find(run => run.id === first.id).revision, 5);
+  app.unmount();
+});
+
+test('a confirmed save switch advances profile revision and old polls cannot restore the previous selected save', async () => {
+  const oldReply = deferred();
+  const first = libraryRun('run-one', 4);
+  const second = libraryRun('run-two', 2);
+  const app = harness(async (action, args) => {
+    if (action === 'status') return oldReply.promise;
+    if (action === 'command') {
+      assert.deepEqual(args.command, { type: 'resume_run', run_id: second.id });
+      assert.equal(args.expected_revision, 1);
+      return libraryPayload(2, second, [first, second], { result: { run_id: second.id } });
+    }
+    return libraryPayload(1, first, [first, second]);
+  });
+  await app.flush();
+  const old = app.value.refresh();
+  const result = await app.value.command('resume_run', { run_id: second.id });
+  assert.equal(result.active_run.id, second.id);
+  oldReply.resolve(libraryPayload(1, first, [first]));
+  await old;
+  assert.equal(app.value.activeRun.id, second.id);
+  assert.equal(app.value.savedRuns.length, 2);
+  assert.deepEqual(app.value.savedRuns.filter(run => run.selected).map(run => run.id), [second.id]);
+  assert.equal(app.value.pendingCount, 0);
+  app.unmount();
+});
+
+test('missing-save rejections release only their own profile receipt and cannot lock out the next investigation', async () => {
+  for (const type of ['resume_run', 'settle_case']) {
+    const first = libraryRun('existing-save', 4);
+    const calls = [];
+    const app = harness(async (action, args) => {
+      if (action !== 'command') return libraryPayload(1, first, [first]);
+      calls.push(args);
+      if (args.command.type === type) throw failure('RUN_NOT_FOUND', 404);
+      return libraryPayload(2, first, [first], { result: { saved: true } });
+    });
+    await app.flush();
+    const runReceiptKey = 'td-authoritative-run-intent-v2:owner-a:existing-save';
+    app.store.setItem(runReceiptKey, '{"unconfirmed":"run action"}');
+    await assert.rejects(app.value.command(type, { run_id: 'missing-save' }), { code: 'RUN_NOT_FOUND' });
+    assert.equal(journal.readProfileCommands('owner-a', app.store).length, 0);
+    assert.equal(app.value.pendingCount, 0);
+    assert.equal(app.value.isReadOnly, false);
+    assert.equal(app.store.getItem(runReceiptKey), '{"unconfirmed":"run action"}');
+    assert.equal(app.value.activeRun.id, first.id);
+    assert.equal((await app.value.command('checkin')).saved, true);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].expected_revision, 1, 'The rejected switch did not advance the profile.');
+    assert.equal(calls[1].command.type, 'checkin');
+    assert.notEqual(calls[1].operation_id, calls[0].operation_id);
+    app.unmount();
+  }
+});
+
+test('missing-save receipt cleanup failure preserves the receipt and blocks new commands until storage recovers', async () => {
+  const store = memoryStorage();
+  store.removeItem = () => {};
+  const app = harness(async action => {
+    if (action === 'command') throw failure('RUN_NOT_FOUND', 404);
+    return payload();
+  }, store);
+  await app.flush();
+  await assert.rejects(app.value.command('resume_run', { run_id: 'missing-save' }), { code: 'PROFILE_WAL_UNAVAILABLE' });
+  assert.equal(app.value.syncStatus, 'storage_unavailable');
+  assert.equal(journal.readProfileCommands('owner-a', store).length, 1);
+  await assert.rejects(app.value.command('checkin'), { code: 'PROFILE_SYNC_BLOCKED' });
+  app.unmount();
+});
+
+test('an uncertain missing-save response retains the original receipt for exact reconciliation', async () => {
+  const calls = [];
+  const app = harness(async (action, args) => {
+    if (action !== 'command') return payload();
+    calls.push(args);
+    throw failure('RUN_NOT_FOUND', 503);
+  });
+  await app.flush();
+  await assert.rejects(app.value.command('resume_run', { run_id: 'missing-save' }), { code: 'PROFILE_COMMAND_PENDING' });
+  await assert.rejects(app.value.command('checkin'), { code: 'PROFILE_COMMAND_PENDING' });
+  assert.equal(journal.readProfileCommands('owner-a', app.store).length, 1);
+  assert.deepEqual(calls[0], calls[1]);
+  app.unmount();
+});
+
+test('a newer profile revision never downgrades the same investigation revision while real selection changes remain possible', async () => {
+  const latest = libraryRun('run-one', 10);
+  const second = libraryRun('run-two', 2);
+  let response = libraryPayload(1, latest, [latest, second]);
+  const app = harness(async () => response);
+  await app.flush();
+  const olderRun = libraryRun(latest.id, 9);
+  response = libraryPayload(2, olderRun, [olderRun, second], { profile: { profile_revision: 2, gold: 900 } });
+  await app.value.refresh();
+  assert.equal(app.value.profile.profile_revision, 2);
+  assert.equal(app.value.profile.gold, 900);
+  assert.equal(app.value.activeRun.revision, 10);
+  assert.equal(app.value.savedRuns.find(run => run.id === latest.id).revision, 10);
+  response = libraryPayload(3, second, [latest, second]);
+  await app.value.refresh();
+  assert.equal(app.value.activeRun.id, second.id);
+  assert.deepEqual(app.value.savedRuns.filter(run => run.selected).map(run => run.id), [second.id]);
+  response = libraryPayload(4, null, [latest, second]);
+  await app.value.refresh();
+  assert.equal(app.value.activeRun, null);
+  assert.ok(app.value.savedRuns.every(run => !run.selected));
+  app.unmount();
+});
+
+test('same run-revision library metadata keeps its newest timestamp and a capability downgrade closes multiple-save controls', async () => {
+  const run = libraryRun('run-one', 3, { updated_at: '2026-10-16T00:10:00.000Z', clue_count: 4 });
+  let response = libraryPayload(1, run, [run], { save_library_limit: 12 });
+  const app = harness(async () => response);
+  await app.flush();
+  assert.equal(app.value.saveLibraryLimit, 12);
+  response = libraryPayload(1, run, [{ ...run, updated_at: '2026-10-16T00:00:00.000Z', clue_count: 2 }]);
+  await app.value.refresh();
+  assert.equal(app.value.savedRuns[0].clue_count, 4);
+  response = payload('owner-a', 2, { active_run: run });
+  await app.value.refresh();
+  assert.equal(app.value.saveLibraryVersion, 0);
+  assert.equal(app.value.saveLibraryLimit, 20);
+  assert.equal(app.value.savedRuns.length, 1);
+  app.unmount();
+});
+
+test('changing profile owners immediately clears save metadata and ignores the previous owner delayed response', async () => {
+  const late = deferred(); let owner = 'owner-a';
+  const run = libraryRun('owner-a-save', 2);
+  const app = harness(async action => {
+    if (action === 'status') return late.promise;
+    return owner === 'owner-a' ? libraryPayload(1, run, [run]) : payload(owner);
+  });
+  await app.flush();
+  const refresh = app.value.refresh();
+  const cancelled = assert.rejects(refresh, { code: 'PROFILE_REQUEST_CANCELLED' });
+  owner = 'owner-b'; app.switchOwner(owner);
+  assert.deepEqual(app.value.savedRuns, []);
+  assert.equal(app.value.saveLibraryVersion, 0);
+  assert.equal(app.value.saveLibraryLimit, 20);
+  await app.flush();
+  late.resolve(libraryPayload(2, run, [run]));
+  await cancelled;
+  assert.deepEqual(app.value.savedRuns, []);
+  assert.equal(app.value.activeRun, null);
+  assert.equal(app.value.account.id, owner);
+  app.unmount();
+});
+
+test('resume replay returns the current selection separately from immutable original result and keeps run receipts', async () => {
+  const first = libraryRun('old-save', 1); const current = libraryRun('selected-save', 7);
+  const store = memoryStorage();
+  const receipt = journal.appendProfileCommand({ ownerUid: 'owner-a', lineageId: 'web-previous-session-001',
+    operationId: 'operation-previous-001', baseRevision: 1, command: { type: 'resume_run', run_id: first.id } }, store);
+  const runKey = 'td-authoritative-run-intent-v2:owner-a:old-save';
+  store.setItem(runKey, '{"unconfirmed":"gameplay"}');
+  const app = harness(async (action, args) => {
+    if (action === 'command') {
+      assert.equal(args.operation_id, receipt.operationId);
+      assert.deepEqual(args.command, receipt.command);
+      return libraryPayload(3, current, [first, current], { result: { run: first } });
+    }
+    return libraryPayload(3, current, [first, current]);
+  }, store);
+  await app.flush();
+  assert.equal(app.value.activeRun.id, current.id);
+  assert.deepEqual(app.value.savedRuns.filter(run => run.selected).map(run => run.id), [current.id]);
+  assert.equal(store.getItem(runKey), '{"unconfirmed":"gameplay"}');
+  assert.equal(journal.readProfileCommands('owner-a', store).length, 0);
+  app.unmount();
+});
+
+test('malformed save libraries cannot accept a paid command or clear its retry receipt', async () => {
+  const run = libraryRun('run-one');
+  for (const run_library of [null, {}, [run, run], [{ ...run, revision: -1 }], [{ ...run, id: '../escape' }], Array.from({ length: 41 }, (_, i) => libraryRun(`run-${i}`))]) {
+    const app = harness(async action => action === 'command'
+      ? libraryPayload(1, run, run_library, { result: {} }) : payload());
+    await app.flush();
+    await assert.rejects(app.value.command('start_case', { case_id: 'Lvl_01', new_save: true }), { code: 'PROFILE_DATA_CORRUPT' });
+    assert.equal(app.value.profile.profile_revision, 0);
+    assert.equal(app.value.saveLibraryVersion, 0);
+    assert.deepEqual(app.value.savedRuns, []);
+    assert.equal(journal.readProfileCommands('owner-a', app.store).length, 1);
     app.unmount();
   }
 });

@@ -126,7 +126,7 @@ export default function ReconstructionWorkbench({ puzzle, answerIds = [], onAnsw
   const material = puzzle?.workbench;
   const items = puzzle?.items || [];
   const [localView, setLocalView] = useState({});
-  const { activeId = items[0]?.id || '', offsets = {}, showReference = true, alignments = {}, frame = 0 } = viewState || localView;
+  const { activeId = items[0]?.id || '', offsets = {}, showReference = true, alignments = {}, frame: restoredFrame = 0 } = viewState || localView;
   const changeView = updates => {
     const apply = previous => ({ ...previous, ...updates(previous || {}) });
     if (onViewChange) onViewChange(apply);
@@ -155,6 +155,9 @@ export default function ReconstructionWorkbench({ puzzle, answerIds = [], onAnsw
   const step = trace?.sample_step || 1;
   const alignmentStep = material.kind === 'camera' ? 6 : step;
   const alignmentMax = material.kind === 'camera' ? 18 : step * 4;
+  const frameMax = material.kind === 'camera' && hasTrace ? Math.max(0, Math.min(material.observed.length, material.reference.length) - 1) * step : 0;
+  const sampleFrame = value => Math.round(clamp(value, 0, frameMax) / step) * step;
+  const frame = sampleFrame(restoredFrame);
 
   return <section className={`td-reconstruction-workbench is-${material.kind}`} aria-label={text(material.title, lang)}>
     <header><h4>{text(material.title, lang)}</h4><p>{text(material.instructions, lang)}</p><p className="td-workbench-source">{text(material.source_note, lang)}</p></header>
@@ -177,8 +180,8 @@ export default function ReconstructionWorkbench({ puzzle, answerIds = [], onAnsw
             <input type="range" min={-alignmentMax} max={alignmentMax} step={alignmentStep} value={alignment} disabled={disabled}
               aria-label={zh ? '参考对齐偏移' : 'Reference alignment offset'} onChange={event => changeView(previous => ({ alignments: { ...previous.alignments, [currentId]: clamp(event.target.value, -alignmentMax, alignmentMax) } }))} />
           </label>
-          {material.kind === 'camera' && <label>{zh ? '取帧时刻 / 秒' : 'Frame time / seconds'} <output>{frame}</output><input type="range" min="0" max={(material.observed.length - 1) * step} step={step} value={frame} disabled={disabled}
-            aria-label={zh ? '取帧时刻' : 'Frame time'} onChange={event => changeView(() => ({ frame: clamp(event.target.value, 0, (material.observed.length - 1) * step) }))} /></label>}
+          {material.kind === 'camera' && <label>{zh ? '取帧时刻 / 秒' : 'Frame time / seconds'} <output>{frame}</output><input type="range" min="0" max={frameMax} step={step} value={frame} disabled={disabled}
+            aria-label={zh ? '取帧时刻' : 'Frame time'} onChange={event => changeView(() => ({ frame: sampleFrame(event.target.value) }))} /></label>}
         </div>
         <TraceChart reference={trace.reference} observed={trace.observed} referenceLabel={trace.reference_label} observedLabel={trace.observed_label}
           xLabel={trace.x_label} yLabel={trace.y_label} step={step} alignment={alignment} showReference={showReference} cursor={material.kind === 'camera' ? frame : undefined} lang={lang} />

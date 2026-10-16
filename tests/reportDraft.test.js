@@ -155,7 +155,7 @@ test('invalid or unavailable context cannot access persistent storage', () => {
   }
 });
 
-test('default storage uses only sessionStorage and survives a denied browser storage getter', t => {
+test('default storage persists reports beyond a tab session, migrates validated legacy drafts and handles denied browser storage', t => {
   const sessionDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
   const localDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   t.after(() => {
@@ -164,13 +164,42 @@ test('default storage uses only sessionStorage and survives a denied browser sto
       else delete globalThis[key];
     }
   });
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { assert.fail('must not use localStorage'); } });
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('privacy mode'); } });
   Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, get() { throw new Error('privacy mode'); } });
   assert.equal(writeReportDraft(context, draft).status, 'memory');
   assert.equal(readReportDraft(context).status, 'memory');
   assert.equal(removeReportDraft(context).status, 'memory');
+  const oldSession = storage();
+  writeReportDraft(context, draft, oldSession);
   const store = storage();
-  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: store });
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: oldSession });
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: store });
+  assert.deepEqual(readReportDraft(context).value, normalizeReportDraft(draft));
+  assert.equal(oldSession.data.size, 0, 'a validated old session draft moves to durable local storage');
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: storage() });
+  assert.deepEqual(readReportDraft(context).value, normalizeReportDraft(draft), 'a newly opened tab session restores the same local draft');
   assert.equal(writeReportDraft(context, draft).status, 'saved');
   assert.deepEqual(readReportDraft(context).value, normalizeReportDraft(draft));
+  assert.equal(removeReportDraft(context).status, 'empty');
+  assert.equal(readReportDraft(context).status, 'empty');
+});
+
+test('a damaged legacy session is never copied and a failed legacy cleanup cannot resurrect a cleared report', t => {
+  const previous = Object.fromEntries(['localStorage', 'sessionStorage'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  t.after(() => Object.entries(previous).forEach(([key, descriptor]) => {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+  }));
+  const durable = storage(); const legacy = storage(); const key = scopeKey(context);
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: durable });
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: legacy });
+  legacy.setItem(key, '{broken');
+  assert.equal(readReportDraft(context).status, 'memory');
+  assert.equal(durable.data.size, 0);
+  writeReportDraft(context, draft, legacy);
+  writeReportDraft(context, draft);
+  legacy.setItem(key, JSON.stringify({ version: 1, owner_uid: context.ownerUid, run_id: context.runId,
+    case_id: context.caseId, investigation_version: 2, draft: normalizeReportDraft(draft) }));
+  legacy.removeItem = () => {};
+  assert.equal(removeReportDraft(context).status, 'memory');
+  assert.deepEqual(readReportDraft(context).value, normalizeReportDraft(draft), 'the durable copy stays until the older session copy can be removed safely');
 });

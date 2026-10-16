@@ -1,3 +1,5 @@
+import { clearLegacyDraft, localDraftStorage, readLocalDraftRaw } from './localDraftStorage.js';
+
 const PREFIX = 'td-hypotheses-v1:';
 const LIMIT = 20;
 const MAX_BYTES = 32_768;
@@ -36,34 +38,37 @@ function validContext(context) {
     && typeof context.caseId === 'string' && ID.test(context.caseId);
 }
 function storageKey(context) { return `${PREFIX}${encodeURIComponent(context.ownerUid)}:${encodeURIComponent(context.runId)}`; }
-function sessionStore() { try { return globalThis.sessionStorage || null; } catch { return null; } }
 function bounded(raw) { return typeof raw === 'string' && raw.length <= MAX_BYTES && new TextEncoder().encode(raw).length <= MAX_BYTES; }
 
-export function readHypotheses(context, storage = sessionStore()) {
+export function readHypotheses(context, storage = localDraftStorage()) {
   if (!validContext(context) || !storage) return { value: [], status: 'memory' };
   try {
-    const raw = storage.getItem(storageKey(context));
+    const { raw, legacy } = readLocalDraftRaw(storage, storageKey(context));
     if (raw === null) return { value: [], status: 'empty' };
     if (!bounded(raw)) return { value: [], status: 'memory' };
     const saved = JSON.parse(raw);
     if (saved?.version !== 1 || saved.ownerUid !== context.ownerUid || saved.runId !== context.runId
       || saved.caseId !== context.caseId || !Array.isArray(saved.items)) return { value: [], status: 'memory' };
-    return { value: normalizeHypotheses(saved.items), status: 'saved' };
+    const value = normalizeHypotheses(saved.items);
+    return legacy ? writeHypotheses(context, value, storage) : { value, status: 'saved' };
   } catch { return { value: [], status: 'memory' }; }
 }
 
-export function writeHypotheses(context, items, storage = sessionStore()) {
+export function writeHypotheses(context, items, storage = localDraftStorage()) {
   const value = normalizeHypotheses(items);
   if (!validContext(context) || !storage) return { value, status: 'memory' };
   try {
     const key = storageKey(context);
     if (!value.length) {
+      clearLegacyDraft(storage, key);
       storage.removeItem(key);
       return { value, status: storage.getItem(key) === null ? 'empty' : 'memory' };
     }
     const raw = JSON.stringify({ version: 1, ownerUid: context.ownerUid, runId: context.runId, caseId: context.caseId, items: value });
     if (!bounded(raw)) return { value, status: 'memory' };
     storage.setItem(key, raw);
-    return { value, status: storage.getItem(key) === raw ? 'saved' : 'memory' };
+    if (storage.getItem(key) !== raw) return { value, status: 'memory' };
+    clearLegacyDraft(storage, key);
+    return { value, status: 'saved' };
   } catch { return { value, status: 'memory' }; }
 }

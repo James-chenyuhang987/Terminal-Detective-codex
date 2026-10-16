@@ -13,12 +13,15 @@ const SAFE_CODES = Object.freeze({
   FIREBASE_KEYS_UNAVAILABLE: ['身份校验服务暂时不可用，请稍后重试。', 'Identity verification is temporarily unavailable. Try again shortly.'],
   RATE_LIMITED: ['请求过于频繁，请稍后重试。', 'Too many requests. Try again shortly.'],
   ROUTE_NOT_FOUND: ['请求的服务版本不存在，请刷新页面。', 'The requested service version is unavailable. Refresh the page.'],
+  RUN_NOT_FOUND: ['该存档已不可用，请刷新进度保存库后重新选择。', 'This save is no longer available. Refresh the save library and choose another investigation.'],
+  RUN_NOT_RESUMABLE: ['该调查已经结算，无法继续。请刷新保存库查看结案记录，或新建调查。', 'This investigation is already finished. Refresh the library to view its record, or start a new investigation.'],
 });
 
 export function publicErrorMessage(error, lang = 'zh') {
   const english = lang === 'en';
-  const code = String(error?.code || error?.feedbackCode || '').toUpperCase();
-  if (SAFE_CODES[code]) return SAFE_CODES[code][english ? 1 : 0];
+  const code = [error?.code, error?.feedbackCode].map(value => String(value || '').toUpperCase())
+    .find(value => Object.hasOwn(SAFE_CODES, value));
+  if (code) return SAFE_CODES[code][english ? 1 : 0];
   const status = Number(error?.status ?? error?.httpStatus) || 0;
   if (status === 401 || status === 403) return SAFE_CODES.UNAUTHENTICATED[english ? 1 : 0];
   if (status === 429) return SAFE_CODES.RATE_LIMITED[english ? 1 : 0];

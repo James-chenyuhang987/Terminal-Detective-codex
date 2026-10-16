@@ -35,7 +35,10 @@ function evaluate(node, bindings) {
 }
 
 function handler(root, name, bindings) {
-  return evaluate(find(root, node => ts.isVariableDeclaration(node) && node.name.getText() === name).initializer, bindings);
+  return evaluate(find(root, node => ts.isVariableDeclaration(node) && node.name.getText() === name).initializer, {
+    multiSaveEnabled: false, multiSaveAvailable: false, newSaveIntentRef: { current: false },
+    navigationRef: { current: {} }, setRunOwner() {}, setRestoreEpoch() {}, setNewSaveMode() {}, ...bindings,
+  });
 }
 
 const originalCase = ALL_CASES[0];

@@ -179,7 +179,7 @@ export function StructuredReportPanel({ options, value, onChange, onSubmit, onCa
       {error && <div className="td-report-error" role="alert"><Icon name="warning" /> {error}</div>}
       {draftStatus && <p className="td-report-draft-note" role="status">{draftStatus === 'memory'
         ? (zh ? '草稿暂存在当前页面，浏览器未允许保存；刷新后可能丢失。尚未提交。' : 'Draft kept on this page; browser storage is unavailable, so a refresh may lose it. Not submitted.')
-        : (zh ? '草稿在本标签页自动保存，刷新可恢复。尚未提交，不代表结论已经核实。' : 'Draft autosaves in this tab and survives refresh. Not submitted; conclusions are not yet verified.')}</p>}
+        : (zh ? '草稿按调查自动保存在本机浏览器，关闭后可恢复，不跨设备同步。尚未提交，不代表结论已经核实。' : 'Draft autosaves for this investigation in this browser and survives closing. It does not sync between devices. Not submitted; conclusions are not yet verified.')}</p>}
       {!options ? <div className="td-report-loading">{zh ? '正在读取合法报告选项…' : 'LOADING LEGAL REPORT OPTIONS…'}</div> : <>
         {investigationVersion === 2 && <p role="note">{reportPolicy ? (zh
           ? `通过：不消耗 AP。免费补正剩余 ${reportPolicy.evidence_correction_available ? 1 : 0} 次：四项结论均正确、仅附件不足时，本案首次可免费修正，不扣 AP、信誉或混乱。${correctionCostText}结论错误的驳回代价：${penaltyText(conclusionPenalty)}。首次错误指控还可能额外损失 4 信誉或增加 3% 混乱。驳回后仍可修正报告。`

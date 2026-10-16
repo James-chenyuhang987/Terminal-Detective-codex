@@ -130,6 +130,7 @@ test('every higher-priority panel or transaction postpones rather than consumes 
 function entryHarness(mode = 'theater') {
   const state = { screen: 'CASE_SELECT', narrative: null, busy: false, error: '', charges: 0, routes: 0 };
   const bindings = {
+    multiSaveEnabled: false, newSaveIntentRef: { current: false }, navigationRef: { current: {} },
     dialogueLanguageRef: { current: 'en' },
     investigationV2: false,
     selectedCase: null, activeRun: null, settings: { storyMode: mode }, lang: 'en',
@@ -147,10 +148,10 @@ function entryHarness(mode = 'theater') {
 
 test('only explicit theater Home Start uses prologue; resume and ordinary case navigation bypass it', () => {
   let resumes = 0;
-  handler(home, 'quickStart', { suspendedCase: {}, onResume: () => resumes++ })();
+  handler(home, 'quickStart', { multiSaveAvailable: false, suspendedCase: {}, onResume: () => resumes++ })();
   assert.equal(resumes, 1);
   let modules = 0;
-  handler(home, 'quickStart', { suspendedCase: null, openModule: () => modules++ })();
+  handler(home, 'quickStart', { multiSaveAvailable: false, suspendedCase: null, openModule: () => modules++ })();
   assert.equal(modules, 1, 'text flow stays unchanged');
   for (const name of ['openCasesWithSavedTeam', 'openLobbyForCase', 'handleResume']) {
     assert.doesNotMatch(nodes(page, n => ts.isVariableDeclaration(n) && n.name.getText() === name)[0].getText(), /setEntryNarrative/);
@@ -482,7 +483,8 @@ test('overlay keeps full stable wrapping and static accessible text; native top 
   assert.match(css, /min-height: 44px/);
   assert.match(css, /overflow: auto/);
   assert.match(owner.text, /useReducer\(theaterNarrativeReducer, gameState.run_id, createTheaterNarrativeState\)/);
-  assert.match(owner.text, /useRef\(\{ arrived: narrativeBriefed \}\)/);
+  assert.match(owner.text, /useTheaterSpatial\(\{[\s\S]*?ownerUid: account\?\.id, runId: authoritativeRun\?\.id,[\s\S]*?narrativeBriefed/);
+  assert.match(readFileSync(new URL('../src/components/game/investigation/useTheaterSpatial.js', import.meta.url), 'utf8'), /if \(narrativeBriefed\) initial\.spatialRef\.current\.arrived = true/);
   assert.match(owner.text, /paused=\{Boolean\(narrativeVisible \|\|/);
   assert.match(owner.text, /key=\{activeNarrative.id\}/);
   assert.doesNotMatch(owner.text, /key=\{(?:lang|theaterMode|settings.storyMode)\}/);

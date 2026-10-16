@@ -9,6 +9,8 @@ const terminal = readFileSync(new URL('../src/pages/TerminalDetective.jsx', impo
 function navigationHarness() {
   const state = { screen: 'CASE_SELECT', preferredCaseId: null, lobbyReturnScreen: 'HOME', caseSelectReturnScreen: 'HOME' };
   const context = vm.createContext({
+    multiSaveEnabled: false,
+    newSaveIntentRef: { current: false },
     selectedCase: null,
     activeRun: null,
     loadAgentLobby() {},

@@ -48,6 +48,36 @@ test('case-start journal preserves negotiated investigation versions and legacy 
   }
 });
 
+test('new saves and run selection persist their exact canonical intent without carrying gameplay snapshots', () => {
+  for (const args of [{ case_id: 'Lvl_01' }, { case_id: 'Lvl_01', new_save: false },
+    { case_id: 'Lvl_01', new_save: true, investigation_version: 2 }]) {
+    const store = storage();
+    appendProfileCommand({ ...receipt, command: profileCommand('start_case', args) }, store);
+    assert.deepEqual(readProfileCommands('owner-a', store)[0].command, { type: 'start_case', ...args });
+  }
+  const store = storage();
+  const intent = profileCommand('resume_run', { run_id: 'run-second-save' });
+  appendProfileCommand({ ...receipt, command: intent }, store);
+  assert.deepEqual(readProfileCommands('owner-a', store)[0].command, intent);
+  for (const new_save of [1, 0, 'true', null, {}, []]) {
+    assert.throws(() => profileCommand('start_case', { case_id: 'Lvl_01', new_save }), { code: 'PROFILE_COMMAND_INVALID' });
+  }
+  for (const args of [{}, { run_id: '' }, { run_id: '../run' }, { run_id: null }, { run_id: 'run-1', state: {} }, { run_id: 'x'.repeat(181) }]) {
+    assert.throws(() => profileCommand('resume_run', args), { code: 'PROFILE_COMMAND_INVALID' });
+  }
+});
+
+test('switch receipts survive reload and removing profile commands leaves every run retry receipt intact', () => {
+  const store = storage();
+  const runReceiptKey = 'td-authoritative-run-intent-v2:owner-a:run-one';
+  store.setItem(runReceiptKey, '{"unconfirmed":"run action"}');
+  const entry = appendProfileCommand({ ...receipt, command: profileCommand('resume_run', { run_id: 'run-two' }) }, store);
+  assert.deepEqual(readProfileCommands('owner-a', store)[0], entry);
+  removeProfileCommand('owner-a', entry.operationId, store);
+  assert.equal(store.getItem(runReceiptKey), '{"unconfirmed":"run action"}');
+  assert.deepEqual(readProfileCommands('owner-a', store), []);
+});
+
 test('journal keeps one immutable owner-scoped receipt for retries and reloads', () => {
   const store = storage();
   const entry = appendProfileCommand(receipt, store);
@@ -80,6 +110,22 @@ test('journal stops on checksum corruption, conflicting tabs and storage write/d
   appendProfileCommand(receipt, blocked);
   blocked.removeItem = () => {};
   assert.throws(() => removeProfileCommand(receipt.ownerUid, receipt.operationId, blocked), { code: 'PROFILE_WAL_UNAVAILABLE' });
+});
+
+test('a browser blocking the localStorage getter returns the recoverable storage gate for every journal operation', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  try {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true,
+      get() { throw new DOMException('Blocked storage', 'SecurityError'); } });
+    for (const operation of [
+      () => appendProfileCommand(receipt), () => readProfileCommands(receipt.ownerUid),
+      () => removeProfileCommand(receipt.ownerUid, receipt.operationId),
+      () => clearProfileCommands(receipt.ownerUid), () => hasLegacyProfileWrites(receipt.ownerUid),
+    ]) assert.throws(operation, { code: 'PROFILE_WAL_UNAVAILABLE' });
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
+    else delete globalThis.localStorage;
+  }
 });
 
 test('legacy snapshots are detected but never loaded or automatically discarded', () => {

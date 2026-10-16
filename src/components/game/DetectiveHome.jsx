@@ -39,7 +39,7 @@ function HomeModuleSkeleton({ lang }) {
   );
 }
 
-export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase, onRegister, onStartInvestigation = null, suspendedCase = null, onResume = () => {} }) {
+export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase, onRegister, onStartInvestigation = null, suspendedCase = null, onResume = () => {}, onOpenSaves = null, multiSaveAvailable = false }) {
   const { lang } = useLang();
   const { settings, updateSetting } = useSettings();
   const {
@@ -168,13 +168,13 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
     // The routed app always supplies onEnterLobby; retain the old embedded
     // caller fallback for integrations that only expose a resume action.
     if (typeof profile !== 'undefined' && !profile?.detective_name) { onRegister?.(); return; }
-    if (suspendedCase && targetCaseId && targetCaseId !== suspendedCase.case_id) {
+    if (!multiSaveAvailable && suspendedCase && targetCaseId && targetCaseId !== suspendedCase.case_id) {
       setModule(null);
       onOpenCases(targetCaseId);
       return;
     }
     if (suspendedCase && typeof onEnterLobby !== 'function') { onResume(); return; }
-    onEnterLobby(targetCaseId, 'HOME', { previewActiveRun: Boolean(suspendedCase) });
+    onEnterLobby(targetCaseId, 'HOME', { previewActiveRun: Boolean(suspendedCase) && !multiSaveAvailable });
     if (!isReadOnly) {
       void command('visit_lobby').catch(cause => notify(publicErrorMessage(cause, lang), 'error'));
     }
@@ -197,6 +197,7 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
   }, []);
 
   const quickStart = () => {
+    if (multiSaveAvailable && onStartInvestigation) { onStartInvestigation(); return; }
     if (suspendedCase) { onResume(); return; }
     openModule('cases');
   };
@@ -335,8 +336,8 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
               </h2>
               <p style={{ fontSize: '.7rem', lineHeight: 1.7, color: '#d5c7ae' }}>
                 {lang === 'zh'
-                  ? '案件与编队已由云端保存。切换模式、刷新页面或重新登录后均可继续同一调查，不再扣费。镜头位置和未提交的草稿仅在当前页面保留。'
-                  : 'Your case and squad are saved in the cloud. Resume the same investigation after switching modes, reloading, or signing in again without another charge. Camera position and unsent drafts remain only in this page.'}
+                  ? '已确认的调查行动与编队自动保存到云端。打开进度保存库可继续旧案，也可独立新建调查。镜头位置与未提交草稿仅在本机保存。'
+                  : 'Confirmed actions and the team save automatically to the cloud. Resume a case from the save library or start a separate investigation. Camera positions and unsent drafts are saved on this device only.'}
               </p>
               <button type="button" className="td-ui-button td-button-gold" onClick={onResume} style={{
                 minHeight: 44, padding: '10px 16px', borderRadius: 8, border: '1px solid #c5a66f',
@@ -430,9 +431,10 @@ export default function DetectiveHome({ onEnterLobby, onOpenCases, onSelectCase,
       {/* Footer */}
       <div className="td-home-footer" style={{ position: 'relative', zIndex: 2, padding: '14px 22px 22px' }}>
         <div className="td-home-primary-actions">
-          <button ref={resumeRef} type="button" className="td-ui-button td-button-gold" onClick={suspendedCase ? onResume : named ? quickStart : onRegister} disabled={!named && !onRegister}>
-            <Icon name="search" /> {suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME') : named ? (lang === 'zh' ? '开始调查' : 'INVESTIGATE') : (lang === 'zh' ? '注册身份' : 'REGISTER')}
+          <button ref={resumeRef} type="button" className="td-ui-button td-button-gold" onClick={multiSaveAvailable ? (named ? quickStart : onRegister) : suspendedCase ? onResume : named ? quickStart : onRegister} disabled={!named && !onRegister}>
+            <Icon name="search" /> {multiSaveAvailable && named ? (lang === 'zh' ? '开始新调查' : 'NEW INVESTIGATION') : suspendedCase ? (lang === 'zh' ? '继续调查' : 'RESUME') : named ? (lang === 'zh' ? '开始调查' : 'INVESTIGATE') : (lang === 'zh' ? '注册身份' : 'REGISTER')}
           </button>
+          {onOpenSaves && <button type="button" className="td-ui-button" onClick={onOpenSaves}><Icon name="archive" /> {lang === 'zh' ? '进度保存库' : 'SAVE LIBRARY'}</button>}
           <button type="button" className="td-ui-button" onClick={() => enterLobby()} disabled={!named}>
             <Icon name="users" /> {lang === 'zh' ? '战术台' : 'TACTICAL DESK'}
           </button>

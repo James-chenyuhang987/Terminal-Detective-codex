@@ -148,7 +148,7 @@ export const PROFILE_DEFAULTS = {
   case_records: [], activity_stats: DEFAULT_STATS, reward_claims: [],
   journey_started_on: null, mail_read_ids: [], mail_reply_choices: [],
   rewarded_runs: [], weekly_records: [], agent_progression: [], skill_loadout: [],
-  saved_team_config: null, profile_revision: 0, active_session_id: '', home_progress_version: 2,
+  saved_team_config: null, active_run_id: null, profile_revision: 0, active_session_id: '', home_progress_version: 2,
 };
 
 export const PROFILE_FIELD_KEYS = Object.freeze(Object.keys(PROFILE_DEFAULTS));
@@ -236,6 +236,8 @@ export function normalizeProfile(raw = {}, now = new Date(), { regenerateEnergy 
   p.agent_progression = Array.isArray(p.agent_progression) ? p.agent_progression : [];
   p.skill_loadout = Array.isArray(p.skill_loadout) ? p.skill_loadout : [];
   p.saved_team_config = p.saved_team_config && typeof p.saved_team_config === 'object' ? p.saved_team_config : null;
+  p.active_run_id = typeof p.active_run_id === 'string' && /^[A-Za-z0-9._:-]{16,128}$/.test(p.active_run_id)
+    ? p.active_run_id : null;
   p.profile_revision = Math.max(0, Math.floor(finite(p.profile_revision)));
   p.active_session_id = typeof p.active_session_id === 'string' ? p.active_session_id.slice(0, 128) : '';
   p.home_progress_version = Math.max(1, Math.floor(finite(p.home_progress_version, 1)));

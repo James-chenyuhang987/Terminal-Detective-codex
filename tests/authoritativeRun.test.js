@@ -308,7 +308,7 @@ test('accepted run result still replays after reward settlement and a new device
   assert.equal(replay.run.status, 'settled');
 });
 
-test('paid-proof and active-run uniqueness constraints are enforced by actual SQLite', async () => {
+test('paid-proof and per-start uniqueness constraints are enforced by actual SQLite', async () => {
   const DB = authorityDB();
   assert.throws(() => DB.sqlite.prepare('INSERT INTO player_runs(id,user_id,start_operation_id,run_json) VALUES (?,?,?,?)')
     .run('fake-paid-proof-123456', USER_ID, 'missing-operation', '{}'), /FOREIGN KEY/);

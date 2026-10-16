@@ -6,7 +6,7 @@ import { buildTeamConfig } from '@/game/teamConfig';
 import { getActiveSupportAgentId, getSelectedCoreAgentIds } from '@/game/agentMarket';
 import { useLang } from '@/lib/lang.jsx';
 import { publicErrorMessage } from '@/lib/publicError.js';
-import { createPlayerRunClient } from '@/game/playerRun';
+import { createPlayerRunClient, runRecoveryMessage } from '@/game/playerRun';
 import { cloudflareApi } from '@/api/cloudflareClient';
 import { ALL_CASES } from '@/game/caseData';
 import { useSettings } from '@/lib/settings.jsx';
@@ -23,6 +23,7 @@ const AgentLobby = lazy(loadAgentLobby);
 const InvestigationTerminal = lazy(loadInvestigationTerminal);
 const CaseSelect = lazy(loadCaseSelect);
 const DetectiveHome = lazy(loadDetectiveHome);
+const SaveLibrary = lazy(() => import('@/components/game/SaveLibrary'));
 
 function ScreenFallback() {
   const { lang } = useLang();
@@ -35,7 +36,7 @@ function ScreenFallback() {
 
 export default function TerminalDetective() {
   const { lang } = useLang();
-  const { profile, activeRun, supportedInvestigationVersions = [1], command, refresh, loadProfile, settle, isReadOnly, account, sessionId } = useProfile();
+  const { profile, activeRun, savedRuns = [], saveLibraryVersion = 0, saveLibraryLimit = 20, supportedInvestigationVersions = [1], command, refresh, loadProfile, settle, isReadOnly, account, sessionId } = useProfile();
   const { settings, updateSetting } = useSettings();
   const [screen, setScreen] = useState('LANDING');
   const [showModeChooser, setShowModeChooser] = useState(false);
@@ -64,6 +65,48 @@ export default function TerminalDetective() {
   const briefingRequestRef = useRef(null);
   const briefedRunRef = useRef(false);
   const entryReturnScreenRef = useRef('HOME');
+  const multiSaveEnabled = saveLibraryVersion >= 1;
+  const newSaveIntentRef = useRef(false);
+  const [newSaveMode, setNewSaveMode] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [runOwner, setRunOwner] = useState(null);
+  const [restoreEpoch, setRestoreEpoch] = useState(0);
+  const ownerKey = account?.id || '';
+  const navigationRef = useRef({ owner: ownerKey });
+  // Replace the token during render, so late promises are invalid before effects run.
+  if (navigationRef.current.owner !== ownerKey) navigationRef.current = { owner: ownerKey };
+  const previousOwnerRef = useRef(ownerKey);
+
+  useEffect(() => {
+    if (previousOwnerRef.current === ownerKey) return;
+    previousOwnerRef.current = ownerKey;
+    entryRequestRef.current += 1;
+    briefingRequestRef.current?.resolve({ error: 'cancelled' });
+    briefingRequestRef.current = null;
+    caseStartRef.current = false;
+    startRef.current = false;
+    registrationRef.current = false;
+    abandonRunRef.current = false;
+    newSaveIntentRef.current = false;
+    teamIntentRef.current = null;
+    briefedRunRef.current = false;
+    setSelectedCase(null);
+    setAuthoritativeRun(null);
+    setRunOwner(null);
+    setEntryNarrative(null);
+    setShowModeChooser(false);
+    setStartBusy(false);
+    setRegBusy(false);
+    setSaveBusy(false);
+    setNarrativeBusy(false);
+    setAbandonRunBusy(false);
+    setSaveError('');
+    setStartError('');
+    setRegError('');
+    setNewSaveMode(false);
+    setScreen('LANDING');
+  }, [ownerKey]);
 
   useEffect(() => () => {
     briefingRequestRef.current?.resolve({ error: 'cancelled' });
@@ -109,12 +152,13 @@ export default function TerminalDetective() {
     if (startRef.current) return;
     startRef.current = true;
     const requestId = ++entryRequestRef.current;
+    const navigation = navigationRef.current;
     updateSetting('storyMode', normalizeStoryMode(mode));
     setStartBusy(true);
     setStartError('');
     try {
       const current = profile || await loadProfile();
-      if (requestId !== entryRequestRef.current) return;
+      if (requestId !== entryRequestRef.current || navigation !== navigationRef.current) return;
       if (!current || typeof current !== 'object') {
         const unavailable = /** @type {Error & { code?: string }} */ (
           new Error('Cloud profile did not return a usable profile.')
@@ -128,12 +172,15 @@ export default function TerminalDetective() {
         void loadCaseSelect();
       }
       setShowModeChooser(false);
-      setScreen(current.detective_name ? 'HOME' : 'REGISTRATION');
+      newSaveIntentRef.current = true;
+      setNewSaveMode(true);
+      if (current.detective_name) await openCasesWithSavedTeam(null, current, true);
+      else setScreen('REGISTRATION');
     } catch (cause) {
-      if (requestId !== entryRequestRef.current) return;
+      if (requestId !== entryRequestRef.current || navigation !== navigationRef.current) return;
       setStartError(publicErrorMessage(cause, lang));
     } finally {
-      if (requestId === entryRequestRef.current) {
+      if (requestId === entryRequestRef.current && navigation === navigationRef.current) {
         startRef.current = false;
         setStartBusy(false);
       }
@@ -145,30 +192,37 @@ export default function TerminalDetective() {
     registrationRef.current = true;
     setRegBusy(true);
     setRegError('');
+    const navigation = navigationRef.current;
     try {
       const result = await command('identity', { patch: identity });
+      if (navigation !== navigationRef.current) return;
       if (result?.error || result?.pending || !result?.profile?.detective_name) throw new Error('Identity was not persisted.');
       const verified = await refresh();
+      if (navigation !== navigationRef.current) return;
       if (verified?.detective_name !== identity.detective_name) {
         throw new Error('Identity did not survive cloud verification.');
       }
-      setScreen('HOME');
+      if (newSaveIntentRef.current) await openCasesWithSavedTeam(null, verified, true);
+      else setScreen('HOME');
     } catch (cause) {
+      if (navigation !== navigationRef.current) return;
       setRegError(cause?.code === 'UNAUTHENTICATED'
         ? (lang === 'en' ? 'Your session has expired. Sign in again before registering.' : '登录状态已失效，请重新登录后再注册。')
         : (lang === 'en' ? 'Your identity was not saved to the cloud. Your input is preserved; check the network and retry.' : '身份尚未写入云端，已保留当前输入，请检查网络后重试。'));
     } finally {
-      registrationRef.current = false;
-      setRegBusy(false);
+      if (navigation === navigationRef.current) {
+        registrationRef.current = false;
+        setRegBusy(false);
+      }
     }
   };
 
   const handleDeploy = async (strategy, teamConfig) => {
-    if (selectedCase) {
+    if (selectedCase && !(multiSaveEnabled && newSaveIntentRef.current)) {
       setScreen('GAME');
       return { error: null };
     }
-    if (activeRun) { resumeCloudRun(activeRun); return { run: activeRun }; }
+    if (activeRun && !(multiSaveEnabled && newSaveIntentRef.current)) { resumeCloudRun(activeRun); return { run: activeRun }; }
     teamIntentRef.current = teamConfig;
     setAgentStrategy(strategy);
     if (preferredCaseId) {
@@ -183,7 +237,11 @@ export default function TerminalDetective() {
 
   const requireConfirmed = (result) => {
     if (!result?.profile || result.error || result.pending) {
-      throw Object.assign(new Error('The server did not accept this action.'), { code: 'PROFILE_ACTION_REJECTED' });
+      throw Object.assign(new Error('The server did not accept this action.'), {
+        code: 'PROFILE_ACTION_REJECTED',
+        feedbackCode: typeof result?.error === 'string' ? result.error.toUpperCase() : '',
+        confirmed: Boolean(result?.profile && result.error && !result.pending),
+      });
     }
     return result;
   };
@@ -197,6 +255,10 @@ export default function TerminalDetective() {
   const resumeCloudRun = (run) => {
     const caseData = ALL_CASES.find(item => item.case_id === (run?.case_id || run?.state?.case_id));
     if (!run?.id || !caseData) throw new Error('The cloud run is unavailable.');
+    setRunOwner(account?.id || '');
+    setRestoreEpoch(value => value + 1);
+    newSaveIntentRef.current = false;
+    setNewSaveMode(false);
     setAuthoritativeRun(run);
     setAgentStrategy(run.agent_strategy || run.team_config);
     setSelectedCase(caseData);
@@ -204,39 +266,52 @@ export default function TerminalDetective() {
   };
 
   const handleCaseSelect = async (caseData) => {
-    if (selectedCase) {
+    const createSave = multiSaveEnabled && newSaveIntentRef.current;
+    if (selectedCase && !createSave) {
       if (selectedCase.case_id !== caseData.case_id) return { error: 'active_run_exists' };
       setScreen('GAME');
       return { error: null };
     }
     if (caseStartRef.current) return { error: 'busy' };
     caseStartRef.current = true;
+    const navigation = navigationRef.current;
     try {
       await loadInvestigationTerminal();
-      if (activeRun) {
+      if (navigation !== navigationRef.current) return { error: 'cancelled' };
+      if (isReadOnly) return { error: 'readonly' };
+      if (activeRun && !createSave) {
         if (activeRun.case_id !== caseData.case_id) return { error: 'active_run_exists' };
         resumeCloudRun(activeRun);
         return { run: activeRun };
       }
+      if (createSave) await reconcileSelectedRun();
+      if (navigation !== navigationRef.current) return { error: 'cancelled' };
       const teamConfig = teamIntentRef.current || profile?.saved_team_config;
       const result = await command('start_case', {
         case_id: caseData.case_id, ...(teamConfig ? { team_config: teamConfig } : {}),
         ...(supportedInvestigationVersions.includes(2) ? { investigation_version: 2 } : {}),
+        ...(createSave ? { new_save: true } : {}),
       });
+      if (navigation !== navigationRef.current) return { error: 'cancelled' };
+      if (result?.pending || (createSave && result?.error)) return { ...result, error: result?.error || 'cloud_run_unavailable' };
       if (!result?.active_run) return { ...result, error: result?.error || 'cloud_run_unavailable' };
       if (result.active_run.case_id !== caseData.case_id) return { ...result, error: 'active_run_exists' };
+      // A replayed start receipt may describe a save that is no longer selected.
+      if (createSave && result.run?.id !== result.active_run.id) return { ...result, error: 'selection_changed' };
       resumeCloudRun(result.active_run);
       return { ...result, run: result.active_run, error: null };
     } finally {
-      caseStartRef.current = false;
+      if (navigation === navigationRef.current) caseStartRef.current = false;
     }
   };
 
   const requestCaseSelect = (caseData) => {
-    if ((selectedCase && selectedCase.case_id !== caseData.case_id)
-      || (activeRun && activeRun.case_id !== caseData.case_id)) return Promise.resolve({ error: 'active_run_exists' });
-    if (selectedCase) { setScreen('GAME'); return Promise.resolve({ error: null }); }
-    if (activeRun) { resumeCloudRun(activeRun); return Promise.resolve({ run: activeRun }); }
+    if (!(multiSaveEnabled && newSaveIntentRef.current)) {
+      if ((selectedCase && selectedCase.case_id !== caseData.case_id)
+        || (activeRun && activeRun.case_id !== caseData.case_id)) return Promise.resolve({ error: 'active_run_exists' });
+      if (selectedCase) { setScreen('GAME'); return Promise.resolve({ error: null }); }
+      if (activeRun) { resumeCloudRun(activeRun); return Promise.resolve({ run: activeRun }); }
+    }
     if (briefingRequestRef.current || caseStartRef.current) return Promise.resolve({ error: 'busy' });
     briefedRunRef.current = false;
     entryReturnScreenRef.current = screen;
@@ -268,12 +343,14 @@ export default function TerminalDetective() {
     const request = briefingRequestRef.current;
     if (!request || request.confirming) return;
     request.confirming = true;
+    const navigation = navigationRef.current;
     setNarrativeBusy(true);
     setNarrativeError('');
     try {
       // Set before selecting the run: its stable owner consumes this only at initialization.
       briefedRunRef.current = true;
       const result = await handleCaseSelect(request.caseData);
+      if (navigation !== navigationRef.current) return;
       if (result?.error) {
         briefedRunRef.current = false;
         setNarrativeError(lang === 'en' ? 'Unable to enter. Check your energy and profile sync, then retry or return home.' : '暂时无法进入，请检查体力与档案同步后重试，或返回主页。');
@@ -283,15 +360,17 @@ export default function TerminalDetective() {
       setEntryNarrative(null);
       request.resolve(result);
     } catch (cause) {
+      if (navigation !== navigationRef.current) return;
       briefedRunRef.current = false;
       setNarrativeError(publicErrorMessage(cause, lang));
     } finally {
       request.confirming = false;
-      setNarrativeBusy(false);
+      if (navigation === navigationRef.current) setNarrativeBusy(false);
     }
   };
 
   const handleHomeStartInvestigation = () => {
+    if (multiSaveEnabled) { void openCasesWithSavedTeam(); return; }
     if (selectedCase) { setScreen('GAME'); return; }
     if (activeRun) { resumeCloudRun(activeRun); return; }
     entryReturnScreenRef.current = 'HOME';
@@ -309,6 +388,56 @@ export default function TerminalDetective() {
     else if (activeRun) resumeCloudRun(activeRun);
   };
 
+  const reconcileSelectedRun = async () => {
+    if (!activeRun?.id) return;
+    // Share the run's Web Lock and durable receipt before switching its pointer.
+    const client = createPlayerRunClient({ ownerUid: account?.id, runId: activeRun.id,
+      sessionId, invoke: cloudflareApi.functions.invoke });
+    await client.resume();
+  };
+
+  const refreshSaves = async () => {
+    const navigation = navigationRef.current;
+    setSaveBusy(true);
+    setSaveError('');
+    try { await (profile ? refresh() : loadProfile()); }
+    catch (cause) { if (navigation === navigationRef.current) setSaveError(publicErrorMessage(cause, lang)); }
+    finally { if (navigation === navigationRef.current) setSaveBusy(false); }
+  };
+
+  const openSaveLibrary = async () => {
+    if (caseStartRef.current || startRef.current) return;
+    setScreen('SAVES');
+    await refreshSaves();
+  };
+
+  const resumeSavedRun = async (save) => {
+    if (caseStartRef.current || isReadOnly || !multiSaveEnabled || !save?.id) return;
+    const navigation = navigationRef.current;
+    caseStartRef.current = true;
+    setSaveBusy(true);
+    setSaveError('');
+    try {
+      await loadInvestigationTerminal();
+      if (navigation !== navigationRef.current) return;
+      await reconcileSelectedRun();
+      if (navigation !== navigationRef.current) return;
+      const result = requireConfirmed(await command('resume_run', { run_id: save.id }));
+      if (navigation !== navigationRef.current) return;
+      if (result.active_run?.id !== save.id) throw Object.assign(new Error('Save selection changed.'), { code: 'RUN_NOT_SELECTED' });
+      briefedRunRef.current = true;
+      resumeCloudRun(result.active_run);
+    } catch (cause) {
+      if (navigation === navigationRef.current) setSaveError(cause?.confirmed || cause?.code === 'RUN_NOT_FOUND'
+        ? publicErrorMessage(cause, lang) : runRecoveryMessage(cause, lang));
+    } finally {
+      if (navigation === navigationRef.current) {
+        caseStartRef.current = false;
+        setSaveBusy(false);
+      }
+    }
+  };
+
   const abandonActiveRun = async () => {
     const run = activeRun || authoritativeRun;
     if (abandonRunRef.current || abandonRunBusy || !run?.id) return false;
@@ -317,6 +446,7 @@ export default function TerminalDetective() {
       return false;
     }
     abandonRunRef.current = true;
+    const navigation = navigationRef.current;
     setAbandonRunBusy(true);
     setAbandonRunError('');
     try {
@@ -327,13 +457,16 @@ export default function TerminalDetective() {
         invoke: cloudflareApi.functions.invoke,
       });
       const resumed = await client.resume();
+      if (navigation !== navigationRef.current) return false;
       if (resumed.run.status === 'active') {
         const response = await client.command({ type: 'abandon' });
+        if (navigation !== navigationRef.current) return false;
         if (response?.run?.status !== 'abandoned') throw new Error('The active investigation was not ended.');
       }
       // Abandon ends gameplay, but the server's paid slot remains occupied
       // until settlement. Confirm its release before enabling another case.
       const result = requireConfirmed(await command('settle_case', { run_id: run.id }));
+      if (navigation !== navigationRef.current) return false;
       if (result.active_run !== null) throw new Error('The cloud investigation slot is still occupied.');
       setSelectedCase(null);
       setAuthoritativeRun(null);
@@ -341,11 +474,13 @@ export default function TerminalDetective() {
       briefedRunRef.current = false;
       return true;
     } catch (cause) {
-      setAbandonRunError(publicErrorMessage(cause, lang));
+      if (navigation === navigationRef.current) setAbandonRunError(publicErrorMessage(cause, lang));
       return false;
     } finally {
-      abandonRunRef.current = false;
-      setAbandonRunBusy(false);
+      if (navigation === navigationRef.current) {
+        abandonRunRef.current = false;
+        setAbandonRunBusy(false);
+      }
     }
   };
 
@@ -362,6 +497,16 @@ export default function TerminalDetective() {
   };
 
   const openLobbyForCase = (caseId = null, returnScreen = 'HOME', options = {}) => {
+    if (multiSaveEnabled && !options.previewActiveRun) {
+      newSaveIntentRef.current = true;
+      setNewSaveMode(true);
+      void loadAgentLobby();
+      setPreferredCaseId(caseId);
+      setLobbyReturnScreen(returnScreen);
+      setLobbyPreviewRun(false);
+      setScreen('LOBBY');
+      return;
+    }
     const currentCaseId = selectedCase?.case_id || activeRun?.case_id;
     if (caseId && currentCaseId && caseId !== currentCaseId) {
       void openCasesWithSavedTeam(caseId);
@@ -379,10 +524,27 @@ export default function TerminalDetective() {
     setScreen('LOBBY');
   };
 
-  const openCasesWithSavedTeam = async (caseId = null) => {
+  const openCasesWithSavedTeam = async (caseId = null, currentProfile = profile, directStart = false) => {
     setAbandonRunError('');
     void loadCaseSelect();
-    const saved = profile?.saved_team_config;
+    const saved = currentProfile?.saved_team_config;
+    if (multiSaveEnabled || directStart) {
+      if (!currentProfile?.detective_name) {
+        newSaveIntentRef.current = true;
+        setScreen('REGISTRATION');
+        return;
+      }
+      newSaveIntentRef.current = true;
+      setNewSaveMode(true);
+      teamIntentRef.current = { ...(saved || { specs: [{}, {}, {}], primary_agent_index: 0 }), core_agent_ids: getSelectedCoreAgentIds(currentProfile) };
+      setAgentStrategy(buildTeamConfig(teamIntentRef.current, teamIntentRef.current.primary_agent_index,
+        currentProfile?.skill_loadout, getActiveSupportAgentId(currentProfile)));
+      setPreferredCaseId(caseId);
+      setLobbyReturnScreen('HOME');
+      setCaseSelectReturnScreen('HOME');
+      setScreen('CASE_SELECT');
+      return;
+    }
     if (!saved && !selectedCase && !activeRun) {
       openLobbyForCase(caseId);
       return;
@@ -404,7 +566,12 @@ export default function TerminalDetective() {
 
   let content;
   if (screen === 'LANDING') {
-    content = <GameLanding busy={startBusy} error={startError} onStart={handleStart} />;
+    content = <GameLanding busy={startBusy || saveBusy} error={startError} onStart={handleStart} onOpenSaves={openSaveLibrary} />;
+  } else if (screen === 'SAVES') {
+    content = <SaveLibrary saves={savedRuns} currentRunId={activeRun?.id} busy={saveBusy}
+      error={saveError} supported={multiSaveEnabled} limit={saveLibraryLimit} readOnly={isReadOnly}
+      onResume={resumeSavedRun} onRefresh={refreshSaves} onNewGame={() => openCasesWithSavedTeam()}
+      onBack={() => setScreen(profile?.detective_name ? 'HOME' : 'LANDING')} />;
   } else if (screen === 'REGISTRATION') {
     content = (
       <DetectiveRegistration
@@ -420,10 +587,12 @@ export default function TerminalDetective() {
         onEnterLobby={openLobbyForCase}
         onOpenCases={openCasesWithSavedTeam}
         onSelectCase={openCaseSelection}
-        onStartInvestigation={settings.storyMode === 'theater' ? handleHomeStartInvestigation : null}
+        onStartInvestigation={multiSaveEnabled || settings.storyMode === 'theater' ? handleHomeStartInvestigation : null}
+        onOpenSaves={openSaveLibrary}
+        multiSaveAvailable={multiSaveEnabled}
         onRegister={() => setScreen('REGISTRATION')}
         suspendedCase={selectedCase || ALL_CASES.find(item => item.case_id === activeRun?.case_id)}
-        onResume={handleResume}
+        onResume={multiSaveEnabled ? openSaveLibrary : handleResume}
       />
     );
   } else if (screen === 'LOBBY') {
@@ -466,7 +635,9 @@ export default function TerminalDetective() {
         onAbandonRun={abandonActiveRun}
         abandonBusy={abandonRunBusy}
         abandonError={abandonRunError}
-        activeRun={activeRun || (selectedCase ? authoritativeRun : null)}
+        activeRun={multiSaveEnabled && newSaveMode ? null : activeRun || (selectedCase ? authoritativeRun : null)}
+        newSave={multiSaveEnabled && newSaveMode}
+        onOpenSaves={openSaveLibrary}
         returnToHome={caseSelectReturnScreen === 'HOME'}
         preferredCaseId={preferredCaseId}
       />
@@ -481,8 +652,9 @@ export default function TerminalDetective() {
       {/* This stable sibling preserves the run while HOME or presentation settings change. */}
       <div {...(screen !== 'GAME' ? { inert: '' } : {})} hidden={screen !== 'GAME'} aria-hidden={screen !== 'GAME'} className="td-active-run">
         <Suspense fallback={<ScreenFallback />}>
-          {selectedCase && (
+          {selectedCase && runOwner === ownerKey && (
             <InvestigationTerminal
+              key={`${ownerKey}:${authoritativeRun?.id}:${restoreEpoch}`}
               agentStrategy={agentStrategy}
               authoritativeRun={authoritativeRun}
               selectedCase={selectedCase}

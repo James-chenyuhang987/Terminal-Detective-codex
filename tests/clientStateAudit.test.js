@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { compileFunction } from 'node:vm';
 import ts from 'typescript';
+import { readReconstructionDraft, writeReconstructionDraft } from '../src/game/runWorkspace.js';
 
 const source = ts.createSourceFile('InvestigationFieldPanel.jsx', readFileSync(new URL('../src/components/game/investigation/InvestigationFieldPanel.jsx', import.meta.url), 'utf8'),
   ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
@@ -81,7 +82,12 @@ test('late action outcomes and cleanup do not replace a newer view or its pendin
   }
 });
 
-function reconstructionHarness() {
+function workspaceStorage() {
+  const data = new Map();
+  return { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
+}
+
+function reconstructionHarness(store = workspaceStorage()) {
   const hookSource = ts.createSourceFile('useReconstructionDraft.js', readFileSync(new URL('../src/components/game/investigation/useReconstructionDraft.js', import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const code = ts.transpileModule(hookSource.statements.filter(node => !ts.isImportDeclaration(node))
@@ -95,6 +101,8 @@ function reconstructionHarness() {
     return slots[index].value;
   };
   const bindings = { useMemo: memo, useCallback: (callback, deps) => memo(() => callback, deps),
+    readReconstructionDraft: scope => readReconstructionDraft(scope, store),
+    writeReconstructionDraft: (scope, value) => writeReconstructionDraft(scope, value, store),
     useRef: initial => { const index = cursor++; slots[index] ||= { current: initial }; return slots[index]; },
     useState: initial => {
       const index = cursor++;
@@ -102,10 +110,10 @@ function reconstructionHarness() {
       return [slots[index].value, next => { slots[index].value = typeof next === 'function' ? next(slots[index].value) : next; }];
     } };
   const hook = compileFunction(`${code}\nreturn useReconstructionDraft;`, Object.keys(bindings))(...Object.values(bindings));
-  return { render(scope) { cursor = 0; return hook(scope); } };
+  return { store, render(scope) { cursor = 0; return hook(scope); } };
 }
 
-test('the terminal-owned memory draft composes edits and isolates owners, runs, puzzles and previous visits', () => {
+test('the terminal-owned persistent draft composes edits and isolates owners, runs, puzzles and previous visits', () => {
   const scope = { ownerUid: 'owner-a', runId: 'run-a', puzzleId: 'clock' };
   const app = reconstructionHarness();
   const original = app.render(scope);
@@ -126,5 +134,5 @@ test('the terminal-owned memory draft composes edits and isolates owners, runs, 
   returned.setValue({ answerIds: ['latest-visit'], view: {} });
   original.setValue({ answerIds: ['STALE'], view: {} });
   assert.deepEqual(app.render(scope).value.answerIds, ['latest-visit'], 'returning to A does not reactivate callbacks from the first A visit');
-  assert.deepEqual(reconstructionHarness().render(scope).value, { answerIds: [], view: {} }, 'refresh deliberately starts a new memory-only draft');
+  assert.deepEqual(reconstructionHarness(app.store).render(scope).value.answerIds, ['latest-visit'], 'remounting the saved run restores its personal draft');
 });

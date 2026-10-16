@@ -22,6 +22,9 @@ const serverRun = { id: 'paid-run-001', case_id: ALL_CASES[0].case_id, team_conf
 function harness({ activeRun = null, selectedCase = null, response, saved = rawConfig } = {}) {
   const state = { screen: 'HOME', run: null, strategy: null, selected: null, calls: [], narrative: null };
   const bindings = {
+    multiSaveEnabled: false, newSaveIntentRef: { current: false }, navigationRef: { current: {} },
+    isReadOnly: false, account: { id: 'entry-owner' },
+    setRunOwner() {}, setRestoreEpoch() {}, setNewSaveMode() {},
     supportedInvestigationVersions: [1],
     ALL_CASES, selectedCase, activeRun, profile: { saved_team_config: saved }, settings: { storyMode: 'theater' }, lang: 'en',
     teamIntentRef: { current: null }, caseStartRef: { current: false }, briefingRequestRef: { current: null }, briefedRunRef: { current: false }, preferredCaseId: null, lobbyReturnScreen: 'HOME',

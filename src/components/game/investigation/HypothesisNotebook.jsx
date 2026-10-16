@@ -13,7 +13,7 @@ export default function HypothesisNotebook({ items = [], clues = [], onSelect, o
       : 'Personal notes are free and add no confusion. Only system-confirmed deductions count toward closure and grades. Up to 20 notes.'}</p>
     <p role="status">{status === 'memory'
       ? (zh ? '当前仅在内存保留，刷新可能丢失。' : 'Kept in memory only; refreshing may discard these notes.')
-      : (zh ? '保存在本标签页，刷新可恢复。' : 'Saved in this tab and restored after refreshing.')}</p>
+      : (zh ? '按调查保存在本机浏览器，关闭后可恢复，不跨设备同步。' : 'Saved for this investigation in this browser; restored after closing, without syncing between devices.')}</p>
     {!items.length && <p>{zh ? '选择两份证据，可先记下联系，再请系统核验。' : 'Select two clues to note a possible connection before asking the system to verify it.'}</p>}
     <ul>{items.map(item => <li key={hypothesisKey(item)}>
       <strong>{label(item.a)} · {relations[item.relation]} · {label(item.b)}</strong>

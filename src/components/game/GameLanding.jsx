@@ -234,17 +234,17 @@ function TerminalPreview({ lang }) {
   );
 }
 
-function StartButton({ busy, error, onClick, t, lang }) {
+function StartButton({ busy, error, onClick, onOpenSaves, t, lang }) {
   const copy = lang === 'zh'
     ? {
       label: '开启案件调查',
-      action: busy ? '正在连接调查终端…' : '进入调查终端',
-      hint: busy ? '验证身份 · 同步云端档案' : '确认身份 · 连接全息现场 · 部署探员',
+      action: busy ? '正在连接调查终端…' : '开始新调查',
+      hint: busy ? '验证身份 · 同步云端档案' : '选择案件 · 独立存档 · 自动保存',
     }
     : {
       label: 'OPEN CASE INVESTIGATION',
-      action: busy ? 'CONNECTING TO CASE TERMINAL…' : 'ENTER CASE TERMINAL',
-      hint: busy ? 'VERIFYING IDENTITY · SYNCING CLOUD PROFILE' : 'VERIFY IDENTITY · LINK SCENE · DEPLOY AGENTS',
+      action: busy ? 'CONNECTING TO CASE TERMINAL…' : 'NEW INVESTIGATION',
+      hint: busy ? 'VERIFYING IDENTITY · SYNCING CLOUD PROFILE' : 'CHOOSE A CASE · SEPARATE SAVE · AUTO SAVE',
     };
 
   return (
@@ -266,6 +266,8 @@ function StartButton({ busy, error, onClick, t, lang }) {
         <small>{copy.hint}</small>
       </button>
       {error && <div className="td-landing-start-error" id="td-landing-start-error" role="alert"><Icon name="warning" /> {error}</div>}
+      {onOpenSaves && <button type="button" className="td-ui-button td-button-wide" disabled={busy} onClick={onOpenSaves}
+        style={{ width: '100%', marginTop: 12, minHeight: 48 }}><Icon name="archive" /> {lang === 'zh' ? '进度保存库 · 继续游玩' : 'SAVE LIBRARY · CONTINUE'}</button>}
     </div>
   );
 }
@@ -338,7 +340,7 @@ function DetectivePanel({ lang }) {
   );
 }
 
-export default function GameLanding({ busy = false, error = '', onStart }) {
+export default function GameLanding({ busy = false, error = '', onStart, onOpenSaves = null }) {
   const { lang, t } = useLang();
   const { reducedMotion, foreground } = usePresentationMotion();
   const [landingTab, setLandingTab] = useState('case');
@@ -398,7 +400,7 @@ export default function GameLanding({ busy = false, error = '', onStart }) {
         <footer className="td-landing-footer"><IconText text={t.bottomBar} /></footer>
       </div>
       <div className="td-landing-dock">
-        <StartButton busy={busy} error={error} lang={lang} onClick={onStart} t={t} />
+        <StartButton busy={busy} error={error} lang={lang} onClick={onStart} onOpenSaves={onOpenSaves} t={t} />
       </div>
     </div>
   );

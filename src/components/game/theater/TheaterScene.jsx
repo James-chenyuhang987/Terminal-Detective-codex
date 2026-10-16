@@ -654,6 +654,11 @@ function World({ caseData, zoneId, manifest, investigation = null, lang = 'zh', 
     }
     camera.lookAt(view.smoothTarget);
     view.initialized = true;
+    // The investigation owner periodically persists this position-only
+    // snapshot, including on pagehide before React unmounts the scene.
+    const spatial = spatialRef.current || (spatialRef.current = {});
+    spatial.rooms ||= {};
+    spatial.rooms[spatialKey] = { position: [...state.position], rotationY: state.rotationY, yaw: orbit.current.yaw, pitch: orbit.current.pitch };
     // A demand canvas should schedule another frame only while something can
     // visibly change. Keyboard/pointer handlers request the first frame;
     // locomotion, camera easing and active dialogue keep the chain alive until

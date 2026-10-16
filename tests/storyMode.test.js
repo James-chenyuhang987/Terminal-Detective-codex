@@ -39,7 +39,10 @@ function bind(node, bindings = {}) {
 }
 
 function handler(root, name, bindings = {}) {
-  return bind(variable(root, name), bindings);
+  return bind(variable(root, name), {
+    multiSaveEnabled: false, multiSaveAvailable: false, newSaveIntentRef: { current: false },
+    navigationRef: { current: {} }, isReadOnly: false, ...bindings,
+  });
 }
 
 const readStoredNode = findNodes(settings, node => ts.isFunctionDeclaration(node) && node.name?.text === 'readStored')[0];
@@ -104,6 +107,8 @@ function entryBindings() {
     setShowModeChooser: open => { state.open = open; },
     setScreen: screen => { state.screen = screen; },
     loadDetectiveHome: () => {}, loadAgentLobby: () => {}, loadCaseSelect: () => {},
+    newSaveIntentRef: { current: false }, setNewSaveMode() {},
+    openCasesWithSavedTeam: async () => { state.screen = 'CASE_SELECT'; },
     publicErrorMessage: error => error.message,
   };
   return { bindings, state, changes };
@@ -131,7 +136,7 @@ test('confirmation saves only a local mode before loading a profile and routes n
     const confirm = handler(page, 'handleConfirmMode', bindings);
     await Promise.all([confirm('theater'), confirm('terminal')]);
     assert.equal(calls, 1);
-    assert.equal(state.screen, detective_name ? 'HOME' : 'REGISTRATION');
+    assert.equal(state.screen, detective_name ? 'CASE_SELECT' : 'REGISTRATION');
     assert.equal(state.busy, false);
     assert.equal(state.open, false);
   }
@@ -163,7 +168,7 @@ test('cancel invalidates an outstanding entry request and cannot let an old fail
   assert.equal(state.error, '');
   resolveSecond({ detective_name: 'NEXUS' });
   await second;
-  assert.equal(state.screen, 'HOME');
+  assert.equal(state.screen, 'CASE_SELECT');
 });
 
 test('cancel prevents a late successful profile response from navigating away from landing', async () => {
@@ -223,7 +228,7 @@ test('settings reserve run-toolbar safe-area space and long mode labels reflow o
   assert.match(control.text, /overflowWrap: 'anywhere'/);
 });
 
-test('HOME and mode switching never key, replace, or conditionally unmount the active terminal', () => {
+test('HOME and mode switching preserve the active terminal while explicit run restores have an owner-scoped key', () => {
   const terminals = findNodes(page, node => ts.isJsxSelfClosingElement(node) && node.tagName.getText() === 'InvestigationTerminal');
   assert.equal(terminals.length, 1);
   const terminal = terminals[0];
@@ -236,13 +241,16 @@ test('HOME and mode switching never key, replace, or conditionally unmount the a
   for (let node = terminal; node && !ts.isFunctionDeclaration(node); node = node.parent) {
     if (ts.isJsxSelfClosingElement(node) || ts.isJsxElement(node)) {
       const opening = ts.isJsxElement(node) ? node.openingElement : node;
-      assert.equal(opening.attributes.properties.some(attribute => attribute.name?.getText() === 'key'), false);
+      const key = opening.attributes.properties.find(attribute => attribute.name?.getText() === 'key');
+      if (opening.tagName.getText() === 'InvestigationTerminal') {
+        assert.equal(key.initializer.expression.getText(), '`${ownerKey}:${authoritativeRun?.id}:${restoreEpoch}`');
+      } else assert.equal(Boolean(key), false);
       if (opening.getText().includes("hidden={screen !== 'GAME'}")) hasHiddenWrapper = true;
     }
     assert.equal(ts.isIfStatement(node), false);
     assert.equal(ts.isConditionalExpression(node), false);
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-      assert.equal(node.left.getText(), 'selectedCase');
+      assert.ok(['selectedCase', 'selectedCase && runOwner === ownerKey'].includes(node.left.getText()));
       hasSelectedCaseGuard = true;
     }
   }
@@ -253,10 +261,10 @@ test('HOME and mode switching never key, replace, or conditionally unmount the a
 });
 
 test('Home distinguishes durable cloud investigation from local presentation drafts in both languages', () => {
-  assert.match(home.text, /案件与编队已由云端保存/);
-  assert.match(home.text, /镜头位置和未提交的草稿仅在当前页面保留/);
-  assert.match(home.text, /Your case and squad are saved in the cloud/);
-  assert.match(home.text, /Camera position and unsent drafts remain only in this page/);
+  assert.match(home.text, /调查行动与编队自动保存到云端/);
+  assert.match(home.text, /镜头位置与未提交草稿仅在本机保存/);
+  assert.match(home.text, /Confirmed actions and the team save automatically to the cloud/);
+  assert.match(home.text, /Camera positions and unsent drafts are saved on this device only/);
   assert.doesNotMatch(home.text, /刷新或关闭页面将离开本次现场|Reloading or closing the page leaves this live session/);
 });
 
@@ -264,7 +272,7 @@ test('suspending a run focuses the visible resume control without rerouting or m
   const effect = findNodes(home, node => ts.isCallExpression(node) && node.expression.getText() === 'useEffect'
     && node.arguments[0]?.getText().includes('resumeRef.current?.focus'))[0];
   assert.ok(effect);
-  assert.match(home.text, /<button ref=\{resumeRef\}[^>]*onClick=\{suspendedCase \? onResume : named \? quickStart : onRegister\}/);
+  assert.match(home.text, /<button ref=\{resumeRef\}[^>]*onClick=\{multiSaveAvailable \? \(named \? quickStart : onRegister\) : suspendedCase \? onResume : named \? quickStart : onRegister\}/);
   const focusCalls = [];
   const resumeRef = { current: { focus: options => focusCalls.push(options) } };
   bind(effect.arguments[0], { resumeRef, suspendedCase: { case_id: 'Lvl_01' } })();
@@ -295,7 +303,7 @@ test('HOME and resume change only visibility; explicit exit clears selection for
   assert.equal(selection, null);
   assert.equal(preferred, null);
   const writes = findNodes(page, node => ts.isCallExpression(node) && node.expression.getText() === 'setSelectedCase');
-  assert.deepEqual(writes.map(node => node.arguments[0].getText()).sort(), ['caseData', 'null', 'null']);
+  assert.deepEqual(writes.map(node => node.arguments[0].getText()).sort(), ['caseData', 'null', 'null', 'null']);
 });
 
 test('settlement completing during HOME does not clear the ending or GameOver run before reward UI exits', async () => {

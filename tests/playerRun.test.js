@@ -182,6 +182,34 @@ test('revision conflicts refresh without silently rebasing a stale selection', a
   assert.equal(calls.at(-1).action, 'status');
 });
 
+test('an action rejected after switching saves never runs automatically when the save is resumed', async () => {
+  const storage = memoryStorage();
+  const locks = memoryLocks();
+  let selected = false;
+  let charges = 0;
+  let commands = 0;
+  const invoke = async (_name, body) => {
+    if (body.action === 'status') return response(snapshot());
+    commands++;
+    if (!selected) throw Object.assign(new Error('Select the save first.'), { code: 'RUN_NOT_SELECTED', status: 409 });
+    charges++;
+    return response(snapshot(charges));
+  };
+  const client = createPlayerRunClient(options({ storage, locks, invoke }));
+  await client.resume();
+  await assert.rejects(client.command({ type: 'rest' }), { code: 'RUN_NOT_SELECTED' });
+  assert.equal(client.hasPending(), false);
+  assert.equal(charges, 0);
+  assert.match(runRecoveryMessage({ code: 'RUN_NOT_SELECTED' }), /save library/);
+  selected = true;
+  const restored = createPlayerRunClient(options({ storage, locks, invoke }));
+  await restored.resume();
+  assert.equal(commands, 1);
+  assert.equal(charges, 0);
+  await restored.command({ type: 'rest' });
+  assert.equal(charges, 1);
+});
+
 test('pre-commit syntax rejection clears only its receipt while unknown server failures remain retryable', async () => {
   for (const status of [400, 503]) {
     const calls = [];

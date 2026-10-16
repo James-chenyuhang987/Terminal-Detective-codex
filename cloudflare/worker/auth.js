@@ -14,7 +14,7 @@ const REQUIRED_SCHEMA = Object.freeze({
   player_runs: ['id', 'user_id', 'start_operation_id', 'run_json', 'run_revision', 'settled', 'settlement_operation_id'],
   run_operations: ['user_id', 'run_id', 'operation_id', 'base_revision', 'result_revision', 'command_hash', 'result_json'],
 });
-const REQUIRED_MIGRATION = '0004_authoritative_state.sql';
+const REQUIRED_MIGRATION = '0005_run_library.sql';
 let cachedKeys = new Map();
 let cachedKeysExpireAt = 0;
 let keyRefreshPromise = null;

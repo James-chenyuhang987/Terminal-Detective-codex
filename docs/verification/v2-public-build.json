@@ -208,8 +208,8 @@
     "legacy_conflict_reason": 8
   },
   "private_strings_checked": 1422,
-  "browser_js_files": 20,
-  "decoded_literals": 28414,
+  "browser_js_files": 22,
+  "decoded_literals": 28986,
   "matched": 0,
   "matched_by_category": {
     "testimony_response": 0,
@@ -230,119 +230,133 @@
     "legacy_clue_description": 0,
     "legacy_conflict_reason": 0
   },
-  "source_files_checked": 203,
+  "source_files_checked": 208,
   "source_import_violations": [],
   "files": [
     {
-      "path": "dist/assets/ActionCinematic-BbEiKD5F.js",
+      "path": "dist/assets/ActionCinematic-BcOrG3-3.js",
       "bytes": 27267,
-      "sha256": "82d0f019a4c80f3902114c4dc0b728678e321ab391cd08c6409b410ebf39c41a",
+      "sha256": "7b130c8cced1dcb4b78549558effecaa02c32a9051a8c5d896d37a635dd5e49e",
       "decoded_literals": 451,
       "matched": 0
     },
     {
-      "path": "dist/assets/AgentLobby-QtXv5mSA.js",
-      "bytes": 160165,
-      "sha256": "9e8d611bca13adc3164dad45904a32c44a0f9d5f1e54a5eb01549068a29d4261",
+      "path": "dist/assets/AgentLobby-D_CAdOau.js",
+      "bytes": 160159,
+      "sha256": "5a4d215c7e2d79d3a6a2c1399df497b7e8a291f929f00ac888fe01c539e447a8",
       "decoded_literals": 4010,
       "matched": 0
     },
     {
-      "path": "dist/assets/CaseSelect-COxWov-E.js",
-      "bytes": 10549,
-      "sha256": "96b8be70bea41f248fee74fcbaa63224e24b26d2eea2608b8ab2bf6b77e4e5a4",
-      "decoded_literals": 309,
+      "path": "dist/assets/CaseSelect-BMT0XJ94.js",
+      "bytes": 11898,
+      "sha256": "87c251081480ac700cc38c646bdfd7376b6d632fbee0b70ef45a881e7b96b8bd",
+      "decoded_literals": 342,
       "matched": 0
     },
     {
-      "path": "dist/assets/DetectiveHome-CtJ1ZK_4.js",
-      "bytes": 42402,
-      "sha256": "d2eafe7127fbf85d8b7bbe60b43a65f054b7e3589faded84bd4d5594b0971133",
-      "decoded_literals": 1408,
+      "path": "dist/assets/DetectiveHome-uqWjPnPl.js",
+      "bytes": 42716,
+      "sha256": "221fabf0738cc83a0b9384602f432bb75bdcf2c13fddf9efa9b0f5fa76ee4959",
+      "decoded_literals": 1420,
       "matched": 0
     },
     {
-      "path": "dist/assets/EvidenceObjectViewer-DN0Twhiq.js",
+      "path": "dist/assets/EvidenceObjectViewer-Bv9xBGFl.js",
       "bytes": 20946,
-      "sha256": "0d30030134bf30a4d2929f7dc9f90c2b47dc60d8201a71a47ca792befc2737bc",
+      "sha256": "6dbc0d059b6adaf42652637b8ca2797e7685d3620433543396a10d676fc223c5",
       "decoded_literals": 237,
       "matched": 0
     },
     {
-      "path": "dist/assets/FieldAtmosphere-6UuyQBwT.js",
+      "path": "dist/assets/FieldAtmosphere-W3HccVHo.js",
       "bytes": 16561,
-      "sha256": "d9563cdce58e483b73c45f6f4b0c4e99e06cc2b9fd8a49c1daaaf0bd9e534452",
+      "sha256": "48779769866d263849c9d5a8417b3ba3cd190e6234bc18e3858715bc138f9dff",
       "decoded_literals": 100,
       "matched": 0
     },
     {
-      "path": "dist/assets/GraphModule-D86RFn6e.js",
-      "bytes": 2381,
-      "sha256": "eb22a2316b2fff54d0f22f24b793bdecf80d9424d9bc4ac4057399aee3a4b55a",
+      "path": "dist/assets/GraphModule-DhlDHoGF.js",
+      "bytes": 2374,
+      "sha256": "7cd966bfab4a8fc2481398980a306976ac82af712175cbc66e5c7f3c725d514d",
       "decoded_literals": 69,
       "matched": 0
     },
     {
-      "path": "dist/assets/HomeModules-WfXms_6u.js",
-      "bytes": 45428,
-      "sha256": "463f70b201ec37fe2d8e1d8ac46fe87b8102b52ea8c8a82279dddafa3a222ab9",
-      "decoded_literals": 1444,
+      "path": "dist/assets/HomeModules-HYWDOLQV.js",
+      "bytes": 45460,
+      "sha256": "02122ab78f6880bd52bf3ebe64673f438adf9b6c8acbd52b43b4223768d34ff4",
+      "decoded_literals": 1445,
       "matched": 0
     },
     {
-      "path": "dist/assets/InvestigationProps-DeTkRHAp.js",
+      "path": "dist/assets/InvestigationProps-BwHD77FY.js",
       "bytes": 41447,
-      "sha256": "0edbef084432ba00883d004631f51285064ebe41c4735ccc34d737f318062549",
+      "sha256": "03d413f39733f96f1db61d0def8fbb0bbb099cfb0ce986f96a201f702dfddff1",
       "decoded_literals": 337,
       "matched": 0
     },
     {
-      "path": "dist/assets/InvestigationTerminal-DpzKFhdW.js",
-      "bytes": 352016,
-      "sha256": "72691ef54f25199703da97981870113751d60faeaa324073465b5e1e71baa972",
-      "decoded_literals": 7649,
+      "path": "dist/assets/InvestigationTerminal-BsXwmrRl.js",
+      "bytes": 360463,
+      "sha256": "23ba84cd86156aa016a1fea331359bcb8e9856432adb624773a3096a46c4def0",
+      "decoded_literals": 7736,
       "matched": 0
     },
     {
-      "path": "dist/assets/ProfileAppShell-C-7ULd-U.js",
-      "bytes": 21113,
-      "sha256": "7a14505ec7877c55f64ba7070a5000c74306016585fe6a4fc17c99a2db602204",
-      "decoded_literals": 346,
+      "path": "dist/assets/ProfileAppShell-DkircnTf.js",
+      "bytes": 23965,
+      "sha256": "f362eca07b856dfd1fc33711a5442a8aef2886ad4f76c95e0bf24e6fda0204fe",
+      "decoded_literals": 385,
       "matched": 0
     },
     {
-      "path": "dist/assets/SettingsDrawer-CwD45_qV.js",
+      "path": "dist/assets/SaveLibrary-DJh2Ihb7.js",
+      "bytes": 12453,
+      "sha256": "44b47ae7e9f71961db4d723dfa63b48a948b97a85f1f5945befd8e0c66875dbf",
+      "decoded_literals": 342,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/SettingsDrawer-rLVf0P-Z.js",
       "bytes": 24859,
-      "sha256": "fe9fe5a9459f583f59b458e5ceb4301240e70f7e22925d97dd5d6980311838c6",
+      "sha256": "6f1b163b79bf9aaae0937212ec7a23d8089ed48e1c69db992c2bcf2cd49f7bee",
       "decoded_literals": 595,
       "matched": 0
     },
     {
-      "path": "dist/assets/StatusToast-w54qqwrq.js",
+      "path": "dist/assets/StatusToast-Dmns93CB.js",
       "bytes": 789,
-      "sha256": "e903c6a974c8d283564776333fe1094e8a0ea6e71d5d1c7d1d1b83ce9be59a63",
+      "sha256": "bf3f2db8e5af487458a9d43579abaf3355ba4f1368cfce3d1f48edf5c80495ae",
       "decoded_literals": 30,
       "matched": 0
     },
     {
-      "path": "dist/assets/TerminalDetective-B8bz4eRv.js",
-      "bytes": 103588,
-      "sha256": "08a66ef657260e67a4ee994299b2774e81032199368d3cc13bc20c21934407fe",
-      "decoded_literals": 2033,
+      "path": "dist/assets/TerminalDetective-DaXh3xp5.js",
+      "bytes": 108140,
+      "sha256": "f1fd5ca069a6488793543e7b5c97efe2b30068553411ce0ad42482b41dd850b6",
+      "decoded_literals": 2088,
       "matched": 0
     },
     {
-      "path": "dist/assets/TheaterScene-DcjAZ2Yk.js",
-      "bytes": 31293,
-      "sha256": "5cd18968cea4742e468035fe70c3cfd770618ba51ee3ebcebb9630f8d1d2c9d7",
+      "path": "dist/assets/TheaterScene-BtLo8sep.js",
+      "bytes": 31431,
+      "sha256": "858810dae91484bd0dd7dfd1172e4a91363f4df2d4b788f86a2d7ab0fa197540",
       "decoded_literals": 211,
       "matched": 0
     },
     {
-      "path": "dist/assets/index-CigkiK-7.js",
-      "bytes": 310950,
-      "sha256": "b131e0c7e95bb05d2bdd9d5a1b9bdac60afd89f2b5de1687bb04fb8e575daddd",
-      "decoded_literals": 3175,
+      "path": "dist/assets/caseData-BQ4BDafl.js",
+      "bytes": 61163,
+      "sha256": "76cf0572c81cdb69493ee5ff1589281dc2e25f37af94c05a5d9034a9bad70fe9",
+      "decoded_literals": 1805,
+      "matched": 0
+    },
+    {
+      "path": "dist/assets/index-BQ0p4ex6.js",
+      "bytes": 310982,
+      "sha256": "8d3f8a8658e250bb2327dc0d53145df6433242169df948b52f6eda824a52e701",
+      "decoded_literals": 3176,
       "matched": 0
     },
     {
@@ -360,10 +374,10 @@
       "matched": 0
     },
     {
-      "path": "dist/assets/playerProfile-CHO2v2eA.js",
-      "bytes": 108033,
-      "sha256": "59b011b6c22e673b3c2ae3e22cdd0a33ea1db01723637319e3fc555895155b05",
-      "decoded_literals": 2728,
+      "path": "dist/assets/playerProfile-DJ9Z5jr8.js",
+      "bytes": 47031,
+      "sha256": "690e907897d3a24b81990bff1f8af707ccdf56c32efc545ce8e08da5c24af757",
+      "decoded_literals": 925,
       "matched": 0
     },
     {

@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { readReconstructionDraft, writeReconstructionDraft } from '../../../game/runWorkspace.js';
 
-const emptyDraft = () => ({ answerIds: [], view: {} });
-
-// The terminal owns this memory-only draft so opening notes, tools or another
-// presentation does not unmount the player's unfinished reconstruction.
+// Personal selections are local drafts; only the service can judge a puzzle.
 export function useReconstructionDraft({ ownerUid, runId, puzzleId }) {
-  const initial = useMemo(() => ({ token: {}, value: emptyDraft() }), [ownerUid, runId, puzzleId]);
+  const initial = useMemo(() => {
+    const context = { ownerUid, runId, puzzleId };
+    return { context, token: {}, ...readReconstructionDraft(context) };
+  }, [ownerUid, runId, puzzleId]);
   const [stored, setStored] = useState(initial);
   const visible = stored.token === initial.token ? stored : initial;
   const current = useRef(visible);
@@ -13,9 +14,9 @@ export function useReconstructionDraft({ ownerUid, runId, puzzleId }) {
   const setValue = useCallback(next => {
     if (current.current.token !== initial.token) return;
     const value = typeof next === 'function' ? next(current.current.value) : next;
-    const updated = { ...initial, value };
+    const updated = { ...initial, ...writeReconstructionDraft(initial.context, value) };
     current.current = updated;
     setStored(updated);
   }, [initial]);
-  return { value: visible.value, setValue };
+  return { value: visible.value, status: visible.status, setValue };
 }

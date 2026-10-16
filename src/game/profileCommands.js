@@ -9,7 +9,8 @@ const COMMAND_FIELDS = Object.freeze({
   visit_lobby: [], save_team: ['team_config'], skill_loadout: ['skill_loadout'],
   purchase_agent: ['agent_id'], activate_support: ['agent_id'],
   mail_read: ['mail_id'], mail_reply: ['mail_id', 'choice_id'],
-  start_case: ['case_id', 'team_config', 'investigation_version'], settle_case: ['run_id'],
+  start_case: ['case_id', 'team_config', 'investigation_version', 'new_save'],
+  resume_run: ['run_id'], settle_case: ['run_id'],
 });
 const IDENTITY_FIELDS = new Set(['detective_name', 'avatar', 'signature', 'identity_badge', 'detective_tags']);
 const FORBIDDEN = new Set(['__proto__', 'prototype', 'constructor']);
@@ -50,6 +51,12 @@ export function profileCommand(type, args = {}) {
   }
   if (type === 'start_case' && Object.hasOwn(args, 'investigation_version')
     && ![1, 2].includes(args.investigation_version)) fail('PROFILE_COMMAND_INVALID');
+  if (type === 'start_case' && Object.hasOwn(args, 'new_save') && typeof args.new_save !== 'boolean') {
+    fail('PROFILE_COMMAND_INVALID');
+  }
+  if (type === 'resume_run' && (typeof args.run_id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_:+-]{0,179}$/.test(args.run_id))) {
+    fail('PROFILE_COMMAND_INVALID');
+  }
   return canonicalJson({ type, ...args });
 }
 
@@ -60,9 +67,13 @@ function checkedCommand(value) {
 }
 
 function targetStorage(storage) {
-  const target = storage || globalThis.localStorage;
-  if (!target) fail('PROFILE_WAL_UNAVAILABLE');
-  return target;
+  try {
+    const target = storage || globalThis.localStorage;
+    if (!target) fail('PROFILE_WAL_UNAVAILABLE');
+    return target;
+  } catch {
+    fail('PROFILE_WAL_UNAVAILABLE');
+  }
 }
 
 function ownerPrefix(ownerUid) {
