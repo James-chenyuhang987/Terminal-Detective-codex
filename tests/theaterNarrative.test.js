@@ -73,6 +73,16 @@ test('world prologue is original generic bilingual setting; briefings use only e
   assert.doesNotMatch(pureSource, /caseSecrets|server\/|judgeStructured|acquireClues|spendAgentStamina|startCase\(|setGameState|fetch\(/);
 });
 
+test('synergy fallback follows the active language while the terminal stays mounted', () => {
+  const declaration = nodes(owner, node => ts.isVariableDeclaration(node) && node.name.getText() === 'triggerSynergy')[0];
+  assert.ok(declaration, 'triggerSynergy declaration must remain discoverable');
+  assert.ok(ts.isCallExpression(declaration.initializer), 'triggerSynergy must remain a hook call');
+  assert.equal(declaration.initializer.expression.getText(), 'useCallback');
+  assert.equal(declaration.initializer.arguments.length, 2);
+  assert.match(declaration.initializer.arguments[1].getText(), /^\[\s*lang\s*\]$/,
+    'language fallback must be refreshed when the UI language changes');
+});
+
 test('public stage matches observation boundaries without depending on secret facts', () => {
   const caseData = { clue_dictionary: new Array(10).fill({}) };
   assert.equal(theaterNarrativeStage({ turn_count: 0, unlocked_clues: ['one'] }, caseData), 'opening');

@@ -258,7 +258,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       clueKeyword: clue?.keyword || (lang === 'zh' ? '未知线索' : 'UNKNOWN CLUE'),
       id: Date.now(),
     });
-  }, []);
+  }, [lang]);
 
   const terminalRef = useRef(null);
   const terminalScrollFrameRef = useRef(null);
