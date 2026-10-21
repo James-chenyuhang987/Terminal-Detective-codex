@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:5177": "vite --host 127.0.0.1 --port 5177",
     "build": "vite build",
     "release:check": "node scripts/check-cloudflare-release.mjs",
     "build:cloudflare": "npm run release:check && VITE_API_SERVER_URL=same-origin VITE_BASE_PATH=/ vite build && node scripts/prepare-cloudflare-build.mjs && node scripts/check-investigation-public-build.mjs",

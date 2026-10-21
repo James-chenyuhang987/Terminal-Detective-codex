@@ -119,6 +119,8 @@ test('loading, read-only, unsupported and capacity states prevent unsafe entry w
     assert.match(markup, /class="td-save-button is-primary" disabled=""/);
     assert.match(markup, /class="td-save-button is-resume" disabled=""/);
   }
+  const unsupported = renderToStaticMarkup(React.createElement(SaveLibrary, { ...baseProps, supported: false, saves: [save()] }));
+  assert.match(unsupported, /服务端版本尚未启用多档存档|server has not enabled multiple saves yet/);
   const atCapacity = renderToStaticMarkup(React.createElement(SaveLibrary, { ...baseProps, limit: 1, saves: [save()] }));
   assert.match(atCapacity, /class="td-save-button is-primary" disabled=""/);
   assert.doesNotMatch(atCapacity, /class="td-save-button is-resume" disabled=""/);
