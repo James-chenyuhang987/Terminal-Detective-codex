@@ -41,7 +41,10 @@ export function savePresentation(save, lang = 'zh', currentRunId = null) {
     current: Boolean(id && (id === currentRunId || save?.selected === true)),
     statusLabel: STATUS_LABELS[status]?.[zh ? 0 : 1] || (zh ? '状态待确认' : 'Status unavailable'),
     actionLabel: status === 'active' ? (zh ? '继续调查' : 'Continue investigation')
-      : status === 'completed' ? (zh ? '查看结案' : 'View conclusion')
+      // A completed report still needs the authoritative settlement request.
+      // The card is resumable and opens the investigation flow, so “view” is
+      // misleading and makes players expect a read-only history screen.
+      : status === 'completed' ? (zh ? '继续结案' : 'Continue settlement')
         : (zh ? '继续结算' : 'Continue settlement'),
     savedAt,
     savedDate: savedAt === null ? (zh ? '保存时间未记录' : 'Save time unavailable')

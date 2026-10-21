@@ -79,7 +79,7 @@ test('groups preserve resumable conclusions while settled records never expose a
   assert.deepEqual(result.resumable.map(item => item.view.status), ['failed', 'completed', 'abandoned', 'active']);
   assert.deepEqual(result.finished.map(item => item.view.status), ['settled', 'unknown']);
   assert.equal(savePresentation(inputs[1]).actionLabel, '继续结算');
-  assert.equal(savePresentation(inputs[2]).actionLabel, '查看结案');
+  assert.equal(savePresentation(inputs[2]).actionLabel, '继续结案');
   assert.equal(savePresentation(inputs[4]).actionLabel, '继续调查');
 });
 
