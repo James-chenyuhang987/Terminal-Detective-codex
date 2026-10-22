@@ -1645,6 +1645,9 @@ button, input, textarea, select { box-sizing: border-box; }
 .td-landing-dock .td-landing-case-seal { grid-row: 1 / 4; width: 32px; height: 32px; justify-self: center; }
 .td-landing-dock .td-landing-start-wrap > small, .td-landing-dock h2, .td-landing-dock .td-landing-start-wrap > p { grid-column: 2; margin: 0; }
 .td-landing-dock .td-landing-start { grid-column: 3; grid-row: 1 / 4; }
+.td-landing-dock .td-landing-save { grid-column: 2; grid-row: 4; width: 100%; min-height: 40px; margin-top: 3px; justify-self: stretch; border: 1px solid rgba(240,199,107,.48); border-radius: 6px; background: rgba(197,166,111,.08); color: #e1d0ac; font: 700 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .12em; transition: background-color .2s, border-color .2s, color .2s, transform .2s; }
+.td-landing-dock .td-landing-save:not(:disabled):hover { border-color: #f0c76b; background: rgba(197,166,111,.18); color: #fff0b5; transform: translateY(-1px); }
+.td-landing-dock .td-landing-save:disabled { opacity: .45; cursor: wait; }
 .td-landing-dock .td-landing-start-error { grid-column: 1 / -1; max-height: 15dvh; overflow: auto; }
 .td-home-grid { min-height: 0; min-width: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch !important; overflow: hidden; padding-block: 12px !important; }
 .td-home-grid > * { padding: 4px; }
@@ -1708,6 +1711,7 @@ button, input, textarea, select { box-sizing: border-box; }
 @media (max-width: 768px) {
   .td-landing-dock .td-landing-start-wrap { grid-template-columns: minmax(0, 1fr); padding: 8px; gap: 0; }
   .td-landing-dock .td-landing-start { grid-column: 1; grid-row: auto; }
+  .td-landing-dock .td-landing-save { grid-column: 1; grid-row: auto; margin-top: 6px; }
   .td-landing-dock .td-landing-case-seal, .td-landing-dock .td-landing-start-wrap > small, .td-landing-dock h2, .td-landing-dock .td-landing-start-wrap > p { display: none; }
   .td-home-footer { flex-direction: column; align-items: stretch; gap: 6px; }
   .td-home-primary-actions > button { flex: 1; }

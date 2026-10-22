@@ -266,8 +266,8 @@ function StartButton({ busy, error, onClick, onOpenSaves, t, lang }) {
         <small>{copy.hint}</small>
       </button>
       {error && <div className="td-landing-start-error" id="td-landing-start-error" role="alert"><Icon name="warning" /> {error}</div>}
-      {onOpenSaves && <button type="button" className="td-ui-button td-button-wide" disabled={busy} onClick={onOpenSaves}
-        style={{ width: '100%', marginTop: 12, minHeight: 48 }}><Icon name="archive" /> {lang === 'zh' ? '进度保存库 · 继续游玩' : 'SAVE LIBRARY · CONTINUE'}</button>}
+      {onOpenSaves && <button type="button" className="td-ui-button td-landing-save" disabled={busy} onClick={onOpenSaves}
+        aria-label={lang === 'zh' ? '打开进度保存库并继续游玩' : 'Open the save library and continue playing'}><Icon name="archive" /> {lang === 'zh' ? '进度保存库 · 继续游玩' : 'SAVE LIBRARY · CONTINUE'}</button>}
     </div>
   );
 }
