@@ -38,13 +38,16 @@ function profileError(code, message = code) {
   return error;
 }
 
-function runSummary(run) {
+function runSummary(run, legacy = false) {
   const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
   const date = value => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)) ? value : null;
   const identifier = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_:+-]{0,179}$/.test(value) ? value : '';
+  const caseId = identifier(run.case_id);
+  const statuses = new Set(['active', 'completed', 'failed', 'abandoned', 'settled']);
+  if (!legacy && (!caseId || !statuses.has(run.status))) throw profileError('PROFILE_DATA_CORRUPT');
   return {
-    id: run.id, case_id: identifier(run.case_id),
-    status: ['active', 'completed', 'failed', 'abandoned', 'settled'].includes(run.status) ? run.status : 'active',
+    id: run.id, case_id: caseId,
+    status: statuses.has(run.status) ? run.status : 'active',
     revision: run.revision, created_at: date(run.created_at), updated_at: date(run.updated_at),
     zone_id: identifier(run.zone_id ?? run.state?.current_zone),
     turn_count: count(run.turn_count ?? run.state?.turn_count),
@@ -63,7 +66,8 @@ function normalizeRunLibrary(payload) {
   if (Object.hasOwn(payload, 'run_library') && (!Array.isArray(payload.run_library) || payload.run_library.length > 40)) {
     throw profileError('PROFILE_DATA_CORRUPT');
   }
-  const runs = Object.hasOwn(payload, 'run_library') ? payload.run_library : (payload.active_run ? [payload.active_run] : []);
+  const hasLibrary = Object.hasOwn(payload, 'run_library');
+  const runs = hasLibrary ? payload.run_library : (payload.active_run ? [payload.active_run] : []);
   const ids = new Set();
   const items = runs.map(run => {
     if (!run || typeof run !== 'object' || Array.isArray(run)
@@ -72,7 +76,7 @@ function normalizeRunLibrary(payload) {
       throw profileError('PROFILE_DATA_CORRUPT');
     }
     ids.add(run.id);
-    return runSummary(run);
+    return runSummary(run, !hasLibrary);
   });
   if (version === 1 && (items.filter(run => run.status === 'settled').length > 20
     || items.filter(run => run.status !== 'settled').length > 20)) throw profileError('PROFILE_DATA_CORRUPT');

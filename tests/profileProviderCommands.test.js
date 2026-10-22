@@ -570,7 +570,8 @@ test('resume replay returns the current selection separately from immutable orig
 
 test('malformed save libraries cannot accept a paid command or clear its retry receipt', async () => {
   const run = libraryRun('run-one');
-  for (const run_library of [null, {}, [run, run], [{ ...run, revision: -1 }], [{ ...run, id: '../escape' }], Array.from({ length: 41 }, (_, i) => libraryRun(`run-${i}`))]) {
+  for (const run_library of [null, {}, [run, run], [{ ...run, revision: -1 }], [{ ...run, id: '../escape' }],
+    [{ ...run, status: 'unknown' }], [{ ...run, case_id: '' }], Array.from({ length: 41 }, (_, i) => libraryRun(`run-${i}`))]) {
     const app = harness(async action => action === 'command'
       ? libraryPayload(1, run, run_library, { result: {} }) : payload());
     await app.flush();
