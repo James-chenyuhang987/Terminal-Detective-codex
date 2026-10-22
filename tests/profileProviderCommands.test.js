@@ -337,6 +337,22 @@ test('save library keeps two saves of the same case and exposes only bounded pub
   app.unmount();
 });
 
+test('save summaries recover legacy case IDs and valid grades without trusting stale fields', async () => {
+  const nested = libraryRun('nested-case', 2, {
+    case_id: undefined,
+    state: { case_id: 'Lvl_02', current_zone: 'balcony', turn_count: 2, action_points_left: 18, unlocked_clues: [] },
+    grade: 'PRIVATE_ANSWER',
+    judge_result: { score: 'B' },
+  });
+  const failed = libraryRun('failed-case', 3, { grade: 'F' });
+  const app = harness(async () => libraryPayload(1, nested, [nested, failed]));
+  await app.flush();
+  assert.deepEqual(app.value.savedRuns.map(run => [run.id, run.case_id, run.grade]), [
+    ['nested-case', 'Lvl_02', 'B'], ['failed-case', 'Lvl_01', 'F'],
+  ]);
+  app.unmount();
+});
+
 test('legacy payloads safely summarize the single active run without enabling multiple-save capability', async () => {
   const run = { id: 'legacy-paid-run', case_id: 'Lvl_01', revision: 4, status: 'active',
     state: { current_zone: 'balcony', turn_count: 2, action_points_left: 18, unlocked_clues: ['c_01'] } };

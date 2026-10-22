@@ -12,6 +12,8 @@ import { createSingleFlight } from '@/lib/singleFlight.js';
 
 const POLL_MS = 20_000;
 const TRANSIENT_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);
+const RUN_STATUSES = new Set(['active', 'completed', 'failed', 'abandoned', 'settled']);
+const RUN_GRADES = new Set(['S', 'A', 'B', 'C', 'D', 'F']);
 const ProfileContext = createContext(null);
 
 function createSessionId() {
@@ -42,19 +44,19 @@ function runSummary(run, legacy = false) {
   const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
   const date = value => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)) ? value : null;
   const identifier = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_:+-]{0,179}$/.test(value) ? value : '';
-  const caseId = identifier(run.case_id);
-  const statuses = new Set(['active', 'completed', 'failed', 'abandoned', 'settled']);
-  if (!legacy && (!caseId || !statuses.has(run.status))) throw profileError('PROFILE_DATA_CORRUPT');
+  const caseId = identifier(run.case_id ?? run.state?.case_id);
+  const grade = [run.grade, run.judge_result?.score].find(value => RUN_GRADES.has(value)) ?? null;
+  if (!legacy && (!caseId || !RUN_STATUSES.has(run.status))) throw profileError('PROFILE_DATA_CORRUPT');
   return {
     id: run.id, case_id: caseId,
-    status: statuses.has(run.status) ? run.status : 'active',
+    status: RUN_STATUSES.has(run.status) ? run.status : 'active',
     revision: run.revision, created_at: date(run.created_at), updated_at: date(run.updated_at),
     zone_id: identifier(run.zone_id ?? run.state?.current_zone),
     turn_count: count(run.turn_count ?? run.state?.turn_count),
     action_points_left: count(run.action_points_left ?? run.state?.action_points_left),
     clue_count: count(run.clue_count ?? run.state?.unlocked_clues?.length),
     clue_total: count(run.clue_total),
-    grade: ['S', 'A', 'B', 'C', 'D'].includes(run.grade ?? run.judge_result?.score) ? run.grade ?? run.judge_result.score : null,
+    grade,
     selected: false,
   };
 }
