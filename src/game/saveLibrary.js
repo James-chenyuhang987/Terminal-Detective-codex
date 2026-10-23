@@ -27,6 +27,7 @@ export function savePresentation(save, lang = 'zh', currentRunId = null) {
     || (zh ? '未知案件' : 'Unknown case');
   const zoneData = (zh ? caseData?.scene : caseData?.en?.scene || caseData?.scene)?.zones?.[save?.zone_id];
   const zone = zoneData?.label || (zh ? '位置未记录' : 'Location not recorded');
+  const caseId = caseData?.case_id || '';
   const status = typeof save?.status === 'string' ? save.status : '';
   const id = typeof save?.id === 'string' ? save.id : '';
   const resumable = Boolean(id && RESUMABLE_STATUSES.has(status));
@@ -36,7 +37,7 @@ export function savePresentation(save, lang = 'zh', currentRunId = null) {
   const suppliedTotal = count(save?.clue_total);
   const clueTotal = suppliedTotal > 0 ? Math.max(clueCount, suppliedTotal) : 0;
   return {
-    id, title, zone, status, resumable,
+    id, caseId, title, zone, status, resumable,
     active: status === 'active',
     current: Boolean(id && (id === currentRunId || save?.selected === true)),
     statusLabel: STATUS_LABELS[status]?.[zh ? 0 : 1] || (zh ? '状态待确认' : 'Status unavailable'),
@@ -65,7 +66,7 @@ export function groupLibrarySaves(saves = [], lang = 'zh', currentRunId = null, 
   const term = String(query).trim().toLocaleLowerCase();
   const entries = (Array.isArray(saves) ? saves : []).filter(save => save && typeof save === 'object')
     .map(save => ({ save, view: savePresentation(save, lang, currentRunId) }))
-    .filter(({ view }) => !term || `${view.title} ${view.zone}`.toLocaleLowerCase().includes(term))
+    .filter(({ view }) => !term || `${view.title} ${view.zone} ${view.caseId}`.toLocaleLowerCase().includes(term))
     .sort((a, b) => Number(b.view.current) - Number(a.view.current)
       || (b.view.savedAt ?? -Infinity) - (a.view.savedAt ?? -Infinity));
   return {

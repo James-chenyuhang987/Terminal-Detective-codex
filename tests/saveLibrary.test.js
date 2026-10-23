@@ -95,6 +95,22 @@ test('current save sorts first, later saves follow, and searching does not mutat
   assert.deepEqual(groupLibrarySaves(null), { resumable: [], finished: [] });
 });
 
+test('save search accepts a public case ID and exposes a clear control without mutating saves', () => {
+  const inputs = [save(), save({ id: 'second', case_id: 'Lvl_02' })];
+  const original = structuredClone(inputs);
+  assert.deepEqual(groupLibrarySaves(inputs, 'en', null, 'lvl_02').resumable.map(entry => entry.view.id), ['second']);
+  assert.deepEqual(inputs, original);
+  language = 'en';
+  const view = interactiveLibrary({ ...baseProps, saves: inputs });
+  const input = descendants(view.render(), node => node.type === 'input')[0];
+  input.props.onChange({ target: { value: 'lvl_02' } });
+  const filtered = view.render();
+  const clear = buttons(filtered).find(node => String(node.props.className).includes('td-save-search-clear'));
+  assert.ok(clear);
+  clear.props.onClick();
+  assert.equal(descendants(view.render(), node => node.type === 'input')[0].props.value, '');
+});
+
 test('library renders bilingual status, progress, current highlight and read-only settlement history', () => {
   for (language of ['zh', 'en']) {
     const markup = renderToStaticMarkup(React.createElement(SaveLibrary, {

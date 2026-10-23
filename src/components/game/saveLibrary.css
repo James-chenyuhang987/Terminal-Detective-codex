@@ -45,6 +45,7 @@
 .td-save-search > svg { position: absolute; top: 14px; left: 14px; pointer-events: none; }
 .td-save-search input { min-width: 0; flex: 1; min-height: 44px; border: 1px solid #39505e; border-radius: 8px; background: #0b1823; color: #d4e5e7; font: inherit; font-size: 12px; padding: 12px 14px 12px 41px; }
 .td-save-search input::placeholder { color: #849aa4; opacity: 1; }
+.td-save-search-clear { min-height: 44px; padding-inline: 12px; flex-shrink: 0; }
 .td-save-search > span { font-size: 11px; flex-shrink: 0; }
 .td-save-section { margin: 0 0 36px; }
 .td-save-section-heading { padding: 0 0 14px; border-bottom: 1px solid #324653; margin-bottom: 17px; }
