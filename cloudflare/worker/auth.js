@@ -15,6 +15,7 @@ const REQUIRED_SCHEMA = Object.freeze({
   run_operations: ['user_id', 'run_id', 'operation_id', 'base_revision', 'result_revision', 'command_hash', 'result_json'],
 });
 const REQUIRED_MIGRATION = '0005_run_library.sql';
+const FIREBASE_PROJECT_ID_PATTERN = /^[a-z](?:[a-z0-9-]{4,28}[a-z0-9])$/;
 let cachedKeys = new Map();
 let cachedKeysExpireAt = 0;
 let keyRefreshPromise = null;
@@ -143,7 +144,7 @@ function firebaseProviders(claims) {
   if (provider && provider !== 'custom') values.push(provider);
   return [...new Set(values
     .filter(value => value !== 'email')
-    .filter(value => ['password', 'github.com'].includes(value)))];
+    .filter(value => ['password', 'github.com', 'google.com'].includes(value)))];
 }
 
 function validateClaims(payload, projectId, nowSeconds = Math.floor(Date.now() / 1000)) {
@@ -167,7 +168,9 @@ function validateClaims(payload, projectId, nowSeconds = Math.floor(Date.now() /
 
 export function firebaseAuthConfigured(env) {
   const projectId = String(env?.FIREBASE_PROJECT_ID || '').trim();
-  return Boolean(projectId && !/^(?:REPLACE_WITH_|YOUR_|<)/i.test(projectId));
+  return Boolean(projectId
+    && !/^(?:REPLACE_WITH_|YOUR_|<)/i.test(projectId)
+    && FIREBASE_PROJECT_ID_PATTERN.test(projectId));
 }
 
 async function backendReadiness(env) {
@@ -291,6 +294,7 @@ export async function authConfig(env) {
     firebase_project_id: projectId,
     email_password: firebase,
     github: firebase,
+    google: firebase,
     ready: firebase && checks.database && checks.schema,
     checks,
   };
@@ -344,12 +348,23 @@ async function upsertFirebaseUser(env, claims) {
         && Number(existing.email_verified) === 1
         && String(existing.display_name || '') === String(user.full_name || '')
         && String(existing.avatar_url || '') === String(user.avatar_url || '');
+      // A user row may predate the profile table (for example after an
+      // interrupted migration or a manually restored account). Keep session
+      // bootstrap atomic and self-healing so a successful login always has a
+      // profile row ready for the authoritative endpoints.
+      const statements = [];
       if (!unchanged) {
-        await env.DB.prepare(`
+        statements.push(env.DB.prepare(`
           UPDATE users SET email = ?, email_verified = 1, display_name = ?, avatar_url = ?,
             updated_at = CURRENT_TIMESTAMP WHERE id = ?
-        `).bind(user.email, user.full_name, user.avatar_url, user.id).run();
+        `).bind(user.email, user.full_name, user.avatar_url, user.id));
       }
+      statements.push(env.DB.prepare(`
+        INSERT INTO profiles (user_id, profile_json) VALUES (?, '{}')
+        ON CONFLICT(user_id) DO NOTHING
+      `).bind(user.id));
+      if (typeof env.DB.batch === 'function') await env.DB.batch(statements);
+      else for (const statement of statements) await statement.run();
       return user;
     }
     await env.DB.batch([

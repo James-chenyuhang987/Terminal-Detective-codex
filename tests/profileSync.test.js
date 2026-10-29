@@ -294,6 +294,10 @@ test('profile recovery guidance identifies conflicts and confirms destructive cl
   const corruptCloud = profileRecoveryDetails({ code: 'PROFILE_DATA_CORRUPT' }, 'en', 0);
   assert.match(corruptCloud.message, /contact an administrator/);
   assert.equal(corruptCloud.canDiscard, false);
+
+  const corruptRun = profileRecoveryDetails({ code: 'RUN_DATA_CORRUPT' }, 'en', 0);
+  assert.match(corruptRun.message, /saved investigation is corrupted/);
+  assert.equal(corruptRun.canDiscard, false);
 });
 
 test('legacy WAL migration preserves insertion order when timestamps tie', () => {
@@ -545,6 +549,15 @@ test('profile function preserves stable session and revision error codes', async
     await assert.rejects(
       invokePlayerProfile('patch', { session_id: 'web-1234567890123456', expected_revision: 9, patch: {} }),
       error => error.code === 'STALE_PROFILE' && error.payload.profile.profile_revision === 10,
+    );
+
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      error: 'RUN_DATA_CORRUPT', message: 'Run data is corrupt.',
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    await assert.rejects(
+      invokePlayerProfile('status', { session_id: 'web-1234567890123456' }),
+      error => error.code === 'RUN_DATA_CORRUPT'
+        && error.message === 'A saved investigation needs administrator recovery.',
     );
   } finally {
     globalThis.fetch = originalFetch;

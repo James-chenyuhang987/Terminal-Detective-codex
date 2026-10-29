@@ -5,6 +5,7 @@ import {
   AUTH_FEEDBACK_CODES,
   authRedirectFeedback,
   hasGitHubProvider,
+  hasGoogleProvider,
   hasPasswordProvider,
   mapFirebaseAuthError,
   providerIds,
@@ -36,6 +37,7 @@ test('Firebase errors map to stable player-facing categories', () => {
 
 test('redirect errors are reduced to safe feedback categories', () => {
   assert.equal(authRedirectFeedback({ error: 'access_denied' }), AUTH_FEEDBACK_CODES.GITHUB_CANCELLED);
+  assert.equal(authRedirectFeedback({ auth: 'google-login', error: 'access_denied' }), AUTH_FEEDBACK_CODES.GOOGLE_CANCELLED);
   assert.equal(authRedirectFeedback({ error_code: 'too_many_attempts' }), AUTH_FEEDBACK_CODES.RATE_LIMITED);
   assert.equal(authRedirectFeedback({ error_code: 'auth/too-many-requests' }), AUTH_FEEDBACK_CODES.RATE_LIMITED);
   assert.equal(authRedirectFeedback({ error_description: 'unauthorized redirect domain' }), AUTH_FEEDBACK_CODES.DOMAIN_UNAUTHORIZED);
@@ -61,4 +63,5 @@ test('provider helpers deduplicate Firebase identities', () => {
   assert.deepEqual(providerIds(user), ['password', 'github.com']);
   assert.equal(hasPasswordProvider(user), true);
   assert.equal(hasGitHubProvider(user), true);
+  assert.equal(hasGoogleProvider({ providerData: [{ providerId: 'google.com' }] }), true);
 });

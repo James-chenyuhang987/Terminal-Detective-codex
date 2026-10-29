@@ -101,7 +101,7 @@ test('release and browser reject the same missing, placeholder and malformed pub
     ['authDomain', 'auth.example.com:443'], ['authDomain', 'bad host.example.com'],
     ['authDomain', '-auth.example.com'], ['authDomain', 'auth..example.com'],
     ['appId', 'project:web:app'], ['appId', '1:123:android:abc'], ['appId', '1:123:web:'],
-    ['projectId', 'UPPERCASE-PROJECT'], ['projectId', 'abc'],
+    ['projectId', 'UPPERCASE-PROJECT'], ['projectId', 'abc'], ['projectId', '1abcde'],
   ]) {
     const invalid = { ...environment, [fieldNames[field]]: value };
     assert.equal(validateFirebasePublicConfig(publicConfig(invalid)).valid, false);

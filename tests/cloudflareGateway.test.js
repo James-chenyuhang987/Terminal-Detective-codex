@@ -91,6 +91,7 @@ test('auth configuration requires a real Firebase project id', async () => {
     firebase_project_id: '',
     email_password: false,
     github: false,
+    google: false,
     ready: false,
     checks: { database: false, schema: false },
   });
@@ -104,6 +105,7 @@ test('auth configuration requires a real Firebase project id', async () => {
     firebase_project_id: 'terminal-detective-test',
     email_password: true,
     github: true,
+    google: true,
     ready: true,
     checks: { database: true, schema: true },
   });
@@ -215,7 +217,7 @@ test('deterministic detective rules require a Cloudflare session', async () => {
 });
 
 test('authenticated stateless rule probes are retired before private evaluation for unpaid and both paid versions', async () => {
-  const projectId = 'terminal-detective-gateway-test';
+  const projectId = 'td-gateway-test';
   const pair = await generateKeyPair('RS256');
   const now = Math.floor(Date.now() / 1000);
   const token = await new SignJWT({

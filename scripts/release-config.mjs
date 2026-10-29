@@ -2,7 +2,7 @@ import { parse, printParseErrorCode } from 'jsonc-parser';
 import { validateFirebasePublicConfig } from '../src/lib/firebaseConfig.js';
 
 const PLACEHOLDER = /^(?:REPLACE_WITH_|YOUR_|<)/i;
-const FIREBASE_PROJECT_ID = /^[a-z0-9](?:[a-z0-9-]{4,28}[a-z0-9])$/;
+const FIREBASE_PROJECT_ID = /^[a-z](?:[a-z0-9-]{4,28}[a-z0-9])$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseJsonc(source) {

@@ -7,7 +7,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { SKILL_TREES } from '../src/game/agentProgression.js';
 import { localizedInvestigationText } from '../src/game/investigationChoices.js';
-import { getConnectedZones } from '../src/game/caseRuntime.js';
+import { getAccessibleZonePath, getConnectedZones } from '../src/game/caseRuntime.js';
+import { buildContactLeads } from '../src/game/investigationLeads.js';
 import * as stamina from '../src/game/agentStamina.js';
 
 function load(path, imports) {
@@ -87,14 +88,16 @@ test('the actual field panel presents confirmed source hints and skill-adjusted 
     let cursor = 0;
     const card = { option_id: 'quoted-option', label: text('核对原始记录', 'Check original record'),
       available: true, ap_cost: 0, stamina_cost: 6, skill_ap_discount: 1, skill_stamina_discount: 4 };
-    const states = [{ agent: { cards: [card] } }, 'agent', false, '', { narration: 'Confirmed finding', source_hint: hint }];
+    const view = {};
+    const states = [{ view, packs: { agent: { cards: [card] } } }, 'agent', null, null, { view, result: { narration: 'Confirmed finding', source_hint: hint } }];
     const hooks = { ...React, default: React, lazy: () => () => null,
       useState(initial) { const index = cursor++; return [index < states.length ? states[index] : typeof initial === 'function' ? initial() : initial, () => assert.fail('Passive reading cannot set investigation state')]; },
-      useMemo: factory => factory(), useRef: initial => ({ current: initial }), useEffect: () => {},
+      useMemo: () => view, useRef: initial => ({ current: initial }), useEffect: () => {},
     };
     const field = load('InvestigationFieldPanel', {
       react: hooks, '@/lib/lang.jsx': { useLang: () => ({ lang }) },
-      '@/game/investigationChoices.js': { localizedInvestigationText }, '@/game/caseRuntime.js': { getConnectedZones },
+      '@/game/investigationChoices.js': { localizedInvestigationText }, '@/game/caseRuntime.js': { getAccessibleZonePath, getConnectedZones },
+      '@/game/investigationLeads.js': { buildContactLeads }, './InvestigationContacts.jsx': { default: () => null },
       '@/game/agentStamina': stamina, './ReconstructionWorkbench.jsx': { default: () => null },
       './CaseStoryPanel.jsx': { default: () => null }, './InvestigationSkillsPanel.jsx': skillsPanel, './investigationField.css': {},
     });

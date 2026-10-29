@@ -126,6 +126,15 @@ function isoTimestamp(value) {
 export async function runLibrary(env, userId, selectedId = null) {
   // Project a fixed public summary in SQL: never load or return all private
   // case snapshots just to render the save picker.
+  // Validate the JSON envelope before using SQLite JSON functions. A damaged
+  // historical save must fail closed with a stable, actionable error instead
+  // of surfacing a generic gateway failure (or being silently omitted).
+  const invalid = await env.DB.prepare(`
+    SELECT 1 AS invalid FROM player_runs
+    WHERE user_id = ? AND (json_valid(run_json) = 0 OR json_type(run_json) <> 'object')
+    LIMIT 1
+  `).bind(userId).first();
+  if (invalid) throw Object.assign(new Error('Run data is corrupt.'), { code: 'RUN_DATA_CORRUPT', status: 500 });
   const columns = `id, run_revision, settled, created_at, updated_at,
     json_extract(run_json, '$.case_id') AS case_id,
     json_extract(run_json, '$.status') AS run_status,

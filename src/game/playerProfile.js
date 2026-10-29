@@ -250,6 +250,7 @@ function safeProfileErrorMessage(code, status = 0) {
     INVALID_OPERATION_ID: 'The profile operation could not be validated.',
     OPERATION_ID_REUSED: 'The profile operation could not be safely repeated.',
     PROFILE_DATA_CORRUPT: 'The cloud profile needs administrator recovery.',
+    RUN_DATA_CORRUPT: 'A saved investigation needs administrator recovery.',
     DATABASE_UNAVAILABLE: 'Cloud profile storage is temporarily unavailable.',
   };
   return messages[code]

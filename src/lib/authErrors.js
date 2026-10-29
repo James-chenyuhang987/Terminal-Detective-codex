@@ -6,6 +6,7 @@ export const AUTH_FEEDBACK_CODES = Object.freeze({
   WEAK_PASSWORD: 'weak_password',
   RATE_LIMITED: 'rate_limited',
   GITHUB_CANCELLED: 'github_cancelled',
+  GOOGLE_CANCELLED: 'google_cancelled',
   ACCOUNT_EXISTS: 'account_exists',
   POPUP_BLOCKED: 'popup_blocked',
   NETWORK: 'network',
@@ -66,11 +67,14 @@ export function authRedirectFeedback(params = {}) {
   const error = String(params.error || '').toLowerCase();
   const description = String(params.error_description || '').toLowerCase();
   const combined = `${code} ${error} ${description}`;
+  const provider = String(params.auth || params.provider || '').toLowerCase();
   if (!combined.trim()) return '';
   if (combined.includes('too_many') || combined.includes('too-many') || combined.includes('rate') || combined.includes('quota')) return AUTH_FEEDBACK_CODES.RATE_LIMITED;
   if (combined.includes('unauthorized') || combined.includes('redirect') || combined.includes('configuration')) return AUTH_FEEDBACK_CODES.DOMAIN_UNAUTHORIZED;
   if (combined.includes('operation-not-allowed') || combined.includes('provider-disabled')) return AUTH_FEEDBACK_CODES.PROVIDER_DISABLED;
-  if (combined.includes('access_denied') || combined.includes('cancel')) return AUTH_FEEDBACK_CODES.GITHUB_CANCELLED;
+  if (combined.includes('access_denied') || combined.includes('cancel')) {
+    return provider.includes('google') ? AUTH_FEEDBACK_CODES.GOOGLE_CANCELLED : AUTH_FEEDBACK_CODES.GITHUB_CANCELLED;
+  }
   if (combined.includes('expired') || combined.includes('invalid_action_code') || combined.includes('invalid-action-code')) return AUTH_FEEDBACK_CODES.ACTION_EXPIRED;
   return AUTH_FEEDBACK_CODES.UNKNOWN;
 }
@@ -85,4 +89,8 @@ export function hasPasswordProvider(user) {
 
 export function hasGitHubProvider(user) {
   return providerIds(user).includes('github.com');
+}
+
+export function hasGoogleProvider(user) {
+  return providerIds(user).includes('google.com');
 }

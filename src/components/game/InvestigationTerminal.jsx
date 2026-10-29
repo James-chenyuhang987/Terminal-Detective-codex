@@ -91,6 +91,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
   const investigationV2 = serverRun?.investigation_version === 2;
   const [fieldTargetId, setFieldTargetId] = useState(null);
   const [fieldDeskOpen, setFieldDeskOpen] = useState(true);
+  const [fieldLead, setFieldLead] = useState(null);
   const [authorityReady, setAuthorityReady] = useState(false);
   const [authorityError, setAuthorityError] = useState(null);
   const [authorityLoading, setAuthorityLoading] = useState(false);
@@ -1108,6 +1109,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     } else {
       const text = result.settlement?.action_narration || result.narration || result.reveal || result.resultText;
       if (text) addLine(text, 'narration');
+      if (result.finding && result.limitation) addLine(result.limitation, 'clue-desc');
     }
   };
   useLayoutEffect(() => { recoveryPresentationRef.current = presentRecoveredResponse; });
@@ -1266,6 +1268,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
       activeTerminalTurnRef.current = confirmedTurn; viewedTerminalTurnRef.current = confirmedTurn;
       setActiveTerminalTurn(confirmedTurn); setViewedTerminalTurn(confirmedTurn);
       if (response.result.narration) addLine(response.result.narration, 'narration');
+      if (response.result.finding && response.result.limitation) addLine(response.result.limitation, 'clue-desc');
       const discovered = response.run.state.unlocked_clues.filter(id => !before.unlocked_clues.includes(id));
       if (discovered.length) {
         setNewClueIds(prev => [...new Set([...prev, ...discovered])]);
@@ -1280,14 +1283,29 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
 
   const selectFieldTarget = id => {
     setFieldTargetId(id);
-    if (id && investigation?.targets.some(target => target.target_id === id && target.zone_id === gameState.current_zone && target.available)) {
+    if (id && investigation?.targets.some(target => target.target_id === id && target.zone_id === gameState.current_zone)) {
       markTutorialProgress('observed');
     }
+  };
+  const followFieldNpc = npcId => {
+    if (runViewRef.current?.client !== runClient || !runViewRef.current?.active || interactionLocked) return;
+    if (npcId === null || caseData.npcs.some(npc => npc.npc_id === npcId && investigation?.npc_zones?.[npcId])) {
+      setFieldLead({ client: runClient, npcId });
+    }
+  };
+  const talkToFieldNpc = npcId => {
+    if (runViewRef.current?.client !== runClient || !runViewRef.current?.active || interactionLocked
+      || investigation?.npc_zones?.[npcId] !== gameStateRef.current.current_zone) return;
+    const npc = caseData.npcs.find(item => item.npc_id === npcId);
+    if (!npc) return;
+    setReportMode(false);
+    void handleNPCTalk(npc);
   };
   const fieldPanel = investigationV2 && investigation && <InvestigationFieldPanel
     investigation={investigation} gameState={gameState} team={activeAgentStrategy.team} caseData={caseData}
     reconstructionDraft={reconstructionDraft} onReconstructionDraftChange={setReconstructionDraft}
     targetId={fieldTargetId} onTargetChange={selectFieldTarget} onCommand={handleFieldCommand}
+    followedNpcId={fieldLead?.client === runClient ? fieldLead.npcId : null} onFollowNpc={followFieldNpc} onTalk={talkToFieldNpc}
     busy={interactionLocked} active={authorityReady && !authorityLoading && presentationActive && !showSettings && !showOnboarding && !isFinalizing} />;
 
   const openInvestigation = () => {
@@ -1312,7 +1330,11 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
     linkedPairs,
     selectedNpcId: selectedNPC?.npc_id || null,
     investigationVersion: investigationV2 ? 2 : 1,
-    currentGoal: publicCaseContext?.objective || investigation?.current_goal,
+    // Version 2 goals are authoritative and change after every confirmed
+    // inspection, testimony or deduction. The legacy narrative objective is
+    // useful for version 1, but would otherwise hide the concrete next action
+    // returned by the investigation rules.
+    currentGoal: investigationV2 ? investigation?.current_goal : publicCaseContext?.objective,
   }), [caseData, decisionCards, gameState, investigation?.current_goal, investigationV2, isProcessing, lang, linkedPairs, newClueIds.length, publicCaseContext?.objective, reportMode, selectedNPC?.npc_id]);
 
   const bgColor = noirColor(phaseColor.bg);
@@ -1413,6 +1435,7 @@ export default function InvestigationTerminal({ agentStrategy, authoritativeRun 
                 setLinkWorkspace({ client: runClient, draft, feedback: null });
               }}
               feedback={linkFeedback?.lang === lang ? linkFeedback : null}
+              nextGoal={investigationV2 ? investigation?.current_goal : null}
               sources={evidenceArchive.sources}
               expertNotes={evidenceArchive.expertNotes}
               hypotheses={unverifiedHypotheses}

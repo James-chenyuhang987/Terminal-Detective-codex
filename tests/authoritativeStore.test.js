@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   readEnvelope, readProfileRow, profilePayload, commandHash, matchingOperation,
-  serialize, MAX_PROFILE_BYTES,
+  runLibrary, serialize, MAX_PROFILE_BYTES,
 } from '../cloudflare/worker/authorityStore.js';
 import { authorityDB, request, USER_ID } from './cloudflareAuthorityDB.js';
 
@@ -39,6 +39,23 @@ test('corrupt stored snapshots fail closed instead of resetting to defaults', as
     assert.equal(DB.profile().profile_json, corrupt);
     assert.equal(DB.profile().authority_version, 0);
   }
+});
+
+test('corrupt saved runs fail closed with a stable data error before SQLite JSON projection', async () => {
+  const DB = authorityDB();
+  DB.sqlite.prepare(`INSERT INTO profile_operations
+    (user_id, operation_id, base_revision, result_revision, patch_hash, result_json)
+    VALUES (?, ?, 0, 1, ?, '{}')`)
+    .run(USER_ID, 'missing-operation-123456', 'hash');
+  DB.sqlite.prepare(`INSERT INTO player_runs
+    (id, user_id, start_operation_id, run_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .run('corrupt-run-123456', USER_ID, 'missing-operation-123456', '{broken',
+      '2026-09-05 12:00:00', '2026-09-05 12:00:00');
+  await assert.rejects(
+    runLibrary({ DB }, USER_ID),
+    error => error.code === 'RUN_DATA_CORRUPT' && error.status === 500,
+  );
 });
 
 test('legacy patches and client state never pass the strict command envelope', async () => {

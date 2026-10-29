@@ -11,7 +11,7 @@ const WEIGHT_COLORS = { CRITICAL: '#c77c78', HIGH: '#c19a63', MEDIUM: '#709f9a',
 
 export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isChecking, accentColor: _accentColor, relationsEnabled = false,
   draft, onDraftChange, feedback, sources = {}, expertNotes = {},
-  hypotheses = [], onSaveHypothesis, onRemoveHypothesis, hypothesisStatus }) {
+  hypotheses = [], onSaveHypothesis, onRemoveHypothesis, hypothesisStatus, nextGoal = null }) {
   const { lang } = useLang();
   const zh = lang === 'zh';
   const unlocked = clues.filter(c => unlockedIds.includes(c.clue_id));
@@ -37,6 +37,10 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
   };
   const resultFeedback = localFeedback || feedback;
   const feedbackText = localizedInvestigationText(resultFeedback?.text, lang);
+  const nextGoalText = localizedInvestigationText(nextGoal, lang);
+  const feedbackFirst = unlocked.find(clue => clue.clue_id === (resultFeedback?.a || firstClue));
+  const feedbackSecond = unlocked.find(clue => clue.clue_id === (resultFeedback?.b || secondClue));
+  const feedbackRelation = resultFeedback?.relation || relation;
   const knownId = id => unlocked.some(clue => clue.clue_id === id);
 
   const submitLink = (a, b) => {
@@ -176,7 +180,16 @@ export default function LinkBoard({ clues, unlockedIds, linkedPairs, onLink, isC
         clue={unlocked.find(clue => clue.clue_id === id)} sourceLabel={sources[id]} expertNote={expertNotes[id]} /></div>)}
       {feedbackText && <div role="status" className={`td-link-feedback${resultFeedback.valid ? ' is-valid' : ''}`}>
         <strong>{resultFeedback.valid ? (zh ? '关系已记录' : 'Relationship recorded') : (zh ? '关系尚未成立' : 'Relationship not established')}</strong>
+        {feedbackFirst && feedbackSecond && <p className="td-link-feedback-label"><strong>{zh ? '证据链：' : 'Evidence chain: '}</strong>{feedbackFirst.keyword} {feedbackRelation === 'precedes' ? '→' : '·'} {feedbackSecond.keyword}</p>}
         <p>{feedbackText}</p>
+        {resultFeedback.valid ? <>
+          <p className="td-link-feedback-label"><strong>{zh ? '已解决的问题：' : 'Resolved question: '}</strong>{zh
+            ? '这两条证据现在形成了一个可用于结案报告的已确认命题。'
+            : 'These two clues now form a confirmed proposition that can support the final report.'}</p>
+          {nextGoalText && <p className="td-link-feedback-label"><strong>{zh ? '下一步：' : 'Next step: '}</strong>{nextGoalText}</p>}
+        </> : <p className="td-link-feedback-label"><strong>{zh ? '继续调查：' : 'Keep investigating: '}</strong>{zh
+          ? '核对两条证据各自证明的事实，再调整关系类型或“先于”方向；错误关系可以修正。'
+          : 'Check what each clue actually establishes, then revise the relation type or the “precedes” direction; incorrect relations can be corrected.'}</p>}
       </div>}
 
       <div

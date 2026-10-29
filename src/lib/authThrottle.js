@@ -9,6 +9,7 @@ export const AUTH_THROTTLE_ACTIONS = Object.freeze({
   VERIFY_EMAIL: 'verify_email',
   RESET_PASSWORD: 'reset_password',
   GITHUB_LOGIN: 'github_login',
+  GOOGLE_LOGIN: 'google_login',
 });
 
 function storageOrDefault(storage) {

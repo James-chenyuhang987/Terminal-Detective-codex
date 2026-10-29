@@ -42,6 +42,17 @@ jobs:
           fi
           exit "$missing"
 
+      - name: Validate Firebase web configuration
+        run: |
+          missing=0
+          for name in VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository Actions variable $name."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
@@ -94,6 +105,14 @@ jobs:
 
       - name: Verify
         run: |
+          missing=0
+          for name in VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository Actions variable $name."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit "$missing"; fi
           npm run release:check
           npm test
           npm run typecheck

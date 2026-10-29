@@ -50,6 +50,10 @@ const RECOVERY_MESSAGES = Object.freeze({
     '云端档案数据异常，无法由浏览器安全修复。请保留当前页面并联系管理员。',
     'The cloud profile is invalid and cannot be repaired safely in the browser. Keep this page open and contact an administrator.',
   ],
+  RUN_DATA_CORRUPT: [
+    '云端保存的案件数据异常，无法由浏览器安全修复。请保留当前页面并联系管理员。',
+    'A saved investigation is corrupted and cannot be repaired safely in the browser. Keep this page open and contact an administrator.',
+  ],
 });
 
 const GENERIC_RECOVERY_MESSAGE = [

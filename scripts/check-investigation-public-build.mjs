@@ -9,6 +9,7 @@ import ts from 'typescript';
 import { getInvestigationContent, INVESTIGATION_CASE_IDS } from '../server/investigationV2/content.js';
 import { CASE_DESIGN_REVISION } from '../server/investigationV2/caseDesign.js';
 import { getInterviewStrategyContent } from '../server/investigationV2/interviewContent.js';
+import { INSPECTION_REVISION, applyInspectionContent } from '../server/investigationV2/inspectionContent.js';
 import { REPORT_EXPLANATION_REVISION, publicReportEvidenceRoles } from '../server/investigationV2/reportExplanation.js';
 import { ALL_CASES } from '../src/game/caseData.js';
 
@@ -80,7 +81,7 @@ const categoryNames = ['testimony_response', 'hidden_result', 'wrong_outcome', '
   'investigation_result', 'confirmed_proposition', 'failure_explanation', 'conditional_story_focus',
   'story_milestone', 'story_sequence', 'story_aftermath', 'report_evidence_scope',
   'interview_background', 'interview_claim', 'conditional_interview_prompt',
-  'legacy_clue_description', 'legacy_conflict_reason'];
+  'legacy_clue_description', 'legacy_conflict_reason', 'inspection_finding', 'inspection_limitation'];
 const emptyCategories = () => Object.fromEntries(categoryNames.map(name => [name, []]));
 const categories = emptyCategories();
 const coverage = [];
@@ -197,6 +198,29 @@ if (authoredCoverage.report_evidence_scopes !== 64 || authoredCoverage.report_ev
   || authoredCoverage.conditional_interview_prompts !== 24 || authoredCoverage.public_initial_interview_prompts_excluded !== 24) {
   throw new Error('Authored report/interview privacy corpus is incomplete or changed; review coverage.');
 }
+const inspectionCoverage = [];
+for (const caseId of INVESTIGATION_CASE_IDS) {
+  const baseline = getInvestigationContent(caseId, CASE_DESIGN_REVISION);
+  const scoped = applyInspectionContent({ case_id: caseId, investigation_version: 2,
+    investigation: { inspection_revision: INSPECTION_REVISION, case_design_revision: CASE_DESIGN_REVISION } }, baseline);
+  if (scoped === baseline) continue;
+  let findings = 0;
+  for (const target of scoped.targets) {
+    for (const method of target.methods) {
+      if (!method.finding) continue;
+      findings += 1;
+      addBilingual(categories, 'inspection_finding', method.finding.result);
+      addBilingual(categories, 'inspection_limitation', method.finding.limitation);
+    }
+    addBilingual(categories, 'failure_explanation', target.failure_explanation);
+  }
+  inspectionCoverage.push({ case_id: caseId, inspection_revision: INSPECTION_REVISION,
+    targets: scoped.targets.length, findings });
+}
+if (INSPECTION_REVISION !== 1 || inspectionCoverage.length !== 1 || inspectionCoverage[0].case_id !== 'Lvl_03'
+  || inspectionCoverage[0].targets !== 8 || inspectionCoverage[0].findings !== 8) {
+  throw new Error('Scoped inspection privacy coverage changed; review the private corpus.');
+}
 for (const caseData of ALL_CASES) {
   for (const langData of [caseData, caseData.en]) {
     for (const clue of langData?.clue_dictionary || []) {
@@ -257,6 +281,7 @@ const contentBytes = await readFile(path.join(root, 'server/investigationV2/cont
 const provenancePaths = ['scripts/check-investigation-public-build.mjs', 'scripts/browser-case-projection.mjs',
   'server/investigationV2/rawMaterials.js', 'server/investigationV2/caseDesign.js',
   'server/investigationV2/reportExplanation.js', 'server/investigationV2/interviewContent.js',
+  'server/investigationV2/inspectionContent.js',
   'src/game/caseData.js', 'src/game/caseDataExtra.js', 'src/game/caseDataExpansion.js'];
 const sourceHashes = Object.fromEntries(await Promise.all(provenancePaths.map(async filename =>
   [filename, sha256(await readFile(path.join(root, filename)))])));
@@ -270,6 +295,7 @@ const report = {
   content_revisions_checked: contentRevisions,
   revision_coverage: coverage,
   authored_coverage: authoredCoverage,
+  inspection_coverage: inspectionCoverage,
   counts: Object.fromEntries(Object.entries(categories).map(([key, values]) => [key, values.length])),
   private_strings_checked: secretStrings.size,
   browser_js_files: files.length,
@@ -280,7 +306,7 @@ const report = {
   source_import_violations: sourceImportViolations,
   files,
   result: matched === 0 && !sourceImportViolations.length ? 'passed' : 'failed',
-  limitations: 'Frozen and current case-design revisions are both checked for private v2 testimony, hidden results, consequences, expert observations, investigation results and propositions. Current wrong-method explanations, conditional focus after opening, authored milestone/sequence/aftermath titles and bodies, 64 bilingual evidence scopes, and all 48 interview background/claim exchanges with their conditional later-stage prompts are included. Opening focus and initial interview prompts are intentionally public and excluded. Canonical legacy clue descriptions and correct-conflict reasons are included without exemptions. Revision and authored coverage counts precede deduplication; corpus counts are unique per category. Decoded literal containment and source import boundaries are checked. Short clue labels and weights, live API projections, arbitrary derived paraphrases and production deployment require separate authority tests.',
+  limitations: 'Frozen and current case-design revisions are both checked for private v2 testimony, hidden results, consequences, expert observations, investigation results and propositions. Current wrong-method explanations, conditional focus after opening, authored milestone/sequence/aftermath titles and bodies, 64 bilingual evidence scopes, and all 48 interview background/claim exchanges with their conditional later-stage prompts are included. Revision 1 scoped inspection findings, proof limitations and failure explanations for all eight Red Butterfly objects are included. Opening focus and initial interview prompts are intentionally public and excluded. Canonical legacy clue descriptions and correct-conflict reasons are included without exemptions. Revision and authored coverage counts precede deduplication; corpus counts are unique per category. Decoded literal containment and source import boundaries are checked. Short clue labels and weights, live API projections, arbitrary derived paraphrases and production deployment require separate authority tests.',
 };
 await mkdir(path.dirname(output), { recursive: true });
 await writeFile(output, JSON.stringify(report, null, 2) + '\n');

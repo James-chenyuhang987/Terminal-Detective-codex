@@ -48,6 +48,8 @@ test('Firebase configuration rejects deployment placeholders', () => {
   assert.equal(firebaseAuthConfigured({ FIREBASE_PROJECT_ID: PROJECT_ID }), true);
   assert.equal(firebaseAuthConfigured({ FIREBASE_PROJECT_ID: '' }), false);
   assert.equal(firebaseAuthConfigured({ FIREBASE_PROJECT_ID: 'REPLACE_WITH_FIREBASE_PROJECT_ID' }), false);
+  assert.equal(firebaseAuthConfigured({ FIREBASE_PROJECT_ID: 'bad project id' }), false);
+  assert.equal(firebaseAuthConfigured({ FIREBASE_PROJECT_ID: 'a' }), false);
 });
 
 test('Firebase token verification enforces signature and required claims', async () => {
@@ -155,9 +157,9 @@ test('Firebase providers expose only supported sign-in methods', () => {
   assert.deepEqual(authInternals.firebaseProviders({
     firebase: {
       sign_in_provider: 'github.com',
-      identities: { email: ['detective@example.com'], 'github.com': ['1'], google: ['2'] },
+      identities: { email: ['detective@example.com'], 'github.com': ['1'], 'google.com': ['2'] },
     },
-  }), ['github.com']);
+  }), ['github.com', 'google.com']);
   assert.deepEqual(authInternals.firebaseProviders({
     firebase: {
       sign_in_provider: 'password',
@@ -315,6 +317,50 @@ test('Firebase user bootstrap is idempotent for concurrent first requests', asyn
   assert.equal(users.size, 1);
   assert.equal(profiles.size, 1);
   assert.equal(batches, 2);
+});
+
+test('Firebase user bootstrap repairs a missing profile atomically for existing users', async () => {
+  let profilePresent = false;
+  let batches = 0;
+  let batchStatements = 0;
+  const DB = {
+    prepare(sql) {
+      const statement = {
+        sql,
+        args: [],
+        bind(...args) { this.args = args; return this; },
+        async first() {
+          if (sql.includes('SELECT id, email, email_verified, display_name, avatar_url FROM users')) {
+            return {
+              id: 'firebase-user-123', email: 'detective@example.com', email_verified: 1,
+              display_name: 'Old name', avatar_url: null,
+            };
+          }
+          return null;
+        },
+        async run() {
+          if (sql.includes('INSERT INTO profiles')) profilePresent = true;
+          return { meta: { changes: 1 } };
+        },
+      };
+      return statement;
+    },
+    async batch(statements) {
+      batches += 1;
+      batchStatements = statements.length;
+      profilePresent = statements.some(statement => statement.sql.includes('INSERT INTO profiles'));
+    },
+  };
+  const claims = {
+    sub: 'firebase-user-123', email: 'detective@example.com', name: 'Detective',
+    firebase: { identities: { email: ['detective@example.com'] } },
+  };
+
+  const user = await authInternals.upsertFirebaseUser({ DB }, claims);
+  assert.equal(user.id, 'firebase-user-123');
+  assert.equal(profilePresent, true);
+  assert.equal(batches, 1);
+  assert.equal(batchStatements, 2);
 });
 
 test('Firebase user bootstrap distinguishes identity conflicts from database outages', async () => {

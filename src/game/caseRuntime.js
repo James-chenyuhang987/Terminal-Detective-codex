@@ -29,6 +29,26 @@ export function isValidZoneTransition(caseData, fromZone, toZone) {
   return getConnectedZones(caseData, fromZone).includes(toZone);
 }
 
+/** A suggested walking route uses only currently published room access. */
+export function getAccessibleZonePath(caseData, fromZone, toZone, zoneAccess = {}) {
+  const keys = zoneKeys(caseData);
+  if (!keys.includes(fromZone) || !keys.includes(toZone)) return null;
+  if (fromZone === toZone) return [];
+  const visited = new Set([fromZone]);
+  const queue = [{ zone: fromZone, path: [] }];
+  for (let index = 0; index < queue.length; index++) {
+    const { zone, path } = queue[index];
+    for (const next of getConnectedZones(caseData, zone)) {
+      if (visited.has(next) || zoneAccess?.[next]?.available !== true) continue;
+      const nextPath = [...path, next];
+      if (next === toZone) return nextPath;
+      visited.add(next);
+      queue.push({ zone: next, path: nextPath });
+    }
+  }
+  return null;
+}
+
 export function resolveNextZone({
   caseData,
   currentZone,

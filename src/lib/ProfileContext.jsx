@@ -119,6 +119,7 @@ function isRecoveryFailure(cause) {
     || cause?.code === 'PROFILE_WAL_DIVERGED'
     || cause?.code === 'PROFILE_WAL_OPERATION_REUSED'
     || cause?.code === 'PROFILE_DATA_CORRUPT'
+    || cause?.code === 'RUN_DATA_CORRUPT'
     || cause?.code === 'STALE_PROFILE'
     || cause?.code === 'OPERATION_ID_REUSED';
 }

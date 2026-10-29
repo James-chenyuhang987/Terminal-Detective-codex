@@ -7,7 +7,7 @@ export function validateFirebasePublicConfig(config = {}) {
   if (missing.length) return { valid: false, reason: 'missing', fields: missing };
   const whitespace = FIELDS.filter(key => config[key] !== config[key].trim());
   if (whitespace.length) return { valid: false, reason: 'whitespace', fields: whitespace };
-  if (!/^[a-z0-9][a-z0-9-]{4,28}[a-z0-9]$/.test(config.projectId)) {
+  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(config.projectId)) {
     return { valid: false, reason: 'project_id', fields: ['projectId'] };
   }
   const hostname = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;

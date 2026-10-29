@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import {
   EmailAuthProvider,
   GithubAuthProvider,
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   getIdTokenResult,
   getRedirectResult,
@@ -24,7 +25,7 @@ import {
 } from 'firebase/auth';
 import { appParams } from '@/lib/app-params';
 import { prepareAuthEmail } from '@/lib/authEmail';
-import { AUTH_FEEDBACK_CODES, AUTH_NOTICE_CODES, hasGitHubProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
+import { AUTH_FEEDBACK_CODES, AUTH_NOTICE_CODES, hasGitHubProvider, hasGoogleProvider, mapFirebaseAuthError, providerIds, validatePassword } from '@/lib/authErrors';
 import { consumeCapturedAuthReturn } from '@/lib/authReturn';
 import { firebaseAuthReady, firebasePublicConfig, isFirebaseConfigured } from '@/lib/firebase';
 import { createSessionBootstrap, isRecentAuthTime } from '@/lib/authSession';
@@ -99,6 +100,12 @@ function githubProvider() {
   const provider = new GithubAuthProvider();
   provider.addScope('read:user');
   provider.addScope('user:email');
+  provider.setCustomParameters({ prompt: 'select_account' });
+  return provider;
+}
+
+function googleProvider() {
+  const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   return provider;
 }
@@ -301,6 +308,7 @@ export function AuthProvider({ children }) {
         });
     };
     window.addEventListener('online', retryAuth);
+    window.addEventListener('focus', retryAuth);
     const recoveryTimer = window.setInterval(retryAuth, AUTH_RECOVERY_POLL_MS);
     void ensureAuthBackend().catch(() => {});
     void firebaseAuthReady().then(async auth => {
@@ -317,7 +325,10 @@ export function AuthProvider({ children }) {
         }
       } catch (error) {
         if (!cancelled && mountedRef.current) {
-          const code = feedbackCodeFor(error);
+          const rawCode = feedbackCodeFor(error);
+          const code = redirectAction.startsWith('google-') && rawCode === AUTH_FEEDBACK_CODES.GITHUB_CANCELLED
+            ? AUTH_FEEDBACK_CODES.GOOGLE_CANCELLED
+            : rawCode;
           setAuthServiceError(code);
           setAuthNotice({ kind: 'error', code });
         }
@@ -404,6 +415,7 @@ export function AuthProvider({ children }) {
       readinessPromiseRef.current = null;
       window.clearInterval(recoveryTimer);
       window.removeEventListener('online', retryAuth);
+      window.removeEventListener('focus', retryAuth);
       unsubscribe();
       sessionBootstrapRef.current.clear();
       setAuthTokenProvider(null);
@@ -419,6 +431,22 @@ export function AuthProvider({ children }) {
     return configuredAuth();
   }, [configuredAuth, ensureAuthBackend]);
 
+  const retryAuthBackend = useCallback(async () => {
+    authBackendReadyRef.current = false;
+    setAuthBackendReady(false);
+    // A manual retry must be able to replace a still-pending readiness probe.
+    // The old promise remains harmless: its completion handlers check their
+    // request identity before changing the current readiness state.
+    readinessPromiseRef.current = null;
+    await ensureAuthBackend();
+    const instance = await configuredAuth();
+    const current = instance.currentUser;
+    if (current?.emailVerified) {
+      await applyFirebaseUser(current, { forceRefresh: true, throwOnFailure: true });
+    }
+    return true;
+  }, [applyFirebaseUser, configuredAuth, ensureAuthBackend]);
+
   const ensureRecentLogin = useCallback(async (current, password = '') => {
     try {
       const token = await getIdTokenResult(current);
@@ -428,8 +456,8 @@ export function AuthProvider({ children }) {
         await reauthenticateWithCredential(current, EmailAuthProvider.credential(current.email, String(password)));
         return true;
       }
-      if (providers.includes('github.com')) {
-        const provider = githubProvider();
+      if (providers.includes('github.com') || hasGoogleProvider(current)) {
+        const provider = providers.includes('github.com') ? githubProvider() : googleProvider();
         try {
           await reauthenticateWithPopup(current, provider);
           return true;
@@ -451,7 +479,7 @@ export function AuthProvider({ children }) {
     const throttleAction = AUTH_THROTTLE_ACTIONS.EMAIL_LOGIN;
     requireThrottle(throttleAction);
     try {
-      const instance = await auth();
+      const instance = await configuredAuth();
       const credential = await signInWithEmailAndPassword(instance, normalizeEmail(email), String(password || ''));
       if (!credential.user.emailVerified) {
         setVerificationEmail(credential.user.email || normalizeEmail(email));
@@ -466,7 +494,7 @@ export function AuthProvider({ children }) {
       if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) recordAuthRateLimit(throttleAction);
       throw feedbackError(code, error);
     }
-  }, [applyFirebaseUser, auth]);
+  }, [applyFirebaseUser, configuredAuth]);
 
   const signUpWithEmail = useCallback(async (email, password) => {
     const validation = validatePassword(password);
@@ -514,14 +542,14 @@ export function AuthProvider({ children }) {
   }, [configuredAuth]);
 
   const refreshEmailVerification = useCallback(async () => {
-    const instance = await auth();
+    const instance = await configuredAuth();
     const current = instance.currentUser;
     if (!current) return false;
     await reload(current);
     if (!current.emailVerified) throw feedbackError(AUTH_FEEDBACK_CODES.EMAIL_UNVERIFIED);
     await applyFirebaseUser(current, { forceRefresh: true, throwOnFailure: true });
     return true;
-  }, [applyFirebaseUser, auth]);
+  }, [applyFirebaseUser, configuredAuth]);
 
   const sendPasswordReset = useCallback(async email => {
     const throttleAction = AUTH_THROTTLE_ACTIONS.RESET_PASSWORD;
@@ -547,7 +575,7 @@ export function AuthProvider({ children }) {
   const loginWithGitHub = useCallback(async () => {
     const throttleAction = AUTH_THROTTLE_ACTIONS.GITHUB_LOGIN;
     requireThrottle(throttleAction);
-    const instance = await auth();
+    const instance = await configuredAuth();
     const provider = githubProvider();
     try {
       const result = await signInWithPopup(instance, provider);
@@ -568,7 +596,40 @@ export function AuthProvider({ children }) {
       if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) recordAuthRateLimit(throttleAction);
       throw feedbackError(code, error);
     }
-  }, [applyFirebaseUser, auth]);
+  }, [applyFirebaseUser, configuredAuth]);
+
+  const loginWithGoogle = useCallback(async () => {
+    const throttleAction = AUTH_THROTTLE_ACTIONS.GOOGLE_LOGIN;
+    requireThrottle(throttleAction);
+    const instance = await configuredAuth();
+    const provider = googleProvider();
+    try {
+      const result = await signInWithPopup(instance, provider);
+      await applyFirebaseUser(result.user, { forceRefresh: true, throwOnFailure: true });
+      clearAuthThrottle(throttleAction);
+      return result.user;
+    } catch (error) {
+      const rawCode = feedbackCodeFor(error);
+      const code = rawCode === AUTH_FEEDBACK_CODES.GITHUB_CANCELLED
+        ? AUTH_FEEDBACK_CODES.GOOGLE_CANCELLED
+        : rawCode;
+      if (code === AUTH_FEEDBACK_CODES.POPUP_BLOCKED) {
+        try {
+          rememberRedirectAction('google-login');
+          await signInWithRedirect(instance, provider);
+          return null;
+        } catch (redirectError) {
+          const redirectCode = feedbackCodeFor(redirectError);
+          throw feedbackError(
+            redirectCode === AUTH_FEEDBACK_CODES.GITHUB_CANCELLED ? AUTH_FEEDBACK_CODES.GOOGLE_CANCELLED : redirectCode,
+            redirectError,
+          );
+        }
+      }
+      if (code === AUTH_FEEDBACK_CODES.RATE_LIMITED) recordAuthRateLimit(throttleAction);
+      throw feedbackError(code, error);
+    }
+  }, [applyFirebaseUser, configuredAuth]);
 
   const linkGitHub = useCallback(async (currentPassword = '') => {
     const instance = await auth();
@@ -680,6 +741,7 @@ export function AuthProvider({ children }) {
     emailLogin: authThrottleRemaining(AUTH_THROTTLE_ACTIONS.EMAIL_LOGIN),
     registration: authThrottleRemaining(AUTH_THROTTLE_ACTIONS.REGISTER),
     github: authThrottleRemaining(AUTH_THROTTLE_ACTIONS.GITHUB_LOGIN),
+    google: authThrottleRemaining(AUTH_THROTTLE_ACTIONS.GOOGLE_LOGIN),
   }), []);
 
   const value = useMemo(() => ({
@@ -702,6 +764,7 @@ export function AuthProvider({ children }) {
     refreshEmailVerification,
     sendPasswordReset,
     loginWithGitHub,
+    loginWithGoogle,
     linkGitHub,
     unlinkGitHub,
     addPassword,
@@ -710,10 +773,11 @@ export function AuthProvider({ children }) {
     clearAuthNotice,
     checkUserAuth,
     getIdToken,
+    retryAuthBackend,
     cooldownRemaining: getCooldownRemaining,
   }), [
     addPassword, authBackendReady, authChecked, authNotice, authServiceError, changePassword, checkUserAuth, clearAuthNotice, firebaseUser, getCooldownRemaining, getIdToken,
-    isAuthenticated, isLoadingAuth, linkGitHub, loginWithGitHub, logout, refreshEmailVerification,
+    isAuthenticated, isLoadingAuth, linkGitHub, loginWithGitHub, loginWithGoogle, logout, refreshEmailVerification, retryAuthBackend,
     sendPasswordReset, sendVerificationAgain, signInWithEmail, signUpWithEmail, unlinkGitHub, user, verificationEmail,
   ]);
 

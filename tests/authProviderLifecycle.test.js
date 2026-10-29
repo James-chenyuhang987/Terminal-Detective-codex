@@ -119,6 +119,48 @@ test('backend recovery does not bootstrap its captured user after logout', async
   app.unmount();
 });
 
+test('manual backend retry clears a transient readiness failure before login', async () => {
+  let attempts = 0;
+  const app = harness({ readiness: async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error('offline');
+    return true;
+  } });
+  await app.flush();
+  assert.equal(app.value.authBackendReady, false);
+  assert.equal(app.value.authServiceError, authErrors.AUTH_FEEDBACK_CODES.NETWORK);
+  await app.value.retryAuthBackend();
+  await app.flush();
+  assert.equal(attempts, 2);
+  assert.equal(app.value.authBackendReady, true);
+  assert.equal(app.value.authServiceError, '');
+  app.unmount();
+});
+
+test('manual backend retry replaces a stalled readiness probe', async () => {
+  const first = deferred();
+  const second = deferred();
+  let attempts = 0;
+  const app = harness({ readiness: () => ++attempts === 1 ? first.promise : second.promise });
+  await app.flush();
+  assert.equal(attempts, 1);
+
+  const retry = app.value.retryAuthBackend();
+  await app.flush();
+  assert.equal(attempts, 2);
+  second.resolve(true);
+  await retry;
+  await app.flush();
+  assert.equal(app.value.authBackendReady, true);
+
+  // The superseded probe cannot roll the successful retry back to an error.
+  first.reject(new Error('stale readiness failure'));
+  await app.flush();
+  assert.equal(app.value.authBackendReady, true);
+  assert.equal(app.value.authServiceError, '');
+  app.unmount();
+});
+
 test('an account switch invalidates an older token request before it can update authentication', async () => {
   for (const reject of [false, true]) {
     const token = deferred(); const app = harness();

@@ -323,6 +323,12 @@ test('invalid URL and origin settings fail before network requests', async () =>
   }
 });
 
+test('smoke configuration rejects Firebase project IDs that start with a digit', async () => {
+  const f = fixture({ expectedProjectId: '1terminal-detective' });
+  await assert.rejects(f.run(), /invalid_expected_config/);
+  assert.equal(f.calls.length, 0);
+});
+
 test('environment CLI wiring uses explicit release inputs and exits nonzero for invalid configuration', () => {
   assert.deepEqual(smokeOptionsFromEnv({ SMOKE_TARGET: 'pages', SMOKE_SITE_URL: pagesUrl, SMOKE_API_URL: apiUrl, VITE_BUILD_SHA: expectedSha, VITE_FIREBASE_PROJECT_ID: expectedProjectId, VITE_APP_ID: expectedAppId }), {
     target: 'pages', siteUrl: pagesUrl, apiUrl, expectedSha, expectedProjectId, expectedAppId,

@@ -7,7 +7,7 @@ Health check: `https://terminal-detective-codex.terminal-detective.workers.dev/a
 ## Architecture
 
 - Cloudflare Workers Assets serves the Vite application and SPA routes.
-- Firebase Authentication owns email/password, email verification, password reset and GitHub sign-in.
+- Firebase Authentication owns email/password, email verification, password reset, Google sign-in and GitHub sign-in.
 - The browser sends a short-lived Firebase ID token in the `Authorization: Bearer` header.
 - The Worker uses `jose` to verify the RS256 signature, Google certificate `kid`, issuer, audience, `exp`, `iat`, `auth_time`, UID and verified-email claim.
 - Cloudflare D1 stores profiles and game progress under the Firebase UID.
@@ -74,7 +74,13 @@ The Worker does not require a Firebase service-account private key. Google signi
 
 Certificate refreshes are shared across concurrent requests. The 3.5-second deadline covers both the metadata request and response-body parsing; network failures and temporary `429/5xx` responses receive one retry. Unknown key IDs are throttled for one minute and certificate-download failures use a short retry backoff, preventing a malformed-token burst or Google outage from amplifying outbound requests.
 
-## GitHub provider
+## Google and GitHub providers
+
+Enable **Google** in Firebase Authentication → Sign-in method for the one-click sign-in button. Google accounts normally arrive with a verified email, so new players can enter without the email verification round trip required by email/password registration. The Worker still requires a verified Firebase ID token and bootstraps the same D1 profile and save library as every other provider.
+
+Add the production Worker, GitHub Pages (when enabled), `localhost` and `127.0.0.1` to Firebase Authentication → Settings → Authorized domains before testing popup or redirect sign-in.
+
+### GitHub provider
 
 Create a GitHub OAuth App dedicated to Terminal Detective:
 

@@ -25,14 +25,14 @@ test('a repeated same-frame field action shares the first in-flight operation wi
   const view = {};
   const bindings = {
     locked: false, zh: false, mountedRef: { current: true }, requestRef: { current: 0 },
-    actionRef: { current: null }, view, viewRef: { current: view },
+    actionRef: { current: null }, optionsRef: { current: null }, view, viewRef: { current: view },
     commandRef: { current: command => {
       calls.push(command);
       if (calls.length > 1) return Promise.reject(Object.assign(new Error('RUN_REQUEST_BUSY'), { code: 'RUN_REQUEST_BUSY' }));
       return response;
     } },
-    setPending: value => pending.push(value), setError: value => { if (value) errors.push(value); },
-    setNotice: value => { if (value) notices.push(value); }, setPacks() {}, onTargetChange() {},
+    setPendingView: value => pending.push(value), setFailure: value => { if (value) errors.push(value); },
+    setFeedback: value => { if (value) notices.push(value); }, setOffer() {}, onTargetChange() {},
   };
   const perform = loadPerform(bindings);
   const command = { type: 'inspect', option_id: 'current-inspection' };
@@ -43,15 +43,15 @@ test('a repeated same-frame field action shares the first in-flight operation wi
   await Promise.all([first, duplicate]);
   assert.equal(calls.length, 1, 'the synchronous guard must prevent a second command before React rerenders');
   assert.deepEqual(errors, [], 'the successful inspection must not receive a duplicate busy error');
-  assert.deepEqual(notices, [{ narration: 'The cloud confirmed this inspection.' }]);
-  assert.deepEqual(pending, [true, false], 'only the operation owner may release the pending indicator');
+  assert.deepEqual(notices, [{ view, result: { narration: 'The cloud confirmed this inspection.' } }]);
+  assert.deepEqual(pending, [view, null], 'only the operation owner may release the pending indicator');
 });
 
 test('retained action callbacks from another target, run or visit cannot start a command', async () => {
   const oldView = {};
   for (const reason of ['target', 'run', 'inactive', 'return-visit']) {
     let calls = 0;
-    const perform = loadPerform({ locked: false, actionRef: { current: null }, view: oldView,
+    const perform = loadPerform({ locked: false, actionRef: { current: null }, optionsRef: { current: null }, view: oldView,
       viewRef: { current: { reason } }, commandRef: { current: () => { calls++; } } });
     await perform({ type: 'inspect', option_id: 'old-offer' });
     assert.equal(calls, 0, `${reason} must invalidate the old rendered callback before effects run`);
@@ -64,9 +64,9 @@ test('late action outcomes and cleanup do not replace a newer view or its pendin
     const response = new Promise((resolve, reject) => { release = resolve; fail = reject; });
     const view = {};
     const bindings = { locked: false, zh: false, mountedRef: { current: true }, requestRef: { current: 0 },
-      view, viewRef: { current: view }, actionRef: { current: null }, commandRef: { current: () => response },
-      setPending: value => presented.push(['pending', value]), setError: value => presented.push(['error', value]),
-      setNotice: value => presented.push(['notice', value]), setPacks: value => presented.push(['packs', value]),
+      view, viewRef: { current: view }, actionRef: { current: null }, optionsRef: { current: null }, commandRef: { current: () => response },
+      setPendingView: value => presented.push(['pending', value]), setFailure: value => presented.push(['error', value]),
+      setFeedback: value => presented.push(['notice', value]), setOffer: value => presented.push(['packs', value]),
       onTargetChange: value => presented.push(['target', value]) };
     const pending = loadPerform(bindings)({ type: 'travel', zone_id: 'old-destination' });
     presented.length = 0;
@@ -80,6 +80,15 @@ test('late action outcomes and cleanup do not replace a newer view or its pendin
     assert.deepEqual(presented, [], 'a stale result cannot clear new options, show an old notice or release another spinner');
     assert.equal(bindings.actionRef.current, newerAction);
   }
+});
+
+test('same-frame option loading prevents a competing paid action before its pending state renders', async () => {
+  const view = {};
+  let calls = 0;
+  const perform = loadPerform({ locked: false, actionRef: { current: null }, optionsRef: { current: { view } },
+    view, viewRef: { current: view }, commandRef: { current: () => { calls++; } } });
+  await perform({ type: 'rest' });
+  assert.equal(calls, 0, 'reading an offer and a paid action must not race at the same revision');
 });
 
 function workspaceStorage() {

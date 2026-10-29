@@ -93,7 +93,7 @@ export async function runProductionSmoke(options = {}) {
     const { target, expectedSha, expectedProjectId, expectedAppId } = options;
     if (!['worker', 'pages'].includes(target)) fail(stage, 'invalid_target');
     if (!SHA.test(expectedSha)) fail(stage, 'invalid_expected_sha');
-    if (!/^[a-z0-9][a-z0-9-]{4,28}[a-z0-9]$/.test(expectedProjectId || '')
+    if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(expectedProjectId || '')
       || !/^[a-zA-Z0-9_-]+$/.test(expectedAppId || '')) fail(stage, 'invalid_expected_config');
     const site = urlSetting(options.siteUrl, true);
     const api = urlSetting(options.apiUrl);

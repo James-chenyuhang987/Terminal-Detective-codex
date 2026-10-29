@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { compileFunction } from 'node:vm';
 import ts from 'typescript';
+import React from 'react';
 import { resolveTheaterInteraction } from '../src/game/theaterInteraction.js';
 import { createInitialGameState, applySettlementResult, applyRecoveryTurn } from '../src/game/gameState.js';
 import { ALL_CASES, Case_Data_Lvl_01 } from '../src/game/caseData.js';
@@ -13,6 +14,28 @@ const owner = read('components/game/InvestigationTerminal.jsx');
 const presentation = read('components/game/theater/TheaterPresentation.jsx');
 const controls = read('components/game/theater/RunPresentationControls.jsx');
 const decisions = read('components/game/DecisionCards.jsx');
+
+test('a field contact opens the existing dialogue after closing the theater overlay, with pause and area guards', () => {
+  const file = ts.createSourceFile('TheaterPresentation.jsx', presentation, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSX);
+  const component = file.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'TheaterPresentation');
+  const declaration = component.body.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations])
+    .find(node => node.name.getText(file) === 'contactFieldPanel');
+  const calls = [];
+  const fieldPanel = React.createElement('div', { onTalk: id => calls.push(['talk', id]) });
+  const bindings = { React, fieldPanel, busy: false, paused: false, active: true, zoneId: 'hall',
+    investigation: { npc_zones: { witness: 'hall', suspect: 'roof' } }, closePanel: () => calls.push(['close']) };
+  const render = overrides => {
+    const values = { ...bindings, ...overrides };
+    return compileFunction(`return ${declaration.initializer.getText(file)};`, Object.keys(values))(...Object.values(values));
+  };
+  for (const override of [{ busy: true }, { paused: true }, { active: false }]) render(override).props.onTalk('witness');
+  render().props.onTalk('suspect');
+  render().props.onTalk('unknown');
+  assert.deepEqual(calls, []);
+  render().props.onTalk('witness');
+  assert.deepEqual(calls, [['close'], ['talk', 'witness']]);
+  assert.equal(render({ fieldPanel: null }), null);
+});
 
 function freeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;

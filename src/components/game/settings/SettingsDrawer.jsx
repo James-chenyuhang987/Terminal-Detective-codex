@@ -34,7 +34,7 @@ const TX = {
     clearL: '清除本地偏好', clearDesc: '仅清除设置、现场缓存与新手引导，不影响云端进度', clearBtn: '清除',
     cloudReset: '云端进度保护', cloudResetDesc: '资源与案件由服务器核算，客户端不能导入或重置云端进度',
     version: '版本信息',
-    account: '账户 · ACCOUNT', email: '已验证邮箱', providers: '登录方式', passwordProvider: '邮箱密码', githubProvider: 'GitHub', linked: '已绑定', notLinked: '未绑定',
+    account: '账户 · ACCOUNT', email: '已验证邮箱', providers: '登录方式', passwordProvider: '邮箱密码', githubProvider: 'GitHub', googleProvider: 'Google', linked: '已绑定', notLinked: '未绑定',
     linkGithub: '绑定 GitHub', unlinkGithub: '解绑 GitHub', passwordSetup: '设置邮箱密码', passwordChange: '修改密码', passwordPlaceholder: '8–64 位，包含字母和数字', passwordSave: '保存密码',
     currentPassword: '当前密码', currentPasswordPlaceholder: '近期已登录可留空；否则用于重新验证身份',
     passwordRuleLength: '8–64 位', passwordRuleLetter: '含字母', passwordRuleNumber: '含数字',
@@ -70,7 +70,7 @@ const TX = {
     clearL: 'Clear Local Preferences', clearDesc: 'Clear settings, run cache and onboarding only; cloud progress is preserved', clearBtn: 'CLEAR',
     cloudReset: 'Cloud Progress Protection', cloudResetDesc: 'Resources and cases are calculated by the server. Clients cannot import or reset cloud progress.',
     version: 'Version',
-    account: 'ACCOUNT', email: 'Verified email', providers: 'Sign-in methods', passwordProvider: 'Email password', githubProvider: 'GitHub', linked: 'Linked', notLinked: 'Not linked',
+    account: 'ACCOUNT', email: 'Verified email', providers: 'Sign-in methods', passwordProvider: 'Email password', githubProvider: 'GitHub', googleProvider: 'Google', linked: 'Linked', notLinked: 'Not linked',
     linkGithub: 'LINK GITHUB', unlinkGithub: 'UNLINK GITHUB', passwordSetup: 'Add email password', passwordChange: 'Change password', passwordPlaceholder: '8–64 chars with a letter and number', passwordSave: 'SAVE PASSWORD',
     currentPassword: 'Current password', currentPasswordPlaceholder: 'Leave blank after a recent sign-in; otherwise used to verify your identity',
     passwordRuleLength: '8–64 chars', passwordRuleLetter: 'Has a letter', passwordRuleNumber: 'Has a number',
@@ -360,6 +360,10 @@ export default function SettingsDrawer({ onClose }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ color: skin.subText, fontSize: '.56rem' }}>GH {tx.githubProvider} · {providers.includes('github.com') ? tx.linked : tx.notLinked}</span>
                   <button type="button" onClick={() => void runAccountAction(() => providers.includes('github.com') ? unlinkGitHub(currentPassword) : linkGitHub(currentPassword))} style={{ padding: '6px 8px', borderRadius: 7, cursor: 'pointer', border: `1px solid ${providers.includes('github.com') ? '#c77c7860' : `${skin.accent}65`}`, background: 'transparent', color: providers.includes('github.com') ? '#dda29a' : skin.accent, fontFamily: 'monospace', fontSize: '.5rem' }}>{providers.includes('github.com') ? tx.unlinkGithub : tx.linkGithub}</button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ color: skin.subText, fontSize: '.56rem' }}>G {tx.googleProvider} · {providers.includes('google.com') ? tx.linked : tx.notLinked}</span>
+                  <span style={{ color: skin.subText, fontSize: '.48rem' }}>{providers.includes('google.com') ? tx.linked : tx.notLinked}</span>
                 </div>
               </div>
             </div>

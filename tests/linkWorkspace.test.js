@@ -382,6 +382,23 @@ test('a repeated relation explanation follows a language change without another 
   assert.equal(calls.length, 0);
 });
 
+test('confirmed deductions explain what was solved and expose the authoritative next goal', () => {
+  for (language of ['zh', 'en']) {
+    const { props } = propsFor();
+    props.draft = { relation: 'supports', firstClue: 'first', secondClue: 'second' };
+    props.feedback = {
+      valid: true,
+      text: language === 'zh' ? '门禁记录与样本互相印证。' : 'The access record corroborates the sample.',
+    };
+    props.nextGoal = { zh: '前往实验室核验致伤方式。', en: 'Go to the lab and verify the injury method.' };
+    const markup = renderToStaticMarkup(instance(props).render());
+    assert.match(markup, language === 'zh' ? /已解决的问题：/ : /Resolved question:/);
+    assert.match(markup, language === 'zh' ? /证据链：<\/strong>门禁原始记录 · 已封存样本/ : /Evidence chain: <\/strong>Original access record · Preserved sample/);
+    assert.match(markup, language === 'zh' ? /前往实验室核验致伤方式。/ : /Go to the lab and verify the injury method\./);
+    assert.match(markup, language === 'zh' ? /门禁记录与样本互相印证。/ : /The access record corroborates the sample\./);
+  }
+});
+
 test('stale draft ids cannot submit an unknown clue even through a retained callback', () => {
   language = 'en';
   const { props, calls } = propsFor();

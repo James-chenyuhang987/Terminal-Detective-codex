@@ -111,7 +111,7 @@ test('actual field and interview owners pass the same authority story rather tha
   assert.match(owner, /theaterNarrativeStage\(nextGameState, caseData, run\.investigation\)/);
   assert.match(owner, /theaterNarrativeStage\(response\.run\.state, caseData, response\.run\.investigation\)/);
   assert.match(owner, /buildPublicCaseContext\(\{ gameState, caseData, investigation, lang \}\)/);
-  assert.match(owner, /currentGoal: publicCaseContext\?\.objective \|\| investigation\?\.current_goal/);
+  assert.match(owner, /currentGoal: investigationV2 \? investigation\?\.current_goal : publicCaseContext\?\.objective/);
   const css = readFileSync(new URL('../src/components/game/investigation/caseStory.css', import.meta.url), 'utf8');
   assert.match(css, /overflow-wrap:\s*anywhere/);
   assert.match(css, /:focus-visible/);

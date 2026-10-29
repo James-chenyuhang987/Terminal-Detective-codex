@@ -3,14 +3,15 @@
   "check": "v2_private_phrases_absent_from_browser_build",
   "command": "node scripts/check-investigation-public-build.mjs",
   "content_sha256": "9c1f686d946c32b7a77641b733c760b254ece476e2a548614a4d8e099a482784",
-  "corpus_sha256": "f989f90d7f397d69b05cc42ed17acd31a449667bc5140f6a28a8ff0885449f3b",
+  "corpus_sha256": "2ca25e9f32ee5903f6dbade4b53a658642dd6efc4654d31ca4b7fe138c8f3780",
   "source_sha256": {
-    "scripts/check-investigation-public-build.mjs": "c334ec967fe46b0f4c1262ea2b181e47f50ef36162839879612df7f9b0eab45c",
+    "scripts/check-investigation-public-build.mjs": "2bb9c76dc98b75b6131249a5d6fa845a5562e8d12d28fcdcc59647e8b53324a3",
     "scripts/browser-case-projection.mjs": "e65a1e973e1e0b4a38f325097f69063d99827e2b5672173c0da5f5f03bc5d936",
     "server/investigationV2/rawMaterials.js": "605ea5bc4ec65f406c73d1ab9dbeff75f23f069ae5c03b0d8685f3f6ddfa7542",
     "server/investigationV2/caseDesign.js": "78efaef09cb9c7a849148d6739491a85caa2b547a968333cea04bf95487c0ddb",
     "server/investigationV2/reportExplanation.js": "c376485699bb6097f30da7ab0ad4cb68cdaf6cb0b5ea8ae0896b249f50c7570b",
     "server/investigationV2/interviewContent.js": "1c683a38d4b03dc98791d1df3a58298b3d73a7c82f358b7e2abe6112cccb6767",
+    "server/investigationV2/inspectionContent.js": "d9a9e13bcd16b8a20e008c12cc7f5c9ea63da03789ea5080d9dfc6e18b87e62a",
     "src/game/caseData.js": "9703710eedb61c7a0064af2994e6af9f4b738447589a0bf50b54eb35f7149951",
     "src/game/caseDataExtra.js": "a2175f7dc69b8cafddd9ffc38a1fc6b02d5b9c2d957983877bde18fccf31a972",
     "src/game/caseDataExpansion.js": "b2efed1c94a1b9b963fa69733f87e1ceab48573a19b9510e5a1bc92000f3b8fd"
@@ -97,7 +98,9 @@
         "interview_claim": 0,
         "conditional_interview_prompt": 0,
         "legacy_clue_description": 0,
-        "legacy_conflict_reason": 0
+        "legacy_conflict_reason": 0,
+        "inspection_finding": 0,
+        "inspection_limitation": 0
       }
     },
     {
@@ -177,7 +180,9 @@
         "interview_claim": 0,
         "conditional_interview_prompt": 0,
         "legacy_clue_description": 0,
-        "legacy_conflict_reason": 0
+        "legacy_conflict_reason": 0,
+        "inspection_finding": 0,
+        "inspection_limitation": 0
       }
     }
   ],
@@ -188,6 +193,14 @@
     "conditional_interview_prompts": 24,
     "public_initial_interview_prompts_excluded": 24
   },
+  "inspection_coverage": [
+    {
+      "case_id": "Lvl_03",
+      "inspection_revision": 1,
+      "targets": 8,
+      "findings": 8
+    }
+  ],
   "counts": {
     "testimony_response": 290,
     "hidden_result": 16,
@@ -195,7 +208,7 @@
     "expert_observation": 48,
     "investigation_result": 164,
     "confirmed_proposition": 156,
-    "failure_explanation": 16,
+    "failure_explanation": 32,
     "conditional_story_focus": 32,
     "story_milestone": 112,
     "story_sequence": 112,
@@ -205,11 +218,13 @@
     "interview_claim": 96,
     "conditional_interview_prompt": 48,
     "legacy_clue_description": 144,
-    "legacy_conflict_reason": 8
+    "legacy_conflict_reason": 8,
+    "inspection_finding": 16,
+    "inspection_limitation": 16
   },
-  "private_strings_checked": 1422,
+  "private_strings_checked": 1470,
   "browser_js_files": 22,
-  "decoded_literals": 28986,
+  "decoded_literals": 29326,
   "matched": 0,
   "matched_by_category": {
     "testimony_response": 0,
@@ -228,120 +243,122 @@
     "interview_claim": 0,
     "conditional_interview_prompt": 0,
     "legacy_clue_description": 0,
-    "legacy_conflict_reason": 0
+    "legacy_conflict_reason": 0,
+    "inspection_finding": 0,
+    "inspection_limitation": 0
   },
-  "source_files_checked": 208,
+  "source_files_checked": 210,
   "source_import_violations": [],
   "files": [
     {
-      "path": "dist/assets/ActionCinematic-BcOrG3-3.js",
+      "path": "dist/assets/ActionCinematic-B07-CR65.js",
       "bytes": 27267,
-      "sha256": "7b130c8cced1dcb4b78549558effecaa02c32a9051a8c5d896d37a635dd5e49e",
+      "sha256": "52a50551200020dd9df1af358c748a9933b4f6e1cda981a61d9fbfa537fe847c",
       "decoded_literals": 451,
       "matched": 0
     },
     {
-      "path": "dist/assets/AgentLobby-D_CAdOau.js",
+      "path": "dist/assets/AgentLobby-qZDO8gKs.js",
       "bytes": 160159,
-      "sha256": "5a4d215c7e2d79d3a6a2c1399df497b7e8a291f929f00ac888fe01c539e447a8",
+      "sha256": "c69078cecb4165df1c2187a5da675388a0b5e03d4b168f6c0ea76a61da3a4c4a",
       "decoded_literals": 4010,
       "matched": 0
     },
     {
-      "path": "dist/assets/CaseSelect-BMT0XJ94.js",
+      "path": "dist/assets/CaseSelect-BySITgRA.js",
       "bytes": 11898,
-      "sha256": "87c251081480ac700cc38c646bdfd7376b6d632fbee0b70ef45a881e7b96b8bd",
+      "sha256": "f6477a2343eb624c6a92245a7dd9dea8e9db637a099e370016686ebf729a7bfb",
       "decoded_literals": 342,
       "matched": 0
     },
     {
-      "path": "dist/assets/DetectiveHome-uqWjPnPl.js",
+      "path": "dist/assets/DetectiveHome-DpW3fI61.js",
       "bytes": 42716,
-      "sha256": "221fabf0738cc83a0b9384602f432bb75bdcf2c13fddf9efa9b0f5fa76ee4959",
+      "sha256": "f3c1048a74aff7b7e9c501047b16a67fe05e378fcccb08854ad23605f5329ebc",
       "decoded_literals": 1420,
       "matched": 0
     },
     {
-      "path": "dist/assets/EvidenceObjectViewer-Bv9xBGFl.js",
+      "path": "dist/assets/EvidenceObjectViewer-B70mxZDY.js",
       "bytes": 20946,
-      "sha256": "6dbc0d059b6adaf42652637b8ca2797e7685d3620433543396a10d676fc223c5",
+      "sha256": "0d459f16f1fca41ae72948893b7f77c0cac689c78907682907a7a2dd7ea12902",
       "decoded_literals": 237,
       "matched": 0
     },
     {
-      "path": "dist/assets/FieldAtmosphere-W3HccVHo.js",
+      "path": "dist/assets/FieldAtmosphere-B8LXE_Un.js",
       "bytes": 16561,
-      "sha256": "48779769866d263849c9d5a8417b3ba3cd190e6234bc18e3858715bc138f9dff",
+      "sha256": "cae41dd69e482d29989c525851d36bcb8ec216e45aec4d09d8f9f23167cf348b",
       "decoded_literals": 100,
       "matched": 0
     },
     {
-      "path": "dist/assets/GraphModule-DhlDHoGF.js",
+      "path": "dist/assets/GraphModule-CcCW9dBT.js",
       "bytes": 2374,
-      "sha256": "7cd966bfab4a8fc2481398980a306976ac82af712175cbc66e5c7f3c725d514d",
+      "sha256": "ca93a48ef18df250e44cb8ec083920bc2769f1044e053a65566d0a40d2692755",
       "decoded_literals": 69,
       "matched": 0
     },
     {
-      "path": "dist/assets/HomeModules-HYWDOLQV.js",
+      "path": "dist/assets/HomeModules-BiQah95j.js",
       "bytes": 45460,
-      "sha256": "02122ab78f6880bd52bf3ebe64673f438adf9b6c8acbd52b43b4223768d34ff4",
+      "sha256": "b0686699032c3d3ab0e3d297aa716c6a3c5110c83d1fc9960e7127d8ded7f850",
       "decoded_literals": 1445,
       "matched": 0
     },
     {
-      "path": "dist/assets/InvestigationProps-BwHD77FY.js",
+      "path": "dist/assets/InvestigationProps-CFamAjlf.js",
       "bytes": 41447,
-      "sha256": "03d413f39733f96f1db61d0def8fbb0bbb099cfb0ce986f96a201f702dfddff1",
+      "sha256": "4406eddebec0428a5e9bcefcf901ecaaec3264882d776b4ffc921657ff8f995e",
       "decoded_literals": 337,
       "matched": 0
     },
     {
-      "path": "dist/assets/InvestigationTerminal-BsXwmrRl.js",
-      "bytes": 360463,
-      "sha256": "23ba84cd86156aa016a1fea331359bcb8e9856432adb624773a3096a46c4def0",
-      "decoded_literals": 7736,
+      "path": "dist/assets/InvestigationTerminal-DU1O8bS_.js",
+      "bytes": 372909,
+      "sha256": "46afbde94a6e0cd2ca3b3a38583f1caa36eb218610544c52d7690760e5e57dab",
+      "decoded_literals": 7988,
       "matched": 0
     },
     {
-      "path": "dist/assets/ProfileAppShell-DkircnTf.js",
-      "bytes": 23965,
-      "sha256": "f362eca07b856dfd1fc33711a5442a8aef2886ad4f76c95e0bf24e6fda0204fe",
-      "decoded_literals": 385,
+      "path": "dist/assets/ProfileAppShell-COQYdLit.js",
+      "bytes": 24367,
+      "sha256": "a15e1e0ea130697736c54f5cb6b38ecd83383aab5d5f7df46220ebb14291d404",
+      "decoded_literals": 390,
       "matched": 0
     },
     {
-      "path": "dist/assets/SaveLibrary-DJh2Ihb7.js",
-      "bytes": 12453,
-      "sha256": "44b47ae7e9f71961db4d723dfa63b48a948b97a85f1f5945befd8e0c66875dbf",
-      "decoded_literals": 342,
+      "path": "dist/assets/SaveLibrary-COLWQtSV.js",
+      "bytes": 12792,
+      "sha256": "12dcec55b2008b2a6cab1978ede65de90722b30c59046b95daccb943230e7962",
+      "decoded_literals": 350,
       "matched": 0
     },
     {
-      "path": "dist/assets/SettingsDrawer-rLVf0P-Z.js",
-      "bytes": 24859,
-      "sha256": "6f1b163b79bf9aaae0937212ec7a23d8089ed48e1c69db992c2bcf2cd49f7bee",
-      "decoded_literals": 595,
+      "path": "dist/assets/SettingsDrawer-Cot78l9R.js",
+      "bytes": 25284,
+      "sha256": "7d24f9290d9eec8d9841df039a69b23d504502f1d9e3b66de3902ac61d74add9",
+      "decoded_literals": 609,
       "matched": 0
     },
     {
-      "path": "dist/assets/StatusToast-Dmns93CB.js",
+      "path": "dist/assets/StatusToast-DZv0vpx-.js",
       "bytes": 789,
-      "sha256": "bf3f2db8e5af487458a9d43579abaf3355ba4f1368cfce3d1f48edf5c80495ae",
+      "sha256": "3b306da486e6a3589e114f1f58ee7ae4104bb3b886235b50ffc311e6af4a6abd",
       "decoded_literals": 30,
       "matched": 0
     },
     {
-      "path": "dist/assets/TerminalDetective-DaXh3xp5.js",
-      "bytes": 108140,
-      "sha256": "f1fd5ca069a6488793543e7b5c97efe2b30068553411ce0ad42482b41dd850b6",
-      "decoded_literals": 2088,
+      "path": "dist/assets/TerminalDetective-DtcAVUJ3.js",
+      "bytes": 108200,
+      "sha256": "9dd4a58be56ebba6095f19ce3df5ca237bbdd590fd7a3fe785f424c48e063310",
+      "decoded_literals": 2091,
       "matched": 0
     },
     {
-      "path": "dist/assets/TheaterScene-BtLo8sep.js",
+      "path": "dist/assets/TheaterScene-D3jtrs0r.js",
       "bytes": 31431,
-      "sha256": "858810dae91484bd0dd7dfd1172e4a91363f4df2d4b788f86a2d7ab0fa197540",
+      "sha256": "128f9decf16cef8388b33e6f3a009c3e8cfb4f2c8bb2f667c0c1c2f7a042cf51",
       "decoded_literals": 211,
       "matched": 0
     },
@@ -353,10 +370,10 @@
       "matched": 0
     },
     {
-      "path": "dist/assets/index-BQ0p4ex6.js",
-      "bytes": 310982,
-      "sha256": "8d3f8a8658e250bb2327dc0d53145df6433242169df948b52f6eda824a52e701",
-      "decoded_literals": 3176,
+      "path": "dist/assets/index-CLEfcsYd.js",
+      "bytes": 314238,
+      "sha256": "310e2b6fc319e22ff69bf3861d9de510e85ee568cfaac9fcc8358b58395a1dbc",
+      "decoded_literals": 3233,
       "matched": 0
     },
     {
@@ -374,10 +391,10 @@
       "matched": 0
     },
     {
-      "path": "dist/assets/playerProfile-DJ9Z5jr8.js",
-      "bytes": 47031,
-      "sha256": "690e907897d3a24b81990bff1f8af707ccdf56c32efc545ce8e08da5c24af757",
-      "decoded_literals": 925,
+      "path": "dist/assets/playerProfile-rSKlO2bf.js",
+      "bytes": 47102,
+      "sha256": "431f8643bfe63d3697ccbc05a920dab1b398bf05e2d992a8f8d3ea8575e07171",
+      "decoded_literals": 926,
       "matched": 0
     },
     {
@@ -389,5 +406,5 @@
     }
   ],
   "result": "passed",
-  "limitations": "Frozen and current case-design revisions are both checked for private v2 testimony, hidden results, consequences, expert observations, investigation results and propositions. Current wrong-method explanations, conditional focus after opening, authored milestone/sequence/aftermath titles and bodies, 64 bilingual evidence scopes, and all 48 interview background/claim exchanges with their conditional later-stage prompts are included. Opening focus and initial interview prompts are intentionally public and excluded. Canonical legacy clue descriptions and correct-conflict reasons are included without exemptions. Revision and authored coverage counts precede deduplication; corpus counts are unique per category. Decoded literal containment and source import boundaries are checked. Short clue labels and weights, live API projections, arbitrary derived paraphrases and production deployment require separate authority tests."
+  "limitations": "Frozen and current case-design revisions are both checked for private v2 testimony, hidden results, consequences, expert observations, investigation results and propositions. Current wrong-method explanations, conditional focus after opening, authored milestone/sequence/aftermath titles and bodies, 64 bilingual evidence scopes, and all 48 interview background/claim exchanges with their conditional later-stage prompts are included. Revision 1 scoped inspection findings, proof limitations and failure explanations for all eight Red Butterfly objects are included. Opening focus and initial interview prompts are intentionally public and excluded. Canonical legacy clue descriptions and correct-conflict reasons are included without exemptions. Revision and authored coverage counts precede deduplication; corpus counts are unique per category. Decoded literal containment and source import boundaries are checked. Short clue labels and weights, live API projections, arbitrary derived paraphrases and production deployment require separate authority tests."
 }

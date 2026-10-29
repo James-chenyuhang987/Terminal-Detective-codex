@@ -46,6 +46,14 @@ test('auth throttles persist independent success and escalating rate-limit windo
   assert.equal(recordAuthRateLimit(AUTH_THROTTLE_ACTIONS.RESET_PASSWORD, storage, now), 900);
 });
 
+test('Google and GitHub OAuth cooldowns remain independent', () => {
+  const storage = memoryStorage();
+  const now = 1_800_000_000_000;
+  recordAuthSuccess(AUTH_THROTTLE_ACTIONS.GOOGLE_LOGIN, storage, now);
+  assert.equal(authThrottleRemaining(AUTH_THROTTLE_ACTIONS.GOOGLE_LOGIN, storage, now), 60);
+  assert.equal(authThrottleRemaining(AUTH_THROTTLE_ACTIONS.GITHUB_LOGIN, storage, now), 0);
+});
+
 test('legacy OAuth errors are removed without damaging app routes or unrelated query values', () => {
   assert.deepEqual(
     sanitizedAuthReturnUrl('https://game.example/play?case=1&error=access_denied&error_description=nope#/case/2'),

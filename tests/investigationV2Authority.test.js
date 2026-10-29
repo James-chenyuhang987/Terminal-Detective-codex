@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRun, applyRunCommand, publicRun, deriveRunSummary, validateRunCommand } from '../server/gameAuthority/runAuthority.js';
 import { getInvestigationContent, INVESTIGATION_CASE_IDS } from '../server/investigationV2/content.js';
+import { applyInspectionContent } from '../server/investigationV2/inspectionContent.js';
 import { ALL_CASES } from '../src/game/caseData.js';
 import { buildTeamConfig } from '../src/game/teamConfig.js';
 import { MAX_RUN_BYTES, serialize, storedRun } from '../cloudflare/worker/authorityStore.js';
@@ -501,13 +502,36 @@ test('hidden objects retain their actual area without replacing the main investi
     for (const lang of ['zh', 'en']) {
       const label = (lang === 'en' ? run.case_data.en : run.case_data).scene.zones[spec.hidden.zone_id].label;
       assert.equal(hidden.zone_label[lang], label);
-      assert.match(projected.current_goal[lang], lang === 'zh' ? /证词.*专属核验.*报告/ : /testimony.*special verification.*report/);
+      assert.match(projected.current_goal[lang], lang === 'zh' ? /证词/ : /testimony/);
+      assert.equal(projected.current_goal[lang].includes(lang === 'zh' ? spec.hidden.label.zh : spec.hidden.label.en), false);
       assert.equal(projected.hint.direction[lang], projected.current_goal[lang]);
       assert.equal(JSON.stringify(projected).includes(spec.hidden.result[lang]), false);
     }
     run = inspectTarget(run, { ...hidden, method_id: spec.hidden.method_id || 'verify_source' }).run;
     assert.equal(publicRun(run).investigation.current_goal_target, null);
   }
+});
+
+test('public investigation goals advance through testimony, reconstruction, links and report without revealing answers', () => {
+  let run = allCore(fresh('Lvl_01'));
+  const spec = getInvestigationContent(run.case_id);
+  let projected = publicRun(run).investigation;
+  assert.match(projected.current_goal.zh, /证词/);
+  assert.equal(projected.current_goal_target, null);
+  assert.equal(JSON.stringify(projected.current_goal).includes(spec.hidden.result.zh), false);
+
+  run.investigation.testimony_stages = Object.fromEntries(run.case_data.npcs.map(npc => [npc.npc_id, 2]));
+  projected = publicRun(run).investigation;
+  assert.match(projected.current_goal.zh, /专属核验/);
+
+  run.investigation.puzzle_completed = true;
+  projected = publicRun(run).investigation;
+  assert.match(projected.current_goal.zh, /推理连线/);
+
+  run.investigation.propositions = [{ id: 'public-a' }, { id: 'public-b' }];
+  projected = publicRun(run).investigation;
+  assert.match(projected.current_goal.zh, /结案报告/);
+  assert.equal(JSON.stringify(projected.current_goal).includes(spec.hidden.result.zh), false);
 });
 
 test('each acquired independent hidden record supports its corresponding fact, while unknown records cannot be linked and repeats do not alter grading', () => {
@@ -1056,7 +1080,7 @@ for (const caseId of INVESTIGATION_CASE_IDS) {
     test(`${caseId} ${configuration}: 20 AP covers full investigation, a wrong check, two paid preservation crises and one report correction`, (t) => {
       let run = fresh(caseId, 2, { minimumAbilities: configuration === 'zero-ability' });
       const initialAp = run.state.action_points_left;
-      const spec = getInvestigationContent(caseId);
+      const spec = applyInspectionContent(run, getInvestigationContent(caseId));
       // Inject the costliest possible pair; separate scheduling tests cover the
       // real 6–8 turn intervals. This fixture must not win on favorable RNG.
       run.next_crisis_turn = 1000;
@@ -1078,7 +1102,7 @@ for (const caseId of INVESTIGATION_CASE_IDS) {
         return secured.run;
       };
       const first = spec.targets.find(target => target.zone_id === run.state.current_zone && !(target.required_clues || []).length);
-      const wrongMethod = first.methods.find(method => method.id !== first.method_id).id;
+      const wrongMethod = first.methods.find(method => method.id !== first.method_id && !method.finding).id;
       const wrong = inspectTarget(run, first, null, wrongMethod);
       assert.equal(wrong.result.completed, false);
       assert.equal(wrong.run.state.confusion_score, publicRun(run).investigation.cost_rules.unsuccessful_inspection_confusion);

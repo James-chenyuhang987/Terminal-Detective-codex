@@ -14,6 +14,7 @@ import { INVESTIGATION_BALANCE_REVISION, INVESTIGATION_COST_RULES, investigation
   investigationReportPolicy } from './balance.js';
 import { INVESTIGATION_RAW_MATERIALS_REVISION } from './rawMaterials.js';
 import { CASE_DESIGN_REVISION, publicInvestigationStory } from './caseDesign.js';
+import { INSPECTION_REVISION, applyInspectionContent, usesScopedInspection } from './inspectionContent.js';
 import { getInterviewStrategyContent } from './interviewContent.js';
 import { REPORT_EXPLANATION_REVISION, publicReportEvidenceRoles, explainSubmittedReport } from './reportExplanation.js';
 import { INVESTIGATION_SKILLS_REVISION, quoteInvestigationSkills, consumeInvestigationSkills, professionalObservationThreshold,
@@ -39,7 +40,7 @@ function known(run, list = []) { return list.every(id => run.state.unlocked_clue
 function content(run) {
   const value = getInvestigationContent(run.case_id, run.investigation?.case_design_revision || 0);
   if (!value) fail('UNKNOWN_CASE');
-  return value;
+  return applyInspectionContent(run, value);
 }
 function agentIds(run) { return run.team_config.team.map(agent => agent.agent_id); }
 function preparedInvestigation(run) {
@@ -86,6 +87,61 @@ function zoneLabel(run, zoneId) {
   const zh = run.case_data.scene.zones[zoneId]?.label || zoneId;
   return { zh, en: run.case_data.en?.scene?.zones?.[zoneId]?.label || zh };
 }
+function npcLabel(run, npcId) {
+  const zhNpc = run.case_data.npcs.find(npc => npc.npc_id === npcId);
+  const enNpc = run.case_data.en?.npcs?.find(npc => npc.npc_id === npcId);
+  return { zh: zhNpc?.name || npcId, en: enNpc?.name || zhNpc?.name || npcId };
+}
+function postEvidenceGoal(run, spec, puzzleAvailable) {
+  const stages = run.investigation.testimony_stages || {};
+  const nextNpc = run.case_data.npcs.find(npc => {
+    const stage = Math.max(0, Number(stages[npc.npc_id]) || 0);
+    return stage < 2 && spec.testimonies?.[npc.npc_id]?.[stage];
+  });
+  if (nextNpc) {
+    const stage = Math.max(0, Number(stages[nextNpc.npc_id]) || 0);
+    const testimony = spec.testimonies[nextNpc.npc_id][stage];
+    const name = npcLabel(run, nextNpc.npc_id);
+    const zone = zoneLabel(run, spec.npc_zones?.[nextNpc.npc_id] || run.case_data.initial_zone);
+    const evidenceReady = known(run, testimony.required_clues || []);
+    return {
+      goal: evidenceReady
+        ? { zh: `前往「${zone.zh}」与「${name.zh}」核对第 ${stage + 1} 阶段证词，并出示匹配证据。`,
+          en: `Go to “${zone.en}” and compare “${name.en}”’s testimony stage ${stage + 1} with matching evidence.` }
+        : { zh: `先取得能核对「${name.zh}」说法的现场证据，再前往「${zone.zh}」询问。`,
+          en: `Secure the scene evidence needed to check “${name.en}”’s account, then go to “${zone.en}” to ask.` },
+      verification: evidenceReady
+        ? { zh: '先阅读人物的已知陈述，再选择询问策略和对应的已发现证据；匹配证据会推进下一阶段。',
+          en: 'Read the known account first, then choose an interview strategy and the matching discovered evidence; a match advances the next stage.' }
+        : { zh: '先回到现场调查台，观察并核验与这名人物说法有关的物件。',
+          en: 'Return to the field desk and inspect objects related to this person’s account first.' },
+    };
+  }
+  if (!run.investigation.puzzle_completed && puzzleAvailable) {
+    const label = text(spec.puzzle.label, 'zh');
+    const labelEn = text(spec.puzzle.label, 'en');
+    return {
+      goal: { zh: `完成「${label}」专属核验，确认关键事件的顺序或操作链。`,
+        en: `Complete “${labelEn}” to verify the key event order or operation chain.` },
+      verification: { zh: '按物件提供的记录进行排序、并列比对或路线重建；提交前可以免费修改选择。',
+        en: 'Use the supplied records for ordering, comparison or route reconstruction; revise the selection freely before submitting.' },
+    };
+  }
+  if ((run.investigation.propositions || []).length < 2) {
+    return {
+      goal: { zh: '证据已经齐备；在推理连线中核对支持、矛盾或先后关系，再决定是否提交报告。',
+        en: 'The evidence is assembled; test support, contradiction or sequence links before deciding whether to submit the report.' },
+      verification: { zh: '每次关系核验不消耗行动点。先比较两条记录各自证明的事实，再选择关系类型；错误关系可以修正。',
+        en: 'Relation checks cost no AP. Compare what each record establishes before choosing a relation; incorrect links can be corrected.' },
+    };
+  }
+  return {
+    goal: { zh: '调查材料已形成完整链条；打开结案报告，按机会、手段、动机和时间线分别附上证据。',
+      en: 'The investigation now has a complete chain; open the case report and attach evidence for opportunity, method, motive and timeline.' },
+    verification: { zh: '逐项检查四个结案维度的证据覆盖。提交被驳回时仍可修正报告，不会公布未发现的答案。',
+      en: 'Check evidence coverage for all four report dimensions. A rejected report remains revisable and never reveals undiscovered answers.' },
+  };
+}
 function ordered(run, items, group) {
   return [...items].sort((a, b) => runRoll(`${run.id}:${group}`, a.id, 0x7fffffff)
     - runRoll(`${run.id}:${group}`, b.id, 0x7fffffff) || a.id.localeCompare(b.id));
@@ -117,6 +173,19 @@ function targetVisible(run, target) {
 }
 function completed(run, targetId) {
   return run.investigation.completed_checks.find(check => check.target_id === targetId);
+}
+function inspectionFinding(run, targetId, methodId) {
+  return usesScopedInspection(run) ? run.investigation.inspection_findings?.find(record =>
+    record.target_id === targetId && (methodId === undefined || record.method_id === methodId)) : null;
+}
+function publicInspectionFindings(run) {
+  if (!usesScopedInspection(run)) return [];
+  // Only earned, explicitly projected observations may leave the authority.
+  // In particular, payment bookkeeping and unselected method outcomes stay private.
+  return (run.investigation.inspection_findings || []).map(record => ({
+    target_id: record.target_id, method_id: record.method_id, label: record.label,
+    result: record.result, limitation: record.limitation, executor_agent_id: record.executor_agent_id,
+  }));
 }
 function requireTarget(run, targetId) {
   const target = allTargets(run).find(item => item.target_id === targetId);
@@ -255,6 +324,7 @@ export function initializeInvestigation(run) {
   run.investigation_version = 2;
   run.investigation = { balance_revision: INVESTIGATION_BALANCE_REVISION,
     case_design_revision: CASE_DESIGN_REVISION,
+    ...(run.case_id === 'Lvl_03' ? { inspection_revision: INSPECTION_REVISION, inspection_findings: [] } : {}),
     interview_revision: INTERVIEW_REVISION, interview_records: {},
     report_explanation_revision: REPORT_EXPLANATION_REVISION,
     skills_revision: INVESTIGATION_SKILLS_REVISION, skill_usage: {}, skill_hints: [],
@@ -272,21 +342,29 @@ export function publicInvestigation(run) {
   const reachable = reachableZones(run);
   const targets = allTargets(run, spec).filter(target => targetVisible(run, target)).map(target => ({
     target_id: target.target_id, zone_id: target.zone_id, zone_label: zoneLabel(run, target.zone_id), label: target.label, observation: target.observation,
-    kind: target.kind, methods: ordered(run, target.methods, target.target_id).map(method => ({ id: method.id, label: method.label })),
+    kind: target.kind, methods: ordered(run, target.methods, target.target_id).map(method => ({
+      id: method.id, label: method.label, ...(method.scope ? { scope: method.scope } : {}),
+    })),
+    ...(target.inquiry ? { inquiry: target.inquiry } : {}),
     available: known(run, target.required_clues), completed: Boolean(completed(run, target.target_id)),
     hidden: Boolean(target.hidden),
   }));
   const coreTargets = targets.filter(target => !target.hidden);
   const next = coreTargets.find(target => !target.completed && target.available && target.zone_id === run.state.current_zone)
     || coreTargets.find(target => !target.completed && target.available && reachable.has(target.zone_id));
-  const goal = next ? { zh: `${next.zone_id === run.state.current_zone ? '在' : '前往'}「${next.zone_label.zh}」观察「${next.label.zh}」，选择核验方式与执行探员。`,
-    en: `${next.zone_id === run.state.current_zone ? 'In' : 'Go to'} “${next.zone_label.en}”${next.zone_id === run.state.current_zone ? ',' : ' and'} observe “${next.label.en}”, then choose a verification method and investigator.` }
-    : { zh: '核对人物证词、完成专属核验、建立关系命题，并为报告四个环节附上证据。',
-      en: 'Check testimony, complete the special verification, establish relationships, and attach evidence to the four report dimensions.' };
   const puzzleAvailable = known(run, spec.puzzle.required_clues);
+  const nextStep = next ? {
+    goal: { zh: `${next.zone_id === run.state.current_zone ? '在' : '前往'}「${next.zone_label.zh}」观察「${next.label.zh}」，选择核验方式与执行探员。`,
+      en: `${next.zone_id === run.state.current_zone ? 'In' : 'Go to'} “${next.zone_label.en}”${next.zone_id === run.state.current_zone ? ',' : ' and'} observe “${next.label.en}”, then choose a verification method and investigator.` },
+    verification: { zh: `「${next.label.zh}」位于「${next.zone_label.zh}」。比较物件的可见记录与测量结果；先取原始材料，再核对人物说法。`,
+      en: `“${next.label.en}” is in “${next.zone_label.en}”. Compare visible records and measurements; obtain original material before checking accounts.` },
+  } : postEvidenceGoal(run, spec, puzzleAvailable);
+  const goal = nextStep.goal;
   const workbench = publicWorkbench(run, spec.puzzle);
   const reportPolicy = investigationReportPolicy(run);
   return copy({ balance_revision: investigationBalanceRevision(run),
+    ...(usesScopedInspection(run) ? { inspection_revision: INSPECTION_REVISION,
+      inspection_findings: publicInspectionFindings(run) } : {}),
     ...(run.investigation.case_design_revision === CASE_DESIGN_REVISION
       ? { case_design_revision: CASE_DESIGN_REVISION, story: publicInvestigationStory(run, spec) } : {}),
     ...(run.investigation.skills_revision === INVESTIGATION_SKILLS_REVISION ? { skills: publicInvestigationSkills(run) } : {}),
@@ -324,9 +402,7 @@ export function publicInvestigation(run) {
       ...(workbench ? { workbench } : {}) },
     current_goal: goal,
     current_goal_target: next ? { target_id: next.target_id, zone_id: next.zone_id, zone_label: next.zone_label } : null,
-    hint: { direction: goal,
-      verification: { zh: `${next ? `「${next.label.zh}」位于「${next.zone_label.zh}」。` : ''}比较物件的可见记录与测量结果；先取原始材料，再核对人物说法。`,
-        en: `${next ? `“${next.label.en}” is in “${next.zone_label.en}”. ` : ''}Compare visible records and measurements; obtain original material before checking accounts.` },
+    hint: { direction: goal, verification: nextStep.verification,
       facts: run.investigation.completed_checks.map(item => item.result),
     },
   });
@@ -340,10 +416,17 @@ function inspectOptions(run, command, lang) {
     const expert = (preparedInvestigation(run) ? getInvestigationAgentPreparation(agent).specialist_efficiency
       : Math.max(agent.base_observation_focus || 0, agent.base_logic_power || 0, agent.base_hack_level || 0) >= 75)
       && !(run.investigation.discounted_agent_ids || []).includes(agent.agent_id);
-    const methods = check ? target.methods.filter(method => method.id === check.method_id) : target.methods;
+    const methods = check ? target.methods.filter(method => method.id === check.method_id
+      || inspectionFinding(run, target.target_id, method.id)) : target.methods;
     packs[agent.agent_id] = { cards: ordered(run, methods, target.target_id).map(method => {
-      const reviewed = check?.method_id === method.id;
-      const discountSource = reviewed ? 'review' : run.state.ap_discount_credit > 0 ? 'scanner' : expert ? 'specialist' : null;
+      const reviewed = check?.method_id === method.id || Boolean(inspectionFinding(run, target.target_id, method.id));
+      // A useful preliminary check contributes only its actually paid AP to
+      // this object's full check. It never creates a transferable balance.
+      const paid = inspectionFinding(run, target.target_id)?.paid_ap;
+      const inspectionCredit = !reviewed && !check && method.id === target.method_id && Number.isFinite(paid)
+        ? Math.min(1, Math.max(0, paid)) : 0;
+      const discountSource = reviewed ? 'review' : inspectionCredit > 0 ? 'inspection'
+        : run.state.ap_discount_credit > 0 ? 'scanner' : expert ? 'specialist' : null;
       const base = actionQuote(run, discountSource ? 0 : 1);
       const quote = reviewed ? { ...base, stamina_cost: 0 } : { ...base,
         ...quoteInvestigationSkills(run, { kind: 'inspect', actionTag: target.action_tag,
@@ -351,7 +434,9 @@ function inspectOptions(run, command, lang) {
       return { option_id: `inspect:${run.id}:${run.revision + 1}:${target.target_id}:${method.id}:${agent.agent_id}`,
         target_id: target.target_id, method_id: method.id, executor_agent_id: agent.agent_id,
         label: text(method.label, lang), ...quote,
-        ...(preparedInvestigation(run) ? { ap_discount_source: discountSource } : {}),
+        ...(method.scope ? { scope: text(method.scope, lang) } : {}),
+        ...(usesScopedInspection(run) ? { inspection_ap_credit_used: inspectionCredit } : {}),
+        ...(preparedInvestigation(run) || usesScopedInspection(run) ? { ap_discount_source: discountSource } : {}),
         risk_level: 'low',
         available: reviewed || (canPerformInvestigation(run, agent.agent_id, quote.stamina_cost)
           && run.state.action_points_left >= quote.ap_cost), review: Boolean(reviewed) };
@@ -379,6 +464,13 @@ function inspect(run, command, lang) {
   const card = Object.values(offer.packs).flatMap(pack => pack.cards).find(item => item.option_id === command.option_id);
   if (!card) fail('STALE_OPTIONS');
   const target = requireTarget(run, card.target_id);
+  const priorFinding = inspectionFinding(run, target.target_id, card.method_id);
+  if (priorFinding) {
+    clearOffers(run);
+    return { target_id: target.target_id, completed: false, finding: true, review: true,
+      narration: text(priorFinding.result, lang), limitation: text(priorFinding.limitation, lang),
+      executor_agent_id: card.executor_agent_id, ap_cost: 0, new_clue_ids: [] };
+  }
   const prior = completed(run, target.target_id);
   if (prior) {
     clearOffers(run);
@@ -388,12 +480,14 @@ function inspect(run, command, lang) {
   }
   chargeTurn(run, card.executor_agent_id, card.ap_cost, card.command_ap_credit_used || 0, card.stamina_cost ?? AGENT_STAMINA_INVESTIGATION_COST);
   consumeInvestigationSkills(run, card);
-  if (preparedInvestigation(run) ? card.ap_discount_source === 'scanner' : run.state.ap_discount_credit > 0) run.state.ap_discount_credit -= 1;
-  else if (preparedInvestigation(run) ? card.ap_discount_source === 'specialist' : card.ap_cost === 0) run.investigation.discounted_agent_ids = [
+  const quotedDiscount = preparedInvestigation(run) || usesScopedInspection(run);
+  if (quotedDiscount ? card.ap_discount_source === 'scanner' : run.state.ap_discount_credit > 0) run.state.ap_discount_credit -= 1;
+  else if (quotedDiscount ? card.ap_discount_source === 'specialist' : card.ap_cost === 0) run.investigation.discounted_agent_ids = [
     ...(run.investigation.discounted_agent_ids || []), card.executor_agent_id,
   ];
   run.state.last_action = target.action_tag;
   const correct = card.method_id === target.method_id;
+  const finding = usesScopedInspection(run) ? target.methods.find(method => method.id === card.method_id)?.finding : null;
   const before = run.state.unlocked_clues;
   const expertNote = correct ? professionalObservation(run, target, card.executor_agent_id) : null;
   if (correct) {
@@ -402,6 +496,13 @@ function inspect(run, command, lang) {
       clue_ids: [target.clue_id], result: target.result, executor_agent_id: card.executor_agent_id,
       ...(expertNote ? { expert_note: expertNote } : {}) });
     applyInvestigationSkillSuccess(run, { kind: 'inspect' });
+  } else if (finding) {
+    run.investigation.inspection_findings = [...(run.investigation.inspection_findings || []), {
+      target_id: target.target_id, method_id: card.method_id,
+      label: target.methods.find(method => method.id === card.method_id).label,
+      result: finding.result, limitation: finding.limitation, executor_agent_id: card.executor_agent_id,
+      paid_ap: card.ap_cost,
+    }];
   } else run.state.confusion_score = Math.min(100,
     run.state.confusion_score + INVESTIGATION_COST_RULES.unsuccessful_inspection_confusion);
   const sourceHint = correct ? sourceHintInvestigationSkill(run, allTargets(run).filter(item =>
@@ -409,17 +510,22 @@ function inspect(run, command, lang) {
       && known(run, item.required_clues) && reachableZones(run).has(item.zone_id))
     .map(item => ({ target_id: item.target_id, zone_id: item.zone_id, label: item.label,
       zone_label: zoneLabel(run, item.zone_id), available: true, reachable: true }))) : null;
-  const narration = correct ? text(target.result, lang) : target.failure_explanation ? text(target.failure_explanation, lang) : (lang === 'en'
+  const narration = correct ? text(target.result, lang) : finding ? text(finding.result, lang)
+    : target.failure_explanation ? text(target.failure_explanation, lang) : (lang === 'en'
     ? 'This method does not verify the visible discrepancy. Try another measurement or original record.'
     : '此方法未能核验可见异常，请改用其他测量或原始记录。');
   clearOffers(run);
   completeTurn(run, lang);
   return { target_id: target.target_id, completed: correct, narration,
+    ...(finding ? { finding: true, limitation: text(finding.limitation, lang) } : {}),
     executor_agent_id: card.executor_agent_id, ap_cost: card.ap_cost,
     new_clue_ids: run.state.unlocked_clues.filter(id => !before.includes(id)),
     ...(expertNote ? { expert_note: text(expertNote, lang) } : {}),
     ...(sourceHint ? { source_hint: sourceHint } : {}),
-    detail: card.skill_ap_discount || card.skill_stamina_discount
+    detail: card.inspection_ap_credit_used > 0
+      ? (lang === 'en' ? 'The AP already paid for this object’s preliminary check covered this verification. Stamina and one turn were still spent.'
+        : '此物件初步检查已付的 AP 抵扣了本次核验费用；仍消耗所示体力并推进一回合。')
+      : card.skill_ap_discount || card.skill_stamina_discount
       ? (lang === 'en' ? `Investigator skills saved ${card.skill_ap_discount || 0} AP and ${card.skill_stamina_discount || 0} stamina; the displayed price includes these savings.`
         : `探员专长减免 ${card.skill_ap_discount || 0} AP、${card.skill_stamina_discount || 0} 点体力；已计入确认前的报价。`)
       : card.command_ap_credit_used > 0
